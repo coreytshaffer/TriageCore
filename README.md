@@ -1,55 +1,64 @@
 # TriageCore
 
-A lightweight, local-compute-first orchestration harness. It uses flagship cloud models strictly for cognitive routing and oversight, aggressively offloading code generation and formatting to local workers (like Nemotron 30B) to minimize API burn and maximize token efficiency.
+**A Local-First Developer-Agent Control Harness**
 
-## Overview
+TriageCore provides safety rails, task classification, and structured handoff packets for AI coding agents. Instead of giving agents unbounded access or automatically falling back to expensive cloud models when things fail, TriageCore evaluates tasks locally, assigns permission profiles, and generates `.md` packets (Handoff Packets) for tools like Codex and Antigravity.
 
-In modern agentic loops, developers often pass the entirety of a workspace or large data chunks directly to expensive cloud models (Claude Sonnet 3.5, GPT-4o, Gemini 1.5 Pro). While these models possess incredible reasoning, executing mundane text-parsing, code-formatting, and boilerplate generation wastes expensive cloud execution tokens.
+## Core Philosophy
 
-**TriageCore** formalizes a "Supervisor-Worker Loop":
-1. **The Cloud Supervisor** plans the task and establishes strict formatting constraints.
-2. **The Local Worker** executes the repetitive code generation and raw parsing. 
-3. **The Triage Engine** watches the local generation budget (timeouts) and automatically escalates back to the Cloud Supervisor if the local model fails or gets stuck in a loop.
+1. **Local Executes, Cloud Stays Out:** We've removed automatic cloud fallbacks. If an operation fails locally or hits a safety constraint, it doesn't quietly burn cloud tokens. It generates a structured `HandoffPacket` for a developer or specialized agent to review.
+2. **Safety by Default:** Tasks are classified by the `DangerDetector`. Requests to edit `.env` files, run `sudo`, or execute risky deletes (`rm -rf`) are flagged and restricted to `read-only` or `blocked` permission profiles.
+3. **Agent-Agnostic Packets:** TriageCore compiles instructions into standardized Markdown bundles. These bundles guide your agents (e.g., Antigravity or Codex) exactly on what to do, what files to touch, and how to verify their work.
 
 ## Installation
 
+You can install TriageCore locally for CLI access:
+
 ```bash
-pip install -r requirements.txt
-python setup.py install
+git clone https://github.com/coreytshaffer/TriageCore
+cd TriageCore
+pip install -e .
 ```
 
-## Quick Start
+## CLI Usage
 
-You can configure TriageCore to talk to any LiteLLM-compatible cloud model, and any OpenAI-compatible local model (e.g. LM Studio, Ollama).
+TriageCore provides a convenient CLI for generating agent task bundles:
 
-```python
-from triage_core import TriageClient
-from triage_core.validators import PythonSyntaxValidator
-
-client = TriageClient(
-    local_url="http://127.0.0.1:1234", 
-    cloud_model="gemini/gemini-1.5-pro", # Uses LiteLLM standard model naming
-    timeout_seconds=45
-)
-
-result = client.run_task(
-    prompt="Generate a Python function that adds two numbers. Output raw code only.",
-    data="Context: no math functions exist yet.",
-    validator=PythonSyntaxValidator.validate
-)
-
-print(f"Executed via: {result['source']}")
-print(result['output'])
+### 1. Initialize Agent Configs
+Generate a default `AGENTS.md` file in your repository:
+```bash
+triagecore init-agents
 ```
 
-## Architecture Notes & Failure Taxonomy
+### 2. Generate a Codex Task
+Create a standalone markdown task file (`triage_tasks/codex_task_low.md`) for Codex:
+```bash
+triagecore codex-task --prompt "Refactor the database connection string logic" --files src/db.py
+```
 
-If you are building your own Hybrid orchestration workflows, you need to be aware of the exact failure modes local models run into when acting as execution grunts.
+### 3. Generate an Antigravity Bundle
+Create a robust multi-file bundle (`.agent_tasks/my-slug/TASK.md`, `ACCEPTANCE_CRITERIA.md`):
+```bash
+triagecore antigravity-task --prompt "Add pytest coverage for handoff.py" --files tests/test_handoff.py --slug add-tests
+```
 
-1. **The Generation Ceiling:** Local model failure is rarely a reasoning issue; it is a raw output length issue. A 90-second timeout on a local GPU generally supports <150 tokens depending on hardware. Any task requiring more than ~100 tokens of generation must either be aggressively minimized or routed to the cloud orchestrator.
-2. **The Regex Bottleneck:** Complex string patterns or regular expressions dramatically slow down tokenization. Be prepared to pre-escape strings before sending them to the local worker.
-3. **Idempotent Retries:** If a local generation hits the timeout wall, the TriageEngine will gracefully intercept the error and route the payload to your flagship model instead. The process is completely transparent to your broader application loop.
+## Architecture
 
-## Quality Gates
+TriageCore consists of several tightly integrated local components:
 
-TriageCore comes with `PythonSyntaxValidator`, which uses native `py_compile` to statically evaluate generated Python code without executing it. If a local model generates code that is syntactically invalid (e.g. missing colons or bad indentation), TriageCore catches it instantly and escalates the failure back to the Cloud model for a successful fallback generation. 
+- **TriageClient & TriageEngine**: Execute local parsing/generation tasks with strict temporal budgets (e.g., via LM Studio / Ollama).
+- **TriageRouter**: Inspects prompts to decide if they should be executed immediately or wrapped into a handoff packet.
+- **TaskClassifier & DangerDetector**: Categorize tasks (`bugfix`, `docs_update`) and enforce safety constraints (`read-only`, `workspace-write`, `blocked`).
+- **HandoffPacket**: A dataclass that standardizes tasks into readable Markdown.
+
+## Development & Testing
+
+TriageCore uses `pytest` to ensure all routing and safety logic operates completely offline without network calls.
+
+```bash
+pip install pytest
+pytest tests/
+```
+
+## License
+MIT

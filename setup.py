@@ -8,9 +8,13 @@ setup(
     packages=find_packages(),
     install_requires=[
         "requests>=2.28.0",
-        "litellm>=1.0.0",
         "python-dotenv>=1.0.0"
     ],
+    entry_points={
+        "console_scripts": [
+            "triagecore=triage_core.cli:main",
+        ]
+    },
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
