@@ -8,12 +8,21 @@ class TriageEngine:
         self.backend = backend
         self.timeout = timeout_seconds
 
-    def execute_task(self, task_prompt: str, raw_data: str, validator: Optional[Callable[[str], bool]] = None, stream_callback: Optional[Callable[[str], None]] = None) -> Dict[str, Any]:
+    def execute_task(
+        self,
+        task_prompt: str,
+        raw_data: str,
+        validator: Optional[Callable[[str], bool]] = None,
+        stream_callback: Optional[Callable[[str], None]] = None,
+        timeout: Optional[int] = None,
+        post_processor: Optional[Callable[[str], str]] = None
+    ) -> Dict[str, Any]:
         """
         Attempts to execute a parsing or generation task on the local worker.
         Triggers a handoff if a timeout or validation failure occurs.
         """
         start_time = time.time()
+        use_timeout = timeout if timeout is not None else self.timeout
         try:
             messages = [
                 {"role": "system", "content": "You are a rigid parsing worker. Output ONLY raw code or markdown requested. No chat."},
@@ -23,21 +32,26 @@ class TriageEngine:
             backend_response = self.backend.generate(
                 messages=messages,
                 temperature=0.1,
-                timeout=self.timeout,
+                timeout=use_timeout,
                 stream_callback=stream_callback
             )
             
             elapsed = time.time() - start_time
             token_metrics = self._extract_token_metrics(backend_response.usage, elapsed)
             
+            # Apply post-processor before validation
+            response_text = backend_response.text
+            if post_processor:
+                response_text = post_processor(response_text)
+            
             # Run quality gates if provided
-            if validator and not validator(backend_response.text):
+            if validator and not validator(response_text):
                 handoff = self._trigger_handoff(task_prompt, raw_data, "Local output failed quality gate validation.")
+                handoff["timeout_seconds"] = use_timeout
                 handoff.update({
                     "elapsed_seconds": elapsed,
                     "backend_name": backend_response.backend_name,
                     "model": getattr(self.backend, "model", None),
-                    "timeout_seconds": self.timeout,
                     "usage": backend_response.usage,
                     "timings": backend_response.timings,
                     "validator_passed": False,
@@ -49,10 +63,10 @@ class TriageEngine:
                 "status": "success", 
                 "source": "local", 
                 "elapsed_seconds": elapsed, 
-                "output": backend_response.text,
+                "output": response_text,
                 "backend_name": backend_response.backend_name,
                 "model": getattr(self.backend, "model", None),
-                "timeout_seconds": self.timeout,
+                "timeout_seconds": use_timeout,
                 "usage": backend_response.usage,
                 "timings": backend_response.timings,
                 "validator_passed": None if validator is None else True,
@@ -61,9 +75,13 @@ class TriageEngine:
 
         except requests.exceptions.Timeout:
             # Handle the temporal budget exhaustion
-            return self._trigger_handoff(task_prompt, raw_data, f"Local worker exceeded temporal budget of {self.timeout}s.")
+            handoff = self._trigger_handoff(task_prompt, raw_data, f"Local worker exceeded temporal budget of {use_timeout}s.")
+            handoff["timeout_seconds"] = use_timeout
+            return handoff
         except Exception as e:
-            return self._trigger_handoff(task_prompt, raw_data, f"Local runtime error: {str(e)}")
+            handoff = self._trigger_handoff(task_prompt, raw_data, f"Local runtime error: {str(e)}")
+            handoff["timeout_seconds"] = use_timeout
+            return handoff
 
     def _trigger_handoff(self, prompt: str, data: str, reason: str) -> Dict[str, Any]:
         """Triggers a handoff to manual or agentic systems when local fails."""

@@ -777,6 +777,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         self._last_logs_render = None
         self._last_inline_logs_render = None
         self._last_ledger_feed_render = None
+        self.current_loaded_task_id = None
 
         # Setup runtime file logger
         import logging
@@ -1076,49 +1077,54 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         btn_row.grid(row=4, column=0, padx=24, pady=(0, 8), sticky="ew")
         btn_row.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="dispatch")
 
+        # Glow frames for workflow sequence
+        self.glow_local = ctk.CTkFrame(btn_row, corner_radius=8, border_width=0, border_color="transparent", fg_color="transparent")
+        self.glow_local.grid(row=0, column=0, padx=(0, 8), sticky="ew")
         self.btn_local = ctk.CTkButton(
-            btn_row,
+            self.glow_local,
             text="1. Local Draft\nRun with active local model",
-            width=180,
             height=56,
             command=lambda: self._handle_task("local"),
             fg_color="#166534",
             font=ctk.CTkFont(size=13, weight="bold"),
         )
-        self.btn_local.grid(row=0, column=0, padx=(0, 8), sticky="ew")
+        self.btn_local.pack(padx=3, pady=3, fill="both", expand=True)
 
+        self.glow_council = ctk.CTkFrame(btn_row, corner_radius=8, border_width=0, border_color="transparent", fg_color="transparent")
+        self.glow_council.grid(row=0, column=1, padx=(0, 8), sticky="ew")
         self.btn_council = ctk.CTkButton(
-            btn_row,
+            self.glow_council,
             text="2. Worker Council\nCross-check with agents",
-            width=180,
             height=56,
             command=lambda: self._handle_task("council"),
             fg_color="#0e4f6b",
             font=ctk.CTkFont(size=13, weight="bold"),
         )
-        self.btn_council.grid(row=0, column=1, padx=(0, 8), sticky="ew")
+        self.btn_council.pack(padx=3, pady=3, fill="both", expand=True)
 
+        self.glow_codex = ctk.CTkFrame(btn_row, corner_radius=8, border_width=0, border_color="transparent", fg_color="transparent")
+        self.glow_codex.grid(row=0, column=2, padx=(0, 8), sticky="ew")
         self.btn_codex = ctk.CTkButton(
-            btn_row,
+            self.glow_codex,
             text="3. Codex Handoff\nWrite review packet",
-            width=180,
             height=56,
             command=lambda: self._handle_task("codex"),
             fg_color="#7c2d12",
             font=ctk.CTkFont(size=13, weight="bold"),
         )
-        self.btn_codex.grid(row=0, column=2, padx=(0, 8), sticky="ew")
+        self.btn_codex.pack(padx=3, pady=3, fill="both", expand=True)
 
+        self.glow_anti = ctk.CTkFrame(btn_row, corner_radius=8, border_width=0, border_color="transparent", fg_color="transparent")
+        self.glow_anti.grid(row=0, column=3, sticky="ew")
         self.btn_anti = ctk.CTkButton(
-            btn_row,
+            self.glow_anti,
             text="4. Antigravity Handoff\nCreate IDE task bundle",
-            width=180,
             height=56,
             command=lambda: self._handle_task("antigravity"),
             fg_color="#4a1d96",
             font=ctk.CTkFont(size=13, weight="bold"),
         )
-        self.btn_anti.grid(row=0, column=3, sticky="ew")
+        self.btn_anti.pack(padx=3, pady=3, fill="both", expand=True)
 
         self.status_label = ctk.CTkLabel(
             f, text="", text_color="gray", font=ctk.CTkFont(size=12)
@@ -1550,6 +1556,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         self._refresh_ledger()
 
     def _review_task(self, task_id, accepted):
+        self.current_loaded_task_id = task_id
         start_time = self.review_timers.pop(task_id, None)
         elapsed_mins = 0.0
         task = self.ledger.get_task(task_id)
@@ -1600,6 +1607,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         self._refresh_compact_ledger_feed()
         self._update_ticker()
         self._refresh_telemetry()
+        self._update_workflow_glow()
 
     def _update_active_timers(self):
         if self._current_frame == "ledger":
@@ -2141,6 +2149,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             self.telemetry_frame.grid(row=1, column=1, sticky="nsew")
             self._refresh_telemetry()
             self._refresh_compact_ledger_feed()
+            self._update_workflow_glow()
         elif name == "ledger":
             self.ledger_frame.grid(row=0, column=1, rowspan=2, sticky="nsew")
             self._refresh_ledger()
@@ -2228,6 +2237,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             return
 
         task_id = str(uuid.uuid4())
+        self.current_loaded_task_id = task_id
         self.ledger.append_event(
             task_id,
             "task_created",
@@ -2392,6 +2402,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             finally:
                 self.btn_local.configure(state="normal")
                 self._update_ticker()
+                self.after(0, self._update_workflow_glow)
 
         threading.Thread(target=_run, daemon=True).start()
 
@@ -2566,6 +2577,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
                 self.btn_council.configure(state="normal")
                 self._set_active_agent(None)
                 self._update_ticker()
+                self.after(0, self._update_workflow_glow)
 
         threading.Thread(target=_run, daemon=True).start()
 
@@ -2603,6 +2615,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             text_color="#f97316",
         )
         self._log_activity(f"Codex packet saved for task {task_id[:8]}: {filename}")
+        self._update_workflow_glow()
 
     # -- Antigravity --
     def _dispatch_antigravity(self, task_id, prompt, files, danger):
@@ -2639,6 +2652,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             text_color="#a855f7",
         )
         self._log_activity(f"Antigravity bundle saved for task {task_id[:8]}: {task_dir}")
+        self._update_workflow_glow()
 
     # ─── Output Box Helpers ───────────────────────────────────────────────────
     def _clear_output(self, text=""):
@@ -2738,6 +2752,64 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             print(f"IPC Watcher Error: {e}")
         finally:
             self.after(1000, self._check_ipc_inbox)
+
+    def _get_glow_target(self, task) -> Optional[str]:
+        from typing import Optional
+        if not task:
+            return "local"
+        
+        if task.status == "pending":
+            return "local"
+        
+        if task.status == "local_draft_generated":
+            if task.validator_passed is False:
+                return "council"
+            return None
+            
+        if task.status == "handoff_generated":
+            if task.runner == "local_llm":
+                return "council"
+            return "codex"
+            
+        if task.status == "council_completed":
+            if getattr(task, "observed_status", "") != "sufficient":
+                return "codex"
+            return None
+            
+        if task.status == "reviewed" and not task.accepted:
+            return "council"
+            
+        return None
+
+    def _update_workflow_glow(self):
+        if not UI_AVAILABLE:
+            return
+        
+        task_id = getattr(self, "current_loaded_task_id", None)
+        task = self.ledger.get_task(task_id) if task_id else None
+        
+        if not task:
+            tasks = self.ledger.get_all_tasks()
+            if tasks:
+                task = tasks[0]
+                self.current_loaded_task_id = task.task_id
+        
+        target = self._get_glow_target(task)
+        
+        # Reset all glows
+        self.glow_local.configure(border_width=0, border_color="transparent")
+        self.glow_council.configure(border_width=0, border_color="transparent")
+        self.glow_codex.configure(border_width=0, border_color="transparent")
+        self.glow_anti.configure(border_width=0, border_color="transparent")
+        
+        if target == "local":
+            self.glow_local.configure(border_width=2, border_color="#22c55e")
+        elif target == "council":
+            self.glow_council.configure(border_width=2, border_color="#3b82f6")
+        elif target == "codex":
+            self.glow_codex.configure(border_width=2, border_color="#f97316")
+        elif target == "antigravity":
+            self.glow_anti.configure(border_width=2, border_color="#a855f7")
 
 
 # ─── Entry Point ──────────────────────────────────────────────────────────────
