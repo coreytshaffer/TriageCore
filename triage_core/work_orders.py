@@ -15,6 +15,10 @@ class WorkOrder:
     work_order_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     result: Optional[Dict[str, Any]] = None
     created_at: float = field(default_factory=time.time)
+    # Chunk tracking for large-file dispatch
+    chunk_start: int = 0          # First line index (0-based, inclusive)
+    chunk_end: Optional[int] = None  # Last line index (exclusive); None = end of file
+
     
 class TaskBoard:
     def __init__(self):

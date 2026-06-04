@@ -2,10 +2,11 @@
 
 [budgets]
 max_local_attempts = 2
-max_total_local_seconds = 180
+max_total_local_seconds = 300
 max_energy_kwh_per_task = 0.02
 max_review_minutes_expected = 10
-max_tokens = 800
+max_tokens = 1000
+max_artifact_bytes = 12000   # ~3 K tokens; files larger than this are chunked
 
 [permissions]
 default_codex_profile = "read-only"
@@ -29,8 +30,13 @@ max_tokens = 1000
 
 [workers.validator]
 backend = "ollama"
+model = "deepseek-r1:latest"
+max_tokens = 2000
+
+[workers.code_repair]
+backend = "ollama"
 model = "qwen2.5-coder:7b-triagecore"
-max_tokens = 400
+max_tokens = 1200
 
 [workers.union_rep]
 backend = "ollama"
