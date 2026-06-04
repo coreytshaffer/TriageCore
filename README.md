@@ -107,11 +107,18 @@ Run them against a local backend and append model-evaluation evidence to `.triag
 triagecore benchmark --backend-type ollama --model qwen2.5-coder:7b
 ```
 
+Tag formal study runs so reports can exclude exploratory ledger history:
+
+```bash
+triagecore benchmark --study-id study_001
+```
+
 Summarize benchmark evidence:
 
 ```bash
 triagecore benchmark-report
 triagecore benchmark-report --output reports/benchmark-report.md
+triagecore benchmark-report --study-id study_001 --output reports/study_001_benchmark_report.md
 ```
 
 ## Human-Reviewed Learning

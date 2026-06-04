@@ -20,6 +20,7 @@ The schema supports two project goals:
 | `target_files` | Files or artifacts in scope. |
 | `runner` | Execution path, such as `local_benchmark`, `local_llm`, `council`, `codex`, or `antigravity`. |
 | `status` | Current state: `pending`, `local_draft_generated`, `handoff_generated`, `reviewed`, or `blocked`. |
+| `study_id` | Optional study label, such as `study_001`, used to separate formal experiments from exploratory runs. |
 
 ## Routing And Safety Fields
 

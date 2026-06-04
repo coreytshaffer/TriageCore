@@ -51,19 +51,19 @@ Initial candidates:
 3. Run the benchmark set for one backend/model pair:
 
    ```bash
-   triagecore benchmark
+   triagecore benchmark --study-id study_001
    ```
 
 4. Generate a markdown report:
 
    ```bash
-   triagecore benchmark-report --output reports/study_001_benchmark_report.md
+   triagecore benchmark-report --study-id study_001 --output reports/study_001_benchmark_report.md
    ```
 
 5. Generate pending learning proposals:
 
    ```bash
-   triagecore propose-lessons
+   triagecore propose-lessons --study-id study_001
    ```
 
 6. Review any learning proposals manually:
@@ -111,6 +111,8 @@ Expected artifacts:
 - `.triagecore/learning_proposals.jsonl`
 - `.triagecore/learning_reviews.jsonl`
 - `reports/study_001_benchmark_report.md`
+
+Use `study_001` as the ledger `study_id` for formal Study 001 records. Exploratory benchmark records without that label should not be included in the final Study 001 report.
 
 Generated reports should be treated as local experimental observations, not universal claims about model performance.
 

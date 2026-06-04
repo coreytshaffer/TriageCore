@@ -17,6 +17,7 @@ class TaskRecord:
     target_files: List[str] = field(default_factory=list)
     runner: Optional[str] = None
     status: str = "pending"
+    study_id: Optional[str] = None
     permission_profile: Optional[str] = None
     risk_level: Optional[str] = None
     energy_kwh_estimate: float = 0.0
@@ -142,6 +143,8 @@ class TaskLedger:
             record.title = payload.get("title", "")
             record.description = payload.get("description", "")
             record.target_files = payload.get("target_files", [])
+            if "study_id" in payload:
+                record.study_id = payload["study_id"]
         elif etype == "task_classified":
             record.permission_profile = payload.get("recommended_profile")
             record.risk_level = payload.get("risk_level")
@@ -184,6 +187,8 @@ class TaskLedger:
         """Apply benchmark/model evaluation fields from a payload dict."""
         if "backend_name" in payload:
             record.backend_name = payload["backend_name"]
+        if "study_id" in payload:
+            record.study_id = payload["study_id"]
         if "model" in payload:
             record.model = payload["model"]
         if "benchmark_task_id" in payload:

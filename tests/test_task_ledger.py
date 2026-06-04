@@ -84,6 +84,21 @@ def test_ledger_tracks_model_evaluation_fields():
         assert record.tokens_per_second == 60.0
         assert record.validator_passed is True
 
+def test_ledger_tracks_study_id():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        ledger = TaskLedger(ledger_dir=temp_dir)
+        task_id = str(uuid.uuid4())
+
+        ledger.append_event(task_id, "task_created", {
+            "title": "Study benchmark",
+            "study_id": "study_001",
+        })
+
+        record = ledger.get_task(task_id)
+
+        assert record is not None
+        assert record.study_id == "study_001"
+
 def test_ledger_tracks_handoff_reason_for_review():
     with tempfile.TemporaryDirectory() as temp_dir:
         ledger = TaskLedger(ledger_dir=temp_dir)

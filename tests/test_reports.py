@@ -76,3 +76,30 @@ def test_render_benchmark_report_markdown_includes_rates():
 
     assert "custom/local-model" in markdown
     assert "100.0%" in markdown
+
+
+def test_build_benchmark_report_filters_by_study_id():
+    report = build_benchmark_report([
+        TaskRecord(
+            task_id="study-task",
+            study_id="study_001",
+            benchmark_task_id="log_summary_markdown_v1",
+            benchmark_category="log_summary",
+            expected_status="success",
+            observed_status="success",
+        ),
+        TaskRecord(
+            task_id="exploratory-task",
+            benchmark_task_id="log_summary_markdown_v1",
+            benchmark_category="log_summary",
+            expected_status="success",
+            observed_status="handoff_required",
+        ),
+    ], study_id="study_001")
+
+    markdown = render_benchmark_report_markdown(report)
+
+    assert report.total_runs == 1
+    assert report.overall.successes == 1
+    assert report.overall.mismatches == 0
+    assert "Study ID: `study_001`" in markdown
