@@ -227,7 +227,21 @@ burden.
 
 ---
 
-## 9. References
+## 9. Execution Hardware Specification
+
+For the comparison study of local model execution and specialist councils (Study 002), the benchmarking environment was standardized on a host workstation with the following hardware specifications:
+
+- **Host System**: Alienware m18 R1 AMD Laptop
+- **Processor (CPU)**: AMD Ryzen 9 7845HX with Radeon Graphics (12 physical cores, 24 threads, AVX/AVX2 support)
+- **System Memory (RAM)**: 32 GB DDR5 RAM (33,487,876,096 bytes)
+- **Dedicated Graphics (GPU)**: NVIDIA GeForce RTX 4070 Laptop GPU (Discrete, Compute Capability 8.9, 8 GB VRAM / 8,585,216,000 bytes)
+- **Operating System**: Windows 11 Pro 64-bit (Build 26200)
+
+This system configuration is representative of developer-class workstations where local model offloading is actively deployed to protect the cloud compute budget.
+
+---
+
+## 10. References
 
 Grubert, E., & Sanders, K. T. (2018). Water use in the United States energy
 system: A national assessment and unit process inventory of water consumption
