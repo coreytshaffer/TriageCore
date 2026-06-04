@@ -10,10 +10,10 @@ Last updated: 2026-06-04
 
 Recent commits:
 
+- `bc74636 fix: clarify structured extraction and timestamp tasks`
+- `c170c7f feat: scope benchmark reports by run`
+- `71fc8bf docs: add session handoff checkpoint`
 - `7ea8741 test: harden study benchmark validators`
-- `5309119 feat: scope benchmark evidence by study`
-- `c6871c9 fix: route TriageDesk paths through config`
-- `0c7308a fix: respect configured task output directory`
 
 ## What Changed Tonight
 
@@ -34,7 +34,7 @@ python -m pytest
 Result:
 
 ```text
-71 passed
+72 passed
 ```
 
 Benchmark fixture smoke check:
@@ -53,6 +53,8 @@ The structured-extraction issue was diagnosed as benchmark ambiguity: the model 
 
 Aggregated task records now expose both `created_at` and `updated_at`. Raw ledger events already had timestamps; this makes the reduced task view and CSV export more useful for review and reporting.
 
+Ledger task cards now have a Details/Hide toggle. Expanded cards show timestamps, prompt, routing, model/backend, benchmark status, handoff reason, artifacts, and review metrics while preserving expanded state across refreshes.
+
 Next step: review the superseded `trial_001` learning proposals and record explicit human decisions before treating them as accepted or rejected lessons.
 
-After that, revisit `json_extraction_small_v1`, which now produces `handoff_required` under the stricter `monitoring_json` validator.
+Future UI idea captured in the backlog: add a compact scrolling ledger feed to the main dispatch/dashboard screen.

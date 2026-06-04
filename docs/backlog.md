@@ -62,3 +62,13 @@ Resolution: diagnostic output showed valid JSON with ambiguous `site_name` seman
   * Review the `structured_extraction` proposals generated from `trial_001`.
   * Record whether they are rejected or superseded because the failure came from benchmark ambiguity.
   * Keep the review decision explicit before using accepted/rejected proposals to guide future behavior.
+
+## UI Workflow Improvements
+
+* [x] **Story 6.1: Expandable Ledger Review Cards**
+  * Add a Details/Hide toggle to ledger task cards.
+  * Show timestamps, routing, benchmark context, handoff reasons, artifacts, and review metrics inside expanded cards.
+  * Preserve expanded cards across ledger refreshes.
+* [ ] **Story 6.2: Main Screen Ledger Feed**
+  * Add a compact scrolling task ledger feed to the main dispatch/dashboard screen.
+  * Keep the feed lightweight so it gives recent activity context without replacing the full ledger view.

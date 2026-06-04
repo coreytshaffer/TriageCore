@@ -104,6 +104,81 @@ def _antigravity_task_dir(task_id: str) -> str:
     return os.path.join(default_config.get_tasks_dir(), task_id[:8])
 
 
+def _ledger_detail_lines(task) -> list[str]:
+    lines = [
+        f"Task ID: {task.task_id}",
+        f"Created: {task.created_at or 'unknown'}",
+        f"Updated: {task.updated_at or 'unknown'}",
+    ]
+
+    if task.completed_at:
+        lines.append(f"Completed: {task.completed_at}")
+    if task.description:
+        lines.append(f"Prompt: {task.description}")
+    if task.target_files:
+        lines.append(f"Target files: {', '.join(task.target_files)}")
+
+    review_bits = []
+    if task.status == "reviewed":
+        review_bits.append("accepted" if task.accepted else "rejected")
+    if task.human_review_minutes:
+        review_bits.append(f"{task.human_review_minutes:.2f} review min")
+    if task.human_review_required:
+        review_bits.append("review required")
+    if review_bits:
+        lines.append(f"Review: {', '.join(review_bits)}")
+
+    routing_bits = []
+    if task.risk_level:
+        routing_bits.append(f"risk={task.risk_level}")
+    if task.permission_profile:
+        routing_bits.append(f"profile={task.permission_profile}")
+    if task.runner:
+        routing_bits.append(f"runner={task.runner}")
+    if routing_bits:
+        lines.append(f"Routing: {', '.join(routing_bits)}")
+
+    model_bits = []
+    backend = task.backend_name or task.backend
+    if backend:
+        model_bits.append(f"backend={backend}")
+    if task.model:
+        model_bits.append(f"model={task.model}")
+    if task.timeout_seconds:
+        model_bits.append(f"timeout={task.timeout_seconds}s")
+    if model_bits:
+        lines.append(f"Model: {', '.join(model_bits)}")
+
+    benchmark_bits = []
+    if task.study_id:
+        benchmark_bits.append(f"study={task.study_id}")
+    if task.run_id:
+        benchmark_bits.append(f"run={task.run_id}")
+    if task.benchmark_task_id:
+        benchmark_bits.append(f"fixture={task.benchmark_task_id}")
+    if task.benchmark_category:
+        benchmark_bits.append(f"category={task.benchmark_category}")
+    if task.expected_status:
+        benchmark_bits.append(f"expected={task.expected_status}")
+    if task.observed_status:
+        benchmark_bits.append(f"observed={task.observed_status}")
+    if task.validator_passed is not None:
+        benchmark_bits.append(f"validator_passed={task.validator_passed}")
+    if benchmark_bits:
+        lines.append(f"Benchmark: {', '.join(benchmark_bits)}")
+
+    if task.handoff_reason:
+        lines.append(f"Handoff reason: {task.handoff_reason}")
+    if task.artifact_paths:
+        lines.append(f"Artifacts: {', '.join(task.artifact_paths)}")
+
+    return lines
+
+
+def _ledger_detail_text(task) -> str:
+    return "\n".join(_ledger_detail_lines(task))
+
+
 # ─── Small helper widgets ─────────────────────────────────────────────────────
 class _SectionLabel(ctk.CTkLabel):
     def __init__(self, parent, text, **kw):
@@ -585,6 +660,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         self._current_frame = "dispatch"
         self.review_timers = {}
         self.timer_labels = {}
+        self.expanded_ledger_task_ids = set()
 
         # Setup runtime file logger
         import logging
@@ -1033,7 +1109,19 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
                 font=ctk.CTkFont(size=10),
                 text_color="#9ca3af",
                 anchor="e",
-            ).grid(row=0, column=2, padx=10, pady=(8, 2), sticky="e")
+            ).grid(row=0, column=2, padx=(10, 6), pady=(8, 2), sticky="e")
+
+            is_expanded = t.task_id in self.expanded_ledger_task_ids
+            detail_btn = ctk.CTkButton(
+                card,
+                text="Hide" if is_expanded else "Details",
+                width=72,
+                height=24,
+                fg_color="transparent",
+                border_width=1,
+                command=lambda t_id=t.task_id: self._toggle_ledger_details(t_id),
+            )
+            detail_btn.grid(row=0, column=3, padx=(0, 10), pady=(8, 2), sticky="e")
 
             # Meta row
             meta_parts = []
@@ -1052,7 +1140,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
                     font=ctk.CTkFont(size=11),
                     text_color="#9ca3af",
                     anchor="w",
-                ).grid(row=1, column=0, columnspan=3, padx=10, pady=(0, 4), sticky="w")
+                ).grid(row=1, column=0, columnspan=4, padx=10, pady=(0, 4), sticky="w")
 
             # Metric strip
             total_tok = (t.estimated_input_tokens or 0) + (
@@ -1071,7 +1159,28 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
                 font=ctk.CTkFont(family="Courier", size=11),
                 text_color="#d1d5db",
                 anchor="w",
-            ).grid(row=2, column=0, columnspan=3, padx=10, pady=(0, 8), sticky="w")
+            ).grid(row=2, column=0, columnspan=4, padx=10, pady=(0, 8), sticky="w")
+
+            next_row = 3
+            if is_expanded:
+                details = ctk.CTkLabel(
+                    card,
+                    text=_ledger_detail_text(t),
+                    font=ctk.CTkFont(family="Courier", size=11),
+                    text_color="#e5e7eb",
+                    justify="left",
+                    anchor="w",
+                    wraplength=820,
+                )
+                details.grid(
+                    row=next_row,
+                    column=0,
+                    columnspan=4,
+                    padx=10,
+                    pady=(0, 10),
+                    sticky="ew",
+                )
+                next_row += 1
 
             # Accept/Reject buttons (if in reviewable state)
             if status in [
@@ -1081,7 +1190,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             ]:
                 btn_frame = ctk.CTkFrame(card, fg_color="transparent")
                 btn_frame.grid(
-                    row=3, column=0, columnspan=3, padx=10, pady=(0, 10), sticky="w"
+                    row=next_row, column=0, columnspan=4, padx=10, pady=(0, 10), sticky="w"
                 )
 
                 accept_btn = ctk.CTkButton(
@@ -1114,6 +1223,13 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
                 )
                 timer_lbl.pack(side="left", padx=(10, 0))
                 self.timer_labels[t.task_id] = (timer_lbl, t)
+
+    def _toggle_ledger_details(self, task_id):
+        if task_id in self.expanded_ledger_task_ids:
+            self.expanded_ledger_task_ids.remove(task_id)
+        else:
+            self.expanded_ledger_task_ids.add(task_id)
+        self._refresh_ledger()
 
     def _review_task(self, task_id, accepted):
         start_time = self.review_timers.pop(task_id, None)
