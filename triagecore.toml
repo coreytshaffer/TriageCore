@@ -9,6 +9,7 @@ timeout_seconds = 30
 [paths]
 ledger_dir = ".triagecore"
 tasks_dir = ".agent_tasks"
+codex_tasks_dir = "triage_tasks"
 benchmarks_path = "benchmarks/tasks.jsonl"
 benchmark_report_path = "reports/benchmark-report.md"
 

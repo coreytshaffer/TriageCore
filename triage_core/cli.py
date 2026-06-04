@@ -230,10 +230,11 @@ def _create_packet(prompt: str, files: list[str]) -> HandoffPacket:
 
 def _generate_codex_task(prompt: str, files: list[str]):
     packet = _create_packet(prompt, files)
-    os.makedirs("triage_tasks", exist_ok=True)
+    codex_tasks_dir = default_config.get_codex_tasks_dir()
+    os.makedirs(codex_tasks_dir, exist_ok=True)
     
     task_id = str(uuid.uuid4())
-    filename = f"triage_tasks/codex_task_{task_id[:8]}.md"
+    filename = os.path.join(codex_tasks_dir, f"codex_task_{task_id[:8]}.md")
     
     with open(filename, "w", encoding="utf-8") as f:
         f.write(packet.to_markdown())

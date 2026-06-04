@@ -63,6 +63,9 @@ class Config:
     def get_tasks_dir(self) -> str:
         return self.get_global("paths", "tasks_dir", ".agent_tasks")
 
+    def get_codex_tasks_dir(self) -> str:
+        return self.get_global("paths", "codex_tasks_dir", "triage_tasks")
+
     def get_report_path(self) -> str:
         return self.get_global("paths", "benchmark_report_path", "reports/benchmark-report.md")
 

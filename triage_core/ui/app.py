@@ -44,6 +44,7 @@ import uuid
 import threading
 import time
 from datetime import datetime, timezone
+from ..config import default_config
 from ..task_ledger import TaskLedger
 from ..classifier import DangerDetector, TaskClassifier
 from ..sustainability import SustainabilityEstimator, PowerMonitor
@@ -77,6 +78,30 @@ def _badge_color(status):
 
 def _card_fg(status):
     return _STATUS_FG.get(status, "#1f2937")
+
+
+def _ledger_dir() -> str:
+    return default_config.get_ledger_dir()
+
+
+def _log_file_path() -> str:
+    return os.path.join(_ledger_dir(), "triagecore.log")
+
+
+def _ledger_file_path() -> str:
+    return os.path.join(_ledger_dir(), "ledger.jsonl")
+
+
+def _ipc_inbox_path() -> str:
+    return os.path.join(_ledger_dir(), "ipc_inbox.json")
+
+
+def _codex_task_path(task_id: str) -> str:
+    return os.path.join(default_config.get_codex_tasks_dir(), f"codex_task_{task_id[:8]}.md")
+
+
+def _antigravity_task_dir(task_id: str) -> str:
+    return os.path.join(default_config.get_tasks_dir(), task_id[:8])
 
 
 # ─── Small helper widgets ─────────────────────────────────────────────────────
@@ -555,7 +580,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             return
 
         super().__init__()
-        self.ledger = TaskLedger()
+        self.ledger = TaskLedger(ledger_dir=default_config.get_ledger_dir())
         self.active_backend = None
         self._current_frame = "dispatch"
         self.review_timers = {}
@@ -564,9 +589,9 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         # Setup runtime file logger
         import logging
 
-        log_dir = ".triagecore"
+        log_dir = _ledger_dir()
         os.makedirs(log_dir, exist_ok=True)
-        log_file = os.path.join(log_dir, "triagecore.log")
+        log_file = _log_file_path()
         logging.basicConfig(
             filename=log_file,
             filemode="a",
@@ -1232,7 +1257,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         self.logs_box.delete("0.0", "end")
 
         if self._log_view_mode == "system":
-            log_file = ".triagecore/triagecore.log"
+            log_file = _log_file_path()
             if os.path.exists(log_file):
                 try:
                     with open(log_file, "r", encoding="utf-8") as f:
@@ -1243,7 +1268,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             else:
                 self.logs_box.insert("0.0", "No system logs generated yet.")
         else:
-            ledger_file = ".triagecore/ledger.jsonl"
+            ledger_file = _ledger_file_path()
             if os.path.exists(ledger_file):
                 try:
                     with open(ledger_file, "r", encoding="utf-8") as f:
@@ -2009,8 +2034,8 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         from ..handoff import HandoffPacket
 
         self.ledger.append_event(task_id, "runner_selected", {"runner": "codex"})
-        os.makedirs("triage_tasks", exist_ok=True)
-        filename = f"triage_tasks/codex_task_{task_id[:8]}.md"
+        filename = _codex_task_path(task_id)
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
         packet = HandoffPacket(
             title=f"Task: {prompt[:30]}",
             summary=prompt,
@@ -2043,7 +2068,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         from ..handoff import HandoffPacket
 
         self.ledger.append_event(task_id, "runner_selected", {"runner": "antigravity"})
-        task_dir = f".agent_tasks/{task_id[:8]}"
+        task_dir = _antigravity_task_dir(task_id)
         os.makedirs(task_dir, exist_ok=True)
         packet = HandoffPacket(
             title=f"Task: {prompt[:30]}",
@@ -2100,7 +2125,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
 
     def _check_ipc_inbox(self):
         try:
-            inbox_path = os.path.join(".triagecore", "ipc_inbox.json")
+            inbox_path = _ipc_inbox_path()
             if os.path.exists(inbox_path):
                 import json
 

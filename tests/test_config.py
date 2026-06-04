@@ -17,6 +17,7 @@ def test_config_reads_project_defaults(tmp_path):
                 "[paths]",
                 'ledger_dir = ".custom-ledger"',
                 'tasks_dir = ".custom-tasks"',
+                'codex_tasks_dir = "custom-codex-tasks"',
                 'benchmarks_path = "custom/benchmarks.jsonl"',
                 'benchmark_report_path = "custom/report.md"',
             ]
@@ -32,6 +33,7 @@ def test_config_reads_project_defaults(tmp_path):
     assert config.get_timeout_seconds() == 45
     assert config.get_ledger_dir() == ".custom-ledger"
     assert config.get_tasks_dir() == ".custom-tasks"
+    assert config.get_codex_tasks_dir() == "custom-codex-tasks"
     assert config.get_benchmarks_path() == "custom/benchmarks.jsonl"
     assert config.get_report_path() == "custom/report.md"
 
