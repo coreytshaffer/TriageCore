@@ -78,6 +78,20 @@ Pass condition:
 - Any proposed learning remains pending until a human records a review decision.
 - Human review records include review time and may include subjective workload.
 
+For model/backend comparison, use one shared study label and unique run IDs:
+
+```powershell
+triagecore benchmark --study-id study_002 --run-id ollama_qwen25_coder_7b_trial_001 --backend-type ollama --model qwen2.5-coder:7b-triagecore
+triagecore benchmark --study-id study_002 --run-id lmstudio_loaded_model_trial_001 --backend-type custom --base-url http://localhost:1234/v1 --model <loaded-model-name>
+triagecore benchmark-report --study-id study_002 --output reports\study_002_model_backend_comparison.md
+```
+
+Pass condition:
+
+- Each backend/model pair has a unique `run_id`.
+- The combined report includes `By Backend`, `By Model`, and `By Category`.
+- Any comparison claim cites the same fixture set and timeout settings.
+
 ## 5. Human Review Rule
 
 Do not accept a learning proposal only because a benchmark failed. First decide whether the issue came from:

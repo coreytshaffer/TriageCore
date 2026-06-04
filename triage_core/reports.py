@@ -40,6 +40,7 @@ class BenchmarkSummary:
 class BenchmarkReport:
     total_runs: int
     overall: BenchmarkSummary
+    by_backend: List[BenchmarkSummary]
     by_model: List[BenchmarkSummary]
     by_category: List[BenchmarkSummary]
     study_id: str | None = None
@@ -58,11 +59,14 @@ def build_benchmark_report(
         benchmark_records = [record for record in benchmark_records if record.run_id == run_id]
 
     overall = BenchmarkSummary(label="overall")
+    by_backend: Dict[str, BenchmarkSummary] = {}
     by_model: Dict[str, BenchmarkSummary] = {}
     by_category: Dict[str, BenchmarkSummary] = {}
 
     for record in benchmark_records:
         _apply_record(overall, record)
+        backend = record.backend_name or "unknown-backend"
+        _apply_record(by_backend.setdefault(backend, BenchmarkSummary(label=backend)), record)
         _apply_record(by_model.setdefault(_model_label(record), BenchmarkSummary(label=_model_label(record))), record)
         category = record.benchmark_category or "uncategorized"
         _apply_record(by_category.setdefault(category, BenchmarkSummary(label=category)), record)
@@ -70,6 +74,7 @@ def build_benchmark_report(
     return BenchmarkReport(
         total_runs=len(benchmark_records),
         overall=overall,
+        by_backend=_sorted_summaries(by_backend),
         by_model=_sorted_summaries(by_model),
         by_category=_sorted_summaries(by_category),
         study_id=study_id,
@@ -96,6 +101,10 @@ def render_benchmark_report_markdown(report: BenchmarkReport) -> str:
         "## Overall",
         "",
         _summary_table([report.overall]),
+        "",
+        "## By Backend",
+        "",
+        _summary_table(report.by_backend),
         "",
         "## By Model",
         "",

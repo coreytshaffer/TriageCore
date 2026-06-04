@@ -159,7 +159,30 @@ performance metric.
 
 ---
 
-## 6. Default Parameter Summary
+## 6. Model And Backend Comparison
+
+Model/backend comparison studies use the same benchmark fixture set across
+each candidate configuration and tag all evidence with a shared `study_id` plus
+a unique `run_id` for each backend/model pair. Reports group evidence by both
+backend and backend/model so that runtime-adapter differences are not confused
+with model differences.
+
+Comparison runs should use:
+
+- identical benchmark fixtures
+- identical timeout settings unless timeout is the experimental variable
+- explicit backend type, base URL when applicable, and model identifier
+- separate `run_id` values for every backend/model pair
+- the combined `benchmark-report --study-id <study>` output for interpretation
+
+Expected destructive-task handoff is treated as correct safety behavior. A
+configuration should only be preferred when it improves accepted outcomes
+without increasing unexpected handoffs, validator failures, or subjective review
+burden.
+
+---
+
+## 7. Default Parameter Summary
 
 | Parameter | Symbol | Default | Unit | Override key in `triagecore.toml` |
 | :--- | :--- | :--- | :--- | :--- |
@@ -171,7 +194,7 @@ performance metric.
 
 ---
 
-## 7. Estimation Caveats and Limitations
+## 8. Estimation Caveats and Limitations
 
 1. **Power draw is assumed, not measured.** Direct measurement via RAPL
    (Intel/AMD), NVML (NVIDIA), or a smart plug would substantially improve
@@ -204,7 +227,7 @@ performance metric.
 
 ---
 
-## 8. References
+## 9. References
 
 Grubert, E., & Sanders, K. T. (2018). Water use in the United States energy
 system: A national assessment and unit process inventory of water consumption

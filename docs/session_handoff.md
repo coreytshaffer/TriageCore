@@ -66,4 +66,6 @@ Reviewable ledger cards now include an optional `Review load` selector (`not_rec
 
 The superseded `study_001` / `trial_001` structured-extraction proposals were explicitly rejected in `.triagecore/learning_reviews.jsonl`: `961b769f4d1c`, `2cc74fd2cabf`, and `6b2e9cdfdd20`. They were rejected because the failure was traced to `site_name` benchmark ambiguity and resolved by the `site_id` fixture/validator clarification in `trial_002`.
 
-Next step: choose whether to expand the Study 001 benchmark set or begin model/backend comparison.
+Study 002 model/backend comparison has begun. Benchmark reports now include a `By Backend` grouping, and `docs/study_002_model_backend_comparison.md` defines the comparison protocol and command pattern.
+
+Next step: run the first `study_002` comparison pair and generate `reports/study_002_model_backend_comparison.md`.

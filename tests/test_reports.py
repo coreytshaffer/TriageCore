@@ -45,6 +45,8 @@ def test_build_benchmark_report_summarizes_model_and_category():
     assert report.overall.total_tokens == 140
     assert report.overall.average_elapsed_seconds == 3.0
     assert report.overall.average_tokens_per_second == 30.0
+    assert report.by_backend[0].label == "ollama"
+    assert report.by_backend[0].runs == 2
     assert report.by_model[0].label == "ollama/qwen2.5-coder:7b"
     assert report.by_category[0].label == "python_generation"
     assert report.by_category[1].label == "python_repair"
@@ -75,6 +77,8 @@ def test_render_benchmark_report_markdown_includes_rates():
     markdown = render_benchmark_report_markdown(report)
 
     assert "custom/local-model" in markdown
+    assert "## By Backend" in markdown
+    assert "| custom | 1 | 100.0%" in markdown
     assert "100.0%" in markdown
 
 

@@ -253,6 +253,31 @@ burden (\texttt{not\_recorded}, \texttt{low}, \texttt{medium}, or
 an objective performance metric.
 
 % ─────────────────────────────────────────────────────────────────────────────
+\section{Model and Backend Comparison}
+% ─────────────────────────────────────────────────────────────────────────────
+
+Model/backend comparison studies use the same benchmark fixture set across
+each candidate configuration and tag all evidence with a shared
+\texttt{study\_id} plus a unique \texttt{run\_id} for each backend/model pair.
+Reports group evidence by both backend and backend/model so that
+runtime-adapter differences are not confused with model differences.
+
+Comparison runs should use:
+\begin{itemize}
+  \item identical benchmark fixtures
+  \item identical timeout settings unless timeout is the experimental variable
+  \item explicit backend type, base URL when applicable, and model identifier
+  \item separate \texttt{run\_id} values for every backend/model pair
+  \item the combined \texttt{benchmark-report --study-id <study>} output for
+    interpretation
+\end{itemize}
+
+Expected destructive-task handoff is treated as correct safety behavior. A
+configuration should only be preferred when it improves accepted outcomes
+without increasing unexpected handoffs, validator failures, or subjective review
+burden.
+
+% ─────────────────────────────────────────────────────────────────────────────
 \section{Default Parameter Summary}
 % ─────────────────────────────────────────────────────────────────────────────
 
