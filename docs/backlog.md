@@ -69,7 +69,7 @@ Resolution: diagnostic output showed valid JSON with ambiguous `site_name` seman
   * Add a Details/Hide toggle to ledger task cards.
   * Show timestamps, routing, benchmark context, handoff reasons, artifacts, and review metrics inside expanded cards.
   * Preserve expanded cards across ledger refreshes.
-* [ ] **Story 6.2: Main Screen Ledger Feed**
+* [x] **Story 6.2: Main Screen Ledger Feed**
   * Add a compact scrolling task ledger feed to the main dispatch/dashboard screen.
   * Keep the feed lightweight so it gives recent activity context without replacing the full ledger view.
 * [x] **Story 6.3: Live Backend Activity Panel**
@@ -88,3 +88,9 @@ Resolution: diagnostic output showed valid JSON with ambiguous `site_name` seman
   * Audit keyboard focus order, visible focus states, and minimum click/tap target size.
   * Add user-adjustable density or reduced-motion preferences if visual load increases.
   * Consider a lightweight workload self-check after complex agent sessions.
+* [x] **Story 6.7: Review Card Decision Clarity**
+  * Add a compact assessment snapshot to each ledger review card.
+  * Keep forensic evidence behind Details so approval/denial does not require scanning every field.
+  * Rename review actions to `Approve & Load` and `Deny`.
+* [x] **Story 6.8: Verification Guidance**
+  * Add a practical verification guide for code checks, UI review checks, study evidence checks, and human learning reviews.

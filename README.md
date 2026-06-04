@@ -93,6 +93,8 @@ The project methodology is documented in [`docs/methodology.md`](docs/methodolog
 
 The shared evidence schema is documented in [`docs/evidence_schema.md`](docs/evidence_schema.md). The first repeatable study plan is [`docs/study_001_local_model_baseline.md`](docs/study_001_local_model_baseline.md).
 
+Use [`docs/verification_guide.md`](docs/verification_guide.md) for practical code, UI, study-evidence, and human-review verification checks.
+
 ## Benchmark Tasks
 
 TriageCore includes repeatable benchmark fixtures in [`benchmarks/tasks.jsonl`](benchmarks/tasks.jsonl). List them without contacting a backend:

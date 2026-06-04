@@ -73,6 +73,31 @@ def test_ledger_detail_text_includes_review_and_benchmark_context():
     assert "reports/study_001_trial_002_benchmark_report.md" in text
 
 
+def test_review_assessment_text_keeps_decision_signal_compact():
+    from triage_core.task_ledger import TaskRecord
+    from triage_core.ui.app import _review_assessment_text
+
+    task = TaskRecord(
+        task_id="task-456",
+        runner="local_benchmark",
+        status="handoff_generated",
+        backend_name="ollama",
+        model="qwen2.5-coder:7b-triagecore",
+        expected_status="success",
+        observed_status="handoff_required",
+        human_review_required=True,
+        total_tokens=128,
+        energy_kwh_estimate=0.002,
+    )
+
+    text = _review_assessment_text(task)
+
+    assert "Decision needed: review required before adoption" in text
+    assert "Path: local_benchmark / ollama / qwen2.5-coder:7b-triagecore" in text
+    assert "Benchmark: expected success, observed handoff_required" in text
+    assert "Cost: 128 tokens, 0.002000 kWh" in text
+
+
 def test_read_text_tail_returns_last_lines(tmp_path):
     from triage_core.ui.app import _read_text_tail
 
@@ -90,3 +115,26 @@ def test_agent_state_helpers_are_human_readable():
     assert _agent_display_name("repo_mapper") == "Repo Mapper"
     assert color == "#22c55e"
     assert label == "Running"
+
+
+def test_compact_ledger_line_prioritizes_recent_status():
+    from triage_core.task_ledger import TaskRecord
+    from triage_core.ui.app import _compact_ledger_line
+
+    task = TaskRecord(
+        task_id="abcdef123456",
+        updated_at="2026-06-04T08:00:00+00:00",
+        title="Review local draft",
+        status="local_draft_generated",
+        runner="local_llm",
+        model="local-model",
+        human_review_required=True,
+    )
+
+    line = _compact_ledger_line(task)
+
+    assert "2026-06-04T08:00:00+00:00" in line
+    assert "Review local draft" in line
+    assert "#abcdef12" in line
+    assert "local draft generated" in line
+    assert "review required" in line

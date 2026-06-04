@@ -179,6 +179,81 @@ def _ledger_detail_text(task) -> str:
     return "\n".join(_ledger_detail_lines(task))
 
 
+def _review_assessment_lines(task) -> list[str]:
+    status = task.status or "pending"
+    if status == "reviewed":
+        decision = "approved" if task.accepted else "denied"
+        lines = [f"Decision recorded: {decision}"]
+    elif task.human_review_required:
+        lines = ["Decision needed: review required before adoption"]
+    elif status in ["local_draft_generated", "handoff_generated", "council_completed"]:
+        lines = ["Decision needed: draft is ready for review"]
+    else:
+        lines = [f"Current state: {status.replace('_', ' ')}"]
+
+    runner_bits = []
+    if task.runner:
+        runner_bits.append(task.runner)
+    backend = task.backend_name or task.backend
+    if backend:
+        runner_bits.append(backend)
+    if task.model:
+        runner_bits.append(task.model)
+    if runner_bits:
+        lines.append(f"Path: {' / '.join(runner_bits)}")
+
+    if task.handoff_reason:
+        lines.append(f"Reason: {task.handoff_reason}")
+    elif task.observed_status or task.expected_status:
+        lines.append(
+            f"Benchmark: expected {task.expected_status or 'n/a'}, observed {task.observed_status or 'n/a'}"
+        )
+
+    cost_bits = []
+    total_tok = task.total_tokens or (
+        (task.estimated_input_tokens or 0) + (task.estimated_output_tokens or 0)
+    )
+    if total_tok:
+        cost_bits.append(f"{total_tok} tokens")
+    if task.duration_seconds:
+        cost_bits.append(f"{task.duration_seconds:.1f}s")
+    if task.energy_kwh_estimate:
+        cost_bits.append(f"{task.energy_kwh_estimate:.6f} kWh")
+    if cost_bits:
+        lines.append(f"Cost: {', '.join(cost_bits)}")
+
+    if task.artifact_paths:
+        lines.append(f"Artifact: {task.artifact_paths[-1]}")
+
+    return lines[:5]
+
+
+def _review_assessment_text(task) -> str:
+    return "\n".join(f"- {line}" for line in _review_assessment_lines(task))
+
+
+def _compact_ledger_line(task) -> str:
+    status = task.status or "pending"
+    if status == "reviewed":
+        status = "accepted" if task.accepted else "rejected"
+
+    title = task.title or task.description or task.task_id[:12]
+    if len(title) > 70:
+        title = title[:67] + "..."
+
+    timestamp = task.updated_at or task.created_at or "no timestamp"
+    meta = [f"#{task.task_id[:8]}", status.replace("_", " ")]
+    if task.runner:
+        meta.append(f"runner: {task.runner}")
+    model = task.model or task.backend_name or task.backend
+    if model:
+        meta.append(f"model: {model}")
+    if task.human_review_required and task.status != "reviewed":
+        meta.append("review required")
+
+    return f"{timestamp} | {title} | {' · '.join(meta)}"
+
+
 def _read_text_tail(path: str, max_lines: int = 400) -> str:
     if not os.path.exists(path):
         return ""
@@ -687,6 +762,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         self.agent_status = {}
         self._last_logs_render = None
         self._last_inline_logs_render = None
+        self._last_ledger_feed_render = None
 
         # Setup runtime file logger
         import logging
@@ -1077,6 +1153,35 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         )
         self.inline_log_box.grid(row=3, column=0, sticky="ew")
 
+        feed_hdr = ctk.CTkFrame(result_outer, fg_color="transparent")
+        feed_hdr.grid(row=4, column=0, sticky="ew", pady=(12, 4))
+        feed_hdr.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(
+            feed_hdr,
+            text="Recent task ledger",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color="#9ca3af",
+            anchor="w",
+        ).grid(row=0, column=0, sticky="w")
+        ctk.CTkButton(
+            feed_hdr,
+            text="Open Ledger",
+            width=96,
+            height=24,
+            fg_color="transparent",
+            border_width=1,
+            command=lambda: self.select_frame("ledger"),
+        ).grid(row=0, column=1, sticky="e")
+
+        self.ledger_feed_frame = ctk.CTkScrollableFrame(
+            result_outer,
+            height=150,
+            corner_radius=8,
+            fg_color=("gray88", "gray18"),
+        )
+        self.ledger_feed_frame.grid(row=5, column=0, sticky="ew")
+        self.ledger_feed_frame.grid_columnconfigure(0, weight=1)
+
     def _show_result_metrics(
         self,
         model,
@@ -1245,7 +1350,24 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
                 anchor="w",
             ).grid(row=2, column=0, columnspan=4, padx=10, pady=(0, 8), sticky="w")
 
-            next_row = 3
+            ctk.CTkLabel(
+                card,
+                text="Assessment snapshot",
+                font=ctk.CTkFont(size=11, weight="bold"),
+                text_color="#93c5fd",
+                anchor="w",
+            ).grid(row=3, column=0, columnspan=4, padx=10, pady=(0, 2), sticky="w")
+            ctk.CTkLabel(
+                card,
+                text=_review_assessment_text(t),
+                font=ctk.CTkFont(size=11),
+                text_color="#e5e7eb",
+                justify="left",
+                anchor="w",
+                wraplength=820,
+            ).grid(row=4, column=0, columnspan=4, padx=10, pady=(0, 10), sticky="ew")
+
+            next_row = 5
             if is_expanded:
                 details = ctk.CTkLabel(
                     card,
@@ -1279,9 +1401,9 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
 
                 accept_btn = ctk.CTkButton(
                     btn_frame,
-                    text="Accept Draft",
-                    width=100,
-                    height=24,
+                    text="Approve & Load",
+                    width=132,
+                    height=32,
                     fg_color="#166534",
                     hover_color="#15803d",
                     command=lambda t_id=t.task_id: self._review_task(t_id, True),
@@ -1290,9 +1412,9 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
 
                 reject_btn = ctk.CTkButton(
                     btn_frame,
-                    text="Reject Draft",
-                    width=100,
-                    height=24,
+                    text="Deny",
+                    width=92,
+                    height=32,
                     fg_color="#7f1d1d",
                     hover_color="#991b1b",
                     command=lambda t_id=t.task_id: self._review_task(t_id, False),
@@ -1307,6 +1429,77 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
                 )
                 timer_lbl.pack(side="left", padx=(10, 0))
                 self.timer_labels[t.task_id] = (timer_lbl, t)
+
+    def _refresh_compact_ledger_feed(self, force=True):
+        if not hasattr(self, "ledger_feed_frame"):
+            return
+
+        tasks = self.ledger.get_all_tasks()[:6]
+        render_key = "\n".join(_compact_ledger_line(t) for t in tasks)
+        if not force and render_key == self._last_ledger_feed_render:
+            return
+
+        for w in self.ledger_feed_frame.winfo_children():
+            w.destroy()
+
+        if not tasks:
+            ctk.CTkLabel(
+                self.ledger_feed_frame,
+                text="No ledger activity yet.",
+                text_color="#9ca3af",
+                font=ctk.CTkFont(size=11),
+            ).grid(row=0, column=0, padx=10, pady=14, sticky="w")
+            self._last_ledger_feed_render = render_key
+            return
+
+        for i, task in enumerate(tasks):
+            status = task.status or "pending"
+            if status == "reviewed":
+                status = "accepted" if task.accepted else "rejected"
+            badge_bg, badge_fg = _badge_color(status)
+
+            row = ctk.CTkFrame(
+                self.ledger_feed_frame,
+                corner_radius=8,
+                fg_color=("gray82", "gray22"),
+            )
+            row.grid(row=i, column=0, padx=6, pady=4, sticky="ew")
+            row.grid_columnconfigure(1, weight=1)
+
+            ctk.CTkLabel(
+                row,
+                text=f" {status.replace('_', ' ')} ",
+                fg_color=badge_bg,
+                text_color=badge_fg,
+                corner_radius=6,
+                font=ctk.CTkFont(size=9, weight="bold"),
+            ).grid(row=0, column=0, padx=(8, 6), pady=(6, 2), sticky="w")
+
+            ctk.CTkLabel(
+                row,
+                text=task.title or task.task_id[:12],
+                font=ctk.CTkFont(size=11, weight="bold"),
+                anchor="w",
+            ).grid(row=0, column=1, padx=(0, 8), pady=(6, 2), sticky="ew")
+
+            ctk.CTkLabel(
+                row,
+                text=f"#{task.task_id[:8]}",
+                font=ctk.CTkFont(size=9),
+                text_color="#9ca3af",
+                anchor="e",
+            ).grid(row=0, column=2, padx=(0, 8), pady=(6, 2), sticky="e")
+
+            ctk.CTkLabel(
+                row,
+                text=_compact_ledger_line(task),
+                font=ctk.CTkFont(size=10),
+                text_color="#9ca3af",
+                anchor="w",
+                wraplength=760,
+            ).grid(row=1, column=0, columnspan=3, padx=8, pady=(0, 6), sticky="ew")
+
+        self._last_ledger_feed_render = render_key
 
     def _toggle_ledger_details(self, task_id):
         if task_id in self.expanded_ledger_task_ids:
@@ -1356,6 +1549,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             )
 
         self._refresh_ledger()
+        self._refresh_compact_ledger_feed()
         self._update_ticker()
         self._refresh_telemetry()
 
@@ -1898,6 +2092,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             self.dispatch_frame.grid(row=0, column=1, sticky="nsew")
             self.telemetry_frame.grid(row=1, column=1, sticky="nsew")
             self._refresh_telemetry()
+            self._refresh_compact_ledger_feed()
         elif name == "ledger":
             self.ledger_frame.grid(row=0, column=1, rowspan=2, sticky="nsew")
             self._refresh_ledger()
@@ -1924,6 +2119,8 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             self._t_emissions.set_value(f"{gco2:.4f} gCO₂e")
             self._t_water.set_value(f"{water:.4f} L")
             self._t_embodied.set_value(f"{embodied:.4f} gCO₂e")
+            if getattr(self, "_current_frame", None) == "dashboard":
+                self._refresh_compact_ledger_feed(force=False)
         except Exception:
             pass
 
@@ -1993,6 +2190,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             },
         )
         self._log_activity(f"Task {task_id[:8]} created for {runner_type}")
+        self._refresh_compact_ledger_feed()
 
         cat = TaskClassifier.classify(prompt, backend=self.active_backend)
         danger = DangerDetector.analyze(prompt, files)

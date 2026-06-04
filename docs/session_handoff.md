@@ -10,10 +10,11 @@ Last updated: 2026-06-04
 
 Recent commits:
 
+- `324759c feat: improve dispatch observability and controls`
+- `1cdc7f1 feat: expand ledger cards with review details`
 - `bc74636 fix: clarify structured extraction and timestamp tasks`
 - `c170c7f feat: scope benchmark reports by run`
 - `71fc8bf docs: add session handoff checkpoint`
-- `7ea8741 test: harden study benchmark validators`
 
 ## What Changed Tonight
 
@@ -57,6 +58,8 @@ Ledger task cards now have a Details/Hide toggle. Expanded cards show timestamps
 
 The dispatch screen now opens fullscreen by default, uses larger self-describing dispatch controls, includes a compact live backend/activity log under the output box, and shows richer subagent states for queued/running/complete/issue worker activity.
 
-Next step: review the superseded `trial_001` learning proposals and record explicit human decisions before treating them as accepted or rejected lessons.
+The dispatch screen now also includes a compact recent task ledger feed. Ledger review cards include a short assessment snapshot before dense details, with clearer `Approve & Load` and `Deny` actions for human review.
 
-Future UI idea captured in the backlog: add a compact scrolling ledger feed to the main dispatch/dashboard screen.
+Verification instructions are now documented in `docs/verification_guide.md`, including code checks, UI review checks, study evidence checks, and human-reviewed learning rules.
+
+Next step: review the superseded `trial_001` learning proposals and record explicit human decisions before treating them as accepted or rejected lessons.
