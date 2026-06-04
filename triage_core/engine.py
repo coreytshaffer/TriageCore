@@ -1,11 +1,11 @@
 import time
 import requests
 from typing import Callable, Dict, Any, Optional
+from .backends import LocalBackend
 
 class TriageEngine:
-    def __init__(self, local_url: str, local_model: str, timeout_seconds: int = 45):
-        self.local_url = local_url.rstrip('/')
-        self.local_model = local_model
+    def __init__(self, backend: LocalBackend, timeout_seconds: int = 45):
+        self.backend = backend
         self.timeout = timeout_seconds
 
     def execute_task(self, task_prompt: str, raw_data: str, validator: Optional[Callable[[str], bool]] = None) -> Dict[str, Any]:
@@ -15,42 +15,32 @@ class TriageEngine:
         """
         start_time = time.time()
         try:
-            payload = {
-                "model": self.local_model,
-                "messages": [
-                    {"role": "system", "content": "You are a rigid parsing worker. Output ONLY raw code or markdown requested. No chat."},
-                    {"role": "user", "content": f"{task_prompt}\n\nDATA:\n{raw_data}"}
-                ],
-                "temperature": 0.1
-            }
+            messages = [
+                {"role": "system", "content": "You are a rigid parsing worker. Output ONLY raw code or markdown requested. No chat."},
+                {"role": "user", "content": f"{task_prompt}\n\nDATA:\n{raw_data}"}
+            ]
             
-            # Send post request with strict temporal budget
-            response = requests.post(
-                f"{self.local_url}/v1/chat/completions", 
-                json=payload, 
+            backend_response = self.backend.generate(
+                messages=messages,
+                temperature=0.1,
                 timeout=self.timeout
             )
             
-            if response.status_code == 200:
-                data = response.json()
-                choices = data.get('choices', [])
-                if not choices:
-                    return self._trigger_handoff(task_prompt, raw_data, "Local worker returned unexpected JSON schema (no choices).")
-                
-                message = choices[0].get('message', {})
-                output = message.get('content')
-                if output is None:
-                    return self._trigger_handoff(task_prompt, raw_data, "Local worker returned unexpected JSON schema (no content).")
-                    
-                elapsed = time.time() - start_time
-                
-                # Run quality gates if provided
-                if validator and not validator(output):
-                    return self._trigger_handoff(task_prompt, raw_data, "Local output failed quality gate validation.")
-                
-                return {"status": "success", "source": "local", "elapsed_seconds": elapsed, "output": output}
-            else:
-                return self._trigger_handoff(task_prompt, raw_data, f"Local worker returned status {response.status_code}.")
+            elapsed = time.time() - start_time
+            
+            # Run quality gates if provided
+            if validator and not validator(backend_response.text):
+                return self._trigger_handoff(task_prompt, raw_data, "Local output failed quality gate validation.")
+            
+            return {
+                "status": "success", 
+                "source": "local", 
+                "elapsed_seconds": elapsed, 
+                "output": backend_response.text,
+                "backend_name": backend_response.backend_name,
+                "usage": backend_response.usage,
+                "timings": backend_response.timings
+            }
 
         except requests.exceptions.Timeout:
             # Handle the temporal budget exhaustion

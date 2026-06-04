@@ -5,12 +5,13 @@ class TriageRouter:
     """Routes tasks between local execution or hands them off."""
     
     def should_offload(self, prompt: str, data: str) -> Dict[str, Any]:
+        """Determines if a task should bypass local entirely based on size or risk."""
         danger_info = DangerDetector.analyze(prompt)
         
-        if danger_info["risk_level"] in ["medium", "high"]:
+        if danger_info.risk_level in ["medium", "high"]:
             return {
-                "offload_recommended": True,
-                "reason": f"Risk level {danger_info['risk_level']} detected. {danger_info['reasons']}"
+                "bypass_local": True,
+                "reason": f"Risk level {danger_info.risk_level} detected. {'; '.join(danger_info.reasons)}"
             }
             
         # Optional: Add context length check to offload massive files

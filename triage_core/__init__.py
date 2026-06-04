@@ -4,6 +4,7 @@ from .validators import PythonSyntaxValidator
 from .handoff import HandoffPacket
 from .classifier import TaskClassifier, DangerDetector
 from .routers import TriageRouter
+from .backends import LocalBackend, OpenAICompatibleBackend, create_backend
 
 __all__ = [
     "TriageEngine",
@@ -12,5 +13,8 @@ __all__ = [
     "HandoffPacket",
     "TaskClassifier",
     "DangerDetector",
-    "TriageRouter"
+    "TriageRouter",
+    "LocalBackend",
+    "OpenAICompatibleBackend",
+    "create_backend"
 ]

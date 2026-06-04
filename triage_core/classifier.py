@@ -1,5 +1,6 @@
 import re
-from typing import Dict, Any
+from typing import Dict, Any, List, Literal
+from dataclasses import dataclass, field
 
 class TaskClassifier:
     """Classifies prompts into task categories."""
@@ -28,51 +29,79 @@ class TaskClassifier:
         return "refactor" # default fallback
 
 
+@dataclass
+class DangerInfo:
+    risk_level: Literal["low", "medium", "high"]
+    recommended_profile: Literal["read-only", "workspace-write", "workspace-write-with-approval", "blocked"]
+    reasons: List[str] = field(default_factory=list)
+    risk_categories: List[str] = field(default_factory=list)
+
+
 class DangerDetector:
     """Detects risky operations and recommends permission profiles."""
     
-    RISKY_PATTERNS = [
-        r"rm\s+-rf", r"\.env", r"secret", r"password", r"auth", r"token", 
-        r"deploy", r"\.bashrc", r"\.zshrc", r"sudo", r"install"
-    ]
+    DESTRUCTIVE_OPS = [r"rm\s+-rf", r"delete all", r"wipe"]
+    SYSTEM_MODS = [r"sudo", r"/etc", r"\~/\.bashrc", r"\~/\.zshrc"]
+    SECRETS_AUTH = [r"\.env", r"secret", r"password", r"token", r"auth", r"credentials"]
+    PACKAGE_MGMT = [r"pip install", r"npm install", r"apt-get", r"poetry add"]
+    DEPLOYMENT_CONFIG = [r"deploy", r"docker-compose", r"k8s", r"terraform", r"aws"]
 
     @classmethod
-    def analyze(cls, prompt: str, target_files: list[str] = None) -> Dict[str, str]:
+    def analyze(cls, prompt: str, target_files: List[str] = None) -> DangerInfo:
         target_files = target_files or []
         prompt_lower = prompt.lower()
         
         reasons = []
-        for pattern in cls.RISKY_PATTERNS:
-            if re.search(pattern, prompt_lower):
-                reasons.append(f"Prompt contains risky keyword: {pattern}")
-        
-        for f in target_files:
-            if ".env" in f or "secret" in f or "auth" in f:
-                reasons.append(f"Target file is sensitive: {f}")
+        categories = set()
 
-        if len(reasons) > 1 or "sudo" in prompt_lower or "rm -rf" in prompt_lower:
-            return {
-                "risk_level": "high",
-                "recommended_profile": "blocked",
-                "reasons": "; ".join(reasons)
-            }
-        elif len(reasons) == 1:
-            return {
-                "risk_level": "medium",
-                "recommended_profile": "workspace-write-with-approval",
-                "reasons": "; ".join(reasons)
-            }
+        def check_patterns(patterns, category_name):
+            for pattern in patterns:
+                if re.search(pattern, prompt_lower):
+                    reasons.append(f"Prompt contains {category_name} keyword: {pattern}")
+                    categories.add(category_name)
+                
+                # Check target files for the same keywords where relevant
+                for f in target_files:
+                    if re.search(pattern, f.lower()):
+                        reasons.append(f"Target file is sensitive ({category_name}): {f}")
+                        categories.add(category_name)
+
+        check_patterns(cls.DESTRUCTIVE_OPS, "destructive_ops")
+        check_patterns(cls.SYSTEM_MODS, "system_modifications")
+        check_patterns(cls.SECRETS_AUTH, "secrets_and_auth")
+        check_patterns(cls.PACKAGE_MGMT, "package_management")
+        check_patterns(cls.DEPLOYMENT_CONFIG, "deployment_config")
+
+        categories_list = list(categories)
+
+        if "destructive_ops" in categories or "system_modifications" in categories or "secrets_and_auth" in categories:
+            return DangerInfo(
+                risk_level="high",
+                recommended_profile="blocked",
+                reasons=reasons,
+                risk_categories=categories_list
+            )
+            
+        if "package_management" in categories or "deployment_config" in categories:
+            return DangerInfo(
+                risk_level="medium",
+                recommended_profile="workspace-write-with-approval",
+                reasons=reasons,
+                risk_categories=categories_list
+            )
         
-        # Safe default
+        # Safe defaults
         if "read" in prompt_lower and "write" not in prompt_lower and "edit" not in prompt_lower:
-            return {
-                "risk_level": "low",
-                "recommended_profile": "read-only",
-                "reasons": "No risky patterns detected. Task appears to be inspection only."
-            }
+            return DangerInfo(
+                risk_level="low",
+                recommended_profile="read-only",
+                reasons=["No risky patterns detected. Task appears to be inspection only."],
+                risk_categories=[]
+            )
         
-        return {
-            "risk_level": "low",
-            "recommended_profile": "workspace-write",
-            "reasons": "Standard code modification requested."
-        }
+        return DangerInfo(
+            risk_level="low",
+            recommended_profile="workspace-write",
+            reasons=["Standard code modification requested."],
+            risk_categories=[]
+        )

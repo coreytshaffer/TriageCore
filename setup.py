@@ -15,6 +15,9 @@ setup(
             "triagecore=triage_core.cli:main",
         ]
     },
+    extras_require={
+        "ui": ["customtkinter>=5.2.0", "Pillow>=10.0.0", "pyshortcuts>=1.9.0"]
+    },
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",

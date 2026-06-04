@@ -1,0 +1,146 @@
+import json
+import os
+import uuid
+from datetime import datetime, timezone
+from dataclasses import dataclass, field
+from typing import Dict, Any, List, Optional
+
+@dataclass
+class TaskRecord:
+    task_id: str
+    created_at: str = ""
+    title: str = ""
+    description: str = ""
+    target_files: List[str] = field(default_factory=list)
+    runner: Optional[str] = None
+    status: str = "pending"
+    permission_profile: Optional[str] = None
+    risk_level: Optional[str] = None
+    energy_kwh_estimate: float = 0.0
+    emissions_gco2e_estimate: float = 0.0
+    grid_intensity_gco2e_per_kwh: float = 0.0
+    human_review_required: bool = False
+    accepted: bool = False
+    artifact_paths: List[str] = field(default_factory=list)
+
+class TaskLedger:
+    def __init__(self, ledger_dir: str = ".triagecore"):
+        self.ledger_dir = ledger_dir
+        self.ledger_path = os.path.join(self.ledger_dir, "ledger.jsonl")
+        os.makedirs(self.ledger_dir, exist_ok=True)
+
+    def append_event(self, task_id: str, event_type: str, payload: Dict[str, Any]):
+        event = {
+            "event_id": str(uuid.uuid4()),
+            "task_id": task_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "event_type": event_type,
+            "payload": payload
+        }
+        with open(self.ledger_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(event) + "\n")
+
+    def get_task(self, task_id: str) -> Optional[TaskRecord]:
+        if not os.path.exists(self.ledger_path):
+            return None
+            
+        record = TaskRecord(task_id=task_id)
+        found = False
+        
+        with open(self.ledger_path, "r", encoding="utf-8") as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                    
+                if event.get("task_id") != task_id:
+                    continue
+                    
+                found = True
+                etype = event.get("event_type")
+                payload = event.get("payload", {})
+                
+                if etype == "task_created":
+                    record.created_at = event.get("timestamp", "")
+                    record.title = payload.get("title", "")
+                    record.description = payload.get("description", "")
+                    record.target_files = payload.get("target_files", [])
+                elif etype == "task_classified":
+                    record.permission_profile = payload.get("recommended_profile")
+                    record.risk_level = payload.get("risk_level")
+                    if record.risk_level in ["medium", "high"]:
+                        record.human_review_required = True
+                elif etype == "runner_selected":
+                    record.runner = payload.get("runner")
+                elif etype in ["handoff_generated", "local_draft_generated"]:
+                    record.status = etype
+                    if "artifact_path" in payload:
+                        record.artifact_paths.append(payload["artifact_path"])
+                elif etype == "energy_estimated":
+                    record.energy_kwh_estimate += payload.get("energy_kwh", 0.0)
+                    record.emissions_gco2e_estimate += payload.get("emissions_gco2e", 0.0)
+                    record.grid_intensity_gco2e_per_kwh = payload.get("grid_intensity_gco2e_per_kwh", 0.0)
+                elif etype == "review_completed":
+                    record.status = "reviewed"
+                    record.accepted = payload.get("accepted", False)
+                elif etype == "task_blocked":
+                    record.status = "blocked"
+
+        return record if found else None
+
+    def get_all_tasks(self) -> List[TaskRecord]:
+        if not os.path.exists(self.ledger_path):
+            return []
+            
+        tasks_map: Dict[str, TaskRecord] = {}
+        with open(self.ledger_path, "r", encoding="utf-8") as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                    
+                task_id = event.get("task_id")
+                if not task_id:
+                    continue
+                if task_id not in tasks_map:
+                    tasks_map[task_id] = TaskRecord(task_id=task_id)
+                
+                # Apply reducer logic
+                record = tasks_map[task_id]
+                etype = event.get("event_type")
+                payload = event.get("payload", {})
+                
+                if etype == "task_created":
+                    record.created_at = event.get("timestamp", "")
+                    record.title = payload.get("title", "")
+                    record.description = payload.get("description", "")
+                    record.target_files = payload.get("target_files", [])
+                elif etype == "task_classified":
+                    record.permission_profile = payload.get("recommended_profile")
+                    record.risk_level = payload.get("risk_level")
+                    if record.risk_level in ["medium", "high"]:
+                        record.human_review_required = True
+                elif etype == "runner_selected":
+                    record.runner = payload.get("runner")
+                elif etype in ["handoff_generated", "local_draft_generated"]:
+                    record.status = etype
+                    if "artifact_path" in payload:
+                        record.artifact_paths.append(payload["artifact_path"])
+                elif etype == "energy_estimated":
+                    record.energy_kwh_estimate += payload.get("energy_kwh", 0.0)
+                    record.emissions_gco2e_estimate += payload.get("emissions_gco2e", 0.0)
+                    record.grid_intensity_gco2e_per_kwh = payload.get("grid_intensity_gco2e_per_kwh", 0.0)
+                elif etype == "review_completed":
+                    record.status = "reviewed"
+                    record.accepted = payload.get("accepted", False)
+                elif etype == "task_blocked":
+                    record.status = "blocked"
+
+        # Return sorted by created_at descending
+        return sorted(list(tasks_map.values()), key=lambda x: x.created_at, reverse=True)

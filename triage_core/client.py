@@ -1,18 +1,31 @@
 from typing import Callable, Dict, Any, Optional
 from .engine import TriageEngine
 from .routers import TriageRouter
+from .backends import LocalBackend, create_backend
 
 class TriageClient:
-    def __init__(self, local_url: str = "http://127.0.0.1:1234", local_model: str = "local-model", timeout_seconds: int = 45):
+    def __init__(
+        self,
+        backend_type: str = "ollama",
+        model: str = "local-model",
+        base_url: Optional[str] = None,
+        backend: Optional[LocalBackend] = None,
+        timeout_seconds: int = 45
+    ):
         """
         Initializes the TriageClient which manages local execution and handoff routing.
         
         Args:
-            local_url: The base URL of the local API server (e.g., LM Studio, Ollama).
-            local_model: The model string expected by the local server.
+            backend_type: The preset to use ("ollama", "vllm", "llama.cpp", "custom").
+            model: The model string expected by the local server.
+            base_url: Optional custom URL base.
+            backend: Explicit LocalBackend instance (overrides preset factory).
             timeout_seconds: The strict temporal budget for local generation.
         """
-        self.engine = TriageEngine(local_url=local_url, local_model=local_model, timeout_seconds=timeout_seconds)
+        if backend is None:
+            backend = create_backend(backend_type=backend_type, model=model, base_url=base_url)
+            
+        self.engine = TriageEngine(backend=backend, timeout_seconds=timeout_seconds)
         self.router = TriageRouter()
 
     def run_task(self, prompt: str, data: str, validator: Optional[Callable[[str], bool]] = None) -> Dict[str, Any]:

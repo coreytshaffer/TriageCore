@@ -4,11 +4,20 @@
 
 TriageCore provides safety rails, task classification, and structured handoff packets for AI coding agents. Instead of giving agents unbounded access or automatically falling back to expensive cloud models when things fail, TriageCore evaluates tasks locally, assigns permission profiles, and generates `.md` packets (Handoff Packets) for tools like Codex and Antigravity.
 
-## Core Philosophy
+## Permacomputing Orientation
 
-1. **Local Executes, Cloud Stays Out:** We've removed automatic cloud fallbacks. If an operation fails locally or hits a safety constraint, it doesn't quietly burn cloud tokens. It generates a structured `HandoffPacket` for a developer or specialized agent to review.
-2. **Safety by Default:** Tasks are classified by the `DangerDetector`. Requests to edit `.env` files, run `sudo`, or execute risky deletes (`rm -rf`) are flagged and restricted to `read-only` or `blocked` permission profiles.
-3. **Agent-Agnostic Packets:** TriageCore compiles instructions into standardized Markdown bundles. These bundles guide your agents (e.g., Antigravity or Codex) exactly on what to do, what files to touch, and how to verify their work.
+TriageCore is inspired by sustainable and permacomputing practices that emphasize sufficiency, repairability, visible infrastructure, and graceful operation under constraints.
+
+Rather than optimizing for maximum automation, TriageCore optimizes for bounded, reviewable, locally controlled developer-agent work.
+
+**Design commitments:**
+- Prefer local files over remote services.
+- Prefer Markdown, JSON, and TOML over opaque state.
+- Prefer small task packets over broad autonomous sessions.
+- Prefer explicit permission recommendations over silent execution.
+- Prefer deferral or refusal when a task is too broad, risky, or wasteful.
+- Preserve human review as a first-class part of the workflow.
+- Treat compute, attention, battery, trust, and hardware lifespan as scarce resources.
 
 ## Installation
 
@@ -20,9 +29,65 @@ cd TriageCore
 pip install -e .
 ```
 
-## CLI Usage
+## Pluggable Local Backends
 
-TriageCore provides a convenient CLI for generating agent task bundles:
+TriageCore supports pluggable backends so you can process tasks against any local runner without manually wrangling URLs. All local generations route through a unified `OpenAICompatibleBackend` adapter.
+
+You can configure your `TriageClient` with the following presets:
+
+### 1. Ollama (Default: `http://localhost:11434/v1`)
+```python
+from triage_core import TriageClient
+
+client = TriageClient(backend_type="ollama", model="qwen2.5-coder:7b")
+```
+
+### 2. vLLM (Default: `http://localhost:8000/v1`)
+```python
+client = TriageClient(backend_type="vllm", model="Qwen/Qwen2.5-Coder-7B-Instruct")
+```
+
+### 3. llama.cpp (Default: `http://localhost:8080/v1`)
+```python
+client = TriageClient(backend_type="llama.cpp", model="local-model")
+```
+
+### 4. Custom Backend (e.g., LM Studio)
+```python
+from triage_core.backends import OpenAICompatibleBackend
+from triage_core import TriageClient
+
+backend = OpenAICompatibleBackend(
+    name="lmstudio",
+    base_url="http://localhost:1234/v1",
+    model="local-model"
+)
+client = TriageClient(backend=backend)
+```
+
+## Features
+
+### 1. The TriageDesk GUI
+Launch the local control plane GUI to actively manage tasks, monitor telemetry, and interact with the local LLM engine:
+```bash
+triagecore desk
+```
+- **Live Local Engine:** Hooks directly into Ollama or LM Studio to stream generated code right into the UI.
+- **Energy-Aware Routing:** `psutil` integration actively monitors your battery life. If your battery dips below 20% while unplugged, TriageCore refuses to run heavy LLM tasks and prompts you to plug in (Permacomputing in action).
+- **Precision Telemetry:** Tracks exact energy consumption (kWh) and carbon emissions (gCO2e) in a local append-only ledger (`.triagecore/ledger.jsonl`).
+
+### 2. Post-Execution Safety Validators
+Audit the files your agents modify to ensure they didn't bypass the initial risk assessment:
+```bash
+triagecore audit <task_id> --files src/main.py
+```
+- **Scope Verification:** Flags modified files that were not in the original target list.
+- **Profile Adherence:** Blocks changes if the task was rated `read-only`.
+- **Escalation Detection:** Static analysis checks for `requests`, `socket`, `subprocess`, etc., if the task was classified as low-risk.
+
+## CLI Handoff Generation
+
+TriageCore provides a convenient CLI for generating agent task bundles offline:
 
 ### 1. Initialize Agent Configs
 Generate a default `AGENTS.md` file in your repository:
@@ -42,18 +107,9 @@ Create a robust multi-file bundle (`.agent_tasks/my-slug/TASK.md`, `ACCEPTANCE_C
 triagecore antigravity-task --prompt "Add pytest coverage for handoff.py" --files tests/test_handoff.py --slug add-tests
 ```
 
-## Architecture
-
-TriageCore consists of several tightly integrated local components:
-
-- **TriageClient & TriageEngine**: Execute local parsing/generation tasks with strict temporal budgets (e.g., via LM Studio / Ollama).
-- **TriageRouter**: Inspects prompts to decide if they should be executed immediately or wrapped into a handoff packet.
-- **TaskClassifier & DangerDetector**: Categorize tasks (`bugfix`, `docs_update`) and enforce safety constraints (`read-only`, `workspace-write`, `blocked`).
-- **HandoffPacket**: A dataclass that standardizes tasks into readable Markdown.
-
 ## Development & Testing
 
-TriageCore uses `pytest` to ensure all routing and safety logic operates completely offline without network calls.
+TriageCore uses `pytest` to ensure all routing and safety logic operates completely offline without network calls. Tests actively mock the backend `requests` module to verify payload structures across Ollama, vLLM, and llama.cpp presets.
 
 ```bash
 pip install pytest
