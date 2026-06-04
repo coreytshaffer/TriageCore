@@ -22,6 +22,7 @@ class TaskRecord:
     energy_kwh_estimate: float = 0.0
     emissions_gco2e_estimate: float = 0.0
     grid_intensity_gco2e_per_kwh: float = 0.0
+    grid_intensity_source: str = "static_config"
 
     # Benchmark / model evaluation fields (Codex)
     backend_name: Optional[str] = None
@@ -53,6 +54,7 @@ class TaskRecord:
     embodied_gco2e_allocated: float = 0.0
     storage_written_mb: float = 0.0
     human_review_minutes: float = 0.0
+    completed_at: str = ""
     retry_count: int = 0
     hardware_profile: Optional[str] = None
     duration_seconds: float = 0.0
@@ -62,7 +64,14 @@ class TaskLedger:
     def __init__(self, ledger_dir: str = ".triagecore"):
         self.ledger_dir = ledger_dir
         self.ledger_path = os.path.join(self.ledger_dir, "ledger.jsonl")
-        os.makedirs(self.ledger_dir, exist_ok=True)
+        try:
+            os.makedirs(self.ledger_dir, exist_ok=True)
+        except PermissionError as e:
+            raise RuntimeError(
+                f"Permission denied creating ledger directory at '{os.path.abspath(self.ledger_dir)}'. "
+                "Ensure you are running TriageCore from within your project workspace, "
+                "not a system directory."
+            ) from e
 
     def append_event(self, task_id: str, event_type: str, payload: Dict[str, Any]):
         event = {
@@ -100,7 +109,7 @@ class TaskLedger:
         return record if found else None
 
     def get_all_tasks(self) -> List[TaskRecord]:
-        if not os.path.exists(self.ledger_path):
+        if not os.path.exists(self.ledger_path) or os.path.getsize(self.ledger_path) == 0:
             return []
 
         tasks_map: Dict[str, TaskRecord] = {}
@@ -142,6 +151,7 @@ class TaskLedger:
             record.runner = payload.get("runner")
         elif etype in ["handoff_generated", "local_draft_generated", "council_completed"]:
             record.status = etype
+            record.completed_at = event.get("timestamp", "")
             if "artifact_path" in payload:
                 record.artifact_paths.append(payload["artifact_path"])
             self._apply_model_evaluation(record, payload)
@@ -156,12 +166,14 @@ class TaskLedger:
             record.energy_kwh_estimate += payload.get("energy_kwh", 0.0)
             record.emissions_gco2e_estimate += payload.get("emissions_gco2e", 0.0)
             record.grid_intensity_gco2e_per_kwh = payload.get("grid_intensity_gco2e_per_kwh", 0.0)
+            record.grid_intensity_source = payload.get("grid_intensity_source", record.grid_intensity_source)
             record.water_liters_estimate += payload.get("water_liters_estimate", 0.0)
             record.embodied_gco2e_allocated += payload.get("embodied_gco2e_allocated", 0.0)
             record.duration_seconds += payload.get("duration_seconds", 0.0)
         elif etype == "review_completed":
             record.status = "reviewed"
             record.accepted = payload.get("accepted", False)
+            record.human_review_minutes = payload.get("human_review_minutes", 0.0)
         elif etype == "task_blocked":
             record.status = "blocked"
             record.handoff_reason = payload.get("reason", record.handoff_reason)

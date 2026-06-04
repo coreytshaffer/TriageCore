@@ -8,7 +8,7 @@ class TriageEngine:
         self.backend = backend
         self.timeout = timeout_seconds
 
-    def execute_task(self, task_prompt: str, raw_data: str, validator: Optional[Callable[[str], bool]] = None) -> Dict[str, Any]:
+    def execute_task(self, task_prompt: str, raw_data: str, validator: Optional[Callable[[str], bool]] = None, stream_callback: Optional[Callable[[str], None]] = None) -> Dict[str, Any]:
         """
         Attempts to execute a parsing or generation task on the local worker.
         Triggers a handoff if a timeout or validation failure occurs.
@@ -23,7 +23,8 @@ class TriageEngine:
             backend_response = self.backend.generate(
                 messages=messages,
                 temperature=0.1,
-                timeout=self.timeout
+                timeout=self.timeout,
+                stream_callback=stream_callback
             )
             
             elapsed = time.time() - start_time

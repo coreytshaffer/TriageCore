@@ -35,6 +35,12 @@ def main():
     # install-desktop
     subparsers.add_parser("install-desktop", help="Create a desktop shortcut for TriageDesk.")
 
+    # push-task
+    push_parser = subparsers.add_parser("push-task", help="Push a task to an open TriageDesk instance via IPC.")
+    push_parser.add_argument("--prompt", type=str, required=True, help="The instruction to inject into the UI.")
+    push_parser.add_argument("--files", type=str, nargs="*", default=[], help="Target files to populate.")
+    push_parser.add_argument("--auto-dispatch", type=str, choices=["local", "council", "codex", "antigravity"], help="Optional runner to auto-trigger.")
+
     # benchmark
     benchmark_parser = subparsers.add_parser("benchmark", help="Run or list model evaluation benchmark tasks.")
     benchmark_parser.add_argument("--tasks", type=str, default="benchmarks/tasks.jsonl", help="Path to benchmark JSONL tasks.")
@@ -71,6 +77,8 @@ def main():
         run_app()
     elif args.command == "install-desktop":
         _install_desktop_shortcut()
+    elif args.command == "push-task":
+        _push_task_to_ui(args.prompt, args.files, args.auto_dispatch)
     elif args.command == "audit":
         _audit_task(args.task_id, args.files)
     elif args.command == "codex-task":
@@ -110,6 +118,22 @@ def main():
         )
     else:
         parser.print_help()
+
+def _push_task_to_ui(prompt: str, files: list[str], auto_dispatch: Optional[str] = None):
+    import json
+    ledger_dir = ".triagecore"
+    os.makedirs(ledger_dir, exist_ok=True)
+    inbox_path = os.path.join(ledger_dir, "ipc_inbox.json")
+    
+    payload = {
+        "prompt": prompt,
+        "files": files,
+        "auto_dispatch": auto_dispatch
+    }
+    with open(inbox_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f)
+    print(f"Success: Task pushed to {inbox_path}.")
+    print("If TriageDesk is running, it will automatically import it within 1 second.")
 
 def _audit_task(task_id: str, files: list[str]):
     from .task_ledger import TaskLedger

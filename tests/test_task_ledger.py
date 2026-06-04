@@ -101,3 +101,26 @@ def test_ledger_tracks_handoff_reason_for_review():
         assert record.status == "handoff_generated"
         assert record.handoff_reason == "Risk level high detected."
         assert record.human_review_required is True
+
+def test_ledger_tracks_human_review_minutes_and_completion_timestamp():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        ledger = TaskLedger(ledger_dir=temp_dir)
+        task_id = str(uuid.uuid4())
+
+        ledger.append_event(task_id, "task_created", {"title": "Timer Task"})
+        ledger.append_event(task_id, "local_draft_generated", {
+            "status": "success",
+            "duration_seconds": 12.5
+        })
+        ledger.append_event(task_id, "review_completed", {
+            "accepted": True,
+            "human_review_minutes": 1.5
+        })
+
+        record = ledger.get_task(task_id)
+
+        assert record is not None
+        assert record.status == "reviewed"
+        assert record.accepted is True
+        assert record.human_review_minutes == 1.5
+        assert record.completed_at != ""
