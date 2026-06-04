@@ -64,4 +64,6 @@ Verification instructions are now documented in `docs/verification_guide.md`, in
 
 Reviewable ledger cards now include an optional `Review load` selector (`not_recorded`, `low`, `medium`, `high`). The selection is stored in review records as `review_workload` and documented in the evidence schema and methodology artifacts as a subjective review-burden measure.
 
-Next step: review the superseded `trial_001` learning proposals and record explicit human decisions before treating them as accepted or rejected lessons.
+The superseded `study_001` / `trial_001` structured-extraction proposals were explicitly rejected in `.triagecore/learning_reviews.jsonl`: `961b769f4d1c`, `2cc74fd2cabf`, and `6b2e9cdfdd20`. They were rejected because the failure was traced to `site_name` benchmark ambiguity and resolved by the `site_id` fixture/validator clarification in `trial_002`.
+
+Next step: choose whether to expand the Study 001 benchmark set or begin model/backend comparison.

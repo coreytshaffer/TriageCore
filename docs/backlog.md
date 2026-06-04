@@ -58,10 +58,12 @@ Resolution: diagnostic output showed valid JSON with ambiguous `site_name` seman
 
 ## Current Decision Point
 
-* [ ] **Story 5.3: Human Review Superseded Learning Proposals**
+* [x] **Story 5.3: Human Review Superseded Learning Proposals**
   * Review the `structured_extraction` proposals generated from `trial_001`.
   * Record whether they are rejected or superseded because the failure came from benchmark ambiguity.
   * Keep the review decision explicit before using accepted/rejected proposals to guide future behavior.
+
+Resolution: proposal IDs `961b769f4d1c`, `2cc74fd2cabf`, and `6b2e9cdfdd20` were rejected as superseded by the `site_id` fixture/validator clarification and clean `trial_002` rerun.
 
 ## UI Workflow Improvements
 

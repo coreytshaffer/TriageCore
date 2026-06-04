@@ -96,6 +96,18 @@ Trial 002 outcomes:
 
 No learning proposals were generated from `study_001` / `trial_002`. The only handoff was the expected destructive-task safety handoff.
 
+## Human Review Of Superseded Trial 001 Proposals
+
+The three `structured_extraction` learning proposals generated from `study_001` / `trial_001` were reviewed after the `trial_002` rerun:
+
+| Proposal ID | Trigger | Decision | Rationale |
+| --- | --- | --- | --- |
+| `961b769f4d1c` | `benchmark_status_mismatch:structured_extraction` | rejected | Superseded by benchmark clarification from `site_name` to `site_id`; `trial_002` had no mismatch. |
+| `2cc74fd2cabf` | `unexpected_handoff:structured_extraction` | rejected | Superseded by benchmark clarification from `site_name` to `site_id`; `trial_002` had no unexpected structured-extraction handoff. |
+| `6b2e9cdfdd20` | `validator_failure:structured_extraction` | rejected | Superseded by benchmark clarification from `site_name` to `site_id`; `trial_002` had no validator failure. |
+
+These decisions were appended to `.triagecore/learning_reviews.jsonl`. The review outcome is that no prompt, validator, routing, or model-change lesson should be applied from the `trial_001` structured-extraction proposals.
+
 ## Interpretation
 
-This is a successful first operational baseline, not a broad claim about model quality. The current benchmark set is intentionally small and should be expanded before using Study 001 as strong evidence in the paper. The immediate next research decision is whether to record human review decisions for the superseded `trial_001` proposals or expand the benchmark set before model/backend comparison.
+This is a successful first operational baseline, not a broad claim about model quality. The current benchmark set is intentionally small and should be expanded before using Study 001 as strong evidence in the paper. The superseded `trial_001` proposal reviews are now recorded; the next research decision is whether to expand the benchmark set or begin model/backend comparison.
