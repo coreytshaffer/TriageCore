@@ -821,7 +821,6 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         self._build_rules_frame()
 
         self.state("zoomed")
-        self.attributes("-fullscreen", True)
         self.select_frame("dashboard")
         self._check_backends()
         self._start_ticker()

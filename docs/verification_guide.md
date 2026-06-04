@@ -39,7 +39,7 @@ triagecore desk
 
 Check the main screen:
 
-- The window opens fullscreen.
+- The window opens maximized with the title bar visible.
 - The dispatch buttons read left to right as the workflow.
 - The output box is followed by the live backend/activity log.
 - The recent task ledger panel is visible without opening the full Ledger tab.
