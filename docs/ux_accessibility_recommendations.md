@@ -12,7 +12,7 @@ This note translates established ergonomics and accessibility guidance into conc
 
 4. **Improve target size and focus visibility.** Primary dispatch controls should be large enough to select comfortably, and future work should verify keyboard navigation and visible focus states.
 
-5. **Measure review burden.** TriageCore already records `human_review_minutes`; future studies can add a lightweight subjective workload check after complex sessions.
+5. **Measure review burden.** TriageCore records `human_review_minutes` and can now store an optional `review_workload` label so studies can compare elapsed review time with perceived difficulty.
 
 ## Supporting Sources
 

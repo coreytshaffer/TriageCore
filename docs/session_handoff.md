@@ -62,4 +62,6 @@ The dispatch screen now also includes a compact recent task ledger feed. Ledger 
 
 Verification instructions are now documented in `docs/verification_guide.md`, including code checks, UI review checks, study evidence checks, and human-reviewed learning rules.
 
+Reviewable ledger cards now include an optional `Review load` selector (`not_recorded`, `low`, `medium`, `high`). The selection is stored in review records as `review_workload` and documented in the evidence schema and methodology artifacts as a subjective review-burden measure.
+
 Next step: review the superseded `trial_001` learning proposals and record explicit human decisions before treating them as accepted or rejected lessons.

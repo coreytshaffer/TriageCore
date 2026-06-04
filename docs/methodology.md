@@ -150,6 +150,12 @@ resources without producing accepted software artefacts.
 - gCO₂e embodied carbon per accepted task
 - tokens (input + output) per accepted task
 - human review minutes per accepted task
+- optional subjective review workload (`not_recorded`, `low`, `medium`, or `high`)
+
+Human review minutes measure elapsed review time. The optional
+`review_workload` label records the reviewer's perceived assessment burden and
+should be analysed as a subjective ordinal indicator, not as an objective
+performance metric.
 
 ---
 

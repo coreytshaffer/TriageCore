@@ -222,6 +222,9 @@ def _review_assessment_lines(task) -> list[str]:
     if cost_bits:
         lines.append(f"Cost: {', '.join(cost_bits)}")
 
+    if getattr(task, "review_workload", ""):
+        lines.append(f"Review load: {task.review_workload.replace('_', ' ')}")
+
     if task.artifact_paths:
         lines.append(f"Artifact: {task.artifact_paths[-1]}")
 
@@ -252,6 +255,16 @@ def _compact_ledger_line(task) -> str:
         meta.append("review required")
 
     return f"{timestamp} | {title} | {' · '.join(meta)}"
+
+
+def _review_workload_value(label: str) -> str:
+    values = {
+        "Not set": "not_recorded",
+        "Low": "low",
+        "Medium": "medium",
+        "High": "high",
+    }
+    return values.get(label, "not_recorded")
 
 
 def _read_text_tail(path: str, max_lines: int = 400) -> str:
@@ -758,6 +771,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         self._current_frame = "dispatch"
         self.review_timers = {}
         self.timer_labels = {}
+        self.review_workload_vars = {}
         self.expanded_ledger_task_ids = set()
         self.agent_status = {}
         self._last_logs_render = None
@@ -1251,6 +1265,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
 
     def _refresh_ledger(self):
         self.timer_labels = {}
+        self.review_workload_vars = {}
         for w in self.ledger_scroll.winfo_children():
             w.destroy()
 
@@ -1394,6 +1409,33 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
                 "handoff_generated",
                 "council_completed",
             ]:
+                workload_row = ctk.CTkFrame(card, fg_color="transparent")
+                workload_row.grid(
+                    row=next_row,
+                    column=0,
+                    columnspan=4,
+                    padx=10,
+                    pady=(0, 8),
+                    sticky="w",
+                )
+                ctk.CTkLabel(
+                    workload_row,
+                    text="Review load",
+                    font=ctk.CTkFont(size=11, weight="bold"),
+                    text_color="#9ca3af",
+                ).pack(side="left", padx=(0, 8))
+                workload_var = ctk.StringVar(value="Not set")
+                workload_picker = ctk.CTkSegmentedButton(
+                    workload_row,
+                    values=["Not set", "Low", "Medium", "High"],
+                    variable=workload_var,
+                    height=28,
+                    font=ctk.CTkFont(size=11),
+                )
+                workload_picker.pack(side="left")
+                self.review_workload_vars[t.task_id] = workload_var
+                next_row += 1
+
                 btn_frame = ctk.CTkFrame(card, fg_color="transparent")
                 btn_frame.grid(
                     row=next_row, column=0, columnspan=4, padx=10, pady=(0, 10), sticky="w"
@@ -1527,10 +1569,17 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         if elapsed_mins < 0:
             elapsed_mins = 0.0
 
+        workload_var = self.review_workload_vars.get(task_id)
+        workload_label = workload_var.get() if workload_var else "Not set"
+
         self.ledger.append_event(
             task_id,
             "review_completed",
-            {"accepted": accepted, "human_review_minutes": elapsed_mins},
+            {
+                "accepted": accepted,
+                "human_review_minutes": elapsed_mins,
+                "review_workload": _review_workload_value(workload_label),
+            },
         )
 
         if accepted and task:

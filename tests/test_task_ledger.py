@@ -160,6 +160,25 @@ def test_ledger_tracks_human_review_minutes_and_completion_timestamp():
         assert record.completed_at != ""
         assert record.updated_at != ""
 
+def test_ledger_tracks_review_workload():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        ledger = TaskLedger(ledger_dir=temp_dir)
+        task_id = str(uuid.uuid4())
+
+        ledger.append_event(task_id, "task_created", {"title": "Review Load Task"})
+        ledger.append_event(task_id, "review_completed", {
+            "accepted": False,
+            "human_review_minutes": 0.75,
+            "review_workload": "high"
+        })
+
+        record = ledger.get_task(task_id)
+
+        assert record is not None
+        assert record.status == "reviewed"
+        assert record.accepted is False
+        assert record.review_workload == "high"
+
 def test_ledger_updates_updated_at_on_later_events():
     with tempfile.TemporaryDirectory() as temp_dir:
         ledger = TaskLedger(ledger_dir=temp_dir)

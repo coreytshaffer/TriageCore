@@ -57,6 +57,7 @@ class TaskRecord:
     embodied_gco2e_allocated: float = 0.0
     storage_written_mb: float = 0.0
     human_review_minutes: float = 0.0
+    review_workload: str = ""
     completed_at: str = ""
     retry_count: int = 0
     hardware_profile: Optional[str] = None
@@ -184,6 +185,7 @@ class TaskLedger:
             record.status = "reviewed"
             record.accepted = payload.get("accepted", False)
             record.human_review_minutes = payload.get("human_review_minutes", 0.0)
+            record.review_workload = payload.get("review_workload", "")
         elif etype == "task_blocked":
             record.status = "blocked"
             record.handoff_reason = payload.get("reason", record.handoff_reason)

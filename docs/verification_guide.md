@@ -49,8 +49,16 @@ Check the Ledger tab:
 - Each reviewable card shows an `Assessment snapshot`.
 - The snapshot explains the decision need, path, reason or benchmark result, and cost.
 - The dense evidence stays behind `Details`.
+- The optional `Review load` selector can be left at `Not set` or set to `Low`, `Medium`, or `High`.
 - `Approve & Load` reloads the task into the dispatch prompt.
 - `Deny` records a review decision without hiding the evidence trail.
+
+Check accessibility basics:
+
+- Tab through the visible controls and confirm the focus order follows the task flow.
+- Confirm buttons and segmented controls are large enough to click without precision.
+- Confirm long card text wraps cleanly without overlapping actions.
+- Confirm the workload selector helps review instead of making cards feel noisy.
 
 ## 4. Study Evidence Verification
 
@@ -68,6 +76,7 @@ Pass condition:
 - The report excludes exploratory or older trial records.
 - Validator failures and handoff-required cases are explained instead of silently averaged away.
 - Any proposed learning remains pending until a human records a review decision.
+- Human review records include review time and may include subjective workload.
 
 ## 5. Human Review Rule
 

@@ -60,6 +60,7 @@ The schema supports two project goals:
 | `grid_intensity_gco2e_per_kwh` | Carbon intensity assumption or measured value. |
 | `accepted` | Human accepted this output. |
 | `human_review_minutes` | Time spent reviewing, when captured. |
+| `review_workload` | Optional reviewer workload label: `not_recorded`, `low`, `medium`, or `high`. |
 | `artifact_paths` | Generated handoff packets, reports, or output files. |
 
 ## Learning Linkage

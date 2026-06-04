@@ -84,13 +84,17 @@ Resolution: diagnostic output showed valid JSON with ambiguous `site_name` seman
   * Increase primary dispatch button size and labels.
   * Use numbered left-to-right action text for Local Draft, Worker Council, Codex Handoff, and Antigravity Handoff.
   * Continue toward keyboard focus, target-size, and workload-reduction improvements.
-* [ ] **Story 6.6: Accessibility And Workload Review**
-  * Audit keyboard focus order, visible focus states, and minimum click/tap target size.
-  * Add user-adjustable density or reduced-motion preferences if visual load increases.
-  * Consider a lightweight workload self-check after complex agent sessions.
+* [x] **Story 6.6: Accessibility And Workload Review**
+  * Added an optional review workload selector to reviewable ledger cards.
+  * Persist subjective workload as `review_workload` beside review time.
+  * Document workload capture in the evidence schema, verification guide, accessibility note, and methodology artifacts.
 * [x] **Story 6.7: Review Card Decision Clarity**
   * Add a compact assessment snapshot to each ledger review card.
   * Keep forensic evidence behind Details so approval/denial does not require scanning every field.
   * Rename review actions to `Approve & Load` and `Deny`.
 * [x] **Story 6.8: Verification Guidance**
   * Add a practical verification guide for code checks, UI review checks, study evidence checks, and human learning reviews.
+* [ ] **Story 6.9: Visual Accessibility QA**
+  * Launch TriageDesk and manually verify keyboard focus order, visible focus states, text fit, and minimum click/tap target size.
+  * Confirm the review workload selector does not make cards visually noisy or harder to assess.
+  * Record any UI fixes from the manual pass as a separate focused change.

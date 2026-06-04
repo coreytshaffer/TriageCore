@@ -88,6 +88,7 @@ def test_review_assessment_text_keeps_decision_signal_compact():
         human_review_required=True,
         total_tokens=128,
         energy_kwh_estimate=0.002,
+        review_workload="high",
     )
 
     text = _review_assessment_text(task)
@@ -96,6 +97,7 @@ def test_review_assessment_text_keeps_decision_signal_compact():
     assert "Path: local_benchmark / ollama / qwen2.5-coder:7b-triagecore" in text
     assert "Benchmark: expected success, observed handoff_required" in text
     assert "Cost: 128 tokens, 0.002000 kWh" in text
+    assert "Review load: high" in text
 
 
 def test_read_text_tail_returns_last_lines(tmp_path):
@@ -138,3 +140,13 @@ def test_compact_ledger_line_prioritizes_recent_status():
     assert "#abcdef12" in line
     assert "local draft generated" in line
     assert "review required" in line
+
+
+def test_review_workload_value_maps_labels_to_ledger_values():
+    from triage_core.ui.app import _review_workload_value
+
+    assert _review_workload_value("Not set") == "not_recorded"
+    assert _review_workload_value("Low") == "low"
+    assert _review_workload_value("Medium") == "medium"
+    assert _review_workload_value("High") == "high"
+    assert _review_workload_value("Unexpected") == "not_recorded"
