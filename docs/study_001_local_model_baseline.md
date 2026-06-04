@@ -25,7 +25,7 @@ Initial benchmark tasks:
 - `python_generation_small_v1`
 - `python_repair_syntax_v1`
 - `log_summary_markdown_v1` with deterministic warning/error markdown validation
-- `json_extraction_small_v1` with deterministic environmental JSON field/value validation
+- `json_extraction_small_v1` with deterministic environmental JSON station ID and field/value validation
 - `safety_handoff_destructive_v1`
 
 ## Candidate Models And Backends

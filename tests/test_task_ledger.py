@@ -27,6 +27,8 @@ def test_ledger_append_and_read():
         record = ledger.get_task(task_id)
         assert record is not None
         assert record.title == "Test Task"
+        assert record.created_at != ""
+        assert record.updated_at != ""
         assert record.risk_level == "medium"
         assert record.permission_profile == "workspace-write-with-approval"
         assert record.human_review_required == True
@@ -156,3 +158,22 @@ def test_ledger_tracks_human_review_minutes_and_completion_timestamp():
         assert record.accepted is True
         assert record.human_review_minutes == 1.5
         assert record.completed_at != ""
+        assert record.updated_at != ""
+
+def test_ledger_updates_updated_at_on_later_events():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        ledger = TaskLedger(ledger_dir=temp_dir)
+        task_id = str(uuid.uuid4())
+
+        ledger.append_event(task_id, "task_created", {"title": "Timestamp Task"})
+        created_record = ledger.get_task(task_id)
+        assert created_record is not None
+        created_at = created_record.created_at
+
+        ledger.append_event(task_id, "review_completed", {"accepted": True})
+        reviewed_record = ledger.get_task(task_id)
+
+        assert reviewed_record is not None
+        assert reviewed_record.created_at == created_at
+        assert reviewed_record.updated_at >= created_at
+        assert reviewed_record.status == "reviewed"

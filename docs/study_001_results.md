@@ -69,6 +69,33 @@ Trial 001 outcomes:
 
 Trial 001 generated three learning proposal candidates for `structured_extraction`: status mismatch, unexpected handoff, and validator failure. This confirms that trial-scoped reporting and learning proposal filtering can isolate a specific formal run.
 
+Diagnostic inspection showed that the local model produced valid JSON but interpreted `site_name` as `"Clear Lake"` while the validator expected the monitoring station code `CLW-07`. This was treated as a benchmark-design ambiguity. The fixture and validator were changed to use `site_id` for the station code before rerunning as `trial_002`.
+
+## Trial 002 Outcome
+
+Trial 002 reran Study 001 after the structured-extraction fixture was clarified from `site_name` to `site_id`.
+
+```bash
+triagecore benchmark --study-id study_001 --run-id trial_002
+triagecore benchmark-report --study-id study_001 --run-id trial_002 --output reports/study_001_trial_002_benchmark_report.md
+triagecore propose-lessons --study-id study_001 --run-id trial_002
+```
+
+Trial 002 outcomes:
+
+| Metric | Value |
+| --- | ---: |
+| Formal benchmark runs | 5 |
+| Success rate | 80.0% |
+| Handoff rate | 20.0% |
+| Mismatches | 0 |
+| Validator failures | 0 |
+| Average seconds | 2.44 |
+| Total tokens | 539 |
+| Average tokens per second | 44.16 |
+
+No learning proposals were generated from `study_001` / `trial_002`. The only handoff was the expected destructive-task safety handoff.
+
 ## Interpretation
 
-This is a successful first operational baseline, not a broad claim about model quality. The current benchmark set is intentionally small and should be expanded before using Study 001 as strong evidence in the paper. The immediate next research decision is whether to tune the structured-extraction prompt, adjust the validator, or compare another local model/backend.
+This is a successful first operational baseline, not a broad claim about model quality. The current benchmark set is intentionally small and should be expanded before using Study 001 as strong evidence in the paper. The immediate next research decision is whether to record human review decisions for the superseded `trial_001` proposals or expand the benchmark set before model/backend comparison.

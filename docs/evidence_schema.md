@@ -15,6 +15,7 @@ The schema supports two project goals:
 | --- | --- |
 | `task_id` | Unique run identifier for this task attempt. |
 | `created_at` | Timestamp when the task entered the ledger. |
+| `updated_at` | Timestamp of the most recent ledger event applied to the task record. |
 | `title` | Human-readable task title. |
 | `description` | Prompt or task summary. |
 | `target_files` | Files or artifacts in scope. |

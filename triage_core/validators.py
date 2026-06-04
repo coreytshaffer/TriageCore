@@ -45,7 +45,7 @@ class MonitoringJsonValidator:
     """Validator for the Study 001 monitoring-site extraction fixture."""
 
     REQUIRED_KEYS = {
-        "site_name",
+        "site_id",
         "date",
         "temperature_c",
         "turbidity_ntu",
@@ -70,7 +70,7 @@ class MonitoringJsonValidator:
             return False
 
         return (
-            str(payload["site_name"]) == "CLW-07"
+            str(payload["site_id"]) == "CLW-07"
             and str(payload["date"]) == "2026-06-03"
             and _same_number(payload["temperature_c"], 21.4)
             and _same_number(payload["turbidity_ntu"], 8.7)

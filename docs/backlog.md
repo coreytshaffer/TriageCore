@@ -49,7 +49,16 @@ After run/trial scoping is in place, review whether `json_extraction_small_v1` n
 
 ## Current Decision Point
 
-* [ ] **Story 5.2: Review Structured Extraction Failure**
+* [x] **Story 5.2: Review Structured Extraction Failure**
   * Inspect the `structured_extraction` learning proposals from `study_001` / `trial_001`.
   * Decide whether the failure is prompt wording, validator strictness, model behavior, or backend configuration.
   * Apply only one change at a time, then rerun with a new `run_id`.
+
+Resolution: diagnostic output showed valid JSON with ambiguous `site_name` semantics. The fixture and validator now use `site_id`; `trial_002` restored the expected Study 001 baseline with no mismatches or validator failures.
+
+## Current Decision Point
+
+* [ ] **Story 5.3: Human Review Superseded Learning Proposals**
+  * Review the `structured_extraction` proposals generated from `trial_001`.
+  * Record whether they are rejected or superseded because the failure came from benchmark ambiguity.
+  * Keep the review decision explicit before using accepted/rejected proposals to guide future behavior.

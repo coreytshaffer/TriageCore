@@ -12,6 +12,7 @@ from typing import Dict, Any, List, Optional
 class TaskRecord:
     task_id: str
     created_at: str = ""
+    updated_at: str = ""
     title: str = ""
     description: str = ""
     target_files: List[str] = field(default_factory=list)
@@ -138,9 +139,12 @@ class TaskLedger:
         """Single reducer used by both get_task and get_all_tasks."""
         etype = event.get("event_type")
         payload = event.get("payload", {})
+        event_timestamp = event.get("timestamp", "")
+        if event_timestamp:
+            record.updated_at = event_timestamp
 
         if etype == "task_created":
-            record.created_at = event.get("timestamp", "")
+            record.created_at = event_timestamp
             record.title = payload.get("title", "")
             record.description = payload.get("description", "")
             record.target_files = payload.get("target_files", [])
@@ -157,7 +161,7 @@ class TaskLedger:
             record.runner = payload.get("runner")
         elif etype in ["handoff_generated", "local_draft_generated", "council_completed"]:
             record.status = etype
-            record.completed_at = event.get("timestamp", "")
+            record.completed_at = event_timestamp
             if "artifact_path" in payload:
                 record.artifact_paths.append(payload["artifact_path"])
             self._apply_model_evaluation(record, payload)

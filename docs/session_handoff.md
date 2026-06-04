@@ -34,7 +34,7 @@ python -m pytest
 Result:
 
 ```text
-70 passed
+71 passed
 ```
 
 Benchmark fixture smoke check:
@@ -47,8 +47,12 @@ Result: all five Study 001 fixtures load.
 
 ## Next Decision Point
 
-Run/trial scoping has been added. `study_001` / `trial_001` now isolates one formal run and produces a 5-run report with one `structured_extraction` mismatch and one validator failure.
+Run/trial scoping has been added. `study_001` / `trial_001` isolated one formal run and produced a 5-run report with one `structured_extraction` mismatch and one validator failure.
 
-Next step: inspect the trial-scoped learning proposals and decide whether `json_extraction_small_v1` should be handled by prompt wording, validator adjustment, model comparison, or backend configuration. Apply one change at a time and rerun with a fresh `run_id`.
+The structured-extraction issue was diagnosed as benchmark ambiguity: the model interpreted `site_name` as `"Clear Lake"` while the validator expected station code `CLW-07`. The fixture and validator now use `site_id`; `study_001` / `trial_002` produced a clean 5-run report with no mismatches or validator failures.
+
+Aggregated task records now expose both `created_at` and `updated_at`. Raw ledger events already had timestamps; this makes the reduced task view and CSV export more useful for review and reporting.
+
+Next step: review the superseded `trial_001` learning proposals and record explicit human decisions before treating them as accepted or rejected lessons.
 
 After that, revisit `json_extraction_small_v1`, which now produces `handoff_required` under the stricter `monitoring_json` validator.

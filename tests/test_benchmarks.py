@@ -6,7 +6,7 @@ from triage_core.validators import ErrorWarningMarkdownValidator, MonitoringJson
 
 def test_monitoring_json_validator_accepts_expected_compact_json():
     output = (
-        '{"site_name":"CLW-07","date":"2026-06-03",'
+        '{"site_id":"CLW-07","date":"2026-06-03",'
         '"temperature_c":21.4,"turbidity_ntu":8.7}'
     )
 
@@ -15,7 +15,7 @@ def test_monitoring_json_validator_accepts_expected_compact_json():
 
 def test_monitoring_json_validator_rejects_missing_expected_value():
     output = (
-        '{"site_name":"CLW-99","date":"2026-06-03",'
+        '{"site_id":"CLW-99","date":"2026-06-03",'
         '"temperature_c":21.4,"turbidity_ntu":8.7}'
     )
 
