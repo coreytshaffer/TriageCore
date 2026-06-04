@@ -38,10 +38,15 @@ class TriageClient:
         # Step 1: Routing logic
         route_decision = self.router.should_offload(prompt, data)
         if route_decision.get("offload_recommended", False):
+            reason = f"Router bypass: {route_decision.get('reason')}"
             return {
                 "status": "handoff_required",
                 "source": "router",
-                "reason": f"Router bypass: {route_decision.get('reason')}"
+                "reason": reason,
+                "handoff_reason": reason,
+                "backend_name": getattr(self.engine.backend, "name", None),
+                "model": getattr(self.engine.backend, "model", None),
+                "timeout_seconds": self.engine.timeout,
             }
             
         # Step 2: Local execution

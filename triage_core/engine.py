@@ -27,6 +27,7 @@ class TriageEngine:
             )
             
             elapsed = time.time() - start_time
+            token_metrics = self._extract_token_metrics(backend_response.usage, elapsed)
             
             # Run quality gates if provided
             if validator and not validator(backend_response.text):
@@ -38,8 +39,12 @@ class TriageEngine:
                 "elapsed_seconds": elapsed, 
                 "output": backend_response.text,
                 "backend_name": backend_response.backend_name,
+                "model": getattr(self.backend, "model", None),
+                "timeout_seconds": self.timeout,
                 "usage": backend_response.usage,
-                "timings": backend_response.timings
+                "timings": backend_response.timings,
+                "validator_passed": None if validator is None else True,
+                **token_metrics,
             }
 
         except requests.exceptions.Timeout:
@@ -57,5 +62,21 @@ class TriageEngine:
         return {
             "status": "handoff_required",
             "source": "local_engine",
-            "reason": reason
+            "reason": reason,
+            "timeout_seconds": self.timeout,
+            "handoff_reason": reason,
+        }
+
+    @staticmethod
+    def _extract_token_metrics(usage: Dict[str, Any], elapsed_seconds: float) -> Dict[str, Any]:
+        input_tokens = usage.get("prompt_tokens", 0) or usage.get("input_tokens", 0) or 0
+        output_tokens = usage.get("completion_tokens", 0) or usage.get("output_tokens", 0) or 0
+        total_tokens = usage.get("total_tokens", input_tokens + output_tokens) or 0
+        tokens_per_second = total_tokens / elapsed_seconds if elapsed_seconds > 0 and total_tokens else 0.0
+
+        return {
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "total_tokens": total_tokens,
+            "tokens_per_second": tokens_per_second,
         }

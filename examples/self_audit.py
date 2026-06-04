@@ -5,8 +5,9 @@ from triage_core.validators import PythonSyntaxValidator
 
 load_dotenv()
 
-LOCAL_URL = os.getenv("LOCAL_URL", "http://127.0.0.1:1234")
-CLOUD_MODEL = os.getenv("CLOUD_MODEL", "gemini/gemini-1.5-pro")
+BACKEND_TYPE = os.getenv("TRIAGE_BACKEND_TYPE", "ollama")
+MODEL = os.getenv("TRIAGE_MODEL", "qwen2.5-coder:7b")
+BASE_URL = os.getenv("TRIAGE_BASE_URL")
 
 def audit_file(client: TriageClient, filepath: str, prompt: str):
     print(f"\n--- Auditing {filepath} ---")
@@ -40,16 +41,21 @@ def audit_file(client: TriageClient, filepath: str, prompt: str):
             f.write(output)
         print(f"Successfully hardened and updated {filepath}")
     else:
-        print(f"Task failed: {result.get('error', result.get('escalation_reason'))}")
+        print(f"Task failed: {result.get('reason', result.get('error'))}")
 
 def main():
-    client = TriageClient(local_url=LOCAL_URL, cloud_model=CLOUD_MODEL, timeout_seconds=60)
+    client = TriageClient(
+        backend_type=BACKEND_TYPE,
+        model=MODEL,
+        base_url=BASE_URL,
+        timeout_seconds=60,
+    )
     
     # 1. Hardening engine.py
     engine_prompt = """You are a rigid code execution worker. Review the provided python code for stability and security vulnerabilities.
 Specifically:
 1. Fix JSON parsing to safely use .get() and avoid unhandled KeyError/IndexError if the response schema is unexpected.
-2. Add a `timeout=120` parameter to the `litellm.completion` call to prevent the cloud supervisor from hanging indefinitely.
+2. Confirm local backend calls use an explicit timeout so the worker cannot hang indefinitely.
 Apply the fixes. Output ONLY the complete, corrected python file. No markdown blocks, no conversational filler."""
     
     audit_file(client, "triage_core/engine.py", engine_prompt)

@@ -1,0 +1,64 @@
+import json
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
+
+from .validators import PythonSyntaxValidator
+
+
+@dataclass
+class BenchmarkTask:
+    task_id: str
+    category: str
+    prompt: str
+    data: str
+    validator: Optional[str] = None
+    expected_status: str = "success"
+    target_files: List[str] = field(default_factory=list)
+    notes: str = ""
+
+
+def load_benchmark_tasks(path: str) -> List[BenchmarkTask]:
+    benchmark_path = Path(path)
+    if not benchmark_path.exists():
+        raise FileNotFoundError(f"Benchmark task file not found: {path}")
+
+    tasks: List[BenchmarkTask] = []
+    with benchmark_path.open("r", encoding="utf-8") as f:
+        for line_number, line in enumerate(f, start=1):
+            if not line.strip():
+                continue
+            payload = json.loads(line)
+            try:
+                tasks.append(BenchmarkTask(**payload))
+            except TypeError as exc:
+                raise ValueError(f"Invalid benchmark task on line {line_number}: {exc}") from exc
+
+    return tasks
+
+
+def resolve_validator(name: Optional[str]) -> Optional[Callable[[str], bool]]:
+    if name in (None, "", "none"):
+        return None
+    if name == "python_syntax":
+        return PythonSyntaxValidator.validate
+    raise ValueError(f"Unknown benchmark validator: {name}")
+
+
+def result_to_model_event(task: BenchmarkTask, result: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "benchmark_task_id": task.task_id,
+        "benchmark_category": task.category,
+        "expected_status": task.expected_status,
+        "observed_status": result.get("status"),
+        "backend_name": result.get("backend_name"),
+        "model": result.get("model"),
+        "timeout_seconds": result.get("timeout_seconds"),
+        "elapsed_seconds": result.get("elapsed_seconds", 0.0),
+        "input_tokens": result.get("input_tokens", 0),
+        "output_tokens": result.get("output_tokens", 0),
+        "total_tokens": result.get("total_tokens", 0),
+        "tokens_per_second": result.get("tokens_per_second", 0.0),
+        "validator_passed": result.get("validator_passed"),
+        "handoff_reason": result.get("handoff_reason") or result.get("reason"),
+    }

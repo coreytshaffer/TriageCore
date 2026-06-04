@@ -4,11 +4,17 @@ from triage_core.client import TriageClient
 
 load_dotenv()
 
-LOCAL_URL = os.getenv("LOCAL_URL", "http://127.0.0.1:1234")
-CLOUD_MODEL = os.getenv("CLOUD_MODEL", "gemini/gemini-1.5-pro")
+BACKEND_TYPE = os.getenv("TRIAGE_BACKEND_TYPE", "ollama")
+MODEL = os.getenv("TRIAGE_MODEL", "qwen2.5-coder:7b")
+BASE_URL = os.getenv("TRIAGE_BASE_URL")
 
 def main():
-    client = TriageClient(local_url=LOCAL_URL, cloud_model=CLOUD_MODEL, timeout_seconds=60)
+    client = TriageClient(
+        backend_type=BACKEND_TYPE,
+        model=MODEL,
+        base_url=BASE_URL,
+        timeout_seconds=60,
+    )
     
     prompt = """You are a rigid parsing worker. Output ONLY valid markdown.
 Format the raw log data into a summary list of errors."""
@@ -24,9 +30,12 @@ Format the raw log data into a summary list of errors."""
     result = client.run_task(prompt=prompt, data=data)
     
     print(f"\nResult Source: {result.get('source')}")
-    print(f"Elapsed Time: {result.get('elapsed_seconds'):.2f}s")
-    print("--- OUTPUT ---")
-    print(result.get('output'))
+    if result.get("status") == "success":
+        print(f"Elapsed Time: {result.get('elapsed_seconds'):.2f}s")
+        print("--- OUTPUT ---")
+        print(result.get('output'))
+    else:
+        print(f"Reason: {result.get('reason', result.get('error'))}")
 
 if __name__ == "__main__":
     main()
