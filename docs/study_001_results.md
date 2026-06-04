@@ -44,6 +44,31 @@ The stronger validators surfaced one useful mismatch: `json_extraction_small_v1`
 
 The rerun also exposed the next evidence-design decision: `study_id` separates formal study records from exploratory history, but repeated runs inside the same study still aggregate together. A future slice should add a `run_id` or `trial_id` before comparing multiple prompt, model, or validator versions inside Study 001.
 
+## Trial-Scoped Run
+
+Story 5.1 added `run_id` support so repeated formal attempts can be separated inside the same study. The first trial-scoped run used:
+
+```bash
+triagecore benchmark --study-id study_001 --run-id trial_001
+triagecore benchmark-report --study-id study_001 --run-id trial_001 --output reports/study_001_trial_001_benchmark_report.md
+triagecore propose-lessons --study-id study_001 --run-id trial_001
+```
+
+Trial 001 outcomes:
+
+| Metric | Value |
+| --- | ---: |
+| Formal benchmark runs | 5 |
+| Success rate | 60.0% |
+| Handoff rate | 40.0% |
+| Mismatches | 1 |
+| Validator failures | 1 |
+| Average seconds | 3.28 |
+| Total tokens | 531 |
+| Average tokens per second | 39.88 |
+
+Trial 001 generated three learning proposal candidates for `structured_extraction`: status mismatch, unexpected handoff, and validator failure. This confirms that trial-scoped reporting and learning proposal filtering can isolate a specific formal run.
+
 ## Interpretation
 
-This is a successful first operational baseline, not a broad claim about model quality. The current benchmark set is intentionally small and should be expanded before using Study 001 as strong evidence in the paper.
+This is a successful first operational baseline, not a broad claim about model quality. The current benchmark set is intentionally small and should be expanded before using Study 001 as strong evidence in the paper. The immediate next research decision is whether to tune the structured-extraction prompt, adjust the validator, or compare another local model/backend.

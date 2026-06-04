@@ -52,6 +52,7 @@ def main():
     benchmark_parser.add_argument("--limit", type=int, default=None, help="Optional number of benchmark tasks to run.")
     benchmark_parser.add_argument("--ledger-dir", type=str, default=default_config.get_ledger_dir(), help="Directory for the benchmark ledger.")
     benchmark_parser.add_argument("--study-id", type=str, default=None, help="Optional study identifier to tag benchmark evidence.")
+    benchmark_parser.add_argument("--run-id", type=str, default=None, help="Optional run identifier to tag a specific benchmark trial.")
     benchmark_parser.add_argument("--list-only", action="store_true", help="List benchmark tasks without running a backend.")
 
     # benchmark-report
@@ -59,6 +60,7 @@ def main():
     report_parser.add_argument("--ledger-dir", type=str, default=default_config.get_ledger_dir(), help="Directory containing ledger.jsonl.")
     report_parser.add_argument("--output", type=str, default=None, help="Optional markdown output path.")
     report_parser.add_argument("--study-id", type=str, default=None, help="Optional study identifier used to filter benchmark evidence.")
+    report_parser.add_argument("--run-id", type=str, default=None, help="Optional run identifier used to filter benchmark evidence.")
 
     # propose-lessons
     lessons_parser = subparsers.add_parser("propose-lessons", help="Generate pending learning proposals from ledger evidence.")
@@ -66,6 +68,7 @@ def main():
     lessons_parser.add_argument("--output", type=str, default=os.path.join(default_config.get_ledger_dir(), "learning_proposals.jsonl"), help="JSONL output path for pending proposals.")
     lessons_parser.add_argument("--min-evidence", type=int, default=1, help="Minimum evidence records required for a proposal.")
     lessons_parser.add_argument("--study-id", type=str, default=None, help="Optional study identifier used to filter learning proposal evidence.")
+    lessons_parser.add_argument("--run-id", type=str, default=None, help="Optional run identifier used to filter learning proposal evidence.")
 
     # review-lesson
     review_parser = subparsers.add_parser("review-lesson", help="Record a human review decision for a learning proposal.")
@@ -101,6 +104,7 @@ def main():
             limit=args.limit,
             ledger_dir=args.ledger_dir,
             study_id=args.study_id,
+            run_id=args.run_id,
             list_only=args.list_only,
         )
     elif args.command == "benchmark-report":
@@ -108,6 +112,7 @@ def main():
             ledger_dir=args.ledger_dir,
             output_path=args.output,
             study_id=args.study_id,
+            run_id=args.run_id,
         )
     elif args.command == "propose-lessons":
         _propose_lessons(
@@ -115,6 +120,7 @@ def main():
             output_path=args.output,
             min_evidence=args.min_evidence,
             study_id=args.study_id,
+            run_id=args.run_id,
         )
     elif args.command == "review-lesson":
         _review_lesson(
@@ -289,6 +295,7 @@ def _run_benchmarks(
     limit: Optional[int],
     ledger_dir: str,
     study_id: Optional[str],
+    run_id: Optional[str],
     list_only: bool,
 ):
     from .benchmarks import load_benchmark_tasks, resolve_validator, result_to_model_event
@@ -321,6 +328,7 @@ def _run_benchmarks(
             "target_files": task.target_files,
             "benchmark_task_id": task.task_id,
             "study_id": study_id,
+            "run_id": run_id,
         })
         ledger.append_event(task_id, "runner_selected", {"runner": "local_benchmark"})
 
@@ -338,11 +346,16 @@ def _run_benchmarks(
 
         print(f"  observed={result.get('status')} expected={task.expected_status}")
 
-def _benchmark_report(ledger_dir: str, output_path: Optional[str], study_id: Optional[str]):
+def _benchmark_report(
+    ledger_dir: str,
+    output_path: Optional[str],
+    study_id: Optional[str],
+    run_id: Optional[str],
+):
     from .reports import build_benchmark_report, render_benchmark_report_markdown
 
     ledger = TaskLedger(ledger_dir=ledger_dir)
-    report = build_benchmark_report(ledger.get_all_tasks(), study_id=study_id)
+    report = build_benchmark_report(ledger.get_all_tasks(), study_id=study_id, run_id=run_id)
     markdown = render_benchmark_report_markdown(report)
 
     if output_path:
@@ -355,13 +368,21 @@ def _benchmark_report(ledger_dir: str, output_path: Optional[str], study_id: Opt
     else:
         print(markdown)
 
-def _propose_lessons(ledger_dir: str, output_path: str, min_evidence: int, study_id: Optional[str]):
+def _propose_lessons(
+    ledger_dir: str,
+    output_path: str,
+    min_evidence: int,
+    study_id: Optional[str],
+    run_id: Optional[str],
+):
     from .learning import append_learning_proposals, build_learning_proposals
 
     ledger = TaskLedger(ledger_dir=ledger_dir)
     records = ledger.get_all_tasks()
     if study_id:
         records = [record for record in records if record.study_id == study_id]
+    if run_id:
+        records = [record for record in records if record.run_id == run_id]
     proposals = build_learning_proposals(records, min_evidence=min_evidence)
     new_proposals = append_learning_proposals(output_path, proposals)
 

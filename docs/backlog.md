@@ -34,15 +34,22 @@ This backlog tracks the planned features and scientific enhancements for the loc
   * Configure a file logger (`triagecore.log`) to record internal orchestration milestones, handoff warnings, and errors.
   * Render a scrollable console in TriageDesk showing live run logs and raw JSONL ledger contents.
 
-## Current Decision Point
+## Completed Study Evidence Slice
 
 Study 001 has a clean operational baseline, scoped study reporting, and stronger deterministic validators. The validator hardening rerun surfaced one useful mismatch: `json_extraction_small_v1` triggers `handoff_required` under the stricter `monitoring_json` validator.
 
 Recommended next slice:
 
-* [ ] **Story 5.1: Add Run/Trial IDs for Study Evidence**
+* [x] **Story 5.1: Add Run/Trial IDs for Study Evidence**
   * Add a `run_id` or `trial_id` field to benchmark ledger records.
   * Let `benchmark`, `benchmark-report`, and `propose-lessons` filter by both `study_id` and `run_id`.
   * Use this before tuning prompts or validators so repeated Study 001 runs do not aggregate into one summary.
 
 After run/trial scoping is in place, review whether `json_extraction_small_v1` needs prompt tuning, validator adjustment, or a model/backend comparison.
+
+## Current Decision Point
+
+* [ ] **Story 5.2: Review Structured Extraction Failure**
+  * Inspect the `structured_extraction` learning proposals from `study_001` / `trial_001`.
+  * Decide whether the failure is prompt wording, validator strictness, model behavior, or backend configuration.
+  * Apply only one change at a time, then rerun with a new `run_id`.

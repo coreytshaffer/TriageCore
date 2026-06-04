@@ -21,6 +21,7 @@ The schema supports two project goals:
 | `runner` | Execution path, such as `local_benchmark`, `local_llm`, `council`, `codex`, or `antigravity`. |
 | `status` | Current state: `pending`, `local_draft_generated`, `handoff_generated`, `reviewed`, or `blocked`. |
 | `study_id` | Optional study label, such as `study_001`, used to separate formal experiments from exploratory runs. |
+| `run_id` | Optional run or trial label, such as `trial_001`, used to separate repeated attempts inside one study. |
 
 ## Routing And Safety Fields
 

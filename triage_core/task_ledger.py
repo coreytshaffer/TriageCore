@@ -18,6 +18,7 @@ class TaskRecord:
     runner: Optional[str] = None
     status: str = "pending"
     study_id: Optional[str] = None
+    run_id: Optional[str] = None
     permission_profile: Optional[str] = None
     risk_level: Optional[str] = None
     energy_kwh_estimate: float = 0.0
@@ -145,6 +146,8 @@ class TaskLedger:
             record.target_files = payload.get("target_files", [])
             if "study_id" in payload:
                 record.study_id = payload["study_id"]
+            if "run_id" in payload:
+                record.run_id = payload["run_id"]
         elif etype == "task_classified":
             record.permission_profile = payload.get("recommended_profile")
             record.risk_level = payload.get("risk_level")
@@ -189,6 +192,8 @@ class TaskLedger:
             record.backend_name = payload["backend_name"]
         if "study_id" in payload:
             record.study_id = payload["study_id"]
+        if "run_id" in payload:
+            record.run_id = payload["run_id"]
         if "model" in payload:
             record.model = payload["model"]
         if "benchmark_task_id" in payload:

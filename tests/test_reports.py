@@ -103,3 +103,37 @@ def test_build_benchmark_report_filters_by_study_id():
     assert report.overall.successes == 1
     assert report.overall.mismatches == 0
     assert "Study ID: `study_001`" in markdown
+
+
+def test_build_benchmark_report_filters_by_run_id():
+    report = build_benchmark_report([
+        TaskRecord(
+            task_id="trial-task",
+            study_id="study_001",
+            run_id="trial_001",
+            benchmark_task_id="json_extraction_small_v1",
+            benchmark_category="structured_extraction",
+            expected_status="success",
+            observed_status="handoff_required",
+            validator_passed=False,
+        ),
+        TaskRecord(
+            task_id="other-trial-task",
+            study_id="study_001",
+            run_id="trial_002",
+            benchmark_task_id="json_extraction_small_v1",
+            benchmark_category="structured_extraction",
+            expected_status="success",
+            observed_status="success",
+            validator_passed=True,
+        ),
+    ], study_id="study_001", run_id="trial_001")
+
+    markdown = render_benchmark_report_markdown(report)
+
+    assert report.total_runs == 1
+    assert report.overall.handoffs == 1
+    assert report.overall.mismatches == 1
+    assert report.overall.validator_failures == 1
+    assert "Study ID: `study_001`" in markdown
+    assert "Run ID: `trial_001`" in markdown

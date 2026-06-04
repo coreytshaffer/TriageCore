@@ -43,15 +43,19 @@ class BenchmarkReport:
     by_model: List[BenchmarkSummary]
     by_category: List[BenchmarkSummary]
     study_id: str | None = None
+    run_id: str | None = None
 
 
 def build_benchmark_report(
     records: Iterable[TaskRecord],
     study_id: str | None = None,
+    run_id: str | None = None,
 ) -> BenchmarkReport:
     benchmark_records = [record for record in records if record.benchmark_task_id]
     if study_id:
         benchmark_records = [record for record in benchmark_records if record.study_id == study_id]
+    if run_id:
+        benchmark_records = [record for record in benchmark_records if record.run_id == run_id]
 
     overall = BenchmarkSummary(label="overall")
     by_model: Dict[str, BenchmarkSummary] = {}
@@ -69,6 +73,7 @@ def build_benchmark_report(
         by_model=_sorted_summaries(by_model),
         by_category=_sorted_summaries(by_category),
         study_id=study_id,
+        run_id=run_id,
     )
 
 
@@ -80,6 +85,11 @@ def render_benchmark_report_markdown(report: BenchmarkReport) -> str:
     if report.study_id:
         lines.extend([
             f"Study ID: `{report.study_id}`",
+            "",
+        ])
+    if report.run_id:
+        lines.extend([
+            f"Run ID: `{report.run_id}`",
             "",
         ])
     lines.extend([

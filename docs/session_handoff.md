@@ -34,7 +34,7 @@ python -m pytest
 Result:
 
 ```text
-68 passed
+70 passed
 ```
 
 Benchmark fixture smoke check:
@@ -47,6 +47,8 @@ Result: all five Study 001 fixtures load.
 
 ## Next Decision Point
 
-Add `run_id` or `trial_id` support before tuning the structured-extraction task. `study_id` separates Study 001 from exploratory history, but repeated formal runs still aggregate together. Trial-level scoping will make prompt/model/validator comparisons cleaner and more paper-ready.
+Run/trial scoping has been added. `study_001` / `trial_001` now isolates one formal run and produces a 5-run report with one `structured_extraction` mismatch and one validator failure.
+
+Next step: inspect the trial-scoped learning proposals and decide whether `json_extraction_small_v1` should be handled by prompt wording, validator adjustment, model comparison, or backend configuration. Apply one change at a time and rerun with a fresh `run_id`.
 
 After that, revisit `json_extraction_small_v1`, which now produces `handoff_required` under the stricter `monitoring_json` validator.
