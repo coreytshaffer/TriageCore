@@ -1,8 +1,9 @@
 from triage_core.orchestration import ProjectManager
 from triage_core.worker_registry import WorkerBase
+import traceback
 
 # Mock process to simulate successful LLM generation
-def fake_process(self, order):
+def fake_process(self, order, stream_callback=None):
     return {
         "worker_id": self.role,
         "resource_usage": {"energy_kwh_estimate": 0.01, "duration_seconds": 2},
@@ -24,4 +25,5 @@ def test_dispatch():
     except Exception as e:
         traceback.print_exc()
 
-test_dispatch()
+if __name__ == "__main__":
+    test_dispatch()
