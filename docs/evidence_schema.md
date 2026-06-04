@@ -63,6 +63,20 @@ The schema supports two project goals:
 | `review_workload` | Optional reviewer workload label: `not_recorded`, `low`, `medium`, or `high`. |
 | `artifact_paths` | Generated handoff packets, reports, or output files. |
 
+## Supervisor Review Fields
+
+| Field | Meaning |
+| --- | --- |
+| `supervisor_tool` | Supervisory tool or lane, such as `codex`, `antigravity`, `gemini`, or `human`. |
+| `supervisor_model` | Supervisor model identifier, when known. |
+| `supervisor_profile` | Supervisor mode or profile, such as `high`, `review`, or `supervisor`. |
+| `supervisor_decision` | Review outcome: `accepted`, `rejected`, `needs_revision`, or `escalated`. |
+| `supervisor_notes` | Human-readable rationale for the supervisory decision. |
+| `supervisor_artifact_path` | Packet, transcript, task bundle, or output artifact linked to the review. |
+| `supervisor_input_tokens_est` | Estimated supervisor input tokens, if exact usage is unavailable. |
+| `supervisor_output_tokens_est` | Estimated supervisor output tokens, if exact usage is unavailable. |
+| `supervisor_token_source` | Source label for supervisor token values: `manual_estimate`, `imported_estimate`, or `imported_exact`. |
+
 ## Learning Linkage
 
 Learning proposal files should reference ledger evidence by `task_id`. Accepted lessons should remain review records until a human intentionally applies them as config or prompt changes.

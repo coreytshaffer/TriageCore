@@ -179,6 +179,38 @@ def test_ledger_tracks_review_workload():
         assert record.accepted is False
         assert record.review_workload == "high"
 
+def test_ledger_tracks_supervisor_review():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        ledger = TaskLedger(ledger_dir=temp_dir)
+        task_id = str(uuid.uuid4())
+
+        ledger.append_event(task_id, "task_created", {"title": "Supervisor Task"})
+        ledger.append_event(task_id, "supervisor_reviewed", {
+            "supervisor_tool": "codex",
+            "supervisor_model": "gpt-5",
+            "supervisor_profile": "high",
+            "supervisor_decision": "needs_revision",
+            "supervisor_notes": "Local draft needs tests.",
+            "supervisor_artifact_path": "triage_tasks/codex_task_abc.md",
+            "supervisor_input_tokens_est": 1200,
+            "supervisor_output_tokens_est": 300,
+            "supervisor_token_source": "imported_exact",
+        })
+
+        record = ledger.get_task(task_id)
+
+        assert record is not None
+        assert record.supervisor_tool == "codex"
+        assert record.supervisor_model == "gpt-5"
+        assert record.supervisor_profile == "high"
+        assert record.supervisor_decision == "needs_revision"
+        assert record.supervisor_notes == "Local draft needs tests."
+        assert record.supervisor_artifact_path == "triage_tasks/codex_task_abc.md"
+        assert record.supervisor_input_tokens_est == 1200
+        assert record.supervisor_output_tokens_est == 300
+        assert record.supervisor_token_source == "imported_exact"
+        assert "triage_tasks/codex_task_abc.md" in record.artifact_paths
+
 def test_ledger_updates_updated_at_on_later_events():
     with tempfile.TemporaryDirectory() as temp_dir:
         ledger = TaskLedger(ledger_dir=temp_dir)

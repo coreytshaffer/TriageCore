@@ -252,6 +252,25 @@ burden (\texttt{not\_recorded}, \texttt{low}, \texttt{medium}, or
 \texttt{high}) and should be analysed as a subjective ordinal indicator, not as
 an objective performance metric.
 
+\subsection{Local-First Benefit Signals}
+
+The desktop telemetry dashboard intentionally foregrounds local-first benefit
+signals because the workbench is also an operator environment. These signals
+can help the user keep collecting evidence, building artifacts, and noticing
+when more work is staying on local compute. Current dashboard signals include:
+\begin{itemize}
+  \item accepted yield
+  \item percent of tasks routed through local-first runners
+  \item count of accepted local-first tasks
+  \item percent of tasks that did not require mandatory human review
+\end{itemize}
+
+These are motivational and operational indicators, not standalone proof of
+environmental savings. Reports, papers, and methodology artifacts should
+describe them as benefit or avoidance signals unless a study defines a
+baseline comparison, such as local-first routing versus a remote-only workflow
+using the same benchmark fixture set.
+
 % ─────────────────────────────────────────────────────────────────────────────
 \section{Model and Backend Comparison}
 % ─────────────────────────────────────────────────────────────────────────────
@@ -259,8 +278,9 @@ an objective performance metric.
 Model/backend comparison studies use the same benchmark fixture set across
 each candidate configuration and tag all evidence with a shared
 \texttt{study\_id} plus a unique \texttt{run\_id} for each backend/model pair.
-Reports group evidence by both backend and backend/model so that
-runtime-adapter differences are not confused with model differences.
+Reports group evidence by supervision lane, backend, and backend/model so that
+supervised workflows, runtime-adapter differences, and model differences are
+not confused with one another.
 
 Comparison runs should use:
 \begin{itemize}
@@ -270,12 +290,47 @@ Comparison runs should use:
   \item separate \texttt{run\_id} values for every backend/model pair
   \item the combined \texttt{benchmark-report --study-id <study>} output for
     interpretation
+  \item the \texttt{By Supervision} section when local-only and supervised
+    outcomes are mixed
 \end{itemize}
 
 Expected destructive-task handoff is treated as correct safety behavior. A
 configuration should only be preferred when it improves accepted outcomes
 without increasing unexpected handoffs, validator failures, or subjective review
 burden.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Supervised Hybrid Workflows}
+% ─────────────────────────────────────────────────────────────────────────────
+
+TriageCore distinguishes local-only execution from supervised hybrid workflows.
+A local draft, worker-council result, benchmark run, or pipeline attempt may be
+reviewed by Codex, Antigravity, Gemini, or a human reviewer before it is treated
+as accepted work. These reviews are recorded as
+\texttt{supervisor\_reviewed} events rather than merged into the original local
+execution event.
+
+This separation matters because supervision changes the workflow being studied.
+A Codex-reviewed patch and an Antigravity-supervised IDE implementation may use
+the same local model output, but they also add different review tools, reasoning
+contexts, token costs, and human oversight patterns. Reports should therefore
+label supervised outcomes separately from local-only outcomes whenever they are
+used as scientific evidence.
+
+Supervisor review fields include the supervising tool, model, profile,
+decision, notes, linked artifact path, and estimated supervisor input/output
+tokens when exact usage is not available. Estimated token fields should be
+interpreted as approximate evidence only.
+
+Benchmark reports summarize supervisor reviews under the same
+\texttt{study\_id} and \texttt{run\_id} filters as the benchmark evidence. The
+\texttt{Supervisor Reviews} table reports review counts, decision counts, and
+estimated supervisor token totals by tool. Supervisor token values remain manual
+estimates unless a supervisor tool log or API exposes exact usage data.
+
+This boundary is intentionally conservative: imported exact usage, imported
+estimates, and manual estimates are labelled separately so claims remain
+verifiable, reproducible, and falsifiable.
 
 % ─────────────────────────────────────────────────────────────────────────────
 \section{Default Parameter Summary}

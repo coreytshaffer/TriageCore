@@ -340,6 +340,9 @@ class PowerSampler:
         if self._thread:
             self._stop_event.set()
             self._thread.join(timeout=1.0)
+        if not self.samples:
+            self.measurement_source = "heuristic"
+            self.samples.append((time.time(), get_cpu_power_heuristic()))
         return self.samples
 
     def _run(self):

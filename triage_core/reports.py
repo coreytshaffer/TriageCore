@@ -37,12 +37,31 @@ class BenchmarkSummary:
 
 
 @dataclass
+class SupervisorReviewSummary:
+    label: str
+    reviews: int = 0
+    accepted: int = 0
+    rejected: int = 0
+    needs_revision: int = 0
+    escalated: int = 0
+    total_input_tokens_est: int = 0
+    total_output_tokens_est: int = 0
+    exact_token_records: int = 0
+
+    @property
+    def total_tokens_est(self) -> int:
+        return self.total_input_tokens_est + self.total_output_tokens_est
+
+
+@dataclass
 class BenchmarkReport:
     total_runs: int
     overall: BenchmarkSummary
+    by_supervision: List[BenchmarkSummary]
     by_backend: List[BenchmarkSummary]
     by_model: List[BenchmarkSummary]
     by_category: List[BenchmarkSummary]
+    supervisor_reviews: List[SupervisorReviewSummary]
     study_id: str | None = None
     run_id: str | None = None
 
@@ -59,24 +78,38 @@ def build_benchmark_report(
         benchmark_records = [record for record in benchmark_records if record.run_id == run_id]
 
     overall = BenchmarkSummary(label="overall")
+    by_supervision: Dict[str, BenchmarkSummary] = {}
     by_backend: Dict[str, BenchmarkSummary] = {}
     by_model: Dict[str, BenchmarkSummary] = {}
     by_category: Dict[str, BenchmarkSummary] = {}
+    supervisor_reviews: Dict[str, SupervisorReviewSummary] = {}
 
     for record in benchmark_records:
         _apply_record(overall, record)
+        supervision = _supervision_label(record)
+        _apply_record(by_supervision.setdefault(supervision, BenchmarkSummary(label=supervision)), record)
         backend = record.backend_name or "unknown-backend"
         _apply_record(by_backend.setdefault(backend, BenchmarkSummary(label=backend)), record)
         _apply_record(by_model.setdefault(_model_label(record), BenchmarkSummary(label=_model_label(record))), record)
         category = record.benchmark_category or "uncategorized"
         _apply_record(by_category.setdefault(category, BenchmarkSummary(label=category)), record)
+        if record.supervisor_tool:
+            _apply_supervisor_review(
+                supervisor_reviews.setdefault(
+                    record.supervisor_tool,
+                    SupervisorReviewSummary(label=record.supervisor_tool),
+                ),
+                record,
+            )
 
     return BenchmarkReport(
         total_runs=len(benchmark_records),
         overall=overall,
+        by_supervision=_sorted_summaries(by_supervision),
         by_backend=_sorted_summaries(by_backend),
         by_model=_sorted_summaries(by_model),
         by_category=_sorted_summaries(by_category),
+        supervisor_reviews=_sorted_supervisor_summaries(supervisor_reviews),
         study_id=study_id,
         run_id=run_id,
     )
@@ -102,6 +135,10 @@ def render_benchmark_report_markdown(report: BenchmarkReport) -> str:
         "",
         _summary_table([report.overall]),
         "",
+        "## By Supervision",
+        "",
+        _summary_table(report.by_supervision),
+        "",
         "## By Backend",
         "",
         _summary_table(report.by_backend),
@@ -113,6 +150,10 @@ def render_benchmark_report_markdown(report: BenchmarkReport) -> str:
         "## By Category",
         "",
         _summary_table(report.by_category),
+        "",
+        "## Supervisor Reviews",
+        "",
+        _supervisor_review_table(report.supervisor_reviews),
     ])
     return "\n".join(lines)
 
@@ -135,13 +176,43 @@ def _apply_record(summary: BenchmarkSummary, record: TaskRecord) -> None:
         summary.token_speed_runs += 1
 
 
+def _apply_supervisor_review(summary: SupervisorReviewSummary, record: TaskRecord) -> None:
+    summary.reviews += 1
+    decision = record.supervisor_decision
+    if decision == "accepted":
+        summary.accepted += 1
+    elif decision == "rejected":
+        summary.rejected += 1
+    elif decision == "needs_revision":
+        summary.needs_revision += 1
+    elif decision == "escalated":
+        summary.escalated += 1
+
+    summary.total_input_tokens_est += record.supervisor_input_tokens_est
+    summary.total_output_tokens_est += record.supervisor_output_tokens_est
+    if record.supervisor_token_source == "imported_exact":
+        summary.exact_token_records += 1
+
+
 def _model_label(record: TaskRecord) -> str:
     backend = record.backend_name or "unknown-backend"
     model = record.model or "unknown-model"
     return f"{backend}/{model}"
 
 
+def _supervision_label(record: TaskRecord) -> str:
+    if not record.supervisor_tool:
+        return "local-only"
+    return f"{record.supervisor_tool}-supervised"
+
+
 def _sorted_summaries(groups: Dict[str, BenchmarkSummary]) -> List[BenchmarkSummary]:
+    return sorted(groups.values(), key=lambda item: item.label)
+
+
+def _sorted_supervisor_summaries(
+    groups: Dict[str, SupervisorReviewSummary]
+) -> List[SupervisorReviewSummary]:
     return sorted(groups.values(), key=lambda item: item.label)
 
 
@@ -167,6 +238,36 @@ def _summary_table(summaries: List[BenchmarkSummary]) -> str:
                     f"{summary.average_elapsed_seconds:.2f}",
                     str(summary.total_tokens),
                     f"{summary.average_tokens_per_second:.2f}",
+                ]
+            )
+            + " |"
+        )
+    return "\n".join(rows)
+
+
+def _supervisor_review_table(summaries: List[SupervisorReviewSummary]) -> str:
+    if not summaries:
+        return "_No supervisor reviews found for this benchmark scope._"
+
+    rows = [
+        "| Tool | Reviews | Accepted | Needs Revision | Rejected | Escalated | Exact Token Records | Est Input Tokens | Est Output Tokens | Est Total Tokens |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for summary in summaries:
+        rows.append(
+            "| "
+            + " | ".join(
+                [
+                    summary.label,
+                    str(summary.reviews),
+                    str(summary.accepted),
+                    str(summary.needs_revision),
+                    str(summary.rejected),
+                    str(summary.escalated),
+                    str(summary.exact_token_records),
+                    str(summary.total_input_tokens_est),
+                    str(summary.total_output_tokens_est),
+                    str(summary.total_tokens_est),
                 ]
             )
             + " |"

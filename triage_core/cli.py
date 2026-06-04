@@ -1,11 +1,26 @@
 import argparse
 import os
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
 from .handoff import HandoffPacket
 from .classifier import TaskClassifier, DangerDetector
 from .config import default_config
 from .task_ledger import TaskLedger
+
+
+def _log_cli_activity(message: str, ledger_dir: Optional[str] = None) -> str:
+    log_dir = ledger_dir or default_config.get_ledger_dir()
+    os.makedirs(log_dir, exist_ok=True)
+    log_path = os.path.join(log_dir, "triagecore.log")
+    timestamp = datetime.now(timezone.utc).isoformat()
+    try:
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(f"{timestamp} [cli] {message}\n")
+    except OSError as exc:
+        print(f"Warning: could not write CLI activity log: {exc}")
+    return log_path
+
 
 def main():
     parser = argparse.ArgumentParser(description="TriageCore: Local-first developer-agent control harness.")
@@ -40,7 +55,7 @@ def main():
     push_parser = subparsers.add_parser("push-task", help="Push a task to an open TriageDesk instance via IPC.")
     push_parser.add_argument("--prompt", type=str, required=True, help="The instruction to inject into the UI.")
     push_parser.add_argument("--files", type=str, nargs="*", default=[], help="Target files to populate.")
-    push_parser.add_argument("--auto-dispatch", type=str, choices=["local", "council", "codex", "antigravity"], help="Optional runner to auto-trigger.")
+    push_parser.add_argument("--auto-dispatch", type=str, choices=["local", "council", "codex", "antigravity", "pipeline"], help="Optional runner to auto-trigger.")
 
     # benchmark
     benchmark_parser = subparsers.add_parser("benchmark", help="Run or list model evaluation benchmark tasks.")
@@ -76,6 +91,57 @@ def main():
     review_parser.add_argument("--decision", type=str, choices=["accepted", "rejected"], required=True, help="Human review decision.")
     review_parser.add_argument("--notes", type=str, default="", help="Optional reviewer notes.")
     review_parser.add_argument("--output", type=str, default=os.path.join(default_config.get_ledger_dir(), "learning_reviews.jsonl"), help="JSONL output path for review records.")
+
+    # record-supervisor-review
+    supervisor_parser = subparsers.add_parser(
+        "record-supervisor-review",
+        help="Record a Codex, Antigravity, Gemini, or human supervisor review for a task.",
+    )
+    supervisor_parser.add_argument("task_id", type=str, help="Task ID from the ledger.")
+    supervisor_parser.add_argument("--tool", type=str, required=True, help="Supervisor tool, such as codex, antigravity, gemini, or human.")
+    supervisor_parser.add_argument("--decision", type=str, choices=["accepted", "rejected", "needs_revision", "escalated"], required=True, help="Supervisor review decision.")
+    supervisor_parser.add_argument("--notes", type=str, default="", help="Supervisor notes or review rationale.")
+    supervisor_parser.add_argument("--model", type=str, default="", help="Supervisor model, if known.")
+    supervisor_parser.add_argument("--profile", type=str, default="", help="Supervisor profile or mode, if known.")
+    supervisor_parser.add_argument("--artifact-path", type=str, default="", help="Review packet, transcript, or output artifact path.")
+    supervisor_parser.add_argument("--input-tokens-est", type=int, default=0, help="Estimated supervisor input tokens, if known.")
+    supervisor_parser.add_argument("--output-tokens-est", type=int, default=0, help="Estimated supervisor output tokens, if known.")
+    supervisor_parser.add_argument("--token-source", type=str, choices=["manual_estimate", "imported_estimate", "imported_exact"], default="manual_estimate", help="Source label for supervisor token values.")
+    supervisor_parser.add_argument("--ledger-dir", type=str, default=default_config.get_ledger_dir(), help="Directory containing ledger.jsonl.")
+
+    # import-supervisor-usage
+    usage_parser = subparsers.add_parser(
+        "import-supervisor-usage",
+        help="Import supervisor token usage from a JSON or JSONL artifact.",
+    )
+    usage_parser.add_argument("source", type=str, help="JSON or JSONL file containing supervisor usage records.")
+    usage_parser.add_argument("--tool", type=str, default="", help="Default supervisor tool when records omit one.")
+    usage_parser.add_argument("--decision", type=str, choices=["accepted", "rejected", "needs_revision", "escalated"], default="accepted", help="Default supervisor decision when records omit one.")
+    usage_parser.add_argument("--notes", type=str, default="", help="Default notes when records omit them.")
+    usage_parser.add_argument("--model", type=str, default="", help="Default supervisor model when records omit one.")
+    usage_parser.add_argument("--profile", type=str, default="", help="Default supervisor profile when records omit one.")
+    usage_parser.add_argument("--artifact-path", type=str, default="", help="Default artifact path when records omit one.")
+    usage_parser.add_argument("--token-source", type=str, choices=["imported_estimate", "imported_exact"], default="imported_estimate", help="Whether imported token values are estimates or verified exact usage.")
+    usage_parser.add_argument("--ledger-dir", type=str, default=default_config.get_ledger_dir(), help="Directory containing ledger.jsonl.")
+    usage_parser.add_argument("--dry-run", action="store_true", help="Preview importable records without writing ledger events.")
+
+    # scan-supervisor-usage
+    scan_usage_parser = subparsers.add_parser(
+        "scan-supervisor-usage",
+        help="Scan files or directories for importable supervisor usage JSON/JSONL artifacts.",
+    )
+    scan_usage_parser.add_argument("paths", type=str, nargs="+", help="Files or directories to scan.")
+    scan_usage_parser.add_argument("--tool", type=str, default="", help="Default supervisor tool when candidate records omit one.")
+    scan_usage_parser.add_argument("--token-source", type=str, choices=["imported_estimate", "imported_exact"], default="imported_estimate", help="Token source label used while parsing candidates.")
+    scan_usage_parser.add_argument("--max-file-bytes", type=int, default=1_000_000, help="Maximum JSON/JSONL file size to inspect.")
+
+    # run-pipeline
+    pipeline_parser = subparsers.add_parser("run-pipeline", help="Run the local pipeline headlessly and output tokens.")
+    pipeline_parser.add_argument("--prompt", type=str, required=True, help="Task instructions.")
+    pipeline_parser.add_argument("--files", type=str, nargs="*", default=[], help="Target files.")
+    pipeline_parser.add_argument("--output", type=str, required=True, help="Where to save the output artifact.")
+    pipeline_parser.add_argument("--ledger-dir", type=str, default=default_config.get_ledger_dir(), help="Directory for pipeline ledger evidence.")
+    pipeline_parser.add_argument("--task-id", type=str, default=None, help="Optional existing task ID to append pipeline evidence to.")
 
     args = parser.parse_args()
 
@@ -129,6 +195,42 @@ def main():
             notes=args.notes,
             output_path=args.output,
         )
+    elif args.command == "record-supervisor-review":
+        _record_supervisor_review(
+            task_id=args.task_id,
+            tool=args.tool,
+            decision=args.decision,
+            notes=args.notes,
+            model=args.model,
+            profile=args.profile,
+            artifact_path=args.artifact_path,
+            input_tokens_est=args.input_tokens_est,
+            output_tokens_est=args.output_tokens_est,
+            token_source=args.token_source,
+            ledger_dir=args.ledger_dir,
+        )
+    elif args.command == "import-supervisor-usage":
+        _import_supervisor_usage(
+            source_path=args.source,
+            tool=args.tool,
+            decision=args.decision,
+            notes=args.notes,
+            model=args.model,
+            profile=args.profile,
+            artifact_path=args.artifact_path,
+            token_source=args.token_source,
+            ledger_dir=args.ledger_dir,
+            dry_run=args.dry_run,
+        )
+    elif args.command == "scan-supervisor-usage":
+        _scan_supervisor_usage(
+            paths=args.paths,
+            tool=args.tool,
+            token_source=args.token_source,
+            max_file_bytes=args.max_file_bytes,
+        )
+    elif args.command == "run-pipeline":
+        _run_pipeline(args.prompt, args.files, args.output, args.ledger_dir, args.task_id)
     else:
         parser.print_help()
 
@@ -145,6 +247,7 @@ def _push_task_to_ui(prompt: str, files: list[str], auto_dispatch: Optional[str]
     }
     with open(inbox_path, "w", encoding="utf-8") as f:
         json.dump(payload, f)
+    _log_cli_activity(f"push-task queued auto_dispatch={auto_dispatch or 'none'}", ledger_dir=ledger_dir)
     print(f"Success: Task pushed to {inbox_path}.")
     print("If TriageDesk is running, it will automatically import it within 1 second.")
 
@@ -252,6 +355,7 @@ def _generate_codex_task(prompt: str, files: list[str]):
         f.write(packet.to_markdown())
         
     _log_to_ledger(task_id, prompt, files, "codex", filename)
+    _log_cli_activity(f"codex-task generated task={task_id[:8]} path={filename}")
     print(f"Success: Generated Codex task packet at {filename}")
 
 def _generate_antigravity_task(prompt: str, files: list[str], slug: str):
@@ -271,6 +375,7 @@ def _generate_antigravity_task(prompt: str, files: list[str], slug: str):
             f.write(f"- [ ] {ac}\n")
             
     _log_to_ledger(task_id, prompt, files, "antigravity", task_file)
+    _log_cli_activity(f"antigravity-task generated task={task_id[:8]} path={task_file}")
     print(f"Success: Generated Antigravity task bundle at {task_dir}/")
 
 def _init_agents():
@@ -317,6 +422,10 @@ def _run_benchmarks(
         timeout_seconds=timeout_seconds,
     )
     ledger = TaskLedger(ledger_dir=ledger_dir)
+    _log_cli_activity(
+        f"benchmark started backend={backend_type} model={model} study={study_id or 'none'} run={run_id or 'none'}",
+        ledger_dir=ledger_dir,
+    )
 
     for task in tasks:
         task_id = str(uuid.uuid4())
@@ -345,6 +454,10 @@ def _run_benchmarks(
             })
 
         print(f"  observed={result.get('status')} expected={task.expected_status}")
+        _log_cli_activity(
+            f"benchmark task={task.task_id} observed={result.get('status')} expected={task.expected_status}",
+            ledger_dir=ledger_dir,
+        )
 
 def _benchmark_report(
     ledger_dir: str,
@@ -364,8 +477,16 @@ def _benchmark_report(
             os.makedirs(output_dir, exist_ok=True)
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(markdown + "\n")
+        _log_cli_activity(
+            f"benchmark-report written study={study_id or 'all'} run={run_id or 'all'} path={output_path}",
+            ledger_dir=ledger_dir,
+        )
         print(f"Benchmark report written to {output_path}")
     else:
+        _log_cli_activity(
+            f"benchmark-report printed study={study_id or 'all'} run={run_id or 'all'}",
+            ledger_dir=ledger_dir,
+        )
         print(markdown)
 
 def _propose_lessons(
@@ -404,6 +525,309 @@ def _review_lesson(proposal_id: str, decision: str, notes: str, output_path: str
         notes=notes,
     )
     print(f"Recorded {review['decision']} review for proposal {review['proposal_id']}.")
+
+def _record_supervisor_review(
+    task_id: str,
+    tool: str,
+    decision: str,
+    notes: str,
+    model: str,
+    profile: str,
+    artifact_path: str,
+    input_tokens_est: int,
+    output_tokens_est: int,
+    token_source: str,
+    ledger_dir: str,
+) -> None:
+    ledger = TaskLedger(ledger_dir=ledger_dir)
+    task = ledger.get_task(task_id)
+    if not task:
+        print(f"Error: Task {task_id} not found in ledger.")
+        return
+
+    ledger.append_event(
+        task_id,
+        "supervisor_reviewed",
+        {
+            "supervisor_tool": tool,
+            "supervisor_model": model,
+            "supervisor_profile": profile,
+            "supervisor_decision": decision,
+            "supervisor_notes": notes,
+            "supervisor_artifact_path": artifact_path,
+            "supervisor_input_tokens_est": input_tokens_est,
+            "supervisor_output_tokens_est": output_tokens_est,
+            "supervisor_token_source": token_source,
+        },
+    )
+    _log_cli_activity(
+        f"supervisor review recorded task={task_id[:8]} tool={tool} decision={decision}",
+        ledger_dir=ledger_dir,
+    )
+    print(f"Recorded {tool} supervisor review for task {task_id}: {decision}.")
+
+def _import_supervisor_usage(
+    source_path: str,
+    tool: str,
+    decision: str,
+    notes: str,
+    model: str,
+    profile: str,
+    artifact_path: str,
+    token_source: str,
+    ledger_dir: str,
+    dry_run: bool = False,
+) -> int:
+    from .supervisor_usage import load_supervisor_usage_records
+
+    ledger = TaskLedger(ledger_dir=ledger_dir)
+    records = load_supervisor_usage_records(
+        source_path,
+        default_tool=tool,
+        default_decision=decision,
+        default_model=model,
+        default_profile=profile,
+        default_notes=notes,
+        default_artifact_path=artifact_path,
+        token_source=token_source,
+    )
+    imported = 0
+    skipped = 0
+
+    for record in records:
+        if not ledger.get_task(record.task_id):
+            print(f"Skipped {record.task_id}: task not found in ledger.")
+            skipped += 1
+            continue
+        if dry_run:
+            print(
+                "Would import "
+                f"{record.task_id}: {record.tool or tool or 'unknown-tool'} "
+                f"{record.decision} "
+                f"{record.input_tokens} in/{record.output_tokens} out "
+                f"({record.token_source})"
+            )
+            imported += 1
+            continue
+        ledger.append_event(
+            record.task_id,
+            "supervisor_reviewed",
+            {
+                "supervisor_tool": record.tool,
+                "supervisor_model": record.model,
+                "supervisor_profile": record.profile,
+                "supervisor_decision": record.decision,
+                "supervisor_notes": record.notes,
+                "supervisor_artifact_path": record.artifact_path,
+                "supervisor_input_tokens_est": record.input_tokens,
+                "supervisor_output_tokens_est": record.output_tokens,
+                "supervisor_token_source": record.token_source,
+            },
+        )
+        imported += 1
+
+    verb = "Would import" if dry_run else "Imported"
+    _log_cli_activity(
+        f"supervisor usage import dry_run={dry_run} imported={imported} skipped={skipped} source={source_path}",
+        ledger_dir=ledger_dir,
+    )
+    print(f"{verb} {imported} supervisor usage record(s); skipped {skipped}.")
+    return imported
+
+def _scan_supervisor_usage(
+    paths: list[str],
+    tool: str,
+    token_source: str,
+    max_file_bytes: int,
+) -> int:
+    from .supervisor_usage import scan_supervisor_usage_paths
+
+    candidates = scan_supervisor_usage_paths(
+        paths,
+        default_tool=tool,
+        token_source=token_source,
+        max_file_bytes=max_file_bytes,
+    )
+    if not candidates:
+        _log_cli_activity(
+            f"supervisor usage scan candidates=0 paths={len(paths)}",
+        )
+        print("No importable supervisor usage artifacts found.")
+        return 0
+
+    print("Importable supervisor usage artifacts:")
+    for candidate in candidates:
+        print(
+            f"{candidate.records} record(s) | "
+            f"{candidate.total_input_tokens} in/{candidate.total_output_tokens} out | "
+            f"{candidate.path}"
+        )
+    _log_cli_activity(
+        f"supervisor usage scan candidates={len(candidates)} paths={len(paths)}",
+    )
+    return len(candidates)
+
+def _start_pipeline_task(
+    ledger: TaskLedger,
+    prompt: str,
+    files: list[str],
+    task_id: Optional[str] = None,
+) -> str:
+    pipeline_task_id = task_id or str(uuid.uuid4())
+    if not task_id or not ledger.get_task(task_id):
+        ledger.append_event(
+            pipeline_task_id,
+            "task_created",
+            {
+                "title": f"Pipeline: {prompt[:40]}",
+                "description": prompt,
+                "target_files": files,
+            },
+        )
+    ledger.append_event(pipeline_task_id, "runner_selected", {"runner": "pipeline"})
+    return pipeline_task_id
+
+
+def _record_pipeline_success(
+    ledger: TaskLedger,
+    task_id: str,
+    backend_type: str,
+    model: str,
+    output_path: str,
+    elapsed_seconds: float,
+    input_tokens: int,
+    output_tokens: int,
+    total_tokens: int,
+) -> None:
+    ledger.append_event(
+        task_id,
+        "local_draft_generated",
+        {
+            "status": "success",
+            "duration_seconds": elapsed_seconds,
+            "backend": backend_type,
+            "backend_name": backend_type,
+            "model": model,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "total_tokens": total_tokens,
+            "artifact_path": output_path,
+        },
+    )
+
+
+def _record_pipeline_handoff(
+    ledger: TaskLedger,
+    task_id: str,
+    reason: str,
+) -> None:
+    ledger.append_event(task_id, "task_blocked", {"reason": reason})
+
+
+def _run_pipeline(
+    prompt: str,
+    files: list[str],
+    output_path: str,
+    ledger_dir: str,
+    task_id: Optional[str] = None,
+) -> None:
+    import time
+    import os
+    from .engine import TriageEngine
+    from .backends import create_backend
+    from .config import default_config
+
+    backend_type = default_config.get_backend_type()
+    model = default_config.get_backend_model()
+    base_url = default_config.get_backend_base_url()
+    ledger = TaskLedger(ledger_dir=ledger_dir)
+    task_id = _start_pipeline_task(ledger, prompt, files, task_id)
+    _log_cli_activity(
+        f"pipeline started task={task_id[:8]} backend={backend_type} model={model}",
+        ledger_dir=ledger_dir,
+    )
+    
+    print(f"Running pipeline headless using {backend_type} ({model})...")
+    print(f"Ledger task: {task_id}")
+    
+    backend = create_backend(
+        backend_type=backend_type,
+        model=model,
+        base_url=base_url
+    )
+    
+    engine = TriageEngine(backend=backend, timeout_seconds=120)
+    
+    raw_data = ""
+    for f in files:
+        if os.path.exists(f):
+            with open(f, "r", encoding="utf-8") as f_in:
+                raw_data += f"\n--- {f} ---\n{f_in.read()}"
+    
+    print("Executing task on local model...")
+    t0 = time.time()
+    
+    # Simple stream callback for progress
+    def _stream(chunk):
+        print(".", end="", flush=True)
+        
+    result = engine.execute_task(
+        task_prompt=prompt,
+        raw_data=raw_data,
+        stream_callback=_stream
+    )
+    
+    print()
+    elapsed = time.time() - t0
+    
+    if result.get("status") == "success":
+        output_dir = os.path.dirname(output_path)
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(result["output"])
+        
+        in_tokens = result.get("input_tokens", 0)
+        out_tokens = result.get("output_tokens", 0)
+        total = result.get("total_tokens", 0)
+        
+        # Calculate cloud cost vs local cost
+        # GPT-4o pricing approx: $5.00/1M input, $15.00/1M output
+        cloud_cost = (in_tokens / 1000000.0) * 5.00 + (out_tokens / 1000000.0) * 15.00
+        _record_pipeline_success(
+            ledger=ledger,
+            task_id=task_id,
+            backend_type=backend_type,
+            model=model,
+            output_path=output_path,
+            elapsed_seconds=elapsed,
+            input_tokens=in_tokens,
+            output_tokens=out_tokens,
+            total_tokens=total,
+        )
+        _log_cli_activity(
+            f"pipeline completed task={task_id[:8]} tokens={total} output={output_path}",
+            ledger_dir=ledger_dir,
+        )
+        
+        print(f"\n--- Pipeline Summary ---")
+        print(f"Status: SUCCESS")
+        print(f"Time: {elapsed:.2f}s")
+        print(f"Tokens: {in_tokens} in | {out_tokens} out | {total} total")
+        print(f"Token Savings: Handled {total} tokens locally instead of cloud.")
+        print(f"Estimated Cloud Cost Avoided: ${cloud_cost:.6f}")
+        print(f"Output saved to: {output_path}")
+    else:
+        reason = result.get("reason") or result.get("handoff_reason") or "Pipeline handoff required."
+        _record_pipeline_handoff(ledger, task_id, reason)
+        _log_cli_activity(
+            f"pipeline handoff task={task_id[:8]} reason={reason}",
+            ledger_dir=ledger_dir,
+        )
+        print(f"\n--- Pipeline Summary ---")
+        print(f"Status: HANDOFF REQUIRED")
+        print(f"Reason: {reason}")
+        print("Escalating to Worker Council / Cloud...")
 
 if __name__ == "__main__":
     main()

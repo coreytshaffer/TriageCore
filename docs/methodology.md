@@ -157,15 +157,34 @@ Human review minutes measure elapsed review time. The optional
 should be analysed as a subjective ordinal indicator, not as an objective
 performance metric.
 
+### Local-First Benefit Signals
+
+The desktop telemetry dashboard intentionally foregrounds local-first benefit
+signals because the workbench is also an operator environment. These signals can
+help the user keep collecting evidence, building artifacts, and noticing when
+more work is staying on local compute. Current dashboard signals include:
+
+- accepted yield
+- percent of tasks routed through local-first runners
+- count of accepted local-first tasks
+- percent of tasks that did not require mandatory human review
+
+These are motivational and operational indicators, not standalone proof of
+environmental savings. Reports, papers, and methodology artifacts should describe
+them as benefit or avoidance signals unless a study defines a baseline
+comparison, such as local-first routing versus a remote-only workflow using the
+same benchmark fixture set.
+
 ---
 
 ## 6. Model And Backend Comparison
 
 Model/backend comparison studies use the same benchmark fixture set across
 each candidate configuration and tag all evidence with a shared `study_id` plus
-a unique `run_id` for each backend/model pair. Reports group evidence by both
-backend and backend/model so that runtime-adapter differences are not confused
-with model differences.
+a unique `run_id` for each backend/model pair. Reports group evidence by
+supervision lane, backend, and backend/model so that supervised workflows,
+runtime-adapter differences, and model differences are not confused with one
+another.
 
 Comparison runs should use:
 
@@ -174,6 +193,7 @@ Comparison runs should use:
 - explicit backend type, base URL when applicable, and model identifier
 - separate `run_id` values for every backend/model pair
 - the combined `benchmark-report --study-id <study>` output for interpretation
+- the `By Supervision` section when local-only and supervised outcomes are mixed
 
 Expected destructive-task handoff is treated as correct safety behavior. A
 configuration should only be preferred when it improves accepted outcomes
@@ -182,7 +202,39 @@ burden.
 
 ---
 
-## 7. Default Parameter Summary
+## 7. Supervised Hybrid Workflows
+
+TriageCore distinguishes local-only execution from supervised hybrid workflows.
+A local draft, worker-council result, benchmark run, or pipeline attempt may be
+reviewed by Codex, Antigravity, Gemini, or a human reviewer before it is treated
+as accepted work. These reviews are recorded as `supervisor_reviewed` events
+rather than merged into the original local execution event.
+
+This separation matters because supervision changes the workflow being studied.
+A Codex-reviewed patch and an Antigravity-supervised IDE implementation may use
+the same local model output, but they also add different review tools, reasoning
+contexts, token costs, and human oversight patterns. Reports should therefore
+label supervised outcomes separately from local-only outcomes whenever they are
+used as scientific evidence.
+
+Supervisor review fields include the supervising tool, model, profile, decision,
+notes, linked artifact path, and estimated supervisor input/output tokens when
+exact usage is not available. Estimated token fields should be interpreted as
+approximate evidence only.
+
+Benchmark reports summarize supervisor reviews under the same `study_id` and
+`run_id` filters as the benchmark evidence. The `Supervisor Reviews` table
+reports review counts, decision counts, and estimated supervisor token totals by
+tool. Supervisor token values remain manual estimates unless a supervisor tool
+log or API exposes exact usage data.
+
+This boundary is intentionally conservative: imported exact usage, imported
+estimates, and manual estimates are labelled separately so claims remain
+verifiable, reproducible, and falsifiable.
+
+---
+
+## 8. Default Parameter Summary
 
 | Parameter | Symbol | Default | Unit | Override key in `triagecore.toml` |
 | :--- | :--- | :--- | :--- | :--- |
@@ -194,7 +246,7 @@ burden.
 
 ---
 
-## 8. Estimation Caveats and Limitations
+## 9. Estimation Caveats and Limitations
 
 1. **Power draw is assumed, not measured.** Direct measurement via RAPL
    (Intel/AMD), NVML (NVIDIA), or a smart plug would substantially improve
@@ -227,7 +279,7 @@ burden.
 
 ---
 
-## 9. Execution Hardware Specification
+## 10. Execution Hardware Specification
 
 For the comparison study of local model execution and specialist councils (Study 002), the benchmarking environment was standardized on a host workstation with the following hardware specifications:
 
@@ -241,7 +293,7 @@ This system configuration is representative of developer-class workstations wher
 
 ---
 
-## 10. References
+## 11. References
 
 Grubert, E., & Sanders, K. T. (2018). Water use in the United States energy
 system: A national assessment and unit process inventory of water consumption

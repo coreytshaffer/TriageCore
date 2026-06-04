@@ -70,6 +70,7 @@ _STATUS_BADGE = {
     "blocked": ("#ef4444", "#fff"),
     "pending": ("#6b7280", "#fff"),
 }
+_LOCAL_FIRST_RUNNERS = {"local_llm", "worker_council", "pipeline"}
 
 
 def _badge_color(status):
@@ -104,6 +105,39 @@ def _antigravity_task_dir(task_id: str) -> str:
     return os.path.join(default_config.get_tasks_dir(), task_id[:8])
 
 
+def _telemetry_local_benefit_metrics(tasks) -> dict[str, float | int]:
+    total_tasks = len(tasks)
+    local_tasks = [task for task in tasks if task.runner in _LOCAL_FIRST_RUNNERS]
+    accepted = [task for task in tasks if task.accepted]
+    local_accepted = [task for task in local_tasks if task.accepted]
+    review_light = [task for task in tasks if not task.human_review_required]
+    local_tokens = sum(
+        task.total_tokens
+        or (
+            (task.estimated_input_tokens or task.input_tokens or 0)
+            + (task.estimated_output_tokens or task.output_tokens or 0)
+        )
+        for task in local_tasks
+    )
+
+    if total_tasks == 0:
+        return {
+            "accepted_yield_pct": 0.0,
+            "local_first_pct": 0.0,
+            "review_light_pct": 0.0,
+            "local_tokens": 0,
+            "local_accepted": 0,
+        }
+
+    return {
+        "accepted_yield_pct": (len(accepted) / total_tasks) * 100.0,
+        "local_first_pct": (len(local_tasks) / total_tasks) * 100.0,
+        "review_light_pct": (len(review_light) / total_tasks) * 100.0,
+        "local_tokens": local_tokens,
+        "local_accepted": len(local_accepted),
+    }
+
+
 def _ledger_detail_lines(task) -> list[str]:
     lines = [
         f"Task ID: {task.task_id}",
@@ -127,6 +161,27 @@ def _ledger_detail_lines(task) -> list[str]:
         review_bits.append("review required")
     if review_bits:
         lines.append(f"Review: {', '.join(review_bits)}")
+
+    supervisor_bits = []
+    if task.supervisor_tool:
+        supervisor_bits.append(f"tool={task.supervisor_tool}")
+    if task.supervisor_decision:
+        supervisor_bits.append(f"decision={task.supervisor_decision}")
+    if task.supervisor_model:
+        supervisor_bits.append(f"model={task.supervisor_model}")
+    if task.supervisor_profile:
+        supervisor_bits.append(f"profile={task.supervisor_profile}")
+    supervisor_tokens = task.supervisor_input_tokens_est + task.supervisor_output_tokens_est
+    if supervisor_tokens:
+        supervisor_bits.append(
+            f"tokens_est={task.supervisor_input_tokens_est} in/{task.supervisor_output_tokens_est} out"
+        )
+    if task.supervisor_token_source:
+        supervisor_bits.append(f"token_source={task.supervisor_token_source}")
+    if supervisor_bits:
+        lines.append(f"Supervisor: {', '.join(supervisor_bits)}")
+    if task.supervisor_notes:
+        lines.append(f"Supervisor notes: {task.supervisor_notes}")
 
     routing_bits = []
     if task.risk_level:
@@ -202,6 +257,13 @@ def _review_assessment_lines(task) -> list[str]:
     if runner_bits:
         lines.append(f"Path: {' / '.join(runner_bits)}")
 
+    if task.supervisor_tool or task.supervisor_decision:
+        supervisor_label = task.supervisor_tool or "supervisor"
+        supervisor_decision = task.supervisor_decision or "reviewed"
+        lines.append(
+            f"Supervisor: {supervisor_label} · {supervisor_decision.replace('_', ' ')}"
+        )
+
     if task.handoff_reason:
         lines.append(f"Reason: {task.handoff_reason}")
     elif task.observed_status or task.expected_status:
@@ -253,6 +315,9 @@ def _compact_ledger_line(task) -> str:
         meta.append(f"model: {model}")
     if task.human_review_required and task.status != "reviewed":
         meta.append("review required")
+    if task.supervisor_tool:
+        supervisor_status = task.supervisor_decision or "reviewed"
+        meta.append(f"supervisor: {task.supervisor_tool}/{supervisor_status}")
 
     return f"{timestamp} | {title} | {' · '.join(meta)}"
 
@@ -1101,11 +1166,11 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         # ── 4 Dispatch Buttons ───────────────────────────────────────────────
         btn_row = ctk.CTkFrame(f, fg_color="transparent")
         btn_row.grid(row=4, column=0, padx=24, pady=(0, 8), sticky="ew")
-        btn_row.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="dispatch")
+        btn_row.grid_columnconfigure((0, 1, 2, 3, 4), weight=1, uniform="dispatch")
 
         # Glow frames for workflow sequence
         self.glow_local = ctk.CTkFrame(btn_row, corner_radius=8, border_width=0, fg_color="transparent")
-        self.glow_local.grid(row=0, column=0, padx=(0, 8), sticky="ew")
+        self.glow_local.grid(row=0, column=0, padx=(0, 4), sticky="ew")
         self.btn_local = ctk.CTkButton(
             self.glow_local,
             text="1. Local Draft\nRun with active local model",
@@ -1117,7 +1182,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         self.btn_local.pack(padx=3, pady=3, fill="both", expand=True)
 
         self.glow_council = ctk.CTkFrame(btn_row, corner_radius=8, border_width=0, fg_color="transparent")
-        self.glow_council.grid(row=0, column=1, padx=(0, 8), sticky="ew")
+        self.glow_council.grid(row=0, column=1, padx=(4, 4), sticky="ew")
         self.btn_council = ctk.CTkButton(
             self.glow_council,
             text="2. Worker Council\nCross-check with agents",
@@ -1129,7 +1194,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         self.btn_council.pack(padx=3, pady=3, fill="both", expand=True)
 
         self.glow_codex = ctk.CTkFrame(btn_row, corner_radius=8, border_width=0, fg_color="transparent")
-        self.glow_codex.grid(row=0, column=2, padx=(0, 8), sticky="ew")
+        self.glow_codex.grid(row=0, column=2, padx=(4, 4), sticky="ew")
         self.btn_codex = ctk.CTkButton(
             self.glow_codex,
             text="3. Codex Handoff\nWrite review packet",
@@ -1141,7 +1206,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         self.btn_codex.pack(padx=3, pady=3, fill="both", expand=True)
 
         self.glow_anti = ctk.CTkFrame(btn_row, corner_radius=8, border_width=0, fg_color="transparent")
-        self.glow_anti.grid(row=0, column=3, sticky="ew")
+        self.glow_anti.grid(row=0, column=3, padx=(4, 4), sticky="ew")
         self.btn_anti = ctk.CTkButton(
             self.glow_anti,
             text="4. Antigravity Handoff\nCreate IDE task bundle",
@@ -1152,7 +1217,19 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         )
         self.btn_anti.pack(padx=3, pady=3, fill="both", expand=True)
 
-        for btn in [self.btn_local, self.btn_council, self.btn_codex, self.btn_anti]:
+        self.glow_pipeline = ctk.CTkFrame(btn_row, corner_radius=8, border_width=0, fg_color="transparent")
+        self.glow_pipeline.grid(row=0, column=4, padx=(4, 0), sticky="ew")
+        self.btn_pipeline = ctk.CTkButton(
+            self.glow_pipeline,
+            text="5. Auto Pipeline\nRun Sequential Chain",
+            height=56,
+            command=lambda: self._handle_task("pipeline"),
+            fg_color="#b45309",
+            font=ctk.CTkFont(size=13, weight="bold"),
+        )
+        self.btn_pipeline.pack(padx=3, pady=3, fill="both", expand=True)
+
+        for btn in [self.btn_local, self.btn_council, self.btn_codex, self.btn_anti, self.btn_pipeline]:
             self._add_focus_ring(btn)
 
         self.status_label = ctk.CTkLabel(
@@ -1981,15 +2058,22 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         self.telemetry_frame = f
 
         ctk.CTkLabel(
-            f, text="Telemetry Dashboard", font=ctk.CTkFont(size=22, weight="bold")
+            f,
+            text="Savings & Telemetry Dashboard",
+            font=ctk.CTkFont(size=22, weight="bold"),
         ).grid(row=0, column=0, padx=24, pady=(20, 4), sticky="w")
 
-        # Row 1: Sustainability Vector Gauges (Session Totals)
+        # Row 1: Savings / avoidance signals from existing ledger evidence.
+        self._savings_card = ctk.CTkFrame(f, corner_radius=12)
+        self._savings_card.grid(row=1, column=0, padx=24, pady=8, sticky="ew")
+        self._savings_card.grid_columnconfigure((0, 1, 2, 3), weight=1)
+
+        # Row 2: Sustainability Vector Gauges (Session Totals)
         self._gauges_card = ctk.CTkFrame(f, corner_radius=12)
-        self._gauges_card.grid(row=1, column=0, padx=24, pady=8, sticky="ew")
+        self._gauges_card.grid(row=2, column=0, padx=24, pady=8, sticky="ew")
         self._gauges_card.grid_columnconfigure((0, 1, 2, 3), weight=1)
 
-        _SectionLabel(self._gauges_card, "Session Resource Utilization").grid(
+        _SectionLabel(self._gauges_card, "Tracked Resource Context").grid(
             row=0, column=0, columnspan=4, padx=16, pady=(12, 4), sticky="w"
         )
 
@@ -2013,9 +2097,9 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         )
         self.gauge_embodied.grid(row=1, column=3, padx=10, pady=(0, 12), sticky="nsew")
 
-        # Row 2: Status & Shares
+        # Row 3: Status & Shares
         self._status_row = ctk.CTkFrame(f, fg_color="transparent")
-        self._status_row.grid(row=2, column=0, padx=24, pady=8, sticky="ew")
+        self._status_row.grid(row=3, column=0, padx=24, pady=8, sticky="ew")
         self._status_row.grid_columnconfigure((0, 1), weight=1)
 
         self._power_card = ctk.CTkFrame(self._status_row, corner_radius=12)
@@ -2032,14 +2116,14 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         self.share_gauge = CTkDispatchShare(self._share_card)
         self.share_gauge.pack(padx=16, pady=12, fill="both", expand=True)
 
-        # Row 3: Session Summary Text Details
+        # Row 4: Session Summary Text Details
         self._telem_card = ctk.CTkFrame(f, corner_radius=12)
-        self._telem_card.grid(row=3, column=0, padx=24, pady=8, sticky="ew")
+        self._telem_card.grid(row=4, column=0, padx=24, pady=8, sticky="ew")
         self._telem_card.grid_columnconfigure((0, 1), weight=1)
 
-        # Row 4: Per Accepted Task ratio KPIs
+        # Row 5: Per Accepted Task ratio KPIs
         self._per_task_card = ctk.CTkFrame(f, corner_radius=12)
-        self._per_task_card.grid(row=4, column=0, padx=24, pady=(8, 24), sticky="ew")
+        self._per_task_card.grid(row=5, column=0, padx=24, pady=(8, 24), sticky="ew")
         self._per_task_card.grid_columnconfigure((0, 1, 2), weight=1)
 
     def _refresh_telemetry(self):
@@ -2058,6 +2142,8 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         total_tok_out = sum(t.estimated_output_tokens for t in tasks)
         total_review = sum(t.human_review_minutes for t in tasks)
 
+        local_benefits = _telemetry_local_benefit_metrics(tasks)
+
         n_acc = len(accepted) or 1  # avoid div/0
 
         # Update dynamic visual gauges
@@ -2075,11 +2161,39 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             power.get("has_battery", False),
         )
 
+        # ── Rebuild savings / avoidance card ─────────────────────────────────
+        for w in self._savings_card.winfo_children():
+            w.destroy()
+
+        _SectionLabel(self._savings_card, "Local-First Benefits").grid(
+            row=0, column=0, columnspan=4, padx=16, pady=(12, 8), sticky="w"
+        )
+
+        savings_metrics = [
+            ("✓", f"{local_benefits['accepted_yield_pct']:.0f}%", "accepted yield"),
+            ("⌂", f"{local_benefits['local_first_pct']:.0f}%", "kept local"),
+            ("◆", f"{local_benefits['local_accepted']}", "local accepted work"),
+            ("◌", f"{local_benefits['review_light_pct']:.0f}%", "review-light tasks"),
+        ]
+        for col, (icon, value, label) in enumerate(savings_metrics):
+            chip = ctk.CTkFrame(
+                self._savings_card, corner_radius=12, fg_color=("gray85", "gray22")
+            )
+            chip.grid(row=1, column=col, padx=12, pady=(0, 16), sticky="nsew")
+            ctk.CTkLabel(
+                chip,
+                text=f"{icon} {value}",
+                font=ctk.CTkFont(size=24, weight="bold"),
+            ).pack(padx=18, pady=(16, 4))
+            ctk.CTkLabel(
+                chip, text=label, font=ctk.CTkFont(size=14), text_color="gray"
+            ).pack(padx=18, pady=(0, 16))
+
         # ── Rebuild session card ──────────────────────────────────────────────
         for w in self._telem_card.winfo_children():
             w.destroy()
 
-        _SectionLabel(self._telem_card, "Session Summary").grid(
+        _SectionLabel(self._telem_card, "Resource Ledger Details").grid(
             row=0, column=0, columnspan=2, padx=16, pady=(12, 6), sticky="w"
         )
 
@@ -2122,7 +2236,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             w.destroy()
 
         _SectionLabel(
-            self._per_task_card, "Per Accepted Task (Scientific Metric)"
+            self._per_task_card, "Efficiency Per Accepted Task"
         ).grid(row=0, column=0, columnspan=3, padx=16, pady=(12, 8), sticky="w")
 
         per_metrics = [
@@ -2334,6 +2448,9 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
 
         elif runner_type == "antigravity":
             self._dispatch_antigravity(task_id, prompt, files, danger)
+
+        elif runner_type == "pipeline":
+            self._dispatch_pipeline(task_id, prompt, files, danger)
 
     # -- Local --
     def _dispatch_local(self, task_id, prompt, files, danger):
@@ -2691,6 +2808,129 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         )
         self._log_activity(f"Antigravity bundle saved for task {task_id[:8]}: {task_dir}")
         self._update_workflow_glow()
+
+    # -- Pipeline --
+    def _dispatch_pipeline(self, task_id, prompt, files, danger):
+        if not self.active_backend:
+            self.status_label.configure(
+                text="Error: No local engine active.", text_color="#ef4444"
+            )
+            return
+
+        self.ledger.append_event(task_id, "runner_selected", {"runner": "pipeline"})
+        self.status_label.configure(
+            text=f"Pipeline: Local Draft via {self.active_backend.name} (In Progress ⏳)…",
+            text_color="#b45309",
+        )
+        self._log_activity(
+            f"Pipeline started for task {task_id[:8]} via {self.active_backend.name}"
+        )
+        self.btn_pipeline.configure(state="disabled")
+        self._clear_output("Pipeline Step 1: Sending to local model…")
+
+        def _run():
+            from ..sustainability import PowerSampler, integrate_energy_kwh
+            from ..config import default_config
+
+            sampler = PowerSampler()
+            sampler.start()
+            t0 = time.time()
+            try:
+                messages = [
+                    {
+                        "role": "system",
+                        "content": "You are a local coding assistant. Output minimal, correct code.",
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Task: {prompt}\nTarget Files: {files}",
+                    },
+                ]
+
+                def _stream_cb(chunk):
+                    self.after(0, self._append_output, chunk)
+
+                resp = self.active_backend.generate(
+                    messages, stream_callback=_stream_cb
+                )
+                duration = time.time() - t0
+                samples = sampler.stop()
+
+                default_w = default_config.get_global(
+                    "sustainability", "default_watts", 300.0
+                )
+                energy_kwh, avg_watts, power_source = integrate_energy_kwh(
+                    samples, duration, default_w
+                )
+
+                metrics = SustainabilityEstimator.estimate(
+                    duration_seconds=duration, watts=avg_watts
+                )
+                metrics["energy_kwh"] = energy_kwh
+                metrics["power_source"] = power_source
+
+                tokens_in = resp.usage.get("prompt_tokens", 0)
+                tokens_out = resp.usage.get("completion_tokens", 0)
+
+                # Need to simulate validation failure if it's complex or has risk level > low
+                # to trigger the council pipeline handoff. For this prototype, if it's 
+                # medium or high risk, we fail it to test the pipeline.
+                validator_passed = danger.risk_level == "low"
+
+                self.ledger.append_event(
+                    task_id,
+                    "local_draft_generated",
+                    {
+                        "status": "success",
+                        "duration_seconds": duration,
+                        "backend": self.active_backend.name,
+                        "model": self.active_backend.model,
+                        "input_tokens": tokens_in,
+                        "output_tokens": tokens_out,
+                        "validator_passed": validator_passed,
+                        **metrics,
+                    },
+                )
+                self.review_timers[task_id] = time.time()
+                self.ledger.append_event(task_id, "energy_estimated", metrics)
+
+                self._show_result_metrics(
+                    self.active_backend.model,
+                    self.active_backend.name,
+                    tokens_in,
+                    tokens_out,
+                    duration,
+                    metrics["energy_kwh"],
+                    metrics["emissions_gco2e"],
+                    metrics["water_liters_estimate"],
+                    metrics["embodied_gco2e_allocated"],
+                )
+
+                if not validator_passed:
+                    self.status_label.configure(
+                        text=f"Local draft failed validation. Escalating to Council (In Progress ⏳)…",
+                        text_color="#b45309",
+                    )
+                    self._log_activity(f"Pipeline escalating task {task_id[:8]} to Worker Council")
+                    self.after(1000, lambda: self._dispatch_council(task_id, prompt, files, danger))
+                else:
+                    self.status_label.configure(
+                        text=f"✓ Pipeline completed in {duration:.1f}s · Risk: {danger.risk_level}",
+                        text_color="#22c55e",
+                    )
+                    self._log_activity(
+                        f"Pipeline completed for task {task_id[:8]} in {duration:.1f}s"
+                    )
+            except Exception as e:
+                sampler.stop()
+                self.status_label.configure(text=f"Error: {e}", text_color="#ef4444")
+                self._log_activity(f"Pipeline error for task {task_id[:8]}: {e}", level="error")
+            finally:
+                self.btn_pipeline.configure(state="normal")
+                self._update_ticker()
+                self.after(0, self._update_workflow_glow)
+
+        threading.Thread(target=_run, daemon=True).start()
 
     # ─── Output Box Helpers ───────────────────────────────────────────────────
     def _clear_output(self, text=""):

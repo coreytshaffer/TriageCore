@@ -58,6 +58,15 @@ class TaskRecord:
     storage_written_mb: float = 0.0
     human_review_minutes: float = 0.0
     review_workload: str = ""
+    supervisor_tool: str = ""
+    supervisor_model: str = ""
+    supervisor_profile: str = ""
+    supervisor_decision: str = ""
+    supervisor_notes: str = ""
+    supervisor_artifact_path: str = ""
+    supervisor_input_tokens_est: int = 0
+    supervisor_output_tokens_est: int = 0
+    supervisor_token_source: str = ""
     completed_at: str = ""
     retry_count: int = 0
     hardware_profile: Optional[str] = None
@@ -186,6 +195,18 @@ class TaskLedger:
             record.accepted = payload.get("accepted", False)
             record.human_review_minutes = payload.get("human_review_minutes", 0.0)
             record.review_workload = payload.get("review_workload", "")
+        elif etype == "supervisor_reviewed":
+            record.supervisor_tool = payload.get("supervisor_tool", "")
+            record.supervisor_model = payload.get("supervisor_model", "")
+            record.supervisor_profile = payload.get("supervisor_profile", "")
+            record.supervisor_decision = payload.get("supervisor_decision", "")
+            record.supervisor_notes = payload.get("supervisor_notes", "")
+            record.supervisor_artifact_path = payload.get("supervisor_artifact_path", "")
+            record.supervisor_input_tokens_est = payload.get("supervisor_input_tokens_est", 0)
+            record.supervisor_output_tokens_est = payload.get("supervisor_output_tokens_est", 0)
+            record.supervisor_token_source = payload.get("supervisor_token_source", "")
+            if record.supervisor_artifact_path:
+                record.artifact_paths.append(record.supervisor_artifact_path)
         elif etype == "task_blocked":
             record.status = "blocked"
             record.handoff_reason = payload.get("reason", record.handoff_reason)

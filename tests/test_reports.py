@@ -47,6 +47,8 @@ def test_build_benchmark_report_summarizes_model_and_category():
     assert report.overall.average_tokens_per_second == 30.0
     assert report.by_backend[0].label == "ollama"
     assert report.by_backend[0].runs == 2
+    assert report.by_supervision[0].label == "local-only"
+    assert report.by_supervision[0].runs == 2
     assert report.by_model[0].label == "ollama/qwen2.5-coder:7b"
     assert report.by_category[0].label == "python_generation"
     assert report.by_category[1].label == "python_repair"
@@ -77,9 +79,94 @@ def test_render_benchmark_report_markdown_includes_rates():
     markdown = render_benchmark_report_markdown(report)
 
     assert "custom/local-model" in markdown
+    assert "## By Supervision" in markdown
     assert "## By Backend" in markdown
+    assert "| local-only | 1 | 100.0%" in markdown
     assert "| custom | 1 | 100.0%" in markdown
     assert "100.0%" in markdown
+
+
+def test_build_benchmark_report_groups_supervised_workflows():
+    report = build_benchmark_report([
+        TaskRecord(
+            task_id="local-task",
+            benchmark_task_id="log_summary_markdown_v1",
+            benchmark_category="log_summary",
+            observed_status="success",
+        ),
+        TaskRecord(
+            task_id="codex-task",
+            benchmark_task_id="log_summary_markdown_v1",
+            benchmark_category="log_summary",
+            observed_status="success",
+            supervisor_tool="codex",
+            supervisor_decision="accepted",
+            supervisor_input_tokens_est=100,
+            supervisor_output_tokens_est=25,
+            supervisor_token_source="imported_exact",
+        ),
+        TaskRecord(
+            task_id="antigravity-task",
+            benchmark_task_id="log_summary_markdown_v1",
+            benchmark_category="log_summary",
+            observed_status="handoff_required",
+            supervisor_tool="antigravity",
+            supervisor_decision="needs_revision",
+            supervisor_input_tokens_est=200,
+            supervisor_output_tokens_est=50,
+        ),
+    ])
+
+    labels = [summary.label for summary in report.by_supervision]
+    supervisor_labels = [summary.label for summary in report.supervisor_reviews]
+    markdown = render_benchmark_report_markdown(report)
+
+    assert labels == ["antigravity-supervised", "codex-supervised", "local-only"]
+    assert supervisor_labels == ["antigravity", "codex"]
+    assert "| antigravity-supervised | 1 | 0.0%" in markdown
+    assert "| codex-supervised | 1 | 100.0%" in markdown
+    assert "| local-only | 1 | 100.0%" in markdown
+    assert "## Supervisor Reviews" in markdown
+    assert "| antigravity | 1 | 0 | 1 | 0 | 0 | 0 | 200 | 50 | 250 |" in markdown
+    assert "| codex | 1 | 1 | 0 | 0 | 0 | 1 | 100 | 25 | 125 |" in markdown
+
+
+def test_supervisor_review_summary_respects_study_and_run_filters():
+    report = build_benchmark_report([
+        TaskRecord(
+            task_id="study-task",
+            study_id="study_002",
+            run_id="trial_001",
+            benchmark_task_id="log_summary_markdown_v1",
+            observed_status="success",
+            supervisor_tool="codex",
+            supervisor_decision="accepted",
+            supervisor_input_tokens_est=300,
+            supervisor_output_tokens_est=90,
+            supervisor_token_source="imported_exact",
+        ),
+        TaskRecord(
+            task_id="other-study-task",
+            study_id="study_002",
+            run_id="trial_002",
+            benchmark_task_id="log_summary_markdown_v1",
+            observed_status="success",
+            supervisor_tool="antigravity",
+            supervisor_decision="escalated",
+            supervisor_input_tokens_est=500,
+            supervisor_output_tokens_est=120,
+        ),
+    ], study_id="study_002", run_id="trial_001")
+
+    markdown = render_benchmark_report_markdown(report)
+
+    assert len(report.supervisor_reviews) == 1
+    assert report.supervisor_reviews[0].label == "codex"
+    assert report.supervisor_reviews[0].accepted == 1
+    assert report.supervisor_reviews[0].total_tokens_est == 390
+    assert report.supervisor_reviews[0].exact_token_records == 1
+    assert "| codex | 1 | 1 | 0 | 0 | 0 | 1 | 300 | 90 | 390 |" in markdown
+    assert "antigravity" not in markdown
 
 
 def test_build_benchmark_report_filters_by_study_id():

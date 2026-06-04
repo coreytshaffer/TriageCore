@@ -75,6 +75,7 @@ triagecore desk
 - **Live Local Engine:** Hooks directly into Ollama or LM Studio to stream generated code right into the UI.
 - **Energy-Aware Routing:** `psutil` integration actively monitors your battery life. If your battery dips below 20% while unplugged, TriageCore refuses to run heavy LLM tasks and prompts you to plug in (Permacomputing in action).
 - **Precision Telemetry:** Tracks exact energy consumption (kWh) and carbon emissions (gCO2e) in a local append-only ledger (`.triagecore/ledger.jsonl`).
+- **Local-First Benefit Signals:** The dashboard foregrounds accepted yield, local-first routing share, accepted local work, and review-light tasks so the bench encourages continued evidence collection while formal reports remain baseline-bound.
 
 ### 2. Post-Execution Safety Validators
 Audit the files your agents modify to ensure they didn't bypass the initial risk assessment:
@@ -91,7 +92,7 @@ TriageCore is also being developed as a scientific model evaluation and token-ba
 
 The project methodology is documented in [`docs/methodology.md`](docs/methodology.md). Supporting literature is collected in [`docs/references.md`](docs/references.md). Together, these describe the evidence loop for model evaluation, safety routing, mistake logging, and human-reviewed learning.
 
-The shared evidence schema is documented in [`docs/evidence_schema.md`](docs/evidence_schema.md). The first repeatable study plan is [`docs/study_001_local_model_baseline.md`](docs/study_001_local_model_baseline.md), and model/backend comparison is planned in [`docs/study_002_model_backend_comparison.md`](docs/study_002_model_backend_comparison.md).
+The shared evidence schema is documented in [`docs/evidence_schema.md`](docs/evidence_schema.md). The first repeatable study plan is [`docs/study_001_local_model_baseline.md`](docs/study_001_local_model_baseline.md), model/backend comparison is planned in [`docs/study_002_model_backend_comparison.md`](docs/study_002_model_backend_comparison.md), and Codex/Antigravity supervision is described in [`docs/codex_antigravity_bridge.md`](docs/codex_antigravity_bridge.md).
 
 Use [`docs/verification_guide.md`](docs/verification_guide.md) for practical code, UI, study-evidence, and human-review verification checks.
 
@@ -131,7 +132,7 @@ triagecore benchmark --study-id study_002 --run-id lmstudio_loaded_model_trial_0
 triagecore benchmark-report --study-id study_002 --output reports/study_002_model_backend_comparison.md
 ```
 
-Comparison reports include `By Backend`, `By Model`, and `By Category` sections.
+Comparison reports include `By Supervision`, `By Backend`, `By Model`, and `By Category` sections. When supervised benchmark records exist, reports also include a `Supervisor Reviews` table with decision counts and estimated supervisor token totals under the same study/run filter.
 
 ## Human-Reviewed Learning
 
@@ -145,6 +146,21 @@ Record an explicit human decision:
 
 ```bash
 triagecore review-lesson <proposal_id> --decision accepted --notes "Evidence supports this routing change."
+```
+
+Record a Codex or Antigravity supervisor decision for a task:
+
+```bash
+triagecore record-supervisor-review <task_id> --tool codex --decision needs_revision --notes "Local draft missed tests." --model gpt-5 --profile high
+triagecore record-supervisor-review <task_id> --tool antigravity --decision accepted --notes "IDE supervisor accepted the local draft." --model gemini-3.1-pro-high --profile supervisor
+```
+
+Import supervisor usage from a verified JSON or JSONL artifact:
+
+```bash
+triagecore scan-supervisor-usage supervisor_logs\
+triagecore import-supervisor-usage supervisor_usage.jsonl --tool codex --token-source imported_exact --dry-run
+triagecore import-supervisor-usage supervisor_usage.jsonl --tool codex --token-source imported_exact
 ```
 
 ## CLI Handoff Generation
