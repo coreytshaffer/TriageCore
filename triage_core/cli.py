@@ -711,6 +711,7 @@ def _record_pipeline_success(
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
             "total_tokens": total_tokens,
+            "energy_estimated": total_tokens * 0.005,
             "artifact_path": output_path,
         },
     )

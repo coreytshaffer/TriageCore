@@ -69,11 +69,15 @@ class WorkerBase:
             except (json.JSONDecodeError, TypeError):
                 result_data = {"raw_text": text}
 
+            in_tokens = response.usage.get("prompt_tokens", 0)
+            out_tokens = response.usage.get("completion_tokens", 0)
+            
             result_data["worker_id"] = self.role
             result_data["resource_usage"] = {
-                "input_tokens_est": response.usage.get("prompt_tokens", 0),
-                "output_tokens_est": response.usage.get("completion_tokens", 0),
+                "input_tokens_est": in_tokens,
+                "output_tokens_est": out_tokens,
                 "duration_seconds": elapsed,
+                "energy_estimated": (in_tokens + out_tokens) * 0.005,
             }
             return result_data
             

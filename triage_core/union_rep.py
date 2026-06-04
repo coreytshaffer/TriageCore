@@ -20,8 +20,13 @@ class UnionRep:
         """
         Evaluate local outputs against budgets and acceptance criteria.
         """
-        total_energy = sum(
+        total_energy_kwh = sum(
             o.result.get("resource_usage", {}).get("energy_kwh_estimate", 0)
+            for o in completed_orders
+            if o.result
+        )
+        total_energy_joules = sum(
+            o.result.get("resource_usage", {}).get("energy_estimated", 0)
             for o in completed_orders
             if o.result
         )
@@ -50,10 +55,10 @@ class UnionRep:
             reasons.append("Local validators failed.")
 
         max_energy = self.budgets.get("max_energy_kwh_per_task", 0.02)
-        if total_energy > max_energy:
+        if total_energy_kwh > max_energy:
             needs_escalation = True
             reasons.append(
-                f"Exceeded energy budget ({total_energy:.4f} > {max_energy})."
+                f"Exceeded energy budget ({total_energy_kwh:.4f} > {max_energy})."
             )
 
         # Compile summaries
@@ -75,7 +80,8 @@ class UnionRep:
             ),
             "resource_summary": {
                 "local_attempts": len(completed_orders),
-                "estimated_energy_kwh": total_energy,
+                "estimated_energy_kwh": total_energy_kwh,
+                "estimated_energy_joules": total_energy_joules,
                 "duration_seconds": total_duration,
             },
             "handoff_summary": "\n".join(local_work_summary),

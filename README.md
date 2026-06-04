@@ -2,7 +2,7 @@
 
 **A Local-First Developer-Agent Control Harness**
 
-TriageCore provides safety rails, task classification, and structured handoff packets for AI coding agents. Instead of giving agents unbounded access or automatically falling back to expensive cloud models when things fail, TriageCore evaluates tasks locally, assigns permission profiles, and generates `.md` packets (Handoff Packets) for tools like Codex and Antigravity.
+TriageCore provides safety rails, task classification, and structured handoff packets for AI coding agents. Instead of giving agents unbounded access or treating expensive cloud models as an automatic fallback, TriageCore evaluates tasks locally using a TaskClassifier and a Local Worker Council. It assigns permission profiles and generates `.md` packets (Handoff Packets) so that cloud models act as supervisors (like Codex and Antigravity) rather than primary executors.
 
 ## Permacomputing Orientation
 
@@ -74,7 +74,7 @@ triagecore desk
 ```
 - **Live Local Engine:** Hooks directly into Ollama or LM Studio to stream generated code right into the UI.
 - **Energy-Aware Routing:** `psutil` integration actively monitors your battery life. If your battery dips below 20% while unplugged, TriageCore refuses to run heavy LLM tasks and prompts you to plug in (Permacomputing in action).
-- **Precision Telemetry:** Tracks exact energy consumption (kWh) and carbon emissions (gCO2e) in a local append-only ledger (`.triagecore/ledger.jsonl`).
+- **Telemetry & Resource Accounting:** Tracks measured or heuristic resource estimates for energy consumption (kWh/Joules) and carbon emissions (gCO2e) in a local append-only ledger (`.triagecore/ledger.jsonl`).
 - **Local-First Benefit Signals:** The dashboard foregrounds accepted yield, local-first routing share, accepted local work, and review-light tasks so the bench encourages continued evidence collection while formal reports remain baseline-bound.
 
 ### 2. Post-Execution Safety Validators
