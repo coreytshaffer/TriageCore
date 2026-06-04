@@ -34,7 +34,7 @@ python -m pytest
 Result:
 
 ```text
-72 passed
+74 passed
 ```
 
 Benchmark fixture smoke check:
@@ -54,6 +54,8 @@ The structured-extraction issue was diagnosed as benchmark ambiguity: the model 
 Aggregated task records now expose both `created_at` and `updated_at`. Raw ledger events already had timestamps; this makes the reduced task view and CSV export more useful for review and reporting.
 
 Ledger task cards now have a Details/Hide toggle. Expanded cards show timestamps, prompt, routing, model/backend, benchmark status, handoff reason, artifacts, and review metrics while preserving expanded state across refreshes.
+
+The dispatch screen now opens fullscreen by default, uses larger self-describing dispatch controls, includes a compact live backend/activity log under the output box, and shows richer subagent states for queued/running/complete/issue worker activity.
 
 Next step: review the superseded `trial_001` learning proposals and record explicit human decisions before treating them as accepted or rejected lessons.
 

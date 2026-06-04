@@ -71,3 +71,22 @@ def test_ledger_detail_text_includes_review_and_benchmark_context():
     assert "Benchmark: study=study_001, run=trial_002" in text
     assert "validator_passed=True" in text
     assert "reports/study_001_trial_002_benchmark_report.md" in text
+
+
+def test_read_text_tail_returns_last_lines(tmp_path):
+    from triage_core.ui.app import _read_text_tail
+
+    path = tmp_path / "activity.log"
+    path.write_text("one\ntwo\nthree\n", encoding="utf-8")
+
+    assert _read_text_tail(str(path), max_lines=2) == "two\nthree\n"
+
+
+def test_agent_state_helpers_are_human_readable():
+    from triage_core.ui.app import _agent_display_name, _agent_state_style
+
+    color, label = _agent_state_style("running")
+
+    assert _agent_display_name("repo_mapper") == "Repo Mapper"
+    assert color == "#22c55e"
+    assert label == "Running"

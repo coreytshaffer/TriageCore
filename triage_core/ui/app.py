@@ -179,6 +179,29 @@ def _ledger_detail_text(task) -> str:
     return "\n".join(_ledger_detail_lines(task))
 
 
+def _read_text_tail(path: str, max_lines: int = 400) -> str:
+    if not os.path.exists(path):
+        return ""
+    with open(path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+    return "".join(lines[-max_lines:])
+
+
+def _agent_display_name(role: str) -> str:
+    return role.replace("_", " ").title()
+
+
+def _agent_state_style(state: str) -> tuple[str, str]:
+    styles = {
+        "idle": ("#6b7280", "Idle"),
+        "queued": ("#f59e0b", "Queued"),
+        "running": ("#22c55e", "Running"),
+        "completed": ("#38bdf8", "Complete"),
+        "failed": ("#ef4444", "Issue"),
+    }
+    return styles.get(state, styles["idle"])
+
+
 # ─── Small helper widgets ─────────────────────────────────────────────────────
 class _SectionLabel(ctk.CTkLabel):
     def __init__(self, parent, text, **kw):
@@ -661,6 +684,9 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         self.review_timers = {}
         self.timer_labels = {}
         self.expanded_ledger_task_ids = set()
+        self.agent_status = {}
+        self._last_logs_render = None
+        self._last_inline_logs_render = None
 
         # Setup runtime file logger
         import logging
@@ -705,9 +731,11 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         self._build_rules_frame()
 
         self.state("zoomed")
+        self.attributes("-fullscreen", True)
         self.select_frame("dashboard")
         self._check_backends()
         self._start_ticker()
+        self._start_live_logs()
         self._start_ipc_watcher()
         self.after(1000, self._update_active_timers)
 
@@ -808,23 +836,53 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         )
 
         self.agent_indicators = {}
+        self.agent_status_labels = {}
+        self.agent_meta_labels = {}
         agents = ["repo_mapper", "code_repair", "validator", "test_stubber"]
         for agent in agents:
             row = ctk.CTkFrame(self.agent_panel, fg_color="transparent")
-            row.pack(fill="x", padx=10, pady=2)
+            row.pack(fill="x", padx=10, pady=3)
 
             indicator = ctk.CTkFrame(
                 row, width=12, height=12, corner_radius=2, fg_color="#ef4444"
             )
-            indicator.pack(side="left", padx=(0, 8))
+            indicator.pack(side="left", padx=(0, 8), pady=2)
             indicator.pack_propagate(False)
 
-            lbl = ctk.CTkLabel(
-                row, text=agent.replace("_", " ").title(), font=ctk.CTkFont(size=11)
-            )
-            lbl.pack(side="left")
+            text_col = ctk.CTkFrame(row, fg_color="transparent")
+            text_col.pack(side="left", fill="x", expand=True)
 
+            lbl = ctk.CTkLabel(
+                text_col,
+                text=_agent_display_name(agent),
+                font=ctk.CTkFont(size=11, weight="bold"),
+                anchor="w",
+            )
+            lbl.pack(anchor="w")
+
+            meta = ctk.CTkLabel(
+                text_col,
+                text="Idle · awaiting task",
+                font=ctk.CTkFont(size=10),
+                text_color="#9ca3af",
+                anchor="w",
+            )
+            meta.pack(anchor="w")
+
+            state_lbl = ctk.CTkLabel(
+                row,
+                text="Idle",
+                width=58,
+                font=ctk.CTkFont(size=10, weight="bold"),
+                text_color="#9ca3af",
+                anchor="e",
+            )
+            state_lbl.pack(side="right")
+
+            self.agent_status[agent] = "idle"
             self.agent_indicators[agent] = indicator
+            self.agent_status_labels[agent] = state_lbl
+            self.agent_meta_labels[agent] = meta
 
         # ── Live Resource Ticker (bottom of sidebar) ──────────────────────────
         ticker = ctk.CTkFrame(sb, corner_radius=10, fg_color=("gray85", "gray20"))
@@ -926,43 +984,52 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
 
         # ── 4 Dispatch Buttons ───────────────────────────────────────────────
         btn_row = ctk.CTkFrame(f, fg_color="transparent")
-        btn_row.grid(row=4, column=0, padx=24, pady=(0, 6), sticky="w")
+        btn_row.grid(row=4, column=0, padx=24, pady=(0, 8), sticky="ew")
+        btn_row.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="dispatch")
 
         self.btn_local = ctk.CTkButton(
             btn_row,
-            text="⚡ Local Draft",
-            width=140,
+            text="1. Local Draft\nRun with active local model",
+            width=180,
+            height=56,
             command=lambda: self._handle_task("local"),
             fg_color="#166534",
+            font=ctk.CTkFont(size=13, weight="bold"),
         )
-        self.btn_local.pack(side="left", padx=(0, 8))
+        self.btn_local.grid(row=0, column=0, padx=(0, 8), sticky="ew")
 
         self.btn_council = ctk.CTkButton(
             btn_row,
-            text="🏭 Worker Council",
-            width=160,
+            text="2. Worker Council\nCross-check with agents",
+            width=180,
+            height=56,
             command=lambda: self._handle_task("council"),
             fg_color="#0e4f6b",
+            font=ctk.CTkFont(size=13, weight="bold"),
         )
-        self.btn_council.pack(side="left", padx=(0, 8))
+        self.btn_council.grid(row=0, column=1, padx=(0, 8), sticky="ew")
 
         self.btn_codex = ctk.CTkButton(
             btn_row,
-            text="📦 Codex Packet",
-            width=140,
+            text="3. Codex Handoff\nWrite review packet",
+            width=180,
+            height=56,
             command=lambda: self._handle_task("codex"),
             fg_color="#7c2d12",
+            font=ctk.CTkFont(size=13, weight="bold"),
         )
-        self.btn_codex.pack(side="left", padx=(0, 8))
+        self.btn_codex.grid(row=0, column=2, padx=(0, 8), sticky="ew")
 
         self.btn_anti = ctk.CTkButton(
             btn_row,
-            text="🚀 Antigravity",
-            width=140,
+            text="4. Antigravity Handoff\nCreate IDE task bundle",
+            width=180,
+            height=56,
             command=lambda: self._handle_task("antigravity"),
             fg_color="#4a1d96",
+            font=ctk.CTkFont(size=13, weight="bold"),
         )
-        self.btn_anti.pack(side="left")
+        self.btn_anti.grid(row=0, column=3, sticky="ew")
 
         self.status_label = ctk.CTkLabel(
             f, text="", text_color="gray", font=ctk.CTkFont(size=12)
@@ -991,7 +1058,24 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             state="disabled",
             font=ctk.CTkFont(family="Courier", size=12),
         )
-        self.output_box.grid(row=1, column=0, sticky="nsew")
+        self.output_box.grid(row=1, column=0, sticky="nsew", pady=(0, 8))
+
+        self.inline_log_label = ctk.CTkLabel(
+            result_outer,
+            text="Live backend/activity log",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color="#9ca3af",
+            anchor="w",
+        )
+        self.inline_log_label.grid(row=2, column=0, sticky="ew", pady=(0, 4))
+
+        self.inline_log_box = ctk.CTkTextbox(
+            result_outer,
+            height=110,
+            state="disabled",
+            font=ctk.CTkFont(family="Courier", size=11),
+        )
+        self.inline_log_box.grid(row=3, column=0, sticky="ew")
 
     def _show_result_metrics(
         self,
@@ -1355,11 +1439,21 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         )
         self.btn_toggle_sys.pack(side="right")
 
+        self.live_log_status = ctk.CTkLabel(
+            f,
+            text="Live tail enabled · system logs",
+            font=ctk.CTkFont(size=11),
+            text_color="#9ca3af",
+            anchor="w",
+        )
+        self.live_log_status.grid(row=2, column=0, padx=24, pady=(0, 8), sticky="w")
+
         self.logs_box = ctk.CTkTextbox(f, font=ctk.CTkFont(family="Courier", size=12))
-        self.logs_box.grid(row=1, column=0, padx=24, pady=(0, 24), sticky="nsew")
+        self.logs_box.grid(row=1, column=0, padx=24, pady=(0, 8), sticky="nsew")
 
     def _set_log_view(self, mode):
         self._log_view_mode = mode
+        self._last_logs_render = None
         if mode == "system":
             self.btn_toggle_sys.configure(fg_color=("gray70", "gray30"))
             self.btn_toggle_ledger.configure(fg_color="transparent")
@@ -1368,35 +1462,85 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             self.btn_toggle_ledger.configure(fg_color=("gray70", "gray30"))
         self._refresh_logs()
 
-    def _refresh_logs(self):
+    def _refresh_logs(self, force=True):
         self.logs_box.configure(state="normal")
-        self.logs_box.delete("0.0", "end")
 
         if self._log_view_mode == "system":
             log_file = _log_file_path()
             if os.path.exists(log_file):
                 try:
-                    with open(log_file, "r", encoding="utf-8") as f:
-                        content = f.read()
-                        self.logs_box.insert("0.0", content)
+                    content = _read_text_tail(log_file)
                 except Exception as e:
-                    self.logs_box.insert("0.0", f"Error reading log file: {e}")
+                    content = f"Error reading log file: {e}"
             else:
-                self.logs_box.insert("0.0", "No system logs generated yet.")
+                content = "No system logs generated yet."
+            self.live_log_status.configure(text="Live tail enabled · system logs")
         else:
             ledger_file = _ledger_file_path()
             if os.path.exists(ledger_file):
                 try:
-                    with open(ledger_file, "r", encoding="utf-8") as f:
-                        content = f.read()
-                        self.logs_box.insert("0.0", content)
+                    content = _read_text_tail(ledger_file)
                 except Exception as e:
-                    self.logs_box.insert("0.0", f"Error reading ledger file: {e}")
+                    content = f"Error reading ledger file: {e}"
             else:
-                self.logs_box.insert("0.0", "No ledger records found.")
+                content = "No ledger records found."
+            self.live_log_status.configure(text="Live tail enabled · raw ledger")
+
+        if force or content != self._last_logs_render:
+            self.logs_box.delete("0.0", "end")
+            self.logs_box.insert("0.0", content)
+            self._last_logs_render = content
+            self.logs_box.see("end")
 
         self.logs_box.configure(state="disabled")
-        self.logs_box.see("end")
+
+    def _start_live_logs(self):
+        self._update_live_logs()
+
+    def _update_live_logs(self):
+        self._refresh_inline_logs(force=False)
+        if getattr(self, "_current_frame", None) == "logs":
+            self._refresh_logs(force=False)
+        self.after(1000, self._update_live_logs)
+
+    def _inline_log_content(self) -> str:
+        backend = self.active_backend.name if self.active_backend else "none"
+        model = getattr(self.active_backend, "model", None) or "none"
+        header = [
+            f"Active backend: {backend}",
+            f"Active model: {model}",
+            "Source: TriageCore backend/activity events",
+            "",
+        ]
+        tail = _read_text_tail(_log_file_path(), max_lines=80)
+        if not tail.strip():
+            tail = "No backend activity logged yet."
+        return "\n".join(header) + tail
+
+    def _refresh_inline_logs(self, force=True):
+        if not hasattr(self, "inline_log_box"):
+            return
+        content = self._inline_log_content()
+        if not force and content == self._last_inline_logs_render:
+            return
+        self.inline_log_box.configure(state="normal")
+        self.inline_log_box.delete("0.0", "end")
+        self.inline_log_box.insert("0.0", content)
+        self.inline_log_box.see("end")
+        self.inline_log_box.configure(state="disabled")
+        self._last_inline_logs_render = content
+
+    def _log_activity(self, message, level="info"):
+        import logging
+
+        logger = logging.getLogger("triage_core.ui")
+        if level == "error":
+            logger.error(message)
+        elif level == "warning":
+            logger.warning(message)
+        else:
+            logger.info(message)
+        self._last_inline_logs_render = None
 
     def _build_rules_frame(self):
         f = ctk.CTkScrollableFrame(self, corner_radius=0, fg_color="transparent")
@@ -1848,6 +1992,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
                 "target_files": files,
             },
         )
+        self._log_activity(f"Task {task_id[:8]} created for {runner_type}")
 
         cat = TaskClassifier.classify(prompt, backend=self.active_backend)
         danger = DangerDetector.analyze(prompt, files)
@@ -1908,6 +2053,9 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         self.status_label.configure(
             text=f"Drafting locally via {self.active_backend.name}…",
             text_color="#93c5fd",
+        )
+        self._log_activity(
+            f"Local draft started for task {task_id[:8]} via {self.active_backend.name}"
         )
         self.btn_local.configure(state="disabled")
         self._clear_output("Sending to local model…")
@@ -1988,9 +2136,13 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
                     text=f"✓ Draft in {duration:.1f}s · Risk: {danger.risk_level}",
                     text_color="#22c55e",
                 )
+                self._log_activity(
+                    f"Local draft completed for task {task_id[:8]} in {duration:.1f}s"
+                )
             except Exception as e:
                 sampler.stop()
                 self.status_label.configure(text=f"Error: {e}", text_color="#ef4444")
+                self._log_activity(f"Local draft error for task {task_id[:8]}: {e}", level="error")
             finally:
                 self.btn_local.configure(state="normal")
                 self._update_ticker()
@@ -2013,7 +2165,8 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         )
         self.btn_council.configure(state="disabled")
         self._clear_output("Worker Council initialising…\n")
-        self._set_active_agent(None)
+        self._reset_agent_indicators(queued=True)
+        self._log_activity(f"Council dispatch started for task {task_id[:8]}")
 
         def _run():
             from ..sustainability import PowerSampler, integrate_energy_kwh
@@ -2037,7 +2190,12 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
                         match = re.search(r"\[(.*?)\]", chunk)
                         if match:
                             role = match.group(1).lower()
+                            model_match = re.search(r"Model:\s*([^)]+)", chunk)
+                            model = model_match.group(1).strip() if model_match else ""
+                            detail = f"Model: {model}" if model else "Working"
                             self.after(0, self._set_active_agent, role)
+                            self.after(0, self._set_agent_state, role, "running", detail)
+                            self._log_activity(f"Council worker running: {role}")
                     self.after(0, self._append_output, chunk)
 
                 result = pm.dispatch_task(
@@ -2069,12 +2227,28 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
 
                 total_in = 0
                 total_out = 0
+                agent_updates = []
                 for order_id in result.get("work_orders", []):
                     order = pm.board.orders.get(order_id)
                     if order and order.result:
                         ru = order.result.get("resource_usage", {})
-                        total_in += ru.get("input_tokens_est", 0)
-                        total_out += ru.get("output_tokens_est", 0)
+                        input_tokens = ru.get("input_tokens_est", 0)
+                        output_tokens = ru.get("output_tokens_est", 0)
+                        duration_seconds = ru.get("duration_seconds", 0.0)
+                        total_in += input_tokens
+                        total_out += output_tokens
+                        has_error = bool(order.result.get("error")) or order.status == "failed"
+                        agent_updates.append(
+                            {
+                                "role": order.assigned_role,
+                                "state": "failed" if has_error else "completed",
+                                "detail": (
+                                    f"{duration_seconds:.1f}s · "
+                                    f"{input_tokens + output_tokens} tok"
+                                ),
+                            }
+                        )
+                self.after(0, self._apply_agent_updates, agent_updates)
 
                 self.ledger.append_event(
                     task_id,
@@ -2132,12 +2306,16 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
                     text=f"🏭 Council: {local_status} · {duration:.1f}s",
                     text_color=color,
                 )
+                self._log_activity(
+                    f"Council completed task {task_id[:8]}: {local_status} in {duration:.1f}s"
+                )
             except Exception as e:
                 sampler.stop()
                 self.status_label.configure(
                     text=f"Council error: {e}", text_color="#ef4444"
                 )
                 self._append_output(f"\nError: {e}")
+                self._log_activity(f"Council error for task {task_id[:8]}: {e}", level="error")
             finally:
                 self.btn_council.configure(state="normal")
                 self._set_active_agent(None)
@@ -2178,6 +2356,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             text=f"📦 Codex packet saved · {danger.recommended_profile}",
             text_color="#f97316",
         )
+        self._log_activity(f"Codex packet saved for task {task_id[:8]}: {filename}")
 
     # -- Antigravity --
     def _dispatch_antigravity(self, task_id, prompt, files, danger):
@@ -2213,6 +2392,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             text=f"🚀 Antigravity bundle saved · {danger.recommended_profile}",
             text_color="#a855f7",
         )
+        self._log_activity(f"Antigravity bundle saved for task {task_id[:8]}: {task_dir}")
 
     # ─── Output Box Helpers ───────────────────────────────────────────────────
     def _clear_output(self, text=""):
@@ -2229,12 +2409,46 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         self.output_box.configure(state="disabled")
 
     # ─── IPC File Watcher ─────────────────────────────────────────────────────
+    def _set_agent_state(self, role, state, detail=""):
+        if role not in self.agent_indicators:
+            return
+
+        color, label = _agent_state_style(state)
+        self.agent_status[role] = state
+        self.agent_indicators[role].configure(fg_color=color)
+        self.agent_status_labels[role].configure(text=label, text_color=color)
+
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        detail_text = detail or "Awaiting work"
+        self.agent_meta_labels[role].configure(text=f"{detail_text} · {timestamp}")
+
+    def _reset_agent_indicators(self, queued=False):
+        state = "queued" if queued else "idle"
+        detail = "Queued for council run" if queued else "Awaiting task"
+        for role in self.agent_indicators:
+            self._set_agent_state(role, state, detail)
+
+    def _apply_agent_updates(self, updates):
+        for update in updates:
+            self._set_agent_state(
+                update.get("role"),
+                update.get("state", "idle"),
+                update.get("detail", ""),
+            )
+
     def _set_active_agent(self, active_role: str = None):
-        for role, ind in self.agent_indicators.items():
+        if active_role is None:
+            for role, state in list(self.agent_status.items()):
+                if state in {"queued", "running"}:
+                    self._set_agent_state(role, "idle", "No active council work")
+            return
+
+        for role, state in list(self.agent_status.items()):
             if role == active_role:
-                ind.configure(fg_color="#22c55e")
-            else:
-                ind.configure(fg_color="#ef4444")
+                continue
+            if state == "running":
+                self._set_agent_state(role, "queued", "Waiting for next worker")
+        self._set_agent_state(active_role, "running", "Working")
 
     def _start_ipc_watcher(self):
         self._check_ipc_inbox()

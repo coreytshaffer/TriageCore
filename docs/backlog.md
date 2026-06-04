@@ -72,3 +72,19 @@ Resolution: diagnostic output showed valid JSON with ambiguous `site_name` seman
 * [ ] **Story 6.2: Main Screen Ledger Feed**
   * Add a compact scrolling task ledger feed to the main dispatch/dashboard screen.
   * Keep the feed lightweight so it gives recent activity context without replacing the full ledger view.
+* [x] **Story 6.3: Live Backend Activity Panel**
+  * Add a compact live-scrolling activity log below the dispatch output box.
+  * Tail TriageCore backend events during local, council, Codex, and Antigravity runs.
+  * Prepare future hooks for external Ollama and LM Studio process logs when their log paths or APIs are configured.
+* [x] **Story 6.4: Rich Subagent Status Indicators**
+  * Replace binary red/green worker dots with queued/running/complete/issue states.
+  * Show last activity details such as model, duration, and token estimates per worker.
+  * Preserve enough signal for quick scanning without requiring the full logs view.
+* [x] **Story 6.5: Dispatch Control Ergonomics**
+  * Increase primary dispatch button size and labels.
+  * Use numbered left-to-right action text for Local Draft, Worker Council, Codex Handoff, and Antigravity Handoff.
+  * Continue toward keyboard focus, target-size, and workload-reduction improvements.
+* [ ] **Story 6.6: Accessibility And Workload Review**
+  * Audit keyboard focus order, visible focus states, and minimum click/tap target size.
+  * Add user-adjustable density or reduced-motion preferences if visual load increases.
+  * Consider a lightweight workload self-check after complex agent sessions.
