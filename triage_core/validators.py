@@ -1,3 +1,4 @@
+import json
 import tempfile
 import py_compile
 import os
@@ -38,3 +39,77 @@ class PythonSyntaxValidator:
             return False
         finally:
             os.remove(path)
+
+
+class MonitoringJsonValidator:
+    """Validator for the Study 001 monitoring-site extraction fixture."""
+
+    REQUIRED_KEYS = {
+        "site_name",
+        "date",
+        "temperature_c",
+        "turbidity_ntu",
+    }
+
+    @staticmethod
+    def validate(output: str) -> bool:
+        cleaned = _strip_markdown_fence(output)
+        try:
+            payload = json.loads(cleaned)
+        except json.JSONDecodeError as exc:
+            print(f"[Validator] JSON parse error detected: {exc}")
+            return False
+
+        if not isinstance(payload, dict):
+            print("[Validator] Expected a JSON object.")
+            return False
+
+        missing_keys = MonitoringJsonValidator.REQUIRED_KEYS - set(payload)
+        if missing_keys:
+            print(f"[Validator] Missing JSON keys: {sorted(missing_keys)}")
+            return False
+
+        return (
+            str(payload["site_name"]) == "CLW-07"
+            and str(payload["date"]) == "2026-06-03"
+            and _same_number(payload["temperature_c"], 21.4)
+            and _same_number(payload["turbidity_ntu"], 8.7)
+        )
+
+
+class ErrorWarningMarkdownValidator:
+    """Validator for concise warning/error-only log summaries."""
+
+    @staticmethod
+    def validate(output: str) -> bool:
+        cleaned = _strip_markdown_fence(output)
+        normalized = cleaned.lower()
+        lines = [line.strip() for line in cleaned.splitlines() if line.strip()]
+
+        if not lines:
+            print("[Validator] Empty log summary.")
+            return False
+        if "info" in normalized or "service started" in normalized or "sync complete" in normalized:
+            print("[Validator] Log summary included INFO-only content.")
+            return False
+        if "warn" not in normalized or "latency spike" not in normalized:
+            print("[Validator] Log summary missed the warning signal.")
+            return False
+        if "error" not in normalized or "connection timeout" not in normalized:
+            print("[Validator] Log summary missed the error signal.")
+            return False
+
+        return all(line.startswith(("-", "*")) for line in lines)
+
+
+def _strip_markdown_fence(output: str) -> str:
+    output = re.sub(r'^```[a-zA-Z]*\s*', '', output.strip())
+    output = re.sub(r'\s*```$', '', output)
+    return output.strip()
+
+
+def _same_number(value: object, expected: float) -> bool:
+    try:
+        return abs(float(value) - expected) < 0.001
+    except (TypeError, ValueError):
+        return False

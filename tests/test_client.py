@@ -53,3 +53,24 @@ def test_low_risk_task_runs_backend():
     assert result["output_tokens"] == 2
     assert result["total_tokens"] == 5
     assert backend.called is True
+
+
+def test_validator_failure_records_model_and_token_context():
+    backend = RecordingBackend()
+    client = TriageClient(backend=backend)
+
+    result = client.run_task(
+        "Summarize this text",
+        "small data",
+        validator=lambda _output: False,
+    )
+
+    assert result["status"] == "handoff_required"
+    assert result["source"] == "local_engine"
+    assert result["validator_passed"] is False
+    assert result["backend_name"] == "fake"
+    assert result["model"] == "fake-model"
+    assert result["input_tokens"] == 3
+    assert result["output_tokens"] == 2
+    assert result["total_tokens"] == 5
+    assert backend.called is True

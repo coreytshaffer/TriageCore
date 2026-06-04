@@ -32,7 +32,18 @@ class TriageEngine:
             
             # Run quality gates if provided
             if validator and not validator(backend_response.text):
-                return self._trigger_handoff(task_prompt, raw_data, "Local output failed quality gate validation.")
+                handoff = self._trigger_handoff(task_prompt, raw_data, "Local output failed quality gate validation.")
+                handoff.update({
+                    "elapsed_seconds": elapsed,
+                    "backend_name": backend_response.backend_name,
+                    "model": getattr(self.backend, "model", None),
+                    "timeout_seconds": self.timeout,
+                    "usage": backend_response.usage,
+                    "timings": backend_response.timings,
+                    "validator_passed": False,
+                    **token_metrics,
+                })
+                return handoff
             
             return {
                 "status": "success", 

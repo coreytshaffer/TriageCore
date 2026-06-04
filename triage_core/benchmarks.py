@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-from .validators import PythonSyntaxValidator
+from .validators import ErrorWarningMarkdownValidator, MonitoringJsonValidator, PythonSyntaxValidator
 
 
 @dataclass
@@ -42,6 +42,10 @@ def resolve_validator(name: Optional[str]) -> Optional[Callable[[str], bool]]:
         return None
     if name == "python_syntax":
         return PythonSyntaxValidator.validate
+    if name == "monitoring_json":
+        return MonitoringJsonValidator.validate
+    if name == "error_warning_markdown":
+        return ErrorWarningMarkdownValidator.validate
     raise ValueError(f"Unknown benchmark validator: {name}")
 
 

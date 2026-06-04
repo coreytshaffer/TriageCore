@@ -33,6 +33,17 @@ Running `triagecore propose-lessons --study-id study_001` produced no learning p
 
 Earlier exploratory benchmark records produced pending proposal candidates, but those records are intentionally excluded from the formal Study 001 report because they do not carry the `study_001` label.
 
+## Validator Hardening Rerun
+
+After the initial baseline, Study 001 validation was strengthened for the log-summary and structured-extraction fixtures:
+
+- `log_summary_markdown_v1` now checks that warning and error content are present and INFO-only content is excluded.
+- `json_extraction_small_v1` now checks exact environmental JSON fields and values.
+
+The stronger validators surfaced one useful mismatch: `json_extraction_small_v1` triggered `handoff_required` instead of the expected `success`. This should be treated as evidence for prompt/model/validator review, not as a silent failure.
+
+The rerun also exposed the next evidence-design decision: `study_id` separates formal study records from exploratory history, but repeated runs inside the same study still aggregate together. A future slice should add a `run_id` or `trial_id` before comparing multiple prompt, model, or validator versions inside Study 001.
+
 ## Interpretation
 
 This is a successful first operational baseline, not a broad claim about model quality. The current benchmark set is intentionally small and should be expanded before using Study 001 as strong evidence in the paper.
