@@ -5,11 +5,17 @@ from triage_core.client import TriageClient
 
 load_dotenv()
 
-LOCAL_URL = os.getenv("LOCAL_URL", "http://127.0.0.1:1234")
-CLOUD_MODEL = os.getenv("CLOUD_MODEL", "gemini/gemini-1.5-pro")
+BACKEND_TYPE = os.getenv("TRIAGE_BACKEND_TYPE", "ollama")
+MODEL = os.getenv("TRIAGE_MODEL", "qwen2.5-coder:7b")
+BASE_URL = os.getenv("TRIAGE_BASE_URL")
 
 def generate_self_report():
-    client = TriageClient(local_url=LOCAL_URL, cloud_model=CLOUD_MODEL, timeout_seconds=120)
+    client = TriageClient(
+        backend_type=BACKEND_TYPE,
+        model=MODEL,
+        base_url=BASE_URL,
+        timeout_seconds=120,
+    )
     
     # We grab one of the patched files as context to spark the narrative
     sample_file = "../pitlens-table-games/src/pitlens/database.py"
@@ -46,7 +52,7 @@ Write this in a conversational, scholarly, yet narrative tone. Do not write any 
         print(result.get('output'))
         print("===================================")
     else:
-        print(f"\n[x] Failed to generate report: {result.get('error', result.get('escalation_reason'))}")
+        print(f"\n[x] Failed to generate report: {result.get('reason', result.get('error'))}")
 
 if __name__ == "__main__":
     generate_self_report()

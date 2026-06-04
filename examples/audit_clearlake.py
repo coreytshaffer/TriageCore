@@ -6,12 +6,18 @@ from triage_core.client import TriageClient
 
 load_dotenv()
 
-LOCAL_URL = os.getenv("LOCAL_URL", "http://127.0.0.1:1234")
-CLOUD_MODEL = os.getenv("CLOUD_MODEL", "gemini/gemini-1.5-pro")
+BACKEND_TYPE = os.getenv("TRIAGE_BACKEND_TYPE", "ollama")
+MODEL = os.getenv("TRIAGE_MODEL", "qwen2.5-coder:7b")
+BASE_URL = os.getenv("TRIAGE_BASE_URL")
 
 def run_clearlake_audit(target_dir: str):
     # We aggressively drop the timeout to 30s because we expect the user is running Qwen2.5-Coder!
-    client = TriageClient(local_url=LOCAL_URL, cloud_model=CLOUD_MODEL, timeout_seconds=30)
+    client = TriageClient(
+        backend_type=BACKEND_TYPE,
+        model=MODEL,
+        base_url=BASE_URL,
+        timeout_seconds=30,
+    )
     
     # Clear Lake Watch is built in JS and PowerShell, not Python!
     js_files = glob.glob(os.path.join(target_dir, "**", "*.js"), recursive=True)
@@ -23,7 +29,7 @@ def run_clearlake_audit(target_dir: str):
     
     stats = {
         "success_local": 0,
-        "success_cloud": 0,
+        "handoff_required": 0,
         "failed": 0
     }
     
@@ -50,21 +56,21 @@ def run_clearlake_audit(target_dir: str):
             if source == "local":
                 stats["success_local"] += 1
             else:
-                stats["success_cloud"] += 1
+                stats["handoff_required"] += 1
                 
             output = result.get('output')
             # Dry run for this demonstration to protect the flagship project codebase
             # with open(file, 'w', encoding='utf-8') as f:
             #     f.write(output)
         else:
-            print(f"  [FAILED]: {result.get('error', result.get('escalation_reason'))}")
+            print(f"  [HANDOFF]: {result.get('reason', result.get('error'))}")
             stats["failed"] += 1
             
         time.sleep(1) # Let the local GPU breathe
         
     print("\n--- Optimized Audit Summary ---")
     print(f"Files Fixed via Local Edge: {stats['success_local']}")
-    print(f"Files Escalated to Cloud:   {stats['success_cloud']}")
+    print(f"Files Requiring Handoff:    {stats['handoff_required']}")
     print(f"Failed to Patch:            {stats['failed']}")
 
 if __name__ == "__main__":

@@ -1,9 +1,12 @@
+import csv
+import dataclasses
 import json
 import os
 import uuid
 from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional
+
 
 @dataclass
 class TaskRecord:
@@ -19,11 +22,28 @@ class TaskRecord:
     energy_kwh_estimate: float = 0.0
     emissions_gco2e_estimate: float = 0.0
     grid_intensity_gco2e_per_kwh: float = 0.0
+
+    # Benchmark / model evaluation fields (Codex)
+    backend_name: Optional[str] = None
+    model: Optional[str] = None
+    backend: Optional[str] = None          # alias used by worker_registry
+    benchmark_task_id: Optional[str] = None
+    benchmark_category: Optional[str] = None
+    expected_status: Optional[str] = None
+    observed_status: Optional[str] = None
+    timeout_seconds: Optional[float] = None
+    elapsed_seconds: float = 0.0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+    tokens_per_second: float = 0.0
+    validator_passed: Optional[bool] = None
+    handoff_reason: Optional[str] = None
     human_review_required: bool = False
     accepted: bool = False
     artifact_paths: List[str] = field(default_factory=list)
-    
-    # --- New fields for Token Balance Experiments and Extended Sustainability ---
+
+    # Token balance experiment / extended sustainability fields (Antigravity)
     experiment_id: Optional[str] = None
     prompt_strategy: Optional[str] = None
     context_strategy: Optional[str] = None
@@ -35,9 +55,8 @@ class TaskRecord:
     human_review_minutes: float = 0.0
     retry_count: int = 0
     hardware_profile: Optional[str] = None
-    backend: Optional[str] = None
-    model: Optional[str] = None
     duration_seconds: float = 0.0
+
 
 class TaskLedger:
     def __init__(self, ledger_dir: str = ".triagecore"):
@@ -59,10 +78,10 @@ class TaskLedger:
     def get_task(self, task_id: str) -> Optional[TaskRecord]:
         if not os.path.exists(self.ledger_path):
             return None
-            
+
         record = TaskRecord(task_id=task_id)
         found = False
-        
+
         with open(self.ledger_path, "r", encoding="utf-8") as f:
             for line in f:
                 if not line.strip():
@@ -71,46 +90,19 @@ class TaskLedger:
                     event = json.loads(line)
                 except json.JSONDecodeError:
                     continue
-                    
+
                 if event.get("task_id") != task_id:
                     continue
-                    
+
                 found = True
-                etype = event.get("event_type")
-                payload = event.get("payload", {})
-                
-                if etype == "task_created":
-                    record.created_at = event.get("timestamp", "")
-                    record.title = payload.get("title", "")
-                    record.description = payload.get("description", "")
-                    record.target_files = payload.get("target_files", [])
-                elif etype == "task_classified":
-                    record.permission_profile = payload.get("recommended_profile")
-                    record.risk_level = payload.get("risk_level")
-                    if record.risk_level in ["medium", "high"]:
-                        record.human_review_required = True
-                elif etype == "runner_selected":
-                    record.runner = payload.get("runner")
-                elif etype in ["handoff_generated", "local_draft_generated"]:
-                    record.status = etype
-                    if "artifact_path" in payload:
-                        record.artifact_paths.append(payload["artifact_path"])
-                elif etype == "energy_estimated":
-                    record.energy_kwh_estimate += payload.get("energy_kwh", 0.0)
-                    record.emissions_gco2e_estimate += payload.get("emissions_gco2e", 0.0)
-                    record.grid_intensity_gco2e_per_kwh = payload.get("grid_intensity_gco2e_per_kwh", 0.0)
-                elif etype == "review_completed":
-                    record.status = "reviewed"
-                    record.accepted = payload.get("accepted", False)
-                elif etype == "task_blocked":
-                    record.status = "blocked"
+                self._apply_event(record, event)
 
         return record if found else None
 
     def get_all_tasks(self) -> List[TaskRecord]:
         if not os.path.exists(self.ledger_path):
             return []
-            
+
         tasks_map: Dict[str, TaskRecord] = {}
         with open(self.ledger_path, "r", encoding="utf-8") as f:
             for line in f:
@@ -120,63 +112,106 @@ class TaskLedger:
                     event = json.loads(line)
                 except json.JSONDecodeError:
                     continue
-                    
+
                 task_id = event.get("task_id")
                 if not task_id:
                     continue
                 if task_id not in tasks_map:
                     tasks_map[task_id] = TaskRecord(task_id=task_id)
-                
-                # Apply reducer logic
-                record = tasks_map[task_id]
-                etype = event.get("event_type")
-                payload = event.get("payload", {})
-                
-                if etype == "task_created":
-                    record.created_at = event.get("timestamp", "")
-                    record.title = payload.get("title", "")
-                    record.description = payload.get("description", "")
-                    record.target_files = payload.get("target_files", [])
-                elif etype == "task_classified":
-                    record.permission_profile = payload.get("recommended_profile")
-                    record.risk_level = payload.get("risk_level")
-                    if record.risk_level in ["medium", "high"]:
-                        record.human_review_required = True
-                elif etype == "runner_selected":
-                    record.runner = payload.get("runner")
-                elif etype in ["handoff_generated", "local_draft_generated"]:
-                    record.status = etype
-                    if "artifact_path" in payload:
-                        record.artifact_paths.append(payload["artifact_path"])
-                elif etype == "energy_estimated":
-                    record.energy_kwh_estimate += payload.get("energy_kwh", 0.0)
-                    record.emissions_gco2e_estimate += payload.get("emissions_gco2e", 0.0)
-                    record.grid_intensity_gco2e_per_kwh = payload.get("grid_intensity_gco2e_per_kwh", 0.0)
-                elif etype == "review_completed":
-                    record.status = "reviewed"
-                    record.accepted = payload.get("accepted", False)
-                elif etype == "task_blocked":
-                    record.status = "blocked"
 
-        # Return sorted by created_at descending
+                self._apply_event(tasks_map[task_id], event)
+
         return sorted(list(tasks_map.values()), key=lambda x: x.created_at, reverse=True)
 
+    def _apply_event(self, record: TaskRecord, event: Dict[str, Any]) -> None:
+        """Single reducer used by both get_task and get_all_tasks."""
+        etype = event.get("event_type")
+        payload = event.get("payload", {})
+
+        if etype == "task_created":
+            record.created_at = event.get("timestamp", "")
+            record.title = payload.get("title", "")
+            record.description = payload.get("description", "")
+            record.target_files = payload.get("target_files", [])
+        elif etype == "task_classified":
+            record.permission_profile = payload.get("recommended_profile")
+            record.risk_level = payload.get("risk_level")
+            if record.risk_level in ["medium", "high"]:
+                record.human_review_required = True
+        elif etype == "runner_selected":
+            record.runner = payload.get("runner")
+        elif etype in ["handoff_generated", "local_draft_generated", "council_completed"]:
+            record.status = etype
+            if "artifact_path" in payload:
+                record.artifact_paths.append(payload["artifact_path"])
+            self._apply_model_evaluation(record, payload)
+            if "reason" in payload:
+                record.handoff_reason = payload["reason"]
+                record.human_review_required = True
+        elif etype == "model_evaluated":
+            self._apply_model_evaluation(record, payload)
+        elif etype == "validator_completed":
+            record.validator_passed = payload.get("passed")
+        elif etype == "energy_estimated":
+            record.energy_kwh_estimate += payload.get("energy_kwh", 0.0)
+            record.emissions_gco2e_estimate += payload.get("emissions_gco2e", 0.0)
+            record.grid_intensity_gco2e_per_kwh = payload.get("grid_intensity_gco2e_per_kwh", 0.0)
+            record.water_liters_estimate += payload.get("water_liters_estimate", 0.0)
+            record.embodied_gco2e_allocated += payload.get("embodied_gco2e_allocated", 0.0)
+            record.duration_seconds += payload.get("duration_seconds", 0.0)
+        elif etype == "review_completed":
+            record.status = "reviewed"
+            record.accepted = payload.get("accepted", False)
+        elif etype == "task_blocked":
+            record.status = "blocked"
+            record.handoff_reason = payload.get("reason", record.handoff_reason)
+            record.human_review_required = True
+
+    @staticmethod
+    def _apply_model_evaluation(record: TaskRecord, payload: Dict[str, Any]) -> None:
+        """Apply benchmark/model evaluation fields from a payload dict."""
+        if "backend_name" in payload:
+            record.backend_name = payload["backend_name"]
+        if "model" in payload:
+            record.model = payload["model"]
+        if "benchmark_task_id" in payload:
+            record.benchmark_task_id = payload["benchmark_task_id"]
+        if "benchmark_category" in payload:
+            record.benchmark_category = payload["benchmark_category"]
+        if "expected_status" in payload:
+            record.expected_status = payload["expected_status"]
+        if "observed_status" in payload:
+            record.observed_status = payload["observed_status"]
+        if "timeout_seconds" in payload:
+            record.timeout_seconds = payload["timeout_seconds"]
+        if "elapsed_seconds" in payload:
+            record.elapsed_seconds = payload["elapsed_seconds"]
+        if "input_tokens" in payload:
+            record.input_tokens = payload["input_tokens"]
+        if "output_tokens" in payload:
+            record.output_tokens = payload["output_tokens"]
+        if "total_tokens" in payload:
+            record.total_tokens = payload["total_tokens"]
+        if "tokens_per_second" in payload:
+            record.tokens_per_second = payload["tokens_per_second"]
+        if "validator_passed" in payload:
+            record.validator_passed = payload["validator_passed"]
+        if "handoff_reason" in payload:
+            record.handoff_reason = payload["handoff_reason"]
+            record.human_review_required = True
+
     def export_csv(self, export_path: str):
-        import csv
+        """Export all task records to a research-ready CSV."""
         tasks = self.get_all_tasks()
         if not tasks:
             return
-            
-        # Get fields dynamically from the dataclass
-        import dataclasses
+
         field_names = [f.name for f in dataclasses.fields(TaskRecord)]
-        
-        with open(export_path, 'w', newline='', encoding='utf-8') as csvfile:
+        with open(export_path, "w", newline="", encoding="utf-8") as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=field_names)
             writer.writeheader()
             for task in tasks:
-                # Convert target_files and artifact_paths to string for CSV
                 row = dataclasses.asdict(task)
-                row['target_files'] = ';'.join(row['target_files']) if row['target_files'] else ''
-                row['artifact_paths'] = ';'.join(row['artifact_paths']) if row['artifact_paths'] else ''
+                row["target_files"] = ";".join(row["target_files"]) if row["target_files"] else ""
+                row["artifact_paths"] = ";".join(row["artifact_paths"]) if row["artifact_paths"] else ""
                 writer.writerow(row)

@@ -1,6 +1,7 @@
 import argparse
 import os
 import uuid
+from typing import Optional
 from .handoff import HandoffPacket
 from .classifier import TaskClassifier, DangerDetector
 from .task_ledger import TaskLedger
@@ -31,6 +32,38 @@ def main():
     # init-agents
     subparsers.add_parser("init-agents", help="Generate a default AGENTS.md helper file.")
 
+    # install-desktop
+    subparsers.add_parser("install-desktop", help="Create a desktop shortcut for TriageDesk.")
+
+    # benchmark
+    benchmark_parser = subparsers.add_parser("benchmark", help="Run or list model evaluation benchmark tasks.")
+    benchmark_parser.add_argument("--tasks", type=str, default="benchmarks/tasks.jsonl", help="Path to benchmark JSONL tasks.")
+    benchmark_parser.add_argument("--backend-type", type=str, default=os.getenv("TRIAGE_BACKEND_TYPE", "ollama"), help="Backend preset to use.")
+    benchmark_parser.add_argument("--model", type=str, default=os.getenv("TRIAGE_MODEL", "qwen2.5-coder:7b"), help="Model name for the backend.")
+    benchmark_parser.add_argument("--base-url", type=str, default=os.getenv("TRIAGE_BASE_URL"), help="Optional custom OpenAI-compatible base URL.")
+    benchmark_parser.add_argument("--timeout", type=int, default=30, help="Local timeout budget in seconds.")
+    benchmark_parser.add_argument("--limit", type=int, default=None, help="Optional number of benchmark tasks to run.")
+    benchmark_parser.add_argument("--ledger-dir", type=str, default=".triagecore", help="Directory for the benchmark ledger.")
+    benchmark_parser.add_argument("--list-only", action="store_true", help="List benchmark tasks without running a backend.")
+
+    # benchmark-report
+    report_parser = subparsers.add_parser("benchmark-report", help="Summarize benchmark evidence from the ledger.")
+    report_parser.add_argument("--ledger-dir", type=str, default=".triagecore", help="Directory containing ledger.jsonl.")
+    report_parser.add_argument("--output", type=str, default=None, help="Optional markdown output path.")
+
+    # propose-lessons
+    lessons_parser = subparsers.add_parser("propose-lessons", help="Generate pending learning proposals from ledger evidence.")
+    lessons_parser.add_argument("--ledger-dir", type=str, default=".triagecore", help="Directory containing ledger.jsonl.")
+    lessons_parser.add_argument("--output", type=str, default=".triagecore/learning_proposals.jsonl", help="JSONL output path for pending proposals.")
+    lessons_parser.add_argument("--min-evidence", type=int, default=1, help="Minimum evidence records required for a proposal.")
+
+    # review-lesson
+    review_parser = subparsers.add_parser("review-lesson", help="Record a human review decision for a learning proposal.")
+    review_parser.add_argument("proposal_id", type=str, help="Learning proposal ID to review.")
+    review_parser.add_argument("--decision", type=str, choices=["accepted", "rejected"], required=True, help="Human review decision.")
+    review_parser.add_argument("--notes", type=str, default="", help="Optional reviewer notes.")
+    review_parser.add_argument("--output", type=str, default=".triagecore/learning_reviews.jsonl", help="JSONL output path for review records.")
+
     args = parser.parse_args()
 
     if args.command == "desk":
@@ -46,6 +79,35 @@ def main():
         _generate_antigravity_task(args.prompt, args.files, args.slug)
     elif args.command == "init-agents":
         _init_agents()
+    elif args.command == "benchmark":
+        _run_benchmarks(
+            tasks_path=args.tasks,
+            backend_type=args.backend_type,
+            model=args.model,
+            base_url=args.base_url,
+            timeout_seconds=args.timeout,
+            limit=args.limit,
+            ledger_dir=args.ledger_dir,
+            list_only=args.list_only,
+        )
+    elif args.command == "benchmark-report":
+        _benchmark_report(
+            ledger_dir=args.ledger_dir,
+            output_path=args.output,
+        )
+    elif args.command == "propose-lessons":
+        _propose_lessons(
+            ledger_dir=args.ledger_dir,
+            output_path=args.output,
+            min_evidence=args.min_evidence,
+        )
+    elif args.command == "review-lesson":
+        _review_lesson(
+            proposal_id=args.proposal_id,
+            decision=args.decision,
+            notes=args.notes,
+            output_path=args.output,
+        )
     else:
         parser.print_help()
 
@@ -185,6 +247,106 @@ All tasks are strictly bounded by safety profiles defined in TriageCore.
     with open("AGENTS.md", "w", encoding="utf-8") as f:
         f.write(content)
     print("Success: Initialized AGENTS.md")
+
+def _run_benchmarks(
+    tasks_path: str,
+    backend_type: str,
+    model: str,
+    base_url: Optional[str],
+    timeout_seconds: int,
+    limit: Optional[int],
+    ledger_dir: str,
+    list_only: bool,
+):
+    from .benchmarks import load_benchmark_tasks, resolve_validator, result_to_model_event
+    from .client import TriageClient
+
+    tasks = load_benchmark_tasks(tasks_path)
+    if limit is not None:
+        tasks = tasks[:limit]
+
+    if list_only:
+        for task in tasks:
+            print(f"{task.task_id} | {task.category} | expected={task.expected_status}")
+        return
+
+    client = TriageClient(
+        backend_type=backend_type,
+        model=model,
+        base_url=base_url,
+        timeout_seconds=timeout_seconds,
+    )
+    ledger = TaskLedger(ledger_dir=ledger_dir)
+
+    for task in tasks:
+        task_id = str(uuid.uuid4())
+        print(f"Running benchmark: {task.task_id}")
+
+        ledger.append_event(task_id, "task_created", {
+            "title": f"Benchmark: {task.task_id}",
+            "description": task.prompt,
+            "target_files": task.target_files,
+            "benchmark_task_id": task.task_id,
+        })
+        ledger.append_event(task_id, "runner_selected", {"runner": "local_benchmark"})
+
+        result = client.run_task(
+            prompt=task.prompt,
+            data=task.data,
+            validator=resolve_validator(task.validator),
+        )
+
+        ledger.append_event(task_id, "model_evaluated", result_to_model_event(task, result))
+        if result.get("status") == "handoff_required":
+            ledger.append_event(task_id, "handoff_generated", {
+                "reason": result.get("handoff_reason") or result.get("reason"),
+            })
+
+        print(f"  observed={result.get('status')} expected={task.expected_status}")
+
+def _benchmark_report(ledger_dir: str, output_path: Optional[str]):
+    from .reports import build_benchmark_report, render_benchmark_report_markdown
+
+    ledger = TaskLedger(ledger_dir=ledger_dir)
+    report = build_benchmark_report(ledger.get_all_tasks())
+    markdown = render_benchmark_report_markdown(report)
+
+    if output_path:
+        output_dir = os.path.dirname(output_path)
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(markdown + "\n")
+        print(f"Benchmark report written to {output_path}")
+    else:
+        print(markdown)
+
+def _propose_lessons(ledger_dir: str, output_path: str, min_evidence: int):
+    from .learning import append_learning_proposals, build_learning_proposals
+
+    ledger = TaskLedger(ledger_dir=ledger_dir)
+    records = ledger.get_all_tasks()
+    proposals = build_learning_proposals(records, min_evidence=min_evidence)
+    new_proposals = append_learning_proposals(output_path, proposals)
+
+    if not proposals:
+        print("No learning proposals found from current ledger evidence.")
+        return
+
+    print(f"Generated {len(new_proposals)} new proposal(s); {len(proposals)} total candidate(s).")
+    for proposal in new_proposals:
+        print(f"{proposal.proposal_id} | {proposal.trigger} | evidence={len(proposal.evidence_task_ids)}")
+
+def _review_lesson(proposal_id: str, decision: str, notes: str, output_path: str):
+    from .learning import append_learning_review
+
+    review = append_learning_review(
+        path=output_path,
+        proposal_id=proposal_id,
+        decision=decision,
+        notes=notes,
+    )
+    print(f"Recorded {review['decision']} review for proposal {review['proposal_id']}.")
 
 if __name__ == "__main__":
     main()

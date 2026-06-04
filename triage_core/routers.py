@@ -10,7 +10,7 @@ class TriageRouter:
         
         if danger_info.risk_level in ["medium", "high"]:
             return {
-                "bypass_local": True,
+                "offload_recommended": True,
                 "reason": f"Risk level {danger_info.risk_level} detected. {'; '.join(danger_info.reasons)}"
             }
             

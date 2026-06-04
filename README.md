@@ -85,6 +85,47 @@ triagecore audit <task_id> --files src/main.py
 - **Profile Adherence:** Blocks changes if the task was rated `read-only`.
 - **Escalation Detection:** Static analysis checks for `requests`, `socket`, `subprocess`, etc., if the task was classified as low-risk.
 
+## Scientific Methodology
+
+TriageCore is also being developed as a scientific model evaluation and token-balancing workbench. Each task attempt can be treated as an experimental observation that records routing decisions, backend behavior, token use, validation outcomes, energy estimates, and human review results.
+
+The project methodology is documented in [`docs/methodology.md`](docs/methodology.md). Supporting literature is collected in [`docs/references.md`](docs/references.md). Together, these describe the evidence loop for model evaluation, safety routing, mistake logging, and human-reviewed learning.
+
+## Benchmark Tasks
+
+TriageCore includes repeatable benchmark fixtures in [`benchmarks/tasks.jsonl`](benchmarks/tasks.jsonl). List them without contacting a backend:
+
+```bash
+triagecore benchmark --list-only
+```
+
+Run them against a local backend and append model-evaluation evidence to `.triagecore/ledger.jsonl`:
+
+```bash
+triagecore benchmark --backend-type ollama --model qwen2.5-coder:7b
+```
+
+Summarize benchmark evidence:
+
+```bash
+triagecore benchmark-report
+triagecore benchmark-report --output reports/benchmark-report.md
+```
+
+## Human-Reviewed Learning
+
+TriageCore can generate pending learning proposals from ledger evidence, but it does not automatically change routing behavior:
+
+```bash
+triagecore propose-lessons
+```
+
+Record an explicit human decision:
+
+```bash
+triagecore review-lesson <proposal_id> --decision accepted --notes "Evidence supports this routing change."
+```
+
 ## CLI Handoff Generation
 
 TriageCore provides a convenient CLI for generating agent task bundles offline:
