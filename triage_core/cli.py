@@ -4,6 +4,7 @@ import uuid
 from typing import Optional
 from .handoff import HandoffPacket
 from .classifier import TaskClassifier, DangerDetector
+from .config import default_config
 from .task_ledger import TaskLedger
 
 def main():
@@ -43,24 +44,24 @@ def main():
 
     # benchmark
     benchmark_parser = subparsers.add_parser("benchmark", help="Run or list model evaluation benchmark tasks.")
-    benchmark_parser.add_argument("--tasks", type=str, default="benchmarks/tasks.jsonl", help="Path to benchmark JSONL tasks.")
-    benchmark_parser.add_argument("--backend-type", type=str, default=os.getenv("TRIAGE_BACKEND_TYPE", "ollama"), help="Backend preset to use.")
-    benchmark_parser.add_argument("--model", type=str, default=os.getenv("TRIAGE_MODEL", "qwen2.5-coder:7b"), help="Model name for the backend.")
-    benchmark_parser.add_argument("--base-url", type=str, default=os.getenv("TRIAGE_BASE_URL"), help="Optional custom OpenAI-compatible base URL.")
-    benchmark_parser.add_argument("--timeout", type=int, default=30, help="Local timeout budget in seconds.")
+    benchmark_parser.add_argument("--tasks", type=str, default=default_config.get_benchmarks_path(), help="Path to benchmark JSONL tasks.")
+    benchmark_parser.add_argument("--backend-type", type=str, default=default_config.get_backend_type(), help="Backend preset to use.")
+    benchmark_parser.add_argument("--model", type=str, default=default_config.get_backend_model(), help="Model name for the backend.")
+    benchmark_parser.add_argument("--base-url", type=str, default=default_config.get_backend_base_url(), help="Optional custom OpenAI-compatible base URL.")
+    benchmark_parser.add_argument("--timeout", type=int, default=default_config.get_timeout_seconds(), help="Local timeout budget in seconds.")
     benchmark_parser.add_argument("--limit", type=int, default=None, help="Optional number of benchmark tasks to run.")
-    benchmark_parser.add_argument("--ledger-dir", type=str, default=".triagecore", help="Directory for the benchmark ledger.")
+    benchmark_parser.add_argument("--ledger-dir", type=str, default=default_config.get_ledger_dir(), help="Directory for the benchmark ledger.")
     benchmark_parser.add_argument("--list-only", action="store_true", help="List benchmark tasks without running a backend.")
 
     # benchmark-report
     report_parser = subparsers.add_parser("benchmark-report", help="Summarize benchmark evidence from the ledger.")
-    report_parser.add_argument("--ledger-dir", type=str, default=".triagecore", help="Directory containing ledger.jsonl.")
+    report_parser.add_argument("--ledger-dir", type=str, default=default_config.get_ledger_dir(), help="Directory containing ledger.jsonl.")
     report_parser.add_argument("--output", type=str, default=None, help="Optional markdown output path.")
 
     # propose-lessons
     lessons_parser = subparsers.add_parser("propose-lessons", help="Generate pending learning proposals from ledger evidence.")
-    lessons_parser.add_argument("--ledger-dir", type=str, default=".triagecore", help="Directory containing ledger.jsonl.")
-    lessons_parser.add_argument("--output", type=str, default=".triagecore/learning_proposals.jsonl", help="JSONL output path for pending proposals.")
+    lessons_parser.add_argument("--ledger-dir", type=str, default=default_config.get_ledger_dir(), help="Directory containing ledger.jsonl.")
+    lessons_parser.add_argument("--output", type=str, default=os.path.join(default_config.get_ledger_dir(), "learning_proposals.jsonl"), help="JSONL output path for pending proposals.")
     lessons_parser.add_argument("--min-evidence", type=int, default=1, help="Minimum evidence records required for a proposal.")
 
     # review-lesson
@@ -68,7 +69,7 @@ def main():
     review_parser.add_argument("proposal_id", type=str, help="Learning proposal ID to review.")
     review_parser.add_argument("--decision", type=str, choices=["accepted", "rejected"], required=True, help="Human review decision.")
     review_parser.add_argument("--notes", type=str, default="", help="Optional reviewer notes.")
-    review_parser.add_argument("--output", type=str, default=".triagecore/learning_reviews.jsonl", help="JSONL output path for review records.")
+    review_parser.add_argument("--output", type=str, default=os.path.join(default_config.get_ledger_dir(), "learning_reviews.jsonl"), help="JSONL output path for review records.")
 
     args = parser.parse_args()
 
@@ -121,7 +122,7 @@ def main():
 
 def _push_task_to_ui(prompt: str, files: list[str], auto_dispatch: Optional[str] = None):
     import json
-    ledger_dir = ".triagecore"
+    ledger_dir = default_config.get_ledger_dir()
     os.makedirs(ledger_dir, exist_ok=True)
     inbox_path = os.path.join(ledger_dir, "ipc_inbox.json")
     
@@ -242,7 +243,7 @@ def _generate_codex_task(prompt: str, files: list[str]):
 
 def _generate_antigravity_task(prompt: str, files: list[str], slug: str):
     packet = _create_packet(prompt, files)
-    task_dir = f".agent_tasks/{slug}"
+    task_dir = os.path.join(default_config.get_tasks_dir(), slug)
     os.makedirs(task_dir, exist_ok=True)
     
     task_id = str(uuid.uuid4())

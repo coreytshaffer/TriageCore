@@ -91,6 +91,8 @@ TriageCore is also being developed as a scientific model evaluation and token-ba
 
 The project methodology is documented in [`docs/methodology.md`](docs/methodology.md). Supporting literature is collected in [`docs/references.md`](docs/references.md). Together, these describe the evidence loop for model evaluation, safety routing, mistake logging, and human-reviewed learning.
 
+The shared evidence schema is documented in [`docs/evidence_schema.md`](docs/evidence_schema.md). The first repeatable study plan is [`docs/study_001_local_model_baseline.md`](docs/study_001_local_model_baseline.md).
+
 ## Benchmark Tasks
 
 TriageCore includes repeatable benchmark fixtures in [`benchmarks/tasks.jsonl`](benchmarks/tasks.jsonl). List them without contacting a backend:
