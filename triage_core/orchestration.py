@@ -371,8 +371,9 @@ class ProjectManager:
                 evaluation, prompt, target_files
             )
             try:
-                os.makedirs(".agent_tasks", exist_ok=True)
-                packet_path = f".agent_tasks/escalation_{task_id[:8]}.md"
+                tasks_dir = default_config.get_tasks_dir()
+                os.makedirs(tasks_dir, exist_ok=True)
+                packet_path = os.path.join(tasks_dir, f"escalation_{task_id[:8]}.md")
                 with open(packet_path, "w", encoding="utf-8") as f:
                     f.write(packet.to_markdown())
             except OSError as e:

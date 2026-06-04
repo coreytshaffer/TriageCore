@@ -122,3 +122,43 @@ def test_dispatch_task_next_worker():
     assert repo_mapper.call_count == 1
     assert test_stubber.call_count == 1
     assert len(result["work_orders"]) == 2
+
+def test_escalation_packet_uses_configured_tasks_dir(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "triagecore.toml").write_text(
+        "\n".join(
+            [
+                "[paths]",
+                'tasks_dir = "custom_tasks"',
+                "",
+                "[budgets]",
+                "max_energy_kwh_per_task = 0.001",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    from triage_core import config as config_module
+    from triage_core import orchestration as orchestration_module
+
+    fresh_config = config_module.Config(root_dir=str(tmp_path))
+    monkeypatch.setattr(orchestration_module, "default_config", fresh_config)
+
+    pm = ProjectManager()
+    repo_mapper = DummyWorker("repo_mapper", [
+        {
+            "summary": "Repo analyzed",
+            "resource_usage": {"energy_kwh_estimate": 0.01, "duration_seconds": 1},
+        }
+    ])
+    pm.registry.workers = {"repo_mapper": repo_mapper}
+
+    result = pm.dispatch_task(
+        prompt="Trigger energy escalation",
+        target_files=["file.py"],
+        required_roles=["repo_mapper"],
+    )
+
+    assert result["evaluation"]["local_result_status"] == "insufficient"
+    assert result["escalation_packet"].startswith("custom_tasks")
+    assert (tmp_path / result["escalation_packet"]).exists()
