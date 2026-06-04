@@ -1078,7 +1078,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         btn_row.grid_columnconfigure((0, 1, 2, 3), weight=1, uniform="dispatch")
 
         # Glow frames for workflow sequence
-        self.glow_local = ctk.CTkFrame(btn_row, corner_radius=8, border_width=0, border_color="transparent", fg_color="transparent")
+        self.glow_local = ctk.CTkFrame(btn_row, corner_radius=8, border_width=0, fg_color="transparent")
         self.glow_local.grid(row=0, column=0, padx=(0, 8), sticky="ew")
         self.btn_local = ctk.CTkButton(
             self.glow_local,
@@ -1090,7 +1090,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         )
         self.btn_local.pack(padx=3, pady=3, fill="both", expand=True)
 
-        self.glow_council = ctk.CTkFrame(btn_row, corner_radius=8, border_width=0, border_color="transparent", fg_color="transparent")
+        self.glow_council = ctk.CTkFrame(btn_row, corner_radius=8, border_width=0, fg_color="transparent")
         self.glow_council.grid(row=0, column=1, padx=(0, 8), sticky="ew")
         self.btn_council = ctk.CTkButton(
             self.glow_council,
@@ -1102,7 +1102,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         )
         self.btn_council.pack(padx=3, pady=3, fill="both", expand=True)
 
-        self.glow_codex = ctk.CTkFrame(btn_row, corner_radius=8, border_width=0, border_color="transparent", fg_color="transparent")
+        self.glow_codex = ctk.CTkFrame(btn_row, corner_radius=8, border_width=0, fg_color="transparent")
         self.glow_codex.grid(row=0, column=2, padx=(0, 8), sticky="ew")
         self.btn_codex = ctk.CTkButton(
             self.glow_codex,
@@ -1114,7 +1114,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         )
         self.btn_codex.pack(padx=3, pady=3, fill="both", expand=True)
 
-        self.glow_anti = ctk.CTkFrame(btn_row, corner_radius=8, border_width=0, border_color="transparent", fg_color="transparent")
+        self.glow_anti = ctk.CTkFrame(btn_row, corner_radius=8, border_width=0, fg_color="transparent")
         self.glow_anti.grid(row=0, column=3, sticky="ew")
         self.btn_anti = ctk.CTkButton(
             self.glow_anti,
@@ -2797,10 +2797,10 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         target = self._get_glow_target(task)
         
         # Reset all glows
-        self.glow_local.configure(border_width=0, border_color="transparent")
-        self.glow_council.configure(border_width=0, border_color="transparent")
-        self.glow_codex.configure(border_width=0, border_color="transparent")
-        self.glow_anti.configure(border_width=0, border_color="transparent")
+        self.glow_local.configure(border_width=0)
+        self.glow_council.configure(border_width=0)
+        self.glow_codex.configure(border_width=0)
+        self.glow_anti.configure(border_width=0)
         
         if target == "local":
             self.glow_local.configure(border_width=2, border_color="#22c55e")
