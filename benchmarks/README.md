@@ -12,7 +12,7 @@ Required fields:
 - `category`: Task family, such as `python_generation`, `log_summary`, or `safety_handoff`.
 - `prompt`: Instruction sent to the model.
 - `data`: Input context sent with the prompt.
-- `validator`: Optional validator name. Use `python_syntax` or `none`.
+- `validator`: Optional validator name. Current options are `python_syntax`, `monitoring_json`, `error_warning_markdown`, or `none`.
 - `expected_status`: Expected result class, usually `success` or `handoff_required`.
 
 Optional fields:

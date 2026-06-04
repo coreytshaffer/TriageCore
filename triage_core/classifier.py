@@ -10,7 +10,52 @@ class TaskClassifier:
     ]
 
     @classmethod
-    def classify(cls, prompt: str) -> str:
+    def classify(cls, prompt: str, backend=None) -> str:
+        # If backend is not provided, try to create default (Ollama)
+        if not backend:
+            try:
+                from .backends import create_backend
+                from .config import default_config
+                model = default_config.get_global("backend", "default_model", "qwen2.5-coder:7b-triagecore")
+                backend = create_backend("ollama", model=model)
+            except Exception:
+                backend = None
+
+        if backend:
+            try:
+                system_prompt = (
+                    "You are the TriageCore Router.\n"
+                    "Your ONLY job is to classify the user's task prompt into exactly one of the categories below.\n\n"
+                    "Categories:\n"
+                    "- docs_update: Update/add/fix docs, readmes, guides.\n"
+                    "- bugfix: Fix errors, crashes, exceptions, bugs.\n"
+                    "- test_addition: Add tests, fixtures, unit tests.\n"
+                    "- refactor: Restructure, rewrite, clean, format code.\n"
+                    "- packaging: setup.py, pyproject.toml, package requirements, build.\n"
+                    "- security_review: Vulnerabilities, secrets, secure code paths.\n"
+                    "- architecture_planning: Design systems, architecture docs, folder structures.\n"
+                    "- blocked_or_high_risk: Destructive operations (delete, wipe, format all).\n\n"
+                    "Rules:\n"
+                    "1. Do NOT solve the task.\n"
+                    "2. Do NOT explain your choice.\n"
+                    "3. Output ONLY the exact category string from the list above. No other words, no markdown, no punctuation."
+                )
+                response = backend.generate(
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.0,
+                    timeout=1.5  # short timeout to prevent UI freezes
+                )
+                if response and response.text:
+                    cleaned = response.text.strip().lower().replace('"', '').replace("'", "").replace(".", "")
+                    if cleaned in cls.CATEGORIES:
+                        return cleaned
+            except Exception:
+                pass # Fall back to regex classifier
+
+        # Fallback Heuristic Regex Classifier
         prompt_lower = prompt.lower()
         if any(word in prompt_lower for word in ["delete", "remove all", "wipe", "format"]):
             return "blocked_or_high_risk"

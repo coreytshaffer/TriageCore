@@ -17,12 +17,12 @@ derived data can assess the scope and assumptions of each figure.
 
 ## 1. Operational Energy
 
-**Formula**
+### Operational Energy Formula
 
 $$E = \frac{P \cdot t}{3{,}600{,}000}$$
 
 | Symbol | Quantity | Default |
-|--------|----------|---------|
+| :--- | :--- | :--- |
 | $E$ | Energy consumption (kWh) | — |
 | $P$ | Device power draw during inference (W) | **300 W** |
 | $t$ | Task wall-clock duration (s) | measured |
@@ -41,12 +41,12 @@ watt-seconds to kilowatt-hours (1 kWh = 3.6 × 10⁶ J).
 
 ## 2. Operational Carbon Emissions
 
-**Formula**
+### Operational Carbon Emissions Formula
 
 $$C_{\text{op}} = E \times I_{\text{grid}}$$
 
 | Symbol | Quantity | Default |
-|--------|----------|---------|
+| :--- | :--- | :--- |
 | $C_{\text{op}}$ | Operational carbon emissions (gCO₂e) | — |
 | $E$ | Energy (kWh), from §1 | — |
 | $I_{\text{grid}}$ | Grid carbon intensity (gCO₂e / kWh) | **400 gCO₂e / kWh** |
@@ -65,12 +65,12 @@ this is noted as a limitation.
 
 ## 3. Indirect Water Footprint
 
-**Formula**
+### Indirect Water Footprint Formula
 
 $$W = E \times f_{\text{water}}$$
 
 | Symbol | Quantity | Default |
-|--------|----------|---------|
+| :--- | :--- | :--- |
 | $W$ | Indirect water consumption (litres) | — |
 | $E$ | Energy (kWh), from §1 | — |
 | $f_{\text{water}}$ | Water intensity of electricity generation (L / kWh) | **1.5 L / kWh** |
@@ -93,12 +93,12 @@ boundary.
 
 ## 4. Embodied Carbon Allocation
 
-**Formula**
+### Embodied Carbon Allocation Formula
 
 $$C_{\text{emb}} = C_{\text{device}} \times \frac{t / 3600}{H_{\text{lifetime}}}$$
 
 | Symbol | Quantity | Default |
-|--------|----------|---------|
+| :--- | :--- | :--- |
 | $C_{\text{emb}}$ | Embodied carbon allocated to this task (gCO₂e) | — |
 | $C_{\text{device}}$ | Total embodied carbon of the host device (gCO₂e) | **300,000 gCO₂e** |
 | $t$ | Task duration (s) | measured |
@@ -127,12 +127,12 @@ included in this boundary.
 
 ## 5. Per-Accepted-Task Resource Intensity
 
-**Formula**
+### Per-Accepted-Task Resource Intensity Formula
 
 $$R_{\text{accepted}} = \frac{\sum R_i}{N_{\text{accepted}}}$$
 
 | Symbol | Quantity |
-|--------|----------|
+| :--- | :--- |
 | $R_{\text{accepted}}$ | Mean resource consumption per accepted task |
 | $\sum R_i$ | Total resource consumption across all tasks of type $R$ |
 | $N_{\text{accepted}}$ | Count of tasks whose outcome is `accepted = true` |
@@ -143,19 +143,49 @@ high rejection or retry rates, because rejected work still consumed real
 resources without producing accepted software artefacts.
 
 **Reported dimensions:**
+
 - kWh per accepted task
 - gCO₂e per accepted task
 - litres of water per accepted task
 - gCO₂e embodied carbon per accepted task
 - tokens (input + output) per accepted task
 - human review minutes per accepted task
+- optional subjective review workload (`not_recorded`, `low`, `medium`, or `high`)
+
+Human review minutes measure elapsed review time. The optional
+`review_workload` label records the reviewer's perceived assessment burden and
+should be analysed as a subjective ordinal indicator, not as an objective
+performance metric.
 
 ---
 
-## 6. Default Parameter Summary
+## 6. Model And Backend Comparison
+
+Model/backend comparison studies use the same benchmark fixture set across
+each candidate configuration and tag all evidence with a shared `study_id` plus
+a unique `run_id` for each backend/model pair. Reports group evidence by both
+backend and backend/model so that runtime-adapter differences are not confused
+with model differences.
+
+Comparison runs should use:
+
+- identical benchmark fixtures
+- identical timeout settings unless timeout is the experimental variable
+- explicit backend type, base URL when applicable, and model identifier
+- separate `run_id` values for every backend/model pair
+- the combined `benchmark-report --study-id <study>` output for interpretation
+
+Expected destructive-task handoff is treated as correct safety behavior. A
+configuration should only be preferred when it improves accepted outcomes
+without increasing unexpected handoffs, validator failures, or subjective review
+burden.
+
+---
+
+## 7. Default Parameter Summary
 
 | Parameter | Symbol | Default | Unit | Override key in `triagecore.toml` |
-|-----------|--------|---------|------|-----------------------------------|
+| :--- | :--- | :--- | :--- | :--- |
 | Device power draw | $P$ | 300 | W | `sustainability.default_watts` |
 | Grid carbon intensity | $I_{\text{grid}}$ | 400 | gCO₂e / kWh | `sustainability.grid_intensity_gco2e_per_kwh` |
 | Water intensity | $f_{\text{water}}$ | 1.5 | L / kWh | `sustainability.water_intensity_l_per_kwh` |
@@ -164,7 +194,7 @@ resources without producing accepted software artefacts.
 
 ---
 
-## 7. Estimation Caveats and Limitations
+## 8. Estimation Caveats and Limitations
 
 1. **Power draw is assumed, not measured.** Direct measurement via RAPL
    (Intel/AMD), NVML (NVIDIA), or a smart plug would substantially improve
@@ -197,30 +227,44 @@ resources without producing accepted software artefacts.
 
 ---
 
-## 8. References
+## 9. Execution Hardware Specification
+
+For the comparison study of local model execution and specialist councils (Study 002), the benchmarking environment was standardized on a host workstation with the following hardware specifications:
+
+- **Host System**: Alienware m18 R1 AMD Laptop
+- **Processor (CPU)**: AMD Ryzen 9 7845HX with Radeon Graphics (12 physical cores, 24 threads, AVX/AVX2 support)
+- **System Memory (RAM)**: 32 GB DDR5 RAM (33,487,876,096 bytes)
+- **Dedicated Graphics (GPU)**: NVIDIA GeForce RTX 4070 Laptop GPU (Discrete, Compute Capability 8.9, 8 GB VRAM / 8,585,216,000 bytes)
+- **Operating System**: Windows 11 Pro 64-bit (Build 26200)
+
+This system configuration is representative of developer-class workstations where local model offloading is actively deployed to protect the cloud compute budget.
+
+---
+
+## 10. References
 
 Grubert, E., & Sanders, K. T. (2018). Water use in the United States energy
 system: A national assessment and unit process inventory of water consumption
 and withdrawals. *Environmental Science & Technology, 52*(11), 6695–6703.
-https://doi.org/10.1021/acs.est.8b00139
+<https://doi.org/10.1021/acs.est.8b00139>
 
 Gupta, U., Kim, Y. G., Lee, S., Tse, J., Lee, H. H. S., Wei, G.-Y.,
 Brooks, D., & Wu, C.-J. (2022). Chasing carbon: The elusive environmental
 footprint of computing. *IEEE Micro, 42*(4), 37–47.
-https://doi.org/10.1109/MM.2022.3163226
+<https://doi.org/10.1109/MM.2022.3163226>
 
 International Energy Agency. (2023). *Electricity 2024: Analysis and forecast
-to 2026*. IEA. https://www.iea.org/reports/electricity-2024
+to 2026*. IEA. <https://www.iea.org/reports/electricity-2024>
 
 Lannelongue, L., Grealey, J., & Inouye, M. (2021). Green algorithms: Quantifying
 the carbon footprint of computation. *Advanced Science, 8*(12), 2100707.
-https://doi.org/10.1002/advs.202100707
+<https://doi.org/10.1002/advs.202100707>
 
 Malmodin, J., & Lundén, D. (2018). The energy and carbon footprint of the global
 ICT and E&M sectors 2010–2015. *Sustainability, 10*(9), 3027.
-https://doi.org/10.3390/su10093027
+<https://doi.org/10.3390/su10093027>
 
 Meldrum, J., Nettles-Anderson, S., Heath, G., & Macknick, J. (2013). Life cycle
 water use for electricity generation: A review and harmonization of literature
 estimates. *Environmental Research Letters, 8*(1), 015031.
-https://doi.org/10.1088/1748-9326/8/1/015031
+<https://doi.org/10.1088/1748-9326/8/1/015031>

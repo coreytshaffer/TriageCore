@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Protocol
+from typing import Any, Dict, List, Optional, Protocol, Callable
 import requests
 
 @dataclass
@@ -21,6 +21,7 @@ class LocalBackend(Protocol):
         messages: List[Dict[str, str]],
         temperature: float = 0.1,
         timeout: int = 45,
+        stream_callback: Optional[Callable[[str], None]] = None,
         **kwargs: Any,
     ) -> BackendResponse:
         ...
@@ -38,6 +39,7 @@ class OpenAICompatibleBackend:
         messages: List[Dict[str, str]],
         temperature: float = 0.1,
         timeout: int = 45,
+        stream_callback: Optional[Callable[[str], None]] = None,
         **kwargs: Any,
     ) -> BackendResponse:
         url = f"{self.base_url.rstrip('/')}/chat/completions"
@@ -48,6 +50,52 @@ class OpenAICompatibleBackend:
             **kwargs,
         }
 
+        if stream_callback:
+            payload["stream"] = True
+            if "stream_options" not in payload:
+                payload["stream_options"] = {"include_usage": True}
+
+            response = requests.post(url, json=payload, timeout=timeout, stream=True)
+            response.raise_for_status()
+            
+            text_parts = []
+            final_usage = {}
+            for line in response.iter_lines():
+                if line:
+                    decoded = line.decode('utf-8')
+                    if decoded.startswith('data: '):
+                        data_str = decoded[6:].strip()
+                        if data_str == '[DONE]':
+                            break
+                        if not data_str:
+                            continue
+                        try:
+                            import json
+                            chunk = json.loads(data_str)
+                            # Update usage if provided in chunk
+                            if "usage" in chunk and chunk["usage"]:
+                                final_usage = chunk["usage"]
+                            
+                            choices = chunk.get("choices", [])
+                            if choices:
+                                delta = choices[0].get("delta", {})
+                                content = delta.get("content", "")
+                                if content:
+                                    text_parts.append(content)
+                                    stream_callback(content)
+                        except Exception:
+                            pass
+            
+            text = "".join(text_parts)
+            data = {"usage": final_usage}
+            return BackendResponse(
+                text=text,
+                raw=data,
+                usage=final_usage,
+                backend_name=self.name,
+            )
+
+        # Synchronous path
         response = requests.post(url, json=payload, timeout=timeout)
         response.raise_for_status()
 

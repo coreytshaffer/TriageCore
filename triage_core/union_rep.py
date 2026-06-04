@@ -2,23 +2,42 @@ from typing import List, Dict, Any
 from .work_orders import WorkOrder
 from .handoff import HandoffPacket
 
+
 class UnionRep:
     """
     The steward agent that audits local worker results and decides if an escalation is required.
     """
+
     def __init__(self, budgets: Dict[str, Any] = None):
         self.budgets = budgets or {}
-    
-    def evaluate(self, task_prompt: str, target_files: List[str], completed_orders: List[WorkOrder]) -> Dict[str, Any]:
+
+    def evaluate(
+        self,
+        task_prompt: str,
+        target_files: List[str],
+        completed_orders: List[WorkOrder],
+    ) -> Dict[str, Any]:
         """
         Evaluate local outputs against budgets and acceptance criteria.
         """
-        total_energy = sum(o.result.get("resource_usage", {}).get("energy_kwh_estimate", 0) for o in completed_orders if o.result)
-        total_duration = sum(o.result.get("resource_usage", {}).get("duration_seconds", 0) for o in completed_orders if o.result)
-        
-        # Check validators if any
+        total_energy = sum(
+            o.result.get("resource_usage", {}).get("energy_kwh_estimate", 0)
+            for o in completed_orders
+            if o.result
+        )
+        total_duration = sum(
+            o.result.get("resource_usage", {}).get("duration_seconds", 0)
+            for o in completed_orders
+            if o.result
+        )
+
+        # Check validators if any (only the latest run determines final status)
         validators = [o for o in completed_orders if o.assigned_role == "validator"]
-        validation_passed = all(o.result.get("is_valid", False) for o in validators if o.result)
+        validation_passed = (
+            validators[-1].result.get("is_valid", False)
+            if (validators and validators[-1].result)
+            else True
+        )
 
         needs_escalation = False
         reasons = []
@@ -33,28 +52,38 @@ class UnionRep:
         max_energy = self.budgets.get("max_energy_kwh_per_task", 0.02)
         if total_energy > max_energy:
             needs_escalation = True
-            reasons.append(f"Exceeded energy budget ({total_energy:.4f} > {max_energy}).")
+            reasons.append(
+                f"Exceeded energy budget ({total_energy:.4f} > {max_energy})."
+            )
 
         # Compile summaries
         local_work_summary = []
         for o in completed_orders:
             if o.result:
-                local_work_summary.append(f"- {o.assigned_role}: completed with output keys: {list(o.result.keys())}")
+                local_work_summary.append(
+                    f"- {o.assigned_role}: completed with output keys: {list(o.result.keys())}"
+                )
 
         return {
             "local_result_status": "insufficient" if needs_escalation else "sufficient",
-            "reason": " ".join(reasons) if needs_escalation else "Local workers succeeded.",
+            "reason": (
+                " ".join(reasons) if needs_escalation else "Local workers succeeded."
+            ),
             "recommended_escalation": "codex" if needs_escalation else "none",
-            "recommended_permission_profile": "workspace" if needs_escalation else "read-only",
+            "recommended_permission_profile": (
+                "workspace" if needs_escalation else "read-only"
+            ),
             "resource_summary": {
                 "local_attempts": len(completed_orders),
                 "estimated_energy_kwh": total_energy,
-                "duration_seconds": total_duration
+                "duration_seconds": total_duration,
             },
-            "handoff_summary": "\n".join(local_work_summary)
+            "handoff_summary": "\n".join(local_work_summary),
         }
-        
-    def generate_escalation_packet(self, evaluation: Dict[str, Any], task_prompt: str, target_files: List[str]) -> HandoffPacket:
+
+    def generate_escalation_packet(
+        self, evaluation: Dict[str, Any], task_prompt: str, target_files: List[str]
+    ) -> HandoffPacket:
         return HandoffPacket(
             title=f"Escalation: {task_prompt[:30]}",
             summary=task_prompt,
@@ -65,6 +94,8 @@ class UnionRep:
             test_commands=["pytest tests/"],
             safety_notes=[],
             recommended_backend=evaluation.get("recommended_escalation", "codex"),
-            recommended_permission_profile=evaluation.get("recommended_permission_profile", "workspace"),
-            risk_level="medium"
+            recommended_permission_profile=evaluation.get(
+                "recommended_permission_profile", "workspace"
+            ),
+            risk_level="medium",
         )

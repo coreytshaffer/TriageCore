@@ -91,6 +91,10 @@ TriageCore is also being developed as a scientific model evaluation and token-ba
 
 The project methodology is documented in [`docs/methodology.md`](docs/methodology.md). Supporting literature is collected in [`docs/references.md`](docs/references.md). Together, these describe the evidence loop for model evaluation, safety routing, mistake logging, and human-reviewed learning.
 
+The shared evidence schema is documented in [`docs/evidence_schema.md`](docs/evidence_schema.md). The first repeatable study plan is [`docs/study_001_local_model_baseline.md`](docs/study_001_local_model_baseline.md), and model/backend comparison is planned in [`docs/study_002_model_backend_comparison.md`](docs/study_002_model_backend_comparison.md).
+
+Use [`docs/verification_guide.md`](docs/verification_guide.md) for practical code, UI, study-evidence, and human-review verification checks.
+
 ## Benchmark Tasks
 
 TriageCore includes repeatable benchmark fixtures in [`benchmarks/tasks.jsonl`](benchmarks/tasks.jsonl). List them without contacting a backend:
@@ -105,12 +109,29 @@ Run them against a local backend and append model-evaluation evidence to `.triag
 triagecore benchmark --backend-type ollama --model qwen2.5-coder:7b
 ```
 
+Tag formal study runs so reports can exclude exploratory ledger history:
+
+```bash
+triagecore benchmark --study-id study_001 --run-id trial_001
+```
+
 Summarize benchmark evidence:
 
 ```bash
 triagecore benchmark-report
 triagecore benchmark-report --output reports/benchmark-report.md
+triagecore benchmark-report --study-id study_001 --run-id trial_001 --output reports/study_001_benchmark_report.md
 ```
+
+Compare backend/model pairs by giving each run a unique `run_id` under one study:
+
+```bash
+triagecore benchmark --study-id study_002 --run-id ollama_qwen25_coder_7b_trial_001 --backend-type ollama --model qwen2.5-coder:7b-triagecore
+triagecore benchmark --study-id study_002 --run-id lmstudio_loaded_model_trial_001 --backend-type custom --base-url http://localhost:1234/v1 --model <loaded-model-name>
+triagecore benchmark-report --study-id study_002 --output reports/study_002_model_backend_comparison.md
+```
+
+Comparison reports include `By Backend`, `By Model`, and `By Category` sections.
 
 ## Human-Reviewed Learning
 

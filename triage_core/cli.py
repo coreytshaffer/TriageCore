@@ -4,6 +4,7 @@ import uuid
 from typing import Optional
 from .handoff import HandoffPacket
 from .classifier import TaskClassifier, DangerDetector
+from .config import default_config
 from .task_ledger import TaskLedger
 
 def main():
@@ -35,34 +36,46 @@ def main():
     # install-desktop
     subparsers.add_parser("install-desktop", help="Create a desktop shortcut for TriageDesk.")
 
+    # push-task
+    push_parser = subparsers.add_parser("push-task", help="Push a task to an open TriageDesk instance via IPC.")
+    push_parser.add_argument("--prompt", type=str, required=True, help="The instruction to inject into the UI.")
+    push_parser.add_argument("--files", type=str, nargs="*", default=[], help="Target files to populate.")
+    push_parser.add_argument("--auto-dispatch", type=str, choices=["local", "council", "codex", "antigravity"], help="Optional runner to auto-trigger.")
+
     # benchmark
     benchmark_parser = subparsers.add_parser("benchmark", help="Run or list model evaluation benchmark tasks.")
-    benchmark_parser.add_argument("--tasks", type=str, default="benchmarks/tasks.jsonl", help="Path to benchmark JSONL tasks.")
-    benchmark_parser.add_argument("--backend-type", type=str, default=os.getenv("TRIAGE_BACKEND_TYPE", "ollama"), help="Backend preset to use.")
-    benchmark_parser.add_argument("--model", type=str, default=os.getenv("TRIAGE_MODEL", "qwen2.5-coder:7b"), help="Model name for the backend.")
-    benchmark_parser.add_argument("--base-url", type=str, default=os.getenv("TRIAGE_BASE_URL"), help="Optional custom OpenAI-compatible base URL.")
-    benchmark_parser.add_argument("--timeout", type=int, default=30, help="Local timeout budget in seconds.")
+    benchmark_parser.add_argument("--tasks", type=str, default=default_config.get_benchmarks_path(), help="Path to benchmark JSONL tasks.")
+    benchmark_parser.add_argument("--backend-type", type=str, default=default_config.get_backend_type(), help="Backend preset to use.")
+    benchmark_parser.add_argument("--model", type=str, default=default_config.get_backend_model(), help="Model name for the backend.")
+    benchmark_parser.add_argument("--base-url", type=str, default=default_config.get_backend_base_url(), help="Optional custom OpenAI-compatible base URL.")
+    benchmark_parser.add_argument("--timeout", type=int, default=default_config.get_timeout_seconds(), help="Local timeout budget in seconds.")
     benchmark_parser.add_argument("--limit", type=int, default=None, help="Optional number of benchmark tasks to run.")
-    benchmark_parser.add_argument("--ledger-dir", type=str, default=".triagecore", help="Directory for the benchmark ledger.")
+    benchmark_parser.add_argument("--ledger-dir", type=str, default=default_config.get_ledger_dir(), help="Directory for the benchmark ledger.")
+    benchmark_parser.add_argument("--study-id", type=str, default=None, help="Optional study identifier to tag benchmark evidence.")
+    benchmark_parser.add_argument("--run-id", type=str, default=None, help="Optional run identifier to tag a specific benchmark trial.")
     benchmark_parser.add_argument("--list-only", action="store_true", help="List benchmark tasks without running a backend.")
 
     # benchmark-report
     report_parser = subparsers.add_parser("benchmark-report", help="Summarize benchmark evidence from the ledger.")
-    report_parser.add_argument("--ledger-dir", type=str, default=".triagecore", help="Directory containing ledger.jsonl.")
+    report_parser.add_argument("--ledger-dir", type=str, default=default_config.get_ledger_dir(), help="Directory containing ledger.jsonl.")
     report_parser.add_argument("--output", type=str, default=None, help="Optional markdown output path.")
+    report_parser.add_argument("--study-id", type=str, default=None, help="Optional study identifier used to filter benchmark evidence.")
+    report_parser.add_argument("--run-id", type=str, default=None, help="Optional run identifier used to filter benchmark evidence.")
 
     # propose-lessons
     lessons_parser = subparsers.add_parser("propose-lessons", help="Generate pending learning proposals from ledger evidence.")
-    lessons_parser.add_argument("--ledger-dir", type=str, default=".triagecore", help="Directory containing ledger.jsonl.")
-    lessons_parser.add_argument("--output", type=str, default=".triagecore/learning_proposals.jsonl", help="JSONL output path for pending proposals.")
+    lessons_parser.add_argument("--ledger-dir", type=str, default=default_config.get_ledger_dir(), help="Directory containing ledger.jsonl.")
+    lessons_parser.add_argument("--output", type=str, default=os.path.join(default_config.get_ledger_dir(), "learning_proposals.jsonl"), help="JSONL output path for pending proposals.")
     lessons_parser.add_argument("--min-evidence", type=int, default=1, help="Minimum evidence records required for a proposal.")
+    lessons_parser.add_argument("--study-id", type=str, default=None, help="Optional study identifier used to filter learning proposal evidence.")
+    lessons_parser.add_argument("--run-id", type=str, default=None, help="Optional run identifier used to filter learning proposal evidence.")
 
     # review-lesson
     review_parser = subparsers.add_parser("review-lesson", help="Record a human review decision for a learning proposal.")
     review_parser.add_argument("proposal_id", type=str, help="Learning proposal ID to review.")
     review_parser.add_argument("--decision", type=str, choices=["accepted", "rejected"], required=True, help="Human review decision.")
     review_parser.add_argument("--notes", type=str, default="", help="Optional reviewer notes.")
-    review_parser.add_argument("--output", type=str, default=".triagecore/learning_reviews.jsonl", help="JSONL output path for review records.")
+    review_parser.add_argument("--output", type=str, default=os.path.join(default_config.get_ledger_dir(), "learning_reviews.jsonl"), help="JSONL output path for review records.")
 
     args = parser.parse_args()
 
@@ -71,6 +84,8 @@ def main():
         run_app()
     elif args.command == "install-desktop":
         _install_desktop_shortcut()
+    elif args.command == "push-task":
+        _push_task_to_ui(args.prompt, args.files, args.auto_dispatch)
     elif args.command == "audit":
         _audit_task(args.task_id, args.files)
     elif args.command == "codex-task":
@@ -88,18 +103,24 @@ def main():
             timeout_seconds=args.timeout,
             limit=args.limit,
             ledger_dir=args.ledger_dir,
+            study_id=args.study_id,
+            run_id=args.run_id,
             list_only=args.list_only,
         )
     elif args.command == "benchmark-report":
         _benchmark_report(
             ledger_dir=args.ledger_dir,
             output_path=args.output,
+            study_id=args.study_id,
+            run_id=args.run_id,
         )
     elif args.command == "propose-lessons":
         _propose_lessons(
             ledger_dir=args.ledger_dir,
             output_path=args.output,
             min_evidence=args.min_evidence,
+            study_id=args.study_id,
+            run_id=args.run_id,
         )
     elif args.command == "review-lesson":
         _review_lesson(
@@ -110,6 +131,22 @@ def main():
         )
     else:
         parser.print_help()
+
+def _push_task_to_ui(prompt: str, files: list[str], auto_dispatch: Optional[str] = None):
+    import json
+    ledger_dir = default_config.get_ledger_dir()
+    os.makedirs(ledger_dir, exist_ok=True)
+    inbox_path = os.path.join(ledger_dir, "ipc_inbox.json")
+    
+    payload = {
+        "prompt": prompt,
+        "files": files,
+        "auto_dispatch": auto_dispatch
+    }
+    with open(inbox_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f)
+    print(f"Success: Task pushed to {inbox_path}.")
+    print("If TriageDesk is running, it will automatically import it within 1 second.")
 
 def _audit_task(task_id: str, files: list[str]):
     from .task_ledger import TaskLedger
@@ -205,10 +242,11 @@ def _create_packet(prompt: str, files: list[str]) -> HandoffPacket:
 
 def _generate_codex_task(prompt: str, files: list[str]):
     packet = _create_packet(prompt, files)
-    os.makedirs("triage_tasks", exist_ok=True)
+    codex_tasks_dir = default_config.get_codex_tasks_dir()
+    os.makedirs(codex_tasks_dir, exist_ok=True)
     
     task_id = str(uuid.uuid4())
-    filename = f"triage_tasks/codex_task_{task_id[:8]}.md"
+    filename = os.path.join(codex_tasks_dir, f"codex_task_{task_id[:8]}.md")
     
     with open(filename, "w", encoding="utf-8") as f:
         f.write(packet.to_markdown())
@@ -218,7 +256,7 @@ def _generate_codex_task(prompt: str, files: list[str]):
 
 def _generate_antigravity_task(prompt: str, files: list[str], slug: str):
     packet = _create_packet(prompt, files)
-    task_dir = f".agent_tasks/{slug}"
+    task_dir = os.path.join(default_config.get_tasks_dir(), slug)
     os.makedirs(task_dir, exist_ok=True)
     
     task_id = str(uuid.uuid4())
@@ -256,6 +294,8 @@ def _run_benchmarks(
     timeout_seconds: int,
     limit: Optional[int],
     ledger_dir: str,
+    study_id: Optional[str],
+    run_id: Optional[str],
     list_only: bool,
 ):
     from .benchmarks import load_benchmark_tasks, resolve_validator, result_to_model_event
@@ -287,6 +327,8 @@ def _run_benchmarks(
             "description": task.prompt,
             "target_files": task.target_files,
             "benchmark_task_id": task.task_id,
+            "study_id": study_id,
+            "run_id": run_id,
         })
         ledger.append_event(task_id, "runner_selected", {"runner": "local_benchmark"})
 
@@ -304,11 +346,16 @@ def _run_benchmarks(
 
         print(f"  observed={result.get('status')} expected={task.expected_status}")
 
-def _benchmark_report(ledger_dir: str, output_path: Optional[str]):
+def _benchmark_report(
+    ledger_dir: str,
+    output_path: Optional[str],
+    study_id: Optional[str],
+    run_id: Optional[str],
+):
     from .reports import build_benchmark_report, render_benchmark_report_markdown
 
     ledger = TaskLedger(ledger_dir=ledger_dir)
-    report = build_benchmark_report(ledger.get_all_tasks())
+    report = build_benchmark_report(ledger.get_all_tasks(), study_id=study_id, run_id=run_id)
     markdown = render_benchmark_report_markdown(report)
 
     if output_path:
@@ -321,11 +368,21 @@ def _benchmark_report(ledger_dir: str, output_path: Optional[str]):
     else:
         print(markdown)
 
-def _propose_lessons(ledger_dir: str, output_path: str, min_evidence: int):
+def _propose_lessons(
+    ledger_dir: str,
+    output_path: str,
+    min_evidence: int,
+    study_id: Optional[str],
+    run_id: Optional[str],
+):
     from .learning import append_learning_proposals, build_learning_proposals
 
     ledger = TaskLedger(ledger_dir=ledger_dir)
     records = ledger.get_all_tasks()
+    if study_id:
+        records = [record for record in records if record.study_id == study_id]
+    if run_id:
+        records = [record for record in records if record.run_id == run_id]
     proposals = build_learning_proposals(records, min_evidence=min_evidence)
     new_proposals = append_learning_proposals(output_path, proposals)
 

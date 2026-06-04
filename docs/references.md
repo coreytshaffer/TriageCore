@@ -32,6 +32,18 @@ Yao, S., Zhao, J., Yu, D., Du, N., Shafran, I., Narasimhan, K., & Cao, Y. (2022)
 
 ## Project Notes
 
+### Adjacent Tooling
+
+CodeCarbon is a mature reference for Python-side energy and emissions tracking. TriageCore should not try to replace it; future work can either integrate it or use it as a validation reference for local estimates. <https://docs.codecarbon.io/>
+
+Green Algorithms is a useful reference for transparent computational footprint estimation and calculator-style public communication. TriageCore can borrow the clarity of its assumptions and boundary reporting. <https://www.green-algorithms.org/>
+
+EcoLogits is directly relevant for generative-AI impact estimation, especially API-based LLM use. TriageCore's local-backend ledger can complement this by focusing on local model and workbench-level decisions. <https://ecologits.ai/>
+
+OpenTelemetry is the stronger general-purpose standard for traces, metrics, and logs across distributed software. TriageCore should learn from its trace/log vocabulary when coordinating disparate tools, while staying smaller and local-first. <https://opentelemetry.io/docs/>
+
+LangGraph and AutoGen are stronger full agent-orchestration frameworks. TriageCore can remain useful by focusing on human-readable task ledgers, bounded handoffs, review decisions, local backend comparison, and environmental evidence rather than competing as a general-purpose agent framework. <https://docs.langchain.com/oss/python/langgraph> <https://microsoft.github.io/autogen/>
+
 ### Model Evaluation
 
 HELM supports the evaluation design because it argues for broad, transparent, reproducible model evaluation instead of relying on one benchmark or one aggregate score.

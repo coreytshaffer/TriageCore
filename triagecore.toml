@@ -4,11 +4,14 @@
 default_type = "ollama"
 default_model = "qwen2.5-coder:7b-triagecore"
 base_url = "http://localhost:11434/v1"
+timeout_seconds = 30
 
 [paths]
 ledger_dir = ".triagecore"
 tasks_dir = ".agent_tasks"
+codex_tasks_dir = "triage_tasks"
 benchmarks_path = "benchmarks/tasks.jsonl"
+benchmark_report_path = "reports/benchmark-report.md"
 
 [sustainability]
 default_watts = 300.0
@@ -16,3 +19,6 @@ grid_intensity_gco2e_per_kwh = 400.0
 water_intensity_l_per_kwh = 1.5
 device_embodied_gco2e = 300000.0
 device_lifetime_hours = 20000.0
+grid_intensity_api = "co2signal"
+grid_intensity_lat = ""
+grid_intensity_lon = ""

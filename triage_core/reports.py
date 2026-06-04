@@ -40,18 +40,33 @@ class BenchmarkSummary:
 class BenchmarkReport:
     total_runs: int
     overall: BenchmarkSummary
+    by_backend: List[BenchmarkSummary]
     by_model: List[BenchmarkSummary]
     by_category: List[BenchmarkSummary]
+    study_id: str | None = None
+    run_id: str | None = None
 
 
-def build_benchmark_report(records: Iterable[TaskRecord]) -> BenchmarkReport:
+def build_benchmark_report(
+    records: Iterable[TaskRecord],
+    study_id: str | None = None,
+    run_id: str | None = None,
+) -> BenchmarkReport:
     benchmark_records = [record for record in records if record.benchmark_task_id]
+    if study_id:
+        benchmark_records = [record for record in benchmark_records if record.study_id == study_id]
+    if run_id:
+        benchmark_records = [record for record in benchmark_records if record.run_id == run_id]
+
     overall = BenchmarkSummary(label="overall")
+    by_backend: Dict[str, BenchmarkSummary] = {}
     by_model: Dict[str, BenchmarkSummary] = {}
     by_category: Dict[str, BenchmarkSummary] = {}
 
     for record in benchmark_records:
         _apply_record(overall, record)
+        backend = record.backend_name or "unknown-backend"
+        _apply_record(by_backend.setdefault(backend, BenchmarkSummary(label=backend)), record)
         _apply_record(by_model.setdefault(_model_label(record), BenchmarkSummary(label=_model_label(record))), record)
         category = record.benchmark_category or "uncategorized"
         _apply_record(by_category.setdefault(category, BenchmarkSummary(label=category)), record)
@@ -59,8 +74,11 @@ def build_benchmark_report(records: Iterable[TaskRecord]) -> BenchmarkReport:
     return BenchmarkReport(
         total_runs=len(benchmark_records),
         overall=overall,
+        by_backend=_sorted_summaries(by_backend),
         by_model=_sorted_summaries(by_model),
         by_category=_sorted_summaries(by_category),
+        study_id=study_id,
+        run_id=run_id,
     )
 
 
@@ -68,9 +86,25 @@ def render_benchmark_report_markdown(report: BenchmarkReport) -> str:
     lines = [
         "# Benchmark Report",
         "",
+    ]
+    if report.study_id:
+        lines.extend([
+            f"Study ID: `{report.study_id}`",
+            "",
+        ])
+    if report.run_id:
+        lines.extend([
+            f"Run ID: `{report.run_id}`",
+            "",
+        ])
+    lines.extend([
         "## Overall",
         "",
         _summary_table([report.overall]),
+        "",
+        "## By Backend",
+        "",
+        _summary_table(report.by_backend),
         "",
         "## By Model",
         "",
@@ -79,7 +113,7 @@ def render_benchmark_report_markdown(report: BenchmarkReport) -> str:
         "## By Category",
         "",
         _summary_table(report.by_category),
-    ]
+    ])
     return "\n".join(lines)
 
 
