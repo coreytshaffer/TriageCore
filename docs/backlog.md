@@ -96,7 +96,7 @@ Resolution: proposal IDs `961b769f4d1c`, `2cc74fd2cabf`, and `6b2e9cdfdd20` were
   * Rename review actions to `Approve & Load` and `Deny`.
 * [x] **Story 6.8: Verification Guidance**
   * Add a practical verification guide for code checks, UI review checks, study evidence checks, and human learning reviews.
-* [ ] **Story 6.9: Visual Accessibility QA**
+* [x] **Story 6.9: Visual Accessibility QA**
   * Launch TriageDesk and manually verify keyboard focus order, visible focus states, text fit, and minimum click/tap target size.
   * Confirm the review workload selector does not make cards visually noisy or harder to assess.
   * Record any UI fixes from the manual pass as a separate focused change.
@@ -107,7 +107,7 @@ Resolution: proposal IDs `961b769f4d1c`, `2cc74fd2cabf`, and `6b2e9cdfdd20` were
   * Add a model/backend comparison study plan.
   * Extend benchmark reports with a backend-level grouping separate from backend/model grouping.
   * Document command patterns for unique run IDs per backend/model pair.
-* [ ] **Story 7.2: Run Study 002 First Comparison Pair**
+* [x] **Story 7.2: Run Study 002 First Comparison Pair**
   * Run the existing benchmark fixture set for at least two backend/model pairs under `study_002`.
   * Generate `reports/study_002_model_backend_comparison.md`.
   * Review mismatches, unexpected handoffs, validator failures, and learning proposals.

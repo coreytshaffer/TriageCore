@@ -758,6 +758,26 @@ class CTkDispatchShare(ctk.CTkFrame):
 
 # ─── Main App ────────────────────────────────────────────────────────────────
 class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
+    def _add_focus_ring(self, widget, active_border_color="#2563eb"):
+        if not hasattr(widget, "cget"):
+            return
+        orig_width = widget.cget("border_width")
+
+        def on_focus_in(event):
+            try:
+                widget.configure(border_width=2, border_color=active_border_color)
+            except Exception:
+                pass
+
+        def on_focus_out(event):
+            try:
+                widget.configure(border_width=orig_width)
+            except Exception:
+                pass
+
+        widget.bind("<FocusIn>", on_focus_in, add="+")
+        widget.bind("<FocusOut>", on_focus_out, add="+")
+
     def __init__(self):
         if not UI_AVAILABLE:
             print(
@@ -917,6 +937,9 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         btn_rules.grid(row=6, column=0, padx=12, pady=4, sticky="ew")
         self._nav_btns["rules"] = btn_rules
 
+        for btn in [btn_dash, btn_ledger, self.link_log, btn_logs, btn_rules]:
+            self._add_focus_ring(btn)
+
         # ── Agent Status Panel ─────────────────────────
         self.agent_panel = ctk.CTkFrame(sb, corner_radius=10, fg_color="transparent")
         self.agent_panel.grid(row=7, column=0, padx=12, pady=(10, 0), sticky="sew")
@@ -1072,6 +1095,9 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         )
         self.files_entry.grid(row=3, column=0, padx=24, pady=(0, 10), sticky="ew")
 
+        self._add_focus_ring(self.prompt_box)
+        self._add_focus_ring(self.files_entry)
+
         # ── 4 Dispatch Buttons ───────────────────────────────────────────────
         btn_row = ctk.CTkFrame(f, fg_color="transparent")
         btn_row.grid(row=4, column=0, padx=24, pady=(0, 8), sticky="ew")
@@ -1125,6 +1151,9 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             font=ctk.CTkFont(size=13, weight="bold"),
         )
         self.btn_anti.pack(padx=3, pady=3, fill="both", expand=True)
+
+        for btn in [self.btn_local, self.btn_council, self.btn_codex, self.btn_anti]:
+            self._add_focus_ring(btn)
 
         self.status_label = ctk.CTkLabel(
             f, text="", text_color="gray", font=ctk.CTkFont(size=12)
@@ -1331,6 +1360,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
                 command=lambda t_id=t.task_id: self._toggle_ledger_details(t_id),
             )
             detail_btn.grid(row=0, column=3, padx=(0, 10), pady=(8, 2), sticky="e")
+            self._add_focus_ring(detail_btn)
 
             # Meta row
             meta_parts = []
@@ -1436,6 +1466,9 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
                     variable=workload_var,
                     height=28,
                     font=ctk.CTkFont(size=11),
+                    selected_color="#4f46e5",
+                    selected_hover_color="#6366f1",
+                    fg_color="#1f2937",
                 )
                 workload_picker.pack(side="left")
                 self.review_workload_vars[t.task_id] = workload_var
@@ -1456,6 +1489,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
                     command=lambda t_id=t.task_id: self._review_task(t_id, True),
                 )
                 accept_btn.pack(side="left", padx=(0, 8))
+                self._add_focus_ring(accept_btn)
 
                 reject_btn = ctk.CTkButton(
                     btn_frame,
@@ -1467,6 +1501,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
                     command=lambda t_id=t.task_id: self._review_task(t_id, False),
                 )
                 reject_btn.pack(side="left", padx=(0, 8))
+                self._add_focus_ring(reject_btn)
 
                 timer_lbl = ctk.CTkLabel(
                     btn_frame,
@@ -1855,6 +1890,9 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             tokens_var = ctk.StringVar(value="800")
             tokens_entry = ctk.CTkEntry(card, textvariable=tokens_var, width=100)
             tokens_entry.grid(row=2, column=2, padx=16, pady=(0, 12), sticky="w")
+
+            for entry in [backend_entry, model_entry, tokens_entry]:
+                self._add_focus_ring(entry)
 
             self.rules_inputs[role] = {
                 "backend": backend_var,
