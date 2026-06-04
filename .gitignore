@@ -40,3 +40,20 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
+
+# TriageCore runtime data (do not commit)
+.triagecore/ledger.jsonl
+.triagecore/learning_proposals.jsonl
+.triagecore/learning_reviews.jsonl
+
+# TriageCore generated task output
+.agent_tasks/
+triage_tasks/
+reports/
+
+# Ollama Modelfile (local path reference — not portable)
+**/**/Modelfile
+
+# Credentials / secrets
+*.key
+secrets.*

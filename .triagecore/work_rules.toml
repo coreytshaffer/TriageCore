@@ -1,0 +1,38 @@
+# .triagecore/work_rules.toml — Project-Scoped Worker & Budget Rules
+
+[budgets]
+max_local_attempts = 2
+max_total_local_seconds = 180
+max_energy_kwh_per_task = 0.02
+max_review_minutes_expected = 10
+max_tokens = 800
+
+[permissions]
+default_codex_profile = "read-only"
+allow_workspace_write_after_review = true
+deny_files = [".env", "*.key", "secrets.*"]
+
+[escalation]
+escalate_if_tests_fail_twice = true
+escalate_if_risk_level = "high"
+escalate_if_context_files_over = 8
+
+[workers.repo_mapper]
+backend = "ollama"
+model = "qwen2.5-coder:7b-triagecore"
+max_tokens = 500
+
+[workers.test_stubber]
+backend = "ollama"
+model = "qwen2.5-coder:7b-triagecore"
+max_tokens = 1000
+
+[workers.validator]
+backend = "ollama"
+model = "qwen2.5-coder:7b-triagecore"
+max_tokens = 400
+
+[workers.union_rep]
+backend = "ollama"
+model = "qwen2.5-coder:7b-triagecore"
+max_tokens = 700

@@ -1,0 +1,352 @@
+---
+\documentclass[12pt]{article}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{geometry}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{setspace}
+\usepackage{parskip}
+\usepackage{xcolor}
+\usepackage{listings}
+
+\geometry{margin=1in}
+\setstretch{1.15}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!60!black,
+  urlcolor=blue!60!black,
+  citecolor=blue!60!black
+}
+
+\title{TriageCore Resource Estimation Methodology}
+\author{Corey}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Overview}
+% ─────────────────────────────────────────────────────────────────────────────
+
+TriageCore records the estimated resource consumption of every agentic coding
+task it orchestrates. Because direct hardware measurement (e.g., RAPL, NVML,
+smart-plug readings) is not universally available across desktop environments,
+TriageCore uses a \textbf{heuristic estimation model} grounded in the
+literature on computational energy accounting. All parameters are configurable
+in \texttt{triagecore.toml}; defaults are documented below alongside the
+formulae.
+
+Every estimate is stored in the append-only task ledger together with
+\texttt{estimation\_method} and \texttt{measurement\_boundary} fields, so that
+readers of any derived data can assess the scope and assumptions of each figure.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Operational Energy}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection*{Formula}
+
+\begin{equation}
+  E = \frac{P \cdot t}{3{,}600{,}000}
+  \label{eq:energy}
+\end{equation}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{@{}lll@{}}
+\toprule
+Symbol & Quantity & Default \\
+\midrule
+$E$   & Energy consumption (kWh)                    & --- \\
+$P$   & Device power draw during inference (W)      & \textbf{300\,W} \\
+$t$   & Task wall-clock duration (s)                & measured \\
+\bottomrule
+\end{tabular}
+\caption{Parameters for Equation~\ref{eq:energy}.}
+\end{table}
+
+\subsection*{Rationale}
+
+A value of 300\,W is a conservative mid-range estimate for a consumer desktop
+GPU (e.g., NVIDIA RTX 3070--4090 class) running local inference at moderate
+load. Users with known hardware specifications should override this value in
+\texttt{triagecore.toml}. The divisor $3{,}600{,}000$ converts watt-seconds to
+kilowatt-hours ($1\,\text{kWh} = 3.6 \times 10^{6}\,\text{J}$).
+
+\textit{Implementation:} \texttt{SustainabilityEstimator.estimate()},
+\texttt{triage\_core/sustainability.py}, line~25.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Operational Carbon Emissions}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection*{Formula}
+
+\begin{equation}
+  C_{\text{op}} = E \times I_{\text{grid}}
+  \label{eq:emissions}
+\end{equation}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{@{}lll@{}}
+\toprule
+Symbol & Quantity & Default \\
+\midrule
+$C_{\text{op}}$    & Operational carbon emissions (gCO$_2$e)    & --- \\
+$E$                & Energy (kWh), from Eq.~\ref{eq:energy}     & --- \\
+$I_{\text{grid}}$  & Grid carbon intensity (gCO$_2$e\,kWh$^{-1}$) & \textbf{400} \\
+\bottomrule
+\end{tabular}
+\caption{Parameters for Equation~\ref{eq:emissions}.}
+\end{table}
+
+\subsection*{Rationale}
+
+The global average grid carbon intensity is approximately
+475\,gCO$_2$e\,kWh$^{-1}$ (IEA, 2023). A default of 400\,gCO$_2$e\,kWh$^{-1}$
+represents a modestly cleaner mixed grid (US average
+$\approx$\,386\,gCO$_2$e\,kWh$^{-1}$; EU average
+$\approx$\,255\,gCO$_2$e\,kWh$^{-1}$). Time-of-day variation is not currently
+modelled; this is noted as a limitation (Section~\ref{sec:caveats}).
+
+\textit{Implementation:} line~26.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Indirect Water Footprint}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection*{Formula}
+
+\begin{equation}
+  W = E \times f_{\text{water}}
+  \label{eq:water}
+\end{equation}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{@{}lll@{}}
+\toprule
+Symbol & Quantity & Default \\
+\midrule
+$W$                 & Indirect water consumption (litres)       & --- \\
+$E$                 & Energy (kWh), from Eq.~\ref{eq:energy}    & --- \\
+$f_{\text{water}}$  & Water intensity of electricity (L\,kWh$^{-1}$) & \textbf{1.5} \\
+\bottomrule
+\end{tabular}
+\caption{Parameters for Equation~\ref{eq:water}.}
+\end{table}
+
+\subsection*{Rationale}
+
+Electricity generation consumes water through steam-cycle cooling, evaporation
+at hydroelectric reservoirs, and fuel processing. The default factor of
+$1.5\,\text{L}\,\text{kWh}^{-1}$ is derived from global average estimates for
+a mixed thermoelectric--renewable grid \citep{meldrum2013, grubert2018}.
+Regional water intensity can vary by more than an order of magnitude.
+
+\textbf{Measurement boundary:} indirect electricity-related water only. Direct
+on-premise cooling water is not included.
+
+\textit{Implementation:} line~27.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Embodied Carbon Allocation}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection*{Formula}
+
+\begin{equation}
+  C_{\text{emb}} = C_{\text{device}} \times
+    \frac{t\,/\,3600}{H_{\text{lifetime}}}
+  \label{eq:embodied}
+\end{equation}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{@{}lll@{}}
+\toprule
+Symbol & Quantity & Default \\
+\midrule
+$C_{\text{emb}}$      & Embodied carbon allocated to task (gCO$_2$e)   & --- \\
+$C_{\text{device}}$   & Total device embodied carbon (gCO$_2$e)         & \textbf{300,000} \\
+$t$                   & Task duration (s)                               & measured \\
+$H_{\text{lifetime}}$ & Expected device lifetime (hours)                & \textbf{20,000} \\
+\bottomrule
+\end{tabular}
+\caption{Parameters for Equation~\ref{eq:embodied}.}
+\end{table}
+
+\subsection*{Rationale}
+
+Hardware manufacture accounts for a substantial share of a computing device's
+lifetime carbon footprint \citep{gupta2022}. The default of
+$300{,}000\,\text{gCO}_2\text{e}$ (300\,kg\,CO$_2$e) is a representative
+figure for a mid-range desktop workstation including GPU
+\citep{malmodin2018}. A lifetime of 20,000 hours corresponds to approximately
+ten years of average daily use ($\sim$5.5\,h/day).
+
+Allocation follows the \textbf{proportional-use method}: the fraction of device
+lifetime consumed by a task determines the fraction of embodied carbon
+attributed to it. This method is consistent with lifecycle assessment practice
+(ISO~14044) and cloud carbon accounting literature \citep{lannelongue2021}.
+
+\textbf{Measurement boundary:} embodied carbon of host device only. Embodied
+carbon of model weights (i.e., training compute) is out of scope.
+
+\textit{Implementation:} lines~29--30.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Per-Accepted-Task Resource Intensity}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection*{Formula}
+
+\begin{equation}
+  R_{\text{accepted}} = \frac{\displaystyle\sum_{i} R_i}{N_{\text{accepted}}}
+  \label{eq:per_accepted}
+\end{equation}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{@{}ll@{}}
+\toprule
+Symbol & Quantity \\
+\midrule
+$R_{\text{accepted}}$ & Mean resource use per accepted task \\
+$\sum R_i$            & Total resource use across all tasks \\
+$N_{\text{accepted}}$ & Count of tasks with \texttt{accepted = true} \\
+\bottomrule
+\end{tabular}
+\caption{Parameters for Equation~\ref{eq:per_accepted}.}
+\end{table}
+
+This metric is the \textbf{primary scientific outcome variable} of TriageCore
+experiments. It penalises configurations that achieve low per-task costs but
+high rejection or retry rates, because rejected work still consumed real
+resources without producing accepted software artefacts.
+
+\noindent Reported dimensions:
+\begin{itemize}
+  \item kWh per accepted task
+  \item gCO$_2$e per accepted task
+  \item Litres of water per accepted task
+  \item gCO$_2$e embodied carbon per accepted task
+  \item Tokens (input + output) per accepted task
+  \item Human review minutes per accepted task
+\end{itemize}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Default Parameter Summary}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{@{}lllll@{}}
+\toprule
+Parameter & Symbol & Default & Unit & \texttt{triagecore.toml} key \\
+\midrule
+Device power draw    & $P$                  & 300       & W               & \texttt{sustainability.default\_watts} \\
+Grid intensity       & $I_{\text{grid}}$    & 400       & gCO$_2$e\,kWh$^{-1}$ & \texttt{sustainability.grid\_intensity\_gco2e\_per\_kwh} \\
+Water intensity      & $f_{\text{water}}$   & 1.5       & L\,kWh$^{-1}$   & \texttt{sustainability.water\_intensity\_l\_per\_kwh} \\
+Device embodied C    & $C_{\text{device}}$  & 300,000   & gCO$_2$e        & \texttt{sustainability.device\_embodied\_gco2e} \\
+Device lifetime      & $H_{\text{lifetime}}$& 20,000    & hours           & \texttt{sustainability.device\_lifetime\_hours} \\
+\bottomrule
+\end{tabular}
+\caption{Default parameters and their \texttt{triagecore.toml} override keys.}
+\end{table}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Estimation Caveats and Limitations}
+\label{sec:caveats}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\begin{enumerate}
+  \item \textbf{Power draw is assumed, not measured.} Direct measurement via
+    RAPL (Intel/AMD), NVML (NVIDIA), or a smart plug would substantially
+    improve accuracy. The current model assumes constant load at the configured
+    wattage for the full task duration; idle periods within a task are not
+    accounted for.
+
+  \item \textbf{Grid intensity is static.} Carbon intensity varies by time of
+    day and season. Tools such as ElectricityMaps or the WattTime API could
+    provide real-time intensity values as a future enhancement.
+
+  \item \textbf{Water estimates are regional-average proxies.} The factor of
+    $1.5\,\text{L}\,\text{kWh}^{-1}$ may underestimate intensity for coal-heavy
+    grids or overestimate for predominantly hydro/wind grids.
+
+  \item \textbf{Embodied carbon defaults are order-of-magnitude estimates.}
+    Actual figures depend on hardware manufacturer, manufacturing region, and
+    device class. Boavizta device profiles or manufacturer-published product
+    carbon footprint disclosures should be used where available.
+
+  \item \textbf{Training carbon is out of scope.} The embodied carbon of the
+    model weights (i.e., the compute used to train the LLM) is not attributed
+    to inference tasks in this version. This is a deliberate boundary choice,
+    consistent with operational-boundary carbon accounting, and should be stated
+    explicitly in any published results.
+
+  \item \textbf{All estimates are labelled as estimates.} Every ledger record
+    includes
+    \texttt{"estimation\_method": "heuristic\_profile\_v1"} and
+    \texttt{"measurement\_boundary": "local operational estimate plus optional
+    embodied amortisation"} to signal this scope to downstream consumers.
+\end{enumerate}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section*{References}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\begin{thebibliography}{9}
+
+\bibitem{grubert2018}
+Grubert, E., \& Sanders, K.~T. (2018).
+Water use in the United States energy system: A national assessment and unit
+process inventory of water consumption and withdrawals.
+\textit{Environmental Science \& Technology, 52}(11), 6695--6703.
+\url{https://doi.org/10.1021/acs.est.8b00139}
+
+\bibitem{gupta2022}
+Gupta, U., Kim, Y.~G., Lee, S., Tse, J., Lee, H.~H.~S., Wei, G.-Y.,
+Brooks, D., \& Wu, C.-J. (2022).
+Chasing carbon: The elusive environmental footprint of computing.
+\textit{IEEE Micro, 42}(4), 37--47.
+\url{https://doi.org/10.1109/MM.2022.3163226}
+
+\bibitem{iea2023}
+International Energy Agency. (2023).
+\textit{Electricity 2024: Analysis and forecast to 2026}.
+IEA. \url{https://www.iea.org/reports/electricity-2024}
+
+\bibitem{lannelongue2021}
+Lannelongue, L., Grealey, J., \& Inouye, M. (2021).
+Green algorithms: Quantifying the carbon footprint of computation.
+\textit{Advanced Science, 8}(12), 2100707.
+\url{https://doi.org/10.1002/advs.202100707}
+
+\bibitem{malmodin2018}
+Malmodin, J., \& Lund\'{e}n, D. (2018).
+The energy and carbon footprint of the global ICT and E\&M sectors 2010--2015.
+\textit{Sustainability, 10}(9), 3027.
+\url{https://doi.org/10.3390/su10093027}
+
+\bibitem{meldrum2013}
+Meldrum, J., Nettles-Anderson, S., Heath, G., \& Macknick, J. (2013).
+Life cycle water use for electricity generation: A review and harmonization of
+literature estimates.
+\textit{Environmental Research Letters, 8}(1), 015031.
+\url{https://doi.org/10.1088/1748-9326/8/1/015031}
+
+\end{thebibliography}
+
+\end{document}

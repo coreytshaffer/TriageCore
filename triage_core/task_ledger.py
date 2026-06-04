@@ -22,6 +22,22 @@ class TaskRecord:
     human_review_required: bool = False
     accepted: bool = False
     artifact_paths: List[str] = field(default_factory=list)
+    
+    # --- New fields for Token Balance Experiments and Extended Sustainability ---
+    experiment_id: Optional[str] = None
+    prompt_strategy: Optional[str] = None
+    context_strategy: Optional[str] = None
+    estimated_input_tokens: int = 0
+    estimated_output_tokens: int = 0
+    water_liters_estimate: float = 0.0
+    embodied_gco2e_allocated: float = 0.0
+    storage_written_mb: float = 0.0
+    human_review_minutes: float = 0.0
+    retry_count: int = 0
+    hardware_profile: Optional[str] = None
+    backend: Optional[str] = None
+    model: Optional[str] = None
+    duration_seconds: float = 0.0
 
 class TaskLedger:
     def __init__(self, ledger_dir: str = ".triagecore"):
@@ -144,3 +160,23 @@ class TaskLedger:
 
         # Return sorted by created_at descending
         return sorted(list(tasks_map.values()), key=lambda x: x.created_at, reverse=True)
+
+    def export_csv(self, export_path: str):
+        import csv
+        tasks = self.get_all_tasks()
+        if not tasks:
+            return
+            
+        # Get fields dynamically from the dataclass
+        import dataclasses
+        field_names = [f.name for f in dataclasses.fields(TaskRecord)]
+        
+        with open(export_path, 'w', newline='', encoding='utf-8') as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=field_names)
+            writer.writeheader()
+            for task in tasks:
+                # Convert target_files and artifact_paths to string for CSV
+                row = dataclasses.asdict(task)
+                row['target_files'] = ';'.join(row['target_files']) if row['target_files'] else ''
+                row['artifact_paths'] = ';'.join(row['artifact_paths']) if row['artifact_paths'] else ''
+                writer.writerow(row)

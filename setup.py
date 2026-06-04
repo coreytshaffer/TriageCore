@@ -8,7 +8,9 @@ setup(
     packages=find_packages(),
     install_requires=[
         "requests>=2.28.0",
-        "python-dotenv>=1.0.0"
+        "python-dotenv>=1.0.0",
+        "psutil>=5.9.0",
+        "tomli; python_version < '3.11'"
     ],
     entry_points={
         "console_scripts": [
@@ -16,7 +18,8 @@ setup(
         ]
     },
     extras_require={
-        "ui": ["customtkinter>=5.2.0", "Pillow>=10.0.0", "pyshortcuts>=1.9.0"]
+        "ui": ["customtkinter>=5.2.0", "Pillow>=10.0.0", "pyshortcuts>=1.9.0"],
+        "dev": ["pytest", "ruff", "mypy"]
     },
     classifiers=[
         "Programming Language :: Python :: 3",
