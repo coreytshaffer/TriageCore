@@ -188,11 +188,11 @@ Primary scientific outcome: tokens per accepted task, interpreted beside validat
   * [x] Let the harness dynamically inspect prompts and outputs, warning or blocking execution based on local-first policy files (JSON/YAML).
   * [x] Verify that the ethical firewall escalates sensitive contexts (e.g., Bloody Island, sacred/archaeological sites) cleanly.
 
-* [ ] **Story 11.4: Escalate to Antigravity on Credit Allowance Depletion**
-  * Track a local token/credit allowance limit or budget within `ProjectSteward` or a credit coordinator.
-  * When the credit allowance runs out, trigger a structured handoff/escalation to Antigravity (cloud coordinator) for allowance optimization or approval, ensuring the steward remains operational.
+* [x] **Story 11.4: Escalate to Antigravity on Credit Allowance Depletion**
+  * [x] Track a local token/credit allowance limit or budget within `ProjectSteward` or a credit coordinator.
+  * [x] When the credit allowance runs out, trigger a structured handoff/escalation to Antigravity (cloud coordinator) for allowance optimization or approval, ensuring the steward remains operational.
 
-* [ ] **Story 11.5: Early Stopping for Energy Budget Overruns (Study 003)**
+* [x] **Story 11.5: Early Stopping for Energy Budget Overruns (Study 003)**
   * Implement dynamic "early stopping" during task execution when real-time energy telemetry (measured via `PowerSampler` or estimated) projects that the task will overrun its configured max energy budget.
   * Base this early stopping method on recent research regarding energy-aware resource allocation, terminating model inference early to save local power.
 

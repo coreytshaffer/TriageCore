@@ -169,3 +169,73 @@ def test_escalation_packet_uses_configured_tasks_dir(tmp_path, monkeypatch):
     assert result["evaluation"]["local_result_status"] == "insufficient"
     assert result["escalation_packet"].startswith("custom_tasks")
     assert (tmp_path / result["escalation_packet"]).exists()
+
+
+def test_dispatch_task_early_stopping_by_kwh():
+    from triage_core.project_steward import ProjectSteward
+    pm = ProjectManager()
+    pm.budgets = {"max_energy_kwh_per_task": 0.005}
+    pm.steward = ProjectSteward(budgets=pm.budgets)
+
+    # We have context_planner and implementer.
+    # The context_planner exceeds the budget.
+    # The implementer should never be run (its work order cancelled).
+    context_planner = DummyWorker("context_planner", [{
+        "summary": "Analysing structural files...",
+        "resource_usage": {"energy_kwh_estimate": 0.01}
+    }])
+    implementer = DummyWorker("implementer", [{"repaired_code": "print('ok')"}])
+
+    pm.registry.workers = {
+        "context_planner": context_planner,
+        "implementer": implementer
+    }
+
+    result = pm.dispatch_task(
+        prompt="Test early stopping",
+        target_files=["file.py"],
+        required_roles=["context_planner", "implementer"]
+    )
+
+    assert result["evaluation"]["local_result_status"] == "insufficient"
+    assert "Early stopping: Exceeded energy budget" in result["evaluation"]["reason"]
+    assert result["evaluation"]["recommended_escalation"] == "antigravity"
+    assert context_planner.call_count == 1
+    assert implementer.call_count == 0
+
+    # Ensure the implementer order exists on the board but is marked as cancelled
+    cancelled_orders = [o for o in pm.board.orders.values() if o.status == "cancelled"]
+    assert len(cancelled_orders) == 1
+    assert cancelled_orders[0].assigned_role == "implementer"
+
+
+def test_dispatch_task_early_stopping_joules_fallback():
+    from triage_core.project_steward import ProjectSteward
+    pm = ProjectManager()
+    pm.budgets = {"max_energy_kwh_per_task": 0.001}
+    pm.steward = ProjectSteward(budgets=pm.budgets)
+
+    # Let's say energy_kwh_estimate is 0, but energy_estimated is 7200 Joules (= 0.002 kWh)
+    context_planner = DummyWorker("context_planner", [{
+        "summary": "Analysing structural files...",
+        "resource_usage": {"energy_estimated": 7200.0}
+    }])
+    implementer = DummyWorker("implementer", [{"repaired_code": "print('ok')"}])
+
+    pm.registry.workers = {
+        "context_planner": context_planner,
+        "implementer": implementer
+    }
+
+    result = pm.dispatch_task(
+        prompt="Test early stopping fallback",
+        target_files=["file.py"],
+        required_roles=["context_planner", "implementer"]
+    )
+
+    assert result["evaluation"]["local_result_status"] == "insufficient"
+    assert "Early stopping: Exceeded energy budget" in result["evaluation"]["reason"]
+    assert result["evaluation"]["recommended_escalation"] == "antigravity"
+    assert context_planner.call_count == 1
+    assert implementer.call_count == 0
+

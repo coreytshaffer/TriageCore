@@ -44,18 +44,23 @@ class ProjectSteward:
         """
         Evaluate local outputs against budgets, acceptance criteria, and ethical firewalls.
         """
-        total_energy_kwh = sum(
-            o.result.get("resource_usage", {}).get("energy_kwh_estimate", 0)
-            for o in completed_orders
-            if o.result
-        )
+        total_energy_kwh = 0.0
+        for o in completed_orders:
+            if o.result:
+                usage = o.result.get("resource_usage") or {}
+                kwh = usage.get("energy_kwh_estimate") or 0.0
+                if not kwh:
+                    joules = usage.get("energy_estimated") or 0.0
+                    kwh = joules / 3600000.0
+                total_energy_kwh += kwh
+
         total_energy_joules = sum(
-            o.result.get("resource_usage", {}).get("energy_estimated", 0)
+            (o.result.get("resource_usage") or {}).get("energy_estimated", 0)
             for o in completed_orders
             if o.result
         )
         total_duration = sum(
-            o.result.get("resource_usage", {}).get("duration_seconds", 0)
+            (o.result.get("resource_usage") or {}).get("duration_seconds", 0)
             for o in completed_orders
             if o.result
         )

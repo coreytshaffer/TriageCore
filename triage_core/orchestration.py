@@ -160,6 +160,8 @@ class ProjectManager:
         worker_error_count = 0
         forced_escalation = False
         escalation_target = "codex"
+        early_stopped = False
+        early_stop_reason = ""
         
         # We will need the event loop logic for sending ledger events, but 
         # normally TriageCore runs through `engine.py` / `TaskLedger`. We don't have
@@ -200,6 +202,35 @@ class ProjectManager:
             result = worker.process(order, stream_callback=stream_callback)
             self.board.update_status(order.work_order_id, "completed", result)
             completed.append(self.board.orders[order.work_order_id])
+
+            # Calculate cumulative energy (current_energy_kwh) of completed orders so far
+            current_energy_kwh = 0.0
+            for o in completed:
+                if o.result:
+                    usage = o.result.get("resource_usage") or {}
+                    kwh = usage.get("energy_kwh_estimate") or 0.0
+                    if not kwh:
+                        joules = usage.get("energy_estimated") or 0.0
+                        kwh = joules / 3600000.0
+                    current_energy_kwh += kwh
+
+            max_energy = self.budgets.get("max_energy_kwh_per_task", 0.02)
+            if current_energy_kwh > max_energy:
+                forced_escalation = True
+                escalation_target = "antigravity"
+                early_stopped = True
+                early_stop_reason = f"Exceeded energy budget ({current_energy_kwh:.4f} > {max_energy})."
+
+                if stream_callback:
+                    stream_callback(
+                        f"\n[EARLY STOPPING] Dynamic energy budget exceeded. "
+                        f"Cumulative: {current_energy_kwh:.4f} kWh. Max: {max_energy} kWh. "
+                        f"Cancelling remaining tasks and escalating to Antigravity.\n"
+                    )
+                # Cancel all remaining pending work orders
+                for pending_order in self.board.get_pending():
+                    self.board.update_status(pending_order.work_order_id, "cancelled")
+                break
 
             safe_result = {
                 k: v
@@ -355,9 +386,12 @@ class ProjectManager:
         evaluation = self.steward.evaluate(prompt, target_files, completed) or {}
         if forced_escalation:
             evaluation["local_result_status"] = "insufficient"
-            evaluation["reason"] = (
-                f"Forced delegation by council worker to {escalation_target}."
-            )
+            if early_stopped:
+                evaluation["reason"] = f"Early stopping: {early_stop_reason}"
+            else:
+                evaluation["reason"] = (
+                    f"Forced delegation by council worker to {escalation_target}."
+                )
             evaluation["recommended_escalation"] = escalation_target
 
         # Promote worker errors to insufficient if reviewers errored out
