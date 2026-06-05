@@ -289,3 +289,22 @@ def test_context_budget_event_reduces_to_task_record():
         assert record.context_pack_path in record.artifact_paths
         assert ctx is not None
         assert ctx.telemetry_summary["context_estimated_tokens"] == 120
+
+
+def test_ledger_tracks_wasted_tokens():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        ledger = TaskLedger(ledger_dir=temp_dir)
+        task_id = str(uuid.uuid4())
+
+        ledger.append_event(task_id, "task_created", {"title": "Wasted Tokens Task"})
+        ledger.append_event(task_id, "local_draft_generated", {
+            "status": "handoff_required",
+            "wasted_tokens": 1500
+        })
+
+        record = ledger.get_task(task_id)
+
+        assert record is not None
+        assert record.status == "local_draft_generated"
+        assert record.wasted_tokens == 1500
+

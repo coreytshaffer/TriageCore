@@ -2728,6 +2728,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
 
                 total_in = 0
                 total_out = 0
+                wasted_tokens = 0
                 agent_updates = []
                 for order_id in result.get("work_orders", []):
                     order = pm.board.orders.get(order_id)
@@ -2738,7 +2739,13 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
                         duration_seconds = ru.get("duration_seconds", 0.0)
                         total_in += input_tokens
                         total_out += output_tokens
+                        
+                        val_run = order.result.get("validation_run") or {}
+                        failed_val = (val_run and not val_run.get("passed", True))
                         has_error = bool(order.result.get("error")) or order.status == "failed"
+                        if failed_val or has_error:
+                            wasted_tokens += input_tokens + output_tokens
+                            
                         agent_updates.append(
                             {
                                 "role": order.assigned_role,
@@ -2751,6 +2758,9 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
                         )
                 self.after(0, self._apply_agent_updates, agent_updates)
 
+                if local_status == "insufficient":
+                    wasted_tokens = total_in + total_out
+
                 self.ledger.append_event(
                     task_id,
                     "council_completed",
@@ -2760,6 +2770,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
                         "duration_seconds": duration,
                         "input_tokens": total_in,
                         "output_tokens": total_out,
+                        "wasted_tokens": wasted_tokens,
                         **metrics,
                     },
                 )

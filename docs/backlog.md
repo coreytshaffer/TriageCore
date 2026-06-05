@@ -200,9 +200,9 @@ Primary scientific outcome: tokens per accepted task, interpreted beside validat
   * Establish a formal Codex-run stability pass script/procedure (`triagecore stability-pass`) to run after each sprint.
   * Automatically verify harness boundary enforcement, logging compliance, and regression safety across all benchmark tasks.
 
-* [ ] **Story 11.7: Token Efficiency and Escaped Waste Reporting**
-  * Add reporting for wasted tokens (e.g., on cancelled/failed workers or early-stopped tasks).
-  * Track credit consumption and report on cost-benefit metrics per runner lane.
+* [x] **Story 11.7: Token Efficiency and Escaped Waste Reporting**
+  * [x] Add reporting for wasted tokens (e.g., on cancelled/failed workers or early-stopped tasks).
+  * [x] Track credit consumption and report on cost-benefit metrics per runner lane.
 
 * [ ] **Story 11.8: Integrated Telemetry Dashboard Controls**
   * Surface early stopping events, firewall triggers, credit status, and stability pass results directly on the TriageDesk GUI.

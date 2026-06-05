@@ -214,3 +214,35 @@ def test_pipeline_handoff_records_blocked_task():
         assert record.status == "blocked"
         assert record.handoff_reason == "Pipeline handoff required."
         assert record.human_review_required is True
+        assert record.wasted_tokens == 0
+
+
+def test_pipeline_handoff_records_blocked_task_with_wasted_tokens():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        ledger = TaskLedger(ledger_dir=temp_dir)
+        task_id = _start_pipeline_task(
+            ledger=ledger,
+            prompt="Unsafe task.",
+            files=[],
+        )
+
+        _record_pipeline_handoff(
+            ledger=ledger,
+            task_id=task_id,
+            reason="Blocked by ethical policy.",
+            input_tokens=150,
+            output_tokens=50,
+            total_tokens=200,
+        )
+
+        record = ledger.get_task(task_id)
+
+        assert record is not None
+        assert record.status == "blocked"
+        assert record.handoff_reason == "Blocked by ethical policy."
+        assert record.human_review_required is True
+        assert record.input_tokens == 150
+        assert record.output_tokens == 50
+        assert record.total_tokens == 200
+        assert record.wasted_tokens == 200
+

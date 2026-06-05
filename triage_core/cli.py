@@ -490,10 +490,19 @@ def _run_benchmarks(
             validator=resolve_validator(task.validator),
         )
 
-        ledger.append_event(task_id, "model_evaluated", result_to_model_event(task, result))
+        observed = result.get("status")
+        expected = task.expected_status
+        passed = (observed == expected)
+        wasted = 0 if passed else result.get("total_tokens", 0)
+
+        event_payload = result_to_model_event(task, result)
+        event_payload["wasted_tokens"] = wasted
+
+        ledger.append_event(task_id, "model_evaluated", event_payload)
         if result.get("status") == "handoff_required":
             ledger.append_event(task_id, "handoff_generated", {
                 "reason": result.get("handoff_reason") or result.get("reason"),
+                "wasted_tokens": wasted,
             })
 
         print(f"  observed={result.get('status')} expected={task.expected_status}")
@@ -793,6 +802,7 @@ def _record_pipeline_success(
             "total_tokens": total_tokens,
             "energy_estimated": total_tokens * 0.005,
             "artifact_path": output_path,
+            "wasted_tokens": 0,
         },
     )
 
@@ -801,8 +811,21 @@ def _record_pipeline_handoff(
     ledger: TaskLedger,
     task_id: str,
     reason: str,
+    input_tokens: int = 0,
+    output_tokens: int = 0,
+    total_tokens: int = 0,
 ) -> None:
-    ledger.append_event(task_id, "task_blocked", {"reason": reason})
+    ledger.append_event(
+        task_id,
+        "task_blocked",
+        {
+            "reason": reason,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "total_tokens": total_tokens,
+            "wasted_tokens": total_tokens,
+        },
+    )
 
 
 def _run_pipeline(
@@ -900,7 +923,17 @@ def _run_pipeline(
         print(f"Output saved to: {output_path}")
     else:
         reason = result.get("reason") or result.get("handoff_reason") or "Pipeline handoff required."
-        _record_pipeline_handoff(ledger, task_id, reason)
+        in_tokens = result.get("input_tokens", 0)
+        out_tokens = result.get("output_tokens", 0)
+        total = result.get("total_tokens", 0)
+        _record_pipeline_handoff(
+            ledger,
+            task_id,
+            reason,
+            input_tokens=in_tokens,
+            output_tokens=out_tokens,
+            total_tokens=total,
+        )
         _log_cli_activity(
             f"pipeline handoff task={task_id[:8]} reason={reason}",
             ledger_dir=ledger_dir,
@@ -990,16 +1023,21 @@ def _run_stability_pass(
             validator=resolve_validator(task.validator),
         )
 
-        # Log completion
-        ledger.append_event(task_id, "model_evaluated", result_to_model_event(task, result))
-        if result.get("status") == "handoff_required":
-            ledger.append_event(task_id, "handoff_generated", {
-                "reason": result.get("handoff_reason") or result.get("reason"),
-            })
-
         observed = result.get("status")
         expected = task.expected_status
         passed = (observed == expected)
+        wasted = 0 if passed else result.get("total_tokens", 0)
+
+        # Log completion
+        event_payload = result_to_model_event(task, result)
+        event_payload["wasted_tokens"] = wasted
+
+        ledger.append_event(task_id, "model_evaluated", event_payload)
+        if result.get("status") == "handoff_required":
+            ledger.append_event(task_id, "handoff_generated", {
+                "reason": result.get("handoff_reason") or result.get("reason"),
+                "wasted_tokens": wasted,
+            })
 
         status_char = "✅" if passed else "❌"
         print(f"  {status_char} Observed: {observed} | Expected: {expected}")

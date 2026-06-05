@@ -14,6 +14,7 @@ class BenchmarkSummary:
     validator_failures: int = 0
     total_elapsed_seconds: float = 0.0
     total_tokens: int = 0
+    total_wasted_tokens: int = 0
     total_tokens_per_second: float = 0.0
     token_speed_runs: int = 0
 
@@ -61,6 +62,7 @@ class BenchmarkReport:
     by_backend: List[BenchmarkSummary]
     by_model: List[BenchmarkSummary]
     by_category: List[BenchmarkSummary]
+    by_runner: List[BenchmarkSummary]
     supervisor_reviews: List[SupervisorReviewSummary]
     study_id: str | None = None
     run_id: str | None = None
@@ -82,6 +84,7 @@ def build_benchmark_report(
     by_backend: Dict[str, BenchmarkSummary] = {}
     by_model: Dict[str, BenchmarkSummary] = {}
     by_category: Dict[str, BenchmarkSummary] = {}
+    by_runner: Dict[str, BenchmarkSummary] = {}
     supervisor_reviews: Dict[str, SupervisorReviewSummary] = {}
 
     for record in benchmark_records:
@@ -93,6 +96,8 @@ def build_benchmark_report(
         _apply_record(by_model.setdefault(_model_label(record), BenchmarkSummary(label=_model_label(record))), record)
         category = record.benchmark_category or "uncategorized"
         _apply_record(by_category.setdefault(category, BenchmarkSummary(label=category)), record)
+        runner = record.runner or "unknown-runner"
+        _apply_record(by_runner.setdefault(runner, BenchmarkSummary(label=runner)), record)
         if record.supervisor_tool:
             _apply_supervisor_review(
                 supervisor_reviews.setdefault(
@@ -109,6 +114,7 @@ def build_benchmark_report(
         by_backend=_sorted_summaries(by_backend),
         by_model=_sorted_summaries(by_model),
         by_category=_sorted_summaries(by_category),
+        by_runner=_sorted_summaries(by_runner),
         supervisor_reviews=_sorted_supervisor_summaries(supervisor_reviews),
         study_id=study_id,
         run_id=run_id,
@@ -134,6 +140,10 @@ def render_benchmark_report_markdown(report: BenchmarkReport) -> str:
         "## Overall",
         "",
         _summary_table([report.overall]),
+        "",
+        "## By Runner",
+        "",
+        _summary_table(report.by_runner),
         "",
         "## By Supervision",
         "",
@@ -171,6 +181,7 @@ def _apply_record(summary: BenchmarkSummary, record: TaskRecord) -> None:
 
     summary.total_elapsed_seconds += record.elapsed_seconds
     summary.total_tokens += record.total_tokens
+    summary.total_wasted_tokens += getattr(record, "wasted_tokens", 0)
     if record.tokens_per_second > 0:
         summary.total_tokens_per_second += record.tokens_per_second
         summary.token_speed_runs += 1
@@ -221,10 +232,15 @@ def _summary_table(summaries: List[BenchmarkSummary]) -> str:
         return "_No benchmark evidence found._"
 
     rows = [
-        "| Group | Runs | Success Rate | Handoff Rate | Mismatches | Validator Failures | Avg Seconds | Total Tokens | Avg Tok/s |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| Group | Runs | Success Rate | Handoff Rate | Mismatches | Validator Failures | Avg Seconds | Total Tokens | Wasted Tokens | Token Eff | Avg Tok/s |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for summary in summaries:
+        efficiency = 1.0
+        if summary.total_tokens > 0:
+            productive = max(0, summary.total_tokens - summary.total_wasted_tokens)
+            efficiency = productive / summary.total_tokens
+
         rows.append(
             "| "
             + " | ".join(
@@ -237,6 +253,8 @@ def _summary_table(summaries: List[BenchmarkSummary]) -> str:
                     str(summary.validator_failures),
                     f"{summary.average_elapsed_seconds:.2f}",
                     str(summary.total_tokens),
+                    str(summary.total_wasted_tokens),
+                    _format_percent(efficiency),
                     f"{summary.average_tokens_per_second:.2f}",
                 ]
             )

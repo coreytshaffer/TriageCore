@@ -26,6 +26,7 @@ class TaskRecord:
     emissions_gco2e_estimate: float = 0.0
     grid_intensity_gco2e_per_kwh: float = 0.0
     grid_intensity_source: str = "static_config"
+    wasted_tokens: int = 0
 
     # Benchmark / model evaluation fields (Codex)
     backend_name: Optional[str] = None
@@ -280,6 +281,8 @@ class TaskLedger:
             if "reason" in payload:
                 record.handoff_reason = payload["reason"]
                 record.human_review_required = True
+            if "wasted_tokens" in payload:
+                record.wasted_tokens = payload["wasted_tokens"]
         elif etype == "model_evaluated":
             self._apply_model_evaluation(record, payload)
         elif etype == "validator_completed":
@@ -325,6 +328,14 @@ class TaskLedger:
             record.status = "blocked"
             record.handoff_reason = payload.get("reason", record.handoff_reason)
             record.human_review_required = True
+            if "input_tokens" in payload:
+                record.input_tokens = payload["input_tokens"]
+            if "output_tokens" in payload:
+                record.output_tokens = payload["output_tokens"]
+            if "total_tokens" in payload:
+                record.total_tokens = payload["total_tokens"]
+            if "wasted_tokens" in payload:
+                record.wasted_tokens = payload["wasted_tokens"]
 
     @staticmethod
     def _apply_model_evaluation(record: TaskRecord, payload: Dict[str, Any]) -> None:
@@ -362,6 +373,8 @@ class TaskLedger:
         if "handoff_reason" in payload:
             record.handoff_reason = payload["handoff_reason"]
             record.human_review_required = True
+        if "wasted_tokens" in payload:
+            record.wasted_tokens = payload["wasted_tokens"]
 
     def export_csv(self, export_path: str):
         """Export all task records to a research-ready CSV."""
