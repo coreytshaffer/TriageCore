@@ -204,8 +204,8 @@ Primary scientific outcome: tokens per accepted task, interpreted beside validat
   * [x] Add reporting for wasted tokens (e.g., on cancelled/failed workers or early-stopped tasks).
   * [x] Track credit consumption and report on cost-benefit metrics per runner lane.
 
-* [ ] **Story 11.8: Integrated Telemetry Dashboard Controls**
-  * Surface early stopping events, firewall triggers, credit status, and stability pass results directly on the TriageDesk GUI.
+* [x] **Story 11.8: Integrated Telemetry Dashboard Controls**
+  * [x] Surface early stopping events, firewall triggers, credit status, and stability pass results directly on the TriageDesk GUI.
 
 ## 🧪 Phase 12: TriageLab Analytical Engine & Predictive Routing
 
@@ -220,6 +220,6 @@ Goal: Shift from operational tracking to analytical optimization, converting the
   * Train an interpretable predictor (Logistic Regression / Decision Tree) on exported run data.
   * Integrate an advisory warning before dispatching a task if local execution has a high projected failure/escalation probability.
 
-## Current Phase 11 Decision Point
+## Current Phase 12 Decision Point
 
-Story 11.6 (Post-Sprint Codex Stability Pass) is complete. The next active story is Story 11.7 (Token Efficiency and Escaped Waste Reporting) to implement auditing of wasted token resources on failed or cancelled workers.
+Phase 11 is complete. The next active story is Story 12.1 (TriageLab Stats and Markdown Reporting CLI) to implement derived views and CLI reports calculating primary scientific metrics over historical runs.
