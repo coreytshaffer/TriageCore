@@ -200,6 +200,8 @@ def test_dispatch_task_early_stopping_by_kwh():
     assert result["evaluation"]["local_result_status"] == "insufficient"
     assert "Early stopping: Exceeded energy budget" in result["evaluation"]["reason"]
     assert result["evaluation"]["recommended_escalation"] == "antigravity"
+    assert result["evaluation"]["early_stopped"] is True
+    assert "Exceeded energy budget" in result["evaluation"]["early_stop_reason"]
     assert context_planner.call_count == 1
     assert implementer.call_count == 0
 
@@ -236,6 +238,7 @@ def test_dispatch_task_early_stopping_joules_fallback():
     assert result["evaluation"]["local_result_status"] == "insufficient"
     assert "Early stopping: Exceeded energy budget" in result["evaluation"]["reason"]
     assert result["evaluation"]["recommended_escalation"] == "antigravity"
+    assert result["evaluation"]["early_stopped"] is True
+    assert "Exceeded energy budget" in result["evaluation"]["early_stop_reason"]
     assert context_planner.call_count == 1
     assert implementer.call_count == 0
-

@@ -139,6 +139,122 @@ def _telemetry_local_benefit_metrics(tasks) -> dict[str, float | int]:
     }
 
 
+def _task_token_total(task) -> int:
+    return task.total_tokens or (
+        (task.estimated_input_tokens or task.input_tokens or 0)
+        + (task.estimated_output_tokens or task.output_tokens or 0)
+    )
+
+
+def _telemetry_control_summary(tasks, log_tail: str = "", token_credit_allowance: int = 0) -> dict[str, dict[str, object]]:
+    def _latest(records):
+        if not records:
+            return None
+        return max(records, key=lambda task: task.updated_at or task.created_at or "")
+
+    def _trim(text: str, limit: int = 90) -> str:
+        if len(text) <= limit:
+            return text
+        return text[: limit - 3] + "..."
+
+    early_stop_tasks = [task for task in tasks if getattr(task, "early_stopped", False)]
+    latest_early = _latest(early_stop_tasks)
+    early_reason = getattr(latest_early, "early_stop_reason", "") if latest_early else ""
+
+    firewall_tasks = [task for task in tasks if getattr(task, "firewall_triggered", False)]
+    latest_firewall = _latest(firewall_tasks)
+    firewall_reason = getattr(latest_firewall, "firewall_reason", "") if latest_firewall else ""
+
+    configured_allowance = int(token_credit_allowance or 0)
+    ledger_allowance = max((getattr(task, "credit_allowance_total", 0) or 0) for task in tasks) if tasks else 0
+    effective_allowance = max(configured_allowance, ledger_allowance)
+    credit_used = max(
+        sum(_task_token_total(task) for task in tasks),
+        max((getattr(task, "credit_allowance_used", 0) or 0) for task in tasks) if tasks else 0,
+    )
+    credit_remaining = max(effective_allowance - credit_used, 0) if effective_allowance else 0
+    credit_exhausted = any(getattr(task, "credit_allowance_exhausted", False) for task in tasks)
+    if effective_allowance:
+        credit_exhausted = credit_exhausted or credit_used >= effective_allowance
+
+    stability_tasks = [
+        task
+        for task in tasks
+        if task.runner == "stability_pass" or task.study_id == "stability_pass"
+    ]
+    latest_stability = _latest(stability_tasks)
+    if latest_stability and latest_stability.run_id:
+        stability_scope = [
+            task for task in stability_tasks if task.run_id == latest_stability.run_id
+        ]
+    else:
+        stability_scope = stability_tasks
+
+    stability_matches = sum(
+        1
+        for task in stability_scope
+        if task.expected_status and task.observed_status == task.expected_status
+    )
+    stability_total = len(stability_scope)
+    success_idx = log_tail.rfind("stability-pass completed status=success")
+    failed_idx = log_tail.rfind("stability-pass completed status=failed")
+    if success_idx == -1 and failed_idx == -1:
+        stability_state = "ok" if stability_total and stability_matches == stability_total else "warn"
+    else:
+        stability_state = "ok" if success_idx > failed_idx else "alert"
+
+    return {
+        "early_stop": {
+            "title": "Early Stopping",
+            "value": "Clear" if not early_stop_tasks else f"{len(early_stop_tasks)} event(s)",
+            "detail": (
+                "No energy overrun stops recorded."
+                if not latest_early
+                else _trim(early_reason or "Energy overrun stop recorded.")
+            ),
+            "tone": "ok" if not early_stop_tasks else "alert",
+        },
+        "firewall": {
+            "title": "Firewall Triggers",
+            "value": "Clear" if not firewall_tasks else f"{len(firewall_tasks)} trigger(s)",
+            "detail": (
+                "No ethical boundary blocks recorded."
+                if not latest_firewall
+                else _trim(firewall_reason or "Ethical boundary block recorded.")
+            ),
+            "tone": "ok" if not firewall_tasks else "alert",
+        },
+        "credit": {
+            "title": "Credit Status",
+            "value": (
+                "No cap"
+                if not effective_allowance
+                else ("Exhausted" if credit_exhausted else f"{credit_remaining} left")
+            ),
+            "detail": (
+                "Token credit allowance not configured."
+                if not effective_allowance
+                else f"{credit_used}/{effective_allowance} tokens used"
+            ),
+            "tone": "ok" if not credit_exhausted else "alert",
+        },
+        "stability": {
+            "title": "Stability Pass",
+            "value": (
+                "Not run"
+                if not stability_total
+                else ("PASS" if stability_state == "ok" else "FAIL")
+            ),
+            "detail": (
+                "No stability pass evidence recorded yet."
+                if not stability_total
+                else f"{stability_matches}/{stability_total} fixtures matched expected outcomes"
+            ),
+            "tone": "ok" if stability_state == "ok" and stability_total else ("warn" if not stability_total else "alert"),
+        },
+    }
+
+
 def _ledger_detail_lines(task) -> list[str]:
     lines = [
         f"Task ID: {task.task_id}",
@@ -232,6 +348,20 @@ def _ledger_detail_lines(task) -> list[str]:
 
     if task.handoff_reason:
         lines.append(f"Handoff reason: {task.handoff_reason}")
+    if task.early_stopped and task.early_stop_reason:
+        lines.append(f"Early stop: {task.early_stop_reason}")
+    if task.firewall_triggered:
+        lines.append(f"Firewall: {task.firewall_reason or 'triggered'}")
+    if task.credit_allowance_total:
+        credit_state = (
+            "exhausted"
+            if task.credit_allowance_exhausted
+            else f"{task.credit_allowance_remaining} remaining"
+        )
+        lines.append(
+            "Credit: "
+            f"{task.credit_allowance_used}/{task.credit_allowance_total} used ({credit_state})"
+        )
     if task.artifact_paths:
         lines.append(f"Artifacts: {', '.join(task.artifact_paths)}")
 
@@ -2178,8 +2308,13 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         self._telem_card.grid_columnconfigure((0, 1), weight=1)
 
         # Row 5: Per Accepted Task ratio KPIs
+        self._controls_card = ctk.CTkFrame(f, corner_radius=12)
+        self._controls_card.grid(row=5, column=0, padx=24, pady=8, sticky="ew")
+        self._controls_card.grid_columnconfigure((0, 1, 2, 3), weight=1)
+
+        # Row 6: Per Accepted Task ratio KPIs
         self._per_task_card = ctk.CTkFrame(f, corner_radius=12)
-        self._per_task_card.grid(row=5, column=0, padx=24, pady=(8, 24), sticky="ew")
+        self._per_task_card.grid(row=6, column=0, padx=24, pady=(8, 24), sticky="ew")
         self._per_task_card.grid_columnconfigure((0, 1, 2), weight=1)
 
     def _refresh_telemetry(self):
@@ -2286,6 +2421,51 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         ctk.CTkFrame(self._telem_card, height=1, fg_color="gray40").grid(
             row=6, column=0, columnspan=2, padx=16, pady=6, sticky="ew"
         )
+
+        # ── Integrated telemetry controls ────────────────────────────────────
+        for w in self._controls_card.winfo_children():
+            w.destroy()
+
+        _SectionLabel(self._controls_card, "Integrated Controls").grid(
+            row=0, column=0, columnspan=4, padx=16, pady=(12, 8), sticky="w"
+        )
+
+        control_summary = _telemetry_control_summary(
+            tasks,
+            log_tail=_read_text_tail(_log_file_path(), max_lines=200),
+            token_credit_allowance=default_config.get_global(
+                "budgets", "token_credit_allowance", 0
+            ),
+        )
+        tone_map = {
+            "ok": ("#22c55e", "#0b1f14"),
+            "warn": ("#f59e0b", "#2f1d04"),
+            "alert": ("#ef4444", "#341111"),
+        }
+        for col, key in enumerate(["early_stop", "firewall", "credit", "stability"]):
+            card = control_summary[key]
+            accent, fg = tone_map[card["tone"]]
+            chip = ctk.CTkFrame(self._controls_card, corner_radius=12, fg_color=fg)
+            chip.grid(row=1, column=col, padx=12, pady=(0, 16), sticky="nsew")
+            ctk.CTkLabel(
+                chip,
+                text=card["title"],
+                font=ctk.CTkFont(size=12, weight="bold"),
+                text_color=accent,
+            ).pack(anchor="w", padx=16, pady=(14, 4))
+            ctk.CTkLabel(
+                chip,
+                text=card["value"],
+                font=ctk.CTkFont(size=24, weight="bold"),
+            ).pack(anchor="w", padx=16, pady=(0, 4))
+            ctk.CTkLabel(
+                chip,
+                text=card["detail"],
+                justify="left",
+                wraplength=210,
+                text_color="#cbd5e1",
+                font=ctk.CTkFont(size=12),
+            ).pack(anchor="w", padx=16, pady=(0, 14))
 
         # ── Per-accepted-task card ────────────────────────────────────────────
         for w in self._per_task_card.winfo_children():
@@ -2766,6 +2946,16 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
                     "council_completed",
                     {
                         "local_result_status": local_status,
+                        "reason": eval_data.get("reason"),
+                        "recommended_escalation": eval_data.get("recommended_escalation"),
+                        "early_stopped": eval_data.get("early_stopped", False),
+                        "early_stop_reason": eval_data.get("early_stop_reason", ""),
+                        "firewall_triggered": eval_data.get("firewall_triggered", False),
+                        "firewall_reason": eval_data.get("firewall_reason", ""),
+                        "credit_allowance_total": eval_data.get("credit_allowance_total", 0),
+                        "credit_allowance_used": eval_data.get("credit_allowance_used", 0),
+                        "credit_allowance_remaining": eval_data.get("credit_allowance_remaining", 0),
+                        "credit_allowance_exhausted": eval_data.get("credit_allowance_exhausted", False),
                         "escalation_packet": packet_path,
                         "duration_seconds": duration,
                         "input_tokens": total_in,

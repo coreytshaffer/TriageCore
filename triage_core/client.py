@@ -54,6 +54,12 @@ class TriageClient:
                 "backend_name": getattr(self.engine.backend, "name", None),
                 "model": getattr(self.engine.backend, "model", None),
                 "timeout_seconds": use_timeout,
+                "firewall_triggered": steward_eval.get("firewall_triggered", False),
+                "firewall_reason": steward_eval.get("firewall_reason", ""),
+                "credit_allowance_total": steward_eval.get("credit_allowance_total", 0),
+                "credit_allowance_used": steward_eval.get("credit_allowance_used", 0),
+                "credit_allowance_remaining": steward_eval.get("credit_allowance_remaining", 0),
+                "credit_allowance_exhausted": steward_eval.get("credit_allowance_exhausted", False),
             }
 
         if route_decision.get("offload_recommended", False):

@@ -18,6 +18,8 @@ def test_project_steward_escalates_sensitive_context_to_human_only_fallback():
         assert result["local_result_status"] == "insufficient"
         assert result["recommended_escalation"] == "human_only"
         assert "Sensitive context detected" in result["reason"]
+        assert result["firewall_triggered"] is True
+        assert "Ethical Firewall" in result["firewall_reason"]
 
 
 def test_project_steward_escalates_failed_review_to_codex():
@@ -91,12 +93,18 @@ def test_project_steward_escalates_on_credit_exhaustion():
         result={"resource_usage": {"total_tokens": 1500}},
     )
 
-    result = steward.evaluate(
-        "Summarize the text.",
-        target_files=[],
-        completed_orders=[over_order],
-    )
+    with patch("triage_core.project_steward.TaskLedger") as ledger_cls:
+        ledger_cls.return_value.get_all_tasks.return_value = []
+        result = steward.evaluate(
+            "Summarize the text.",
+            target_files=[],
+            completed_orders=[over_order],
+        )
 
     assert result["local_result_status"] == "insufficient"
     assert result["recommended_escalation"] == "antigravity"
     assert "Token credit allowance exhausted" in result["reason"]
+    assert result["credit_allowance_total"] == 1000
+    assert result["credit_allowance_used"] == 1500
+    assert result["credit_allowance_remaining"] == 0
+    assert result["credit_allowance_exhausted"] is True

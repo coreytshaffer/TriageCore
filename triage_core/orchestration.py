@@ -386,6 +386,8 @@ class ProjectManager:
         evaluation = self.steward.evaluate(prompt, target_files, completed) or {}
         if forced_escalation:
             evaluation["local_result_status"] = "insufficient"
+            evaluation["early_stopped"] = early_stopped
+            evaluation["early_stop_reason"] = early_stop_reason
             if early_stopped:
                 evaluation["reason"] = f"Early stopping: {early_stop_reason}"
             else:

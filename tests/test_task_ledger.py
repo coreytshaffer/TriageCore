@@ -308,3 +308,41 @@ def test_ledger_tracks_wasted_tokens():
         assert record.status == "local_draft_generated"
         assert record.wasted_tokens == 1500
 
+
+def test_ledger_tracks_story_118_control_signals():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        ledger = TaskLedger(ledger_dir=temp_dir)
+        task_id = str(uuid.uuid4())
+
+        ledger.append_event(task_id, "task_created", {"title": "Telemetry Controls"})
+        ledger.append_event(
+            task_id,
+            "council_completed",
+            {
+                "reason": "Early stopping: Exceeded energy budget (0.0300 > 0.02).",
+                "early_stopped": True,
+                "early_stop_reason": "Exceeded energy budget (0.0300 > 0.02).",
+                "firewall_triggered": True,
+                "firewall_reason": "Ethical Firewall: Triggered rule 'public_health_and_safety'.",
+                "credit_allowance_total": 1000,
+                "credit_allowance_used": 1200,
+                "credit_allowance_remaining": 0,
+                "credit_allowance_exhausted": True,
+            },
+        )
+
+        record = ledger.get_task(task_id)
+        ctx = ledger.get_task_context(task_id)
+
+        assert record is not None
+        assert record.early_stopped is True
+        assert "Exceeded energy budget" in record.early_stop_reason
+        assert record.firewall_triggered is True
+        assert "Ethical Firewall" in record.firewall_reason
+        assert record.credit_allowance_total == 1000
+        assert record.credit_allowance_used == 1200
+        assert record.credit_allowance_remaining == 0
+        assert record.credit_allowance_exhausted is True
+        assert ctx is not None
+        assert ctx.telemetry_summary["early_stopped"] is True
+        assert ctx.telemetry_summary["credit_allowance_exhausted"] is True

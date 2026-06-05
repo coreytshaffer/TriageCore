@@ -69,6 +69,12 @@ class ProjectSteward:
         needs_escalation = False
         reasons = []
         recommended_escalation = "none"
+        firewall_triggered = False
+        firewall_reason = ""
+        token_credit_allowance = int(self.budgets.get("token_credit_allowance", 0) or 0)
+        credit_allowance_used = 0
+        credit_allowance_remaining = token_credit_allowance
+        credit_allowance_exhausted = False
 
         # Scan prompt and outputs for sensitive context
         combined_text = task_prompt
@@ -108,7 +114,12 @@ class ProjectSteward:
                 if matched_term or matched_regex:
                     needs_escalation = True
                     trigger_detail = matched_term if matched_term else f"regex '{matched_regex}'"
-                    reasons.append(f"Ethical Firewall: Triggered rule '{rule.get('id')}' via {trigger_detail}. {msg}")
+                    firewall_triggered = True
+                    firewall_reason = (
+                        f"Ethical Firewall: Triggered rule '{rule.get('id')}' "
+                        f"via {trigger_detail}. {msg}"
+                    )
+                    reasons.append(firewall_reason)
                     recommended_escalation = decision
                     rules_run = True
                     break
@@ -118,7 +129,9 @@ class ProjectSteward:
             for kw in self.SENSITIVE_KEYWORDS:
                 if kw in combined_text_lower:
                     needs_escalation = True
-                    reasons.append(f"Ethical Firewall: Sensitive context detected ('{kw}').")
+                    firewall_triggered = True
+                    firewall_reason = f"Ethical Firewall: Sensitive context detected ('{kw}')."
+                    reasons.append(firewall_reason)
                     recommended_escalation = "human_only"
                     break
 
@@ -146,8 +159,7 @@ class ProjectSteward:
                 # Escalate to antigravity for credit allowance optimization
                 recommended_escalation = "antigravity"
 
-            token_credit_allowance = self.budgets.get("token_credit_allowance", 0)
-            if not needs_escalation and token_credit_allowance > 0:
+            if token_credit_allowance > 0:
                 try:
                     ledger = TaskLedger(ledger_dir=default_config.get_ledger_dir())
                     all_tasks = ledger.get_all_tasks()
@@ -157,10 +169,18 @@ class ProjectSteward:
                         for o in completed_orders
                         if o.result
                     )
-                    total_usage = cumulative_tokens + current_tokens
-                    if total_usage > token_credit_allowance:
+                    credit_allowance_used = cumulative_tokens + current_tokens
+                    credit_allowance_remaining = max(
+                        token_credit_allowance - credit_allowance_used,
+                        0,
+                    )
+                    credit_allowance_exhausted = credit_allowance_used > token_credit_allowance
+                    if not needs_escalation and credit_allowance_exhausted:
                         needs_escalation = True
-                        reasons.append(f"Token credit allowance exhausted (cumulative {total_usage} >= allowance {token_credit_allowance}).")
+                        reasons.append(
+                            "Token credit allowance exhausted "
+                            f"(cumulative {credit_allowance_used} >= allowance {token_credit_allowance})."
+                        )
                         recommended_escalation = "antigravity"
                 except Exception:
                     pass
@@ -182,6 +202,12 @@ class ProjectSteward:
             "recommended_permission_profile": (
                 "workspace" if needs_escalation else "read-only"
             ),
+            "firewall_triggered": firewall_triggered,
+            "firewall_reason": firewall_reason,
+            "credit_allowance_total": token_credit_allowance,
+            "credit_allowance_used": credit_allowance_used,
+            "credit_allowance_remaining": credit_allowance_remaining,
+            "credit_allowance_exhausted": credit_allowance_exhausted,
             "resource_summary": {
                 "local_attempts": len(completed_orders),
                 "estimated_energy_kwh": total_energy_kwh,

@@ -27,6 +27,14 @@ class TaskRecord:
     grid_intensity_gco2e_per_kwh: float = 0.0
     grid_intensity_source: str = "static_config"
     wasted_tokens: int = 0
+    early_stopped: bool = False
+    early_stop_reason: str = ""
+    firewall_triggered: bool = False
+    firewall_reason: str = ""
+    credit_allowance_total: int = 0
+    credit_allowance_used: int = 0
+    credit_allowance_remaining: int = 0
+    credit_allowance_exhausted: bool = False
 
     # Benchmark / model evaluation fields (Codex)
     backend_name: Optional[str] = None
@@ -211,6 +219,14 @@ class TaskLedger:
             "water_liters": record.water_liters_estimate,
             "embodied_gco2e": record.embodied_gco2e_allocated,
             "total_tokens": total_tok,
+            "early_stopped": record.early_stopped,
+            "early_stop_reason": record.early_stop_reason,
+            "firewall_triggered": record.firewall_triggered,
+            "firewall_reason": record.firewall_reason,
+            "credit_allowance_total": record.credit_allowance_total,
+            "credit_allowance_used": record.credit_allowance_used,
+            "credit_allowance_remaining": record.credit_allowance_remaining,
+            "credit_allowance_exhausted": record.credit_allowance_exhausted,
             "context_estimated_tokens": record.context_estimated_tokens,
             "context_budget_tokens": record.context_budget_tokens,
             "context_budget_status": record.context_budget_status,
@@ -278,6 +294,7 @@ class TaskLedger:
             if "artifact_path" in payload:
                 record.artifact_paths.append(payload["artifact_path"])
             self._apply_model_evaluation(record, payload)
+            self._apply_story_118_signals(record, payload)
             if "reason" in payload:
                 record.handoff_reason = payload["reason"]
                 record.human_review_required = True
@@ -285,6 +302,7 @@ class TaskLedger:
                 record.wasted_tokens = payload["wasted_tokens"]
         elif etype == "model_evaluated":
             self._apply_model_evaluation(record, payload)
+            self._apply_story_118_signals(record, payload)
         elif etype == "validator_completed":
             record.validator_passed = payload.get("passed")
         elif etype == "energy_estimated":
@@ -328,6 +346,7 @@ class TaskLedger:
             record.status = "blocked"
             record.handoff_reason = payload.get("reason", record.handoff_reason)
             record.human_review_required = True
+            self._apply_story_118_signals(record, payload)
             if "input_tokens" in payload:
                 record.input_tokens = payload["input_tokens"]
             if "output_tokens" in payload:
@@ -375,6 +394,37 @@ class TaskLedger:
             record.human_review_required = True
         if "wasted_tokens" in payload:
             record.wasted_tokens = payload["wasted_tokens"]
+
+    @staticmethod
+    def _apply_story_118_signals(record: TaskRecord, payload: Dict[str, Any]) -> None:
+        """Hydrate integrated telemetry controls from explicit payload keys or stable reasons."""
+        reason = (
+            payload.get("early_stop_reason")
+            or payload.get("firewall_reason")
+            or payload.get("handoff_reason")
+            or payload.get("reason")
+            or ""
+        )
+        reason_lower = reason.lower()
+
+        if payload.get("early_stopped") or reason_lower.startswith("early stopping:"):
+            record.early_stopped = True
+            record.early_stop_reason = payload.get("early_stop_reason") or reason
+
+        if payload.get("firewall_triggered") or "ethical firewall:" in reason_lower:
+            record.firewall_triggered = True
+            record.firewall_reason = payload.get("firewall_reason") or reason
+
+        if "credit_allowance_total" in payload:
+            record.credit_allowance_total = payload["credit_allowance_total"] or 0
+        if "credit_allowance_used" in payload:
+            record.credit_allowance_used = payload["credit_allowance_used"] or 0
+        if "credit_allowance_remaining" in payload:
+            record.credit_allowance_remaining = payload["credit_allowance_remaining"] or 0
+        if "credit_allowance_exhausted" in payload:
+            record.credit_allowance_exhausted = bool(payload["credit_allowance_exhausted"])
+        elif "token credit allowance exhausted" in reason_lower:
+            record.credit_allowance_exhausted = True
 
     def export_csv(self, export_path: str):
         """Export all task records to a research-ready CSV."""

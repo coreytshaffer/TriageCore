@@ -69,4 +69,12 @@ def result_to_model_event(task: BenchmarkTask, result: Dict[str, Any]) -> Dict[s
         "tokens_per_second": result.get("tokens_per_second", 0.0),
         "validator_passed": result.get("validator_passed"),
         "handoff_reason": result.get("handoff_reason") or result.get("reason"),
+        "early_stopped": result.get("early_stopped", False),
+        "early_stop_reason": result.get("early_stop_reason", ""),
+        "firewall_triggered": result.get("firewall_triggered", False),
+        "firewall_reason": result.get("firewall_reason", ""),
+        "credit_allowance_total": result.get("credit_allowance_total", 0),
+        "credit_allowance_used": result.get("credit_allowance_used", 0),
+        "credit_allowance_remaining": result.get("credit_allowance_remaining", 0),
+        "credit_allowance_exhausted": result.get("credit_allowance_exhausted", False),
     }

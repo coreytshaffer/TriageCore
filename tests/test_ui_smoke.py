@@ -204,3 +204,65 @@ def test_telemetry_local_benefit_metrics_are_evidence_bound():
     assert metrics["review_light_pct"] == pytest.approx(66.666666)
     assert metrics["local_tokens"] == 175
     assert metrics["local_accepted"] == 1
+
+
+def test_telemetry_control_summary_surfaces_story_118_signals():
+    from triage_core.task_ledger import TaskRecord
+    from triage_core.ui.app import _telemetry_control_summary
+
+    tasks = [
+        TaskRecord(
+            task_id="early-stop",
+            updated_at="2026-06-04T10:00:00+00:00",
+            early_stopped=True,
+            early_stop_reason="Exceeded energy budget (0.0300 > 0.02).",
+            total_tokens=400,
+        ),
+        TaskRecord(
+            task_id="firewall",
+            updated_at="2026-06-04T10:01:00+00:00",
+            firewall_triggered=True,
+            firewall_reason="Ethical Firewall: Triggered rule 'public_health_and_safety'.",
+            total_tokens=300,
+        ),
+        TaskRecord(
+            task_id="credit",
+            updated_at="2026-06-04T10:02:00+00:00",
+            credit_allowance_total=1000,
+            credit_allowance_used=1100,
+            credit_allowance_remaining=0,
+            credit_allowance_exhausted=True,
+            total_tokens=1100,
+        ),
+        TaskRecord(
+            task_id="stability-1",
+            updated_at="2026-06-04T10:03:00+00:00",
+            runner="stability_pass",
+            study_id="stability_pass",
+            expected_status="success",
+            observed_status="success",
+        ),
+        TaskRecord(
+            task_id="stability-2",
+            updated_at="2026-06-04T10:04:00+00:00",
+            runner="stability_pass",
+            study_id="stability_pass",
+            expected_status="handoff_required",
+            observed_status="handoff_required",
+        ),
+    ]
+
+    summary = _telemetry_control_summary(
+        tasks,
+        log_tail="stability-pass completed status=success",
+        token_credit_allowance=1000,
+    )
+
+    assert summary["early_stop"]["value"] == "1 event(s)"
+    assert "Exceeded energy budget" in summary["early_stop"]["detail"]
+    assert summary["firewall"]["value"] == "1 trigger(s)"
+    assert "Ethical Firewall" in summary["firewall"]["detail"]
+    assert summary["credit"]["value"] == "Exhausted"
+    assert summary["credit"]["detail"] == "1800/1000 tokens used"
+    assert summary["stability"]["value"] == "PASS"
+    assert summary["stability"]["detail"] == "2/2 fixtures matched expected outcomes"
