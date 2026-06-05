@@ -75,3 +75,28 @@ def test_project_steward_matches_regex_coordinates():
     assert res["local_result_status"] == "insufficient"
     assert res["recommended_escalation"] == "human_only"
     assert "Triggered rule 'sensitive_coordinates'" in res["reason"]
+
+
+def test_project_steward_escalates_on_credit_exhaustion():
+    # Setup budgets with low credit allowance
+    budgets = {"token_credit_allowance": 1000}
+    steward = ProjectSteward(budgets=budgets)
+
+    # Mock completed orders with token consumption over the budget
+    over_order = WorkOrder(
+        task_id="task-1",
+        assigned_role="implementer",
+        input_artifacts=[],
+        output_required="Generate text.",
+        result={"resource_usage": {"total_tokens": 1500}},
+    )
+
+    result = steward.evaluate(
+        "Summarize the text.",
+        target_files=[],
+        completed_orders=[over_order],
+    )
+
+    assert result["local_result_status"] == "insufficient"
+    assert result["recommended_escalation"] == "antigravity"
+    assert "Token credit allowance exhausted" in result["reason"]

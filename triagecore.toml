@@ -25,3 +25,6 @@ grid_intensity_lon = ""
 
 [policies]
 boundary_rules_path = "policies/cybernetic_ecology_boundary.yaml"
+
+[budgets]
+token_credit_allowance = 50000

@@ -183,10 +183,10 @@ Primary scientific outcome: tokens per accepted task, interpreted beside validat
   * [x] Link context packs to the task ledger so reports can audit what the model actually saw.
   * [x] Preserve reproducibility without forcing every future reviewer to reread the entire chat.
 
-* [ ] **Story 11.3: Cybernetic Ecology Boundary Harness Integration**
-  * Integrate framework principles (community/sovereignty boundaries, public health, regulatory interpretation) as active firewall policies in `ProjectSteward`.
-  * Let the harness dynamically inspect prompts and outputs, warning or blocking execution based on local-first policy files (JSON/YAML).
-  * Verify that the ethical firewall escalates sensitive contexts (e.g., Bloody Island, sacred/archaeological sites) cleanly.
+* [x] **Story 11.3: Cybernetic Ecology Boundary Harness Integration**
+  * [x] Integrate framework principles (community/sovereignty boundaries, public health, regulatory interpretation) as active firewall policies in `ProjectSteward`.
+  * [x] Let the harness dynamically inspect prompts and outputs, warning or blocking execution based on local-first policy files (JSON/YAML).
+  * [x] Verify that the ethical firewall escalates sensitive contexts (e.g., Bloody Island, sacred/archaeological sites) cleanly.
 
 * [ ] **Story 11.4: Escalate to Antigravity on Credit Allowance Depletion**
   * Track a local token/credit allowance limit or budget within `ProjectSteward` or a credit coordinator.

@@ -5,6 +5,7 @@ from typing import List, Dict, Any
 from .work_orders import WorkOrder
 from .handoff import HandoffPacket
 from .config import default_config
+from .task_ledger import TaskLedger
 
 
 class ProjectSteward:
@@ -139,6 +140,25 @@ class ProjectSteward:
                 reasons.append(f"Exceeded energy budget ({total_energy_kwh:.4f} > {max_energy}).")
                 # Escalate to antigravity for credit allowance optimization
                 recommended_escalation = "antigravity"
+
+            token_credit_allowance = self.budgets.get("token_credit_allowance", 0)
+            if not needs_escalation and token_credit_allowance > 0:
+                try:
+                    ledger = TaskLedger(ledger_dir=default_config.get_ledger_dir())
+                    all_tasks = ledger.get_all_tasks()
+                    cumulative_tokens = sum(t.total_tokens for t in all_tasks if t.total_tokens)
+                    current_tokens = sum(
+                        o.result.get("resource_usage", {}).get("total_tokens", 0)
+                        for o in completed_orders
+                        if o.result
+                    )
+                    total_usage = cumulative_tokens + current_tokens
+                    if total_usage > token_credit_allowance:
+                        needs_escalation = True
+                        reasons.append(f"Token credit allowance exhausted (cumulative {total_usage} >= allowance {token_credit_allowance}).")
+                        recommended_escalation = "antigravity"
+                except Exception:
+                    pass
 
         # Compile summaries
         local_work_summary = []
