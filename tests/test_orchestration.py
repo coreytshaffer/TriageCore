@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 from triage_core.orchestration import ProjectManager
 from triage_core.work_orders import WorkOrder
+from triage_core.validator_tools import ValidationResult
 
 class DummyWorker:
     def __init__(self, role, outputs):
@@ -19,107 +20,113 @@ def test_dispatch_task_success():
     pm = ProjectManager()
     
     # Mock registry
-    repo_mapper = DummyWorker("repo_mapper", [{"summary": "Repo analyzed", "files_identified": []}])
-    code_repair = DummyWorker("code_repair", [{"repaired_code": "print('ok')"}])
-    validator = DummyWorker("validator", [{"is_valid": True, "issues_found": []}])
+    context_planner = DummyWorker("context_planner", [{"summary": "Repo analyzed", "files_identified": []}])
+    implementer = DummyWorker("implementer", [{"repaired_code": "print('ok')"}])
+    review_worker = DummyWorker("review_worker", [{"is_valid": True, "issues_found": []}])
     
     pm.registry.workers = {
-        "repo_mapper": repo_mapper,
-        "code_repair": code_repair,
-        "validator": validator
+        "context_planner": context_planner,
+        "implementer": implementer,
+        "review_worker": review_worker
     }
     
-    result = pm.dispatch_task(
-        prompt="Fix issues",
-        target_files=["file.py"],
-        required_roles=["repo_mapper", "code_repair", "validator"]
-    )
+    with patch("triage_core.orchestration.ValidatorTools.run") as mock_val_run:
+        mock_val_run.return_value = [ValidationResult(passed=True, validator="dummy")]
+        result = pm.dispatch_task(
+            prompt="Fix issues",
+            target_files=["file.py"],
+            required_roles=["context_planner", "implementer", "review_worker"]
+        )
     
     assert result["evaluation"]["local_result_status"] == "sufficient"
-    assert repo_mapper.call_count == 1
-    assert code_repair.call_count == 1
-    assert validator.call_count == 1
+    assert context_planner.call_count == 1
+    assert implementer.call_count == 1
+    assert review_worker.call_count == 1
 
 def test_dispatch_task_loopback():
     pm = ProjectManager()
     pm.budgets = {"max_local_attempts": 2}
     
-    # Mock registry: Validator fails first time, succeeds second time
-    repo_mapper = DummyWorker("repo_mapper", [{"summary": "Repo analyzed", "files_identified": []}])
-    code_repair = DummyWorker("code_repair", [
+    # Mock registry
+    context_planner = DummyWorker("context_planner", [{"summary": "Repo analyzed", "files_identified": []}])
+    implementer = DummyWorker("implementer", [
         {"repaired_code": "print('bad')"},
         {"repaired_code": "print('fixed')"}
     ])
-    validator = DummyWorker("validator", [
-        {"is_valid": False, "issues_found": ["syntax error"]},
-        {"is_valid": True, "issues_found": []}
-    ])
+    review_worker = DummyWorker("review_worker", [{"is_valid": True, "issues_found": []}])
     
     pm.registry.workers = {
-        "repo_mapper": repo_mapper,
-        "code_repair": code_repair,
-        "validator": validator
+        "context_planner": context_planner,
+        "implementer": implementer,
+        "review_worker": review_worker
     }
     
-    result = pm.dispatch_task(
-        prompt="Fix issues",
-        target_files=["file.py"],
-        required_roles=["repo_mapper", "code_repair", "validator"]
-    )
+    with patch("triage_core.orchestration.ValidatorTools.run") as mock_val_run:
+        # Fails first time, passes second time
+        mock_val_run.side_effect = [
+            [ValidationResult(passed=False, validator="dummy", issues=["syntax error"])],
+            [ValidationResult(passed=True, validator="dummy", issues=[])]
+        ]
+        
+        result = pm.dispatch_task(
+            prompt="Fix issues",
+            target_files=["file.py"],
+            required_roles=["context_planner", "implementer", "review_worker"]
+        )
     
     # Should resolve successfully after loopback repair
     assert result["evaluation"]["local_result_status"] == "sufficient"
-    assert repo_mapper.call_count == 1
-    # Code repair called twice: once initially, once on loopback
-    assert code_repair.call_count == 2
-    # Validator called twice: once initially, once on loopback
-    assert validator.call_count == 2
+    assert context_planner.call_count == 1
+    # implementer called twice: once initially, once on loopback
+    assert implementer.call_count == 2
+    # review_worker called once after it finally passes
+    assert review_worker.call_count == 1
 
 def test_dispatch_task_early_delegation():
     pm = ProjectManager()
     
-    # Mock registry: code_repair decides to delegate to antigravity immediately
-    repo_mapper = DummyWorker("repo_mapper", [{"summary": "Repo analyzed", "files_identified": []}])
-    code_repair = DummyWorker("code_repair", [{"delegate_to": "antigravity"}])
-    validator = DummyWorker("validator", [{"is_valid": True}])
+    # Mock registry: implementer decides to delegate to antigravity immediately
+    context_planner = DummyWorker("context_planner", [{"summary": "Repo analyzed", "files_identified": []}])
+    implementer = DummyWorker("implementer", [{"delegate_to": "antigravity"}])
+    review_worker = DummyWorker("review_worker", [{"is_valid": True}])
     
     pm.registry.workers = {
-        "repo_mapper": repo_mapper,
-        "code_repair": code_repair,
-        "validator": validator
+        "context_planner": context_planner,
+        "implementer": implementer,
+        "review_worker": review_worker
     }
     
     result = pm.dispatch_task(
         prompt="Extreme refactoring",
         target_files=["file.py"],
-        required_roles=["repo_mapper", "code_repair", "validator"]
+        required_roles=["context_planner", "implementer", "review_worker"]
     )
     
     assert result["evaluation"]["local_result_status"] == "insufficient"
     assert result["evaluation"]["recommended_escalation"] == "antigravity"
-    assert code_repair.call_count == 1
-    # Validator should NEVER be called since execution halted
-    assert validator.call_count == 0
+    assert implementer.call_count == 1
+    # review_worker should NEVER be called since execution halted
+    assert review_worker.call_count == 0
 
 def test_dispatch_task_next_worker():
     pm = ProjectManager()
     
-    # Mock registry: repo_mapper suggests running test_stubber next
-    repo_mapper = DummyWorker("repo_mapper", [{"summary": "Repo analyzed", "next_worker": "test_stubber"}])
+    # Mock registry: context_planner suggests running test_stubber next
+    context_planner = DummyWorker("context_planner", [{"summary": "Repo analyzed", "next_worker": "test_stubber"}])
     test_stubber = DummyWorker("test_stubber", [{"test_code": "def test(): pass"}])
     
     pm.registry.workers = {
-        "repo_mapper": repo_mapper,
+        "context_planner": context_planner,
         "test_stubber": test_stubber
     }
     
     result = pm.dispatch_task(
         prompt="Analyze and stub tests",
         target_files=["file.py"],
-        required_roles=["repo_mapper"]
+        required_roles=["context_planner"]
     )
     
-    assert repo_mapper.call_count == 1
+    assert context_planner.call_count == 1
     assert test_stubber.call_count == 1
     assert len(result["work_orders"]) == 2
 
@@ -145,18 +152,18 @@ def test_escalation_packet_uses_configured_tasks_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(orchestration_module, "default_config", fresh_config)
 
     pm = ProjectManager()
-    repo_mapper = DummyWorker("repo_mapper", [
+    context_planner = DummyWorker("context_planner", [
         {
             "summary": "Repo analyzed",
             "resource_usage": {"energy_kwh_estimate": 0.01, "duration_seconds": 1},
         }
     ])
-    pm.registry.workers = {"repo_mapper": repo_mapper}
+    pm.registry.workers = {"context_planner": context_planner}
 
     result = pm.dispatch_task(
         prompt="Trigger energy escalation",
         target_files=["file.py"],
-        required_roles=["repo_mapper"],
+        required_roles=["context_planner"],
     )
 
     assert result["evaluation"]["local_result_status"] == "insufficient"

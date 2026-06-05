@@ -9,6 +9,7 @@ class WorkOrder:
     assigned_role: str
     input_artifacts: List[str]
     output_required: str
+    validators: List[str] = field(default_factory=list)
     max_tokens: int = 500
     max_seconds: int = 60
     status: str = "pending"

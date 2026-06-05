@@ -1350,14 +1350,16 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
     # ─── Ledger Frame ─────────────────────────────────────────────────────────
     def _build_ledger_frame(self):
         f = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
-        f.grid_columnconfigure(0, weight=1)
+        f.grid_columnconfigure(0, weight=1, minsize=350)
+        f.grid_columnconfigure(1, weight=3)
         f.grid_rowconfigure(1, weight=1)
         self.ledger_frame = f
 
+        # Header spans both columns
         hdr = ctk.CTkFrame(f, fg_color="transparent")
-        hdr.grid(row=0, column=0, padx=24, pady=(20, 8), sticky="ew")
+        hdr.grid(row=0, column=0, columnspan=2, padx=24, pady=(20, 8), sticky="ew")
         ctk.CTkLabel(
-            hdr, text="Task Ledger", font=ctk.CTkFont(size=22, weight="bold")
+            hdr, text="Task Ledger & Inspector", font=ctk.CTkFont(size=22, weight="bold")
         ).pack(side="left")
         ctk.CTkButton(
             hdr,
@@ -1368,19 +1370,186 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             border_width=1,
         ).pack(side="right")
 
+        # Left pane (Task list)
         self.ledger_scroll = ctk.CTkScrollableFrame(
-            f, corner_radius=0, fg_color="transparent"
+            f, corner_radius=8, fg_color=("gray85", "gray15")
         )
-        self.ledger_scroll.grid(row=1, column=0, padx=12, pady=(0, 12), sticky="nsew")
+        self.ledger_scroll.grid(row=1, column=0, padx=(12, 6), pady=(0, 12), sticky="nsew")
         self.ledger_scroll.grid_columnconfigure(0, weight=1)
+
+        # Right pane (Context inspector)
+        self.context_inspector = ctk.CTkFrame(
+            f, corner_radius=8, fg_color=("gray85", "gray20")
+        )
+        self.context_inspector.grid(row=1, column=1, padx=(6, 12), pady=(0, 12), sticky="nsew")
+        self.context_inspector.grid_columnconfigure(0, weight=1)
+        self.context_inspector.grid_rowconfigure(1, weight=1)
+        
+        # Tabs for inspector
+        self.inspector_tabs = ctk.CTkSegmentedButton(
+            self.context_inspector, 
+            values=["Summary", "Artifacts", "Telemetry", "Timeline", "Review"],
+            command=self._on_inspector_tab_change
+        )
+        self.inspector_tabs.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
+        self.inspector_tabs.set("Summary")
+        self.current_inspector_tab = "Summary"
+        
+        self.inspector_content = ctk.CTkScrollableFrame(
+            self.context_inspector, fg_color="transparent", corner_radius=0
+        )
+        self.inspector_content.grid(row=1, column=0, padx=10, pady=(0, 10), sticky="nsew")
+        self.inspector_content.grid_columnconfigure(0, weight=1)
+
+    def _on_inspector_tab_change(self, value):
+        self.current_inspector_tab = value
+        if self.current_loaded_task_id:
+            self._render_context_inspector(self.current_loaded_task_id)
+
+    def _select_ledger_task(self, task_id):
+        self.current_loaded_task_id = task_id
+        self._render_context_inspector(task_id)
+
+    def _render_context_inspector(self, task_id):
+        for w in self.inspector_content.winfo_children():
+            w.destroy()
+            
+        ctx = self.ledger.get_task_context(task_id)
+        if not ctx:
+            ctk.CTkLabel(self.inspector_content, text="Task not found.", text_color="gray").pack(pady=40)
+            return
+
+        if self.current_inspector_tab == "Summary":
+            self._render_inspector_summary(ctx)
+        elif self.current_inspector_tab == "Artifacts":
+            self._render_inspector_artifacts(ctx)
+        elif self.current_inspector_tab == "Telemetry":
+            self._render_inspector_telemetry(ctx)
+        elif self.current_inspector_tab == "Timeline":
+            self._render_inspector_timeline(ctx)
+        elif self.current_inspector_tab == "Review":
+            self._render_inspector_review(ctx)
+
+    def _render_inspector_summary(self, ctx):
+        t = ctx.record
+        _SectionLabel(self.inspector_content, "Task Details").pack(anchor="w", pady=(0, 4))
+        ctk.CTkLabel(self.inspector_content, text=t.title or t.task_id[:12], font=ctk.CTkFont(size=16, weight="bold")).pack(anchor="w", pady=(0, 10))
+        
+        ctk.CTkLabel(self.inspector_content, text=f"ID: {t.task_id}").pack(anchor="w")
+        ctk.CTkLabel(self.inspector_content, text=f"Status: {t.status}").pack(anchor="w")
+        ctk.CTkLabel(self.inspector_content, text=f"Runner: {t.runner or 'None'}").pack(anchor="w")
+        ctk.CTkLabel(self.inspector_content, text=f"Risk Level: {t.risk_level or 'None'}").pack(anchor="w")
+        ctk.CTkLabel(self.inspector_content, text=f"Profile: {t.permission_profile or 'None'}").pack(anchor="w")
+        if t.description:
+            ctk.CTkLabel(self.inspector_content, text="Prompt:", font=ctk.CTkFont(weight="bold")).pack(anchor="w", pady=(10, 0))
+            box = ctk.CTkTextbox(self.inspector_content, height=100)
+            box.pack(fill="x", pady=4)
+            box.insert("0.0", t.description)
+            box.configure(state="disabled")
+
+    def _render_inspector_artifacts(self, ctx):
+        _SectionLabel(self.inspector_content, "Generated Artifacts").pack(anchor="w", pady=(0, 4))
+        if not ctx.artifact_paths:
+            ctk.CTkLabel(self.inspector_content, text="No artifacts generated yet.", text_color="gray").pack(anchor="w", pady=10)
+            return
+            
+        for path in ctx.artifact_paths:
+            ctk.CTkLabel(self.inspector_content, text=path, font=ctk.CTkFont(size=11, family="Courier")).pack(anchor="w", pady=2)
+            
+        if ctx.latest_artifact_text:
+            ctk.CTkLabel(self.inspector_content, text="Latest Artifact Preview:", font=ctk.CTkFont(weight="bold")).pack(anchor="w", pady=(10, 4))
+            box = ctk.CTkTextbox(self.inspector_content, height=300, font=ctk.CTkFont(size=11, family="Courier"))
+            box.pack(fill="both", expand=True, pady=4)
+            box.insert("0.0", ctx.latest_artifact_text)
+            box.configure(state="disabled")
+
+    def _render_inspector_telemetry(self, ctx):
+        _SectionLabel(self.inspector_content, "Resource Consumption").pack(anchor="w", pady=(0, 4))
+        tel = ctx.telemetry_summary
+        grid = ctk.CTkFrame(self.inspector_content, fg_color="transparent")
+        grid.pack(fill="x", pady=10)
+        grid.grid_columnconfigure((0,1), weight=1)
+        
+        ctk.CTkLabel(grid, text=f"⏱ Duration: {tel.get('duration_seconds', 0):.2f}s", font=ctk.CTkFont(size=13)).grid(row=0, column=0, sticky="w", pady=4)
+        ctk.CTkLabel(grid, text=f"🎫 Tokens: {tel.get('total_tokens', 0)}", font=ctk.CTkFont(size=13)).grid(row=0, column=1, sticky="w", pady=4)
+        ctk.CTkLabel(grid, text=f"⚡ Energy: {tel.get('energy_kwh', 0):.6f} kWh", font=ctk.CTkFont(size=13)).grid(row=1, column=0, sticky="w", pady=4)
+        ctk.CTkLabel(grid, text=f"💨 Emissions: {tel.get('emissions_gco2e', 0):.4f} gCO₂e", font=ctk.CTkFont(size=13)).grid(row=1, column=1, sticky="w", pady=4)
+        ctk.CTkLabel(grid, text=f"💧 Water: {tel.get('water_liters', 0):.4f} L", font=ctk.CTkFont(size=13)).grid(row=2, column=0, sticky="w", pady=4)
+        ctk.CTkLabel(grid, text=f"🔩 Embodied: {tel.get('embodied_gco2e', 0):.5f} gCO₂e", font=ctk.CTkFont(size=13)).grid(row=2, column=1, sticky="w", pady=4)
+
+    def _render_inspector_timeline(self, ctx):
+        _SectionLabel(self.inspector_content, "Event Timeline").pack(anchor="w", pady=(0, 4))
+        if not ctx.events:
+            ctk.CTkLabel(self.inspector_content, text="No events recorded.", text_color="gray").pack(anchor="w", pady=10)
+            return
+            
+        for ev in ctx.events:
+            frame = ctk.CTkFrame(self.inspector_content, fg_color=("gray90", "gray10"), corner_radius=4)
+            frame.pack(fill="x", pady=2)
+            ts = ev.get('timestamp', '')[:19].replace('T', ' ')
+            etype = ev.get('event_type', 'unknown')
+            ctk.CTkLabel(frame, text=f"{ts} | {etype}", font=ctk.CTkFont(size=11, family="Courier", weight="bold")).pack(anchor="w", padx=10, pady=4)
+
+    def _render_inspector_review(self, ctx):
+        _SectionLabel(self.inspector_content, "Review & Action").pack(anchor="w", pady=(0, 4))
+        rev = ctx.review_summary
+        t = ctx.record
+        
+        ctk.CTkLabel(self.inspector_content, text=f"Human Review Required: {rev.get('human_review_required', False)}").pack(anchor="w", pady=2)
+        ctk.CTkLabel(self.inspector_content, text=f"Accepted: {rev.get('accepted', False)}").pack(anchor="w", pady=2)
+        if rev.get("supervisor_decision"):
+            ctk.CTkLabel(self.inspector_content, text=f"Supervisor Decision: {rev.get('supervisor_decision')}").pack(anchor="w", pady=2)
+
+        if t.status in ["local_draft_generated", "handoff_generated", "council_completed", "pending"]:
+            actions = ctk.CTkFrame(self.inspector_content, fg_color="transparent")
+            actions.pack(fill="x", pady=20)
+            
+            accept_btn = ctk.CTkButton(actions, text="Approve & Load", fg_color="#166534", hover_color="#15803d", command=lambda: self._execute_context_review(t.task_id, True))
+            accept_btn.pack(side="left", padx=(0, 10))
+            
+            reject_btn = ctk.CTkButton(actions, text="Deny", fg_color="#7f1d1d", hover_color="#991b1b", command=lambda: self._execute_context_review(t.task_id, False))
+            reject_btn.pack(side="left", padx=(0, 10))
+
+            needs_rev_btn = ctk.CTkButton(actions, text="Needs Revision", fg_color="#b45309", hover_color="#92400e", command=lambda: self._execute_context_review(t.task_id, False, "needs_revision"))
+            needs_rev_btn.pack(side="left")
+
+    def _execute_context_review(self, task_id: str, accepted: bool, decision_override: str = None):
+        payload = {
+            "accepted": accepted,
+            "human_review_minutes": 1.0,
+            "review_workload": "medium"
+        }
+        if decision_override:
+            payload["decision"] = decision_override
+            
+        self.ledger.append_event(task_id, "review_completed", payload)
+        
+        if accepted:
+            task = self.ledger.get_task(task_id)
+            if task:
+                self.prompt_box.delete("0.0", "end")
+                self.prompt_box.insert("0.0", task.description or "")
+                self.prompt_box.configure(text_color=("gray10", "#DCE4EE"))
+                self.files_entry.delete(0, "end")
+                if task.target_files:
+                    self.files_entry.insert(0, ", ".join(task.target_files))
+                self.select_frame("dashboard")
+                self.status_label.configure(
+                    text=f"✓ Loaded task #{task_id[:8]} details. Ready to execute locally.",
+                    text_color="#22c55e",
+                )
+
+        self._refresh_ledger()
+        self._refresh_compact_ledger_feed()
+        self._update_ticker()
+        self._refresh_telemetry()
 
     def _refresh_ledger(self):
         self.timer_labels = {}
-        self.review_workload_vars = {}
         for w in self.ledger_scroll.winfo_children():
             w.destroy()
 
-        tasks = self.ledger.get_all_tasks()
+        tasks = self.ledger.get_recent_tasks(50)
         if not tasks:
             ctk.CTkLabel(
                 self.ledger_scroll, text="No tasks in ledger yet.", text_color="gray"
@@ -1394,9 +1563,16 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             fg = _card_fg(status)
             badge_bg, badge_fg = _badge_color(status)
 
-            card = ctk.CTkFrame(self.ledger_scroll, corner_radius=10, fg_color=fg)
-            card.grid(row=i, column=0, padx=4, pady=5, sticky="ew")
+            card = ctk.CTkFrame(self.ledger_scroll, corner_radius=6, fg_color=fg, cursor="hand2")
+            card.grid(row=i, column=0, padx=4, pady=4, sticky="ew")
             card.grid_columnconfigure(1, weight=1)
+            
+            # Make card elements clickable
+            def make_handler(tid=t.task_id):
+                return lambda e, task_id=tid: self._select_ledger_task(task_id)
+                
+            handler = make_handler()
+            card.bind("<Button-1>", handler)
 
             # Status badge
             badge = ctk.CTkLabel(
@@ -1404,190 +1580,51 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
                 text=f" {status.replace('_', ' ')} ",
                 fg_color=badge_bg,
                 text_color=badge_fg,
-                corner_radius=6,
-                font=ctk.CTkFont(size=10, weight="bold"),
+                corner_radius=4,
+                font=ctk.CTkFont(size=9, weight="bold"),
             )
-            badge.grid(row=0, column=0, padx=(10, 6), pady=(8, 2), sticky="w")
+            badge.grid(row=0, column=0, padx=(8, 6), pady=(6, 2), sticky="w")
+            badge.bind("<Button-1>", handler)
 
             # Title
-            ctk.CTkLabel(
+            title_lbl = ctk.CTkLabel(
                 card,
                 text=t.title or t.task_id[:12],
-                font=ctk.CTkFont(size=13, weight="bold"),
+                font=ctk.CTkFont(size=12, weight="bold"),
                 anchor="w",
-            ).grid(row=0, column=1, pady=(8, 2), sticky="w")
+            )
+            title_lbl.grid(row=0, column=1, pady=(6, 2), sticky="w")
+            title_lbl.bind("<Button-1>", handler)
 
             # ID chip
-            ctk.CTkLabel(
+            id_lbl = ctk.CTkLabel(
                 card,
                 text=f"#{t.task_id[:8]}",
-                font=ctk.CTkFont(size=10),
+                font=ctk.CTkFont(size=9),
                 text_color="#9ca3af",
                 anchor="e",
-            ).grid(row=0, column=2, padx=(10, 6), pady=(8, 2), sticky="e")
-
-            is_expanded = t.task_id in self.expanded_ledger_task_ids
-            detail_btn = ctk.CTkButton(
-                card,
-                text="Hide" if is_expanded else "Details",
-                width=72,
-                height=24,
-                fg_color="transparent",
-                border_width=1,
-                command=lambda t_id=t.task_id: self._toggle_ledger_details(t_id),
             )
-            detail_btn.grid(row=0, column=3, padx=(0, 10), pady=(8, 2), sticky="e")
-            self._add_focus_ring(detail_btn)
-
-            # Meta row
+            id_lbl.grid(row=0, column=2, padx=(8, 6), pady=(6, 2), sticky="e")
+            id_lbl.bind("<Button-1>", handler)
+            
             meta_parts = []
-            if t.risk_level:
-                meta_parts.append(f"Risk: {t.risk_level}")
-            if t.runner:
-                meta_parts.append(f"Runner: {t.runner}")
-            if t.model:
-                meta_parts.append(f"Model: {t.model}")
-            if t.backend:
-                meta_parts.append(f"Backend: {t.backend}")
-            if meta_parts:
-                ctk.CTkLabel(
-                    card,
-                    text="  ·  ".join(meta_parts),
-                    font=ctk.CTkFont(size=11),
-                    text_color="#9ca3af",
-                    anchor="w",
-                ).grid(row=1, column=0, columnspan=4, padx=10, pady=(0, 4), sticky="w")
-
-            # Metric strip
-            total_tok = (t.estimated_input_tokens or 0) + (
-                t.estimated_output_tokens or 0
+            if t.risk_level: meta_parts.append(f"Risk: {t.risk_level}")
+            if t.runner: meta_parts.append(f"Runner: {t.runner}")
+            
+            meta_lbl = ctk.CTkLabel(
+                card,
+                text=" · ".join(meta_parts),
+                font=ctk.CTkFont(size=10),
+                text_color="#9ca3af",
+                anchor="w",
             )
-            metrics = [
-                f"⚡ {t.energy_kwh_estimate:.6f} kWh",
-                f"💨 {t.emissions_gco2e_estimate:.4f} gCO₂e",
-                f"💧 {t.water_liters_estimate:.4f} L",
-                f"🔩 {t.embodied_gco2e_allocated:.5f} gCO₂e emb.",
-                f"🎫 {total_tok} tok",
-            ]
-            ctk.CTkLabel(
-                card,
-                text="   ".join(metrics),
-                font=ctk.CTkFont(family="Courier", size=11),
-                text_color="#d1d5db",
-                anchor="w",
-            ).grid(row=2, column=0, columnspan=4, padx=10, pady=(0, 8), sticky="w")
+            meta_lbl.grid(row=1, column=0, columnspan=3, padx=8, pady=(0, 6), sticky="w")
+            meta_lbl.bind("<Button-1>", handler)
 
-            ctk.CTkLabel(
-                card,
-                text="Assessment snapshot",
-                font=ctk.CTkFont(size=11, weight="bold"),
-                text_color="#93c5fd",
-                anchor="w",
-            ).grid(row=3, column=0, columnspan=4, padx=10, pady=(0, 2), sticky="w")
-            ctk.CTkLabel(
-                card,
-                text=_review_assessment_text(t),
-                font=ctk.CTkFont(size=11),
-                text_color="#e5e7eb",
-                justify="left",
-                anchor="w",
-                wraplength=820,
-            ).grid(row=4, column=0, columnspan=4, padx=10, pady=(0, 10), sticky="ew")
-
-            next_row = 5
-            if is_expanded:
-                details = ctk.CTkLabel(
-                    card,
-                    text=_ledger_detail_text(t),
-                    font=ctk.CTkFont(family="Courier", size=11),
-                    text_color="#e5e7eb",
-                    justify="left",
-                    anchor="w",
-                    wraplength=820,
-                )
-                details.grid(
-                    row=next_row,
-                    column=0,
-                    columnspan=4,
-                    padx=10,
-                    pady=(0, 10),
-                    sticky="ew",
-                )
-                next_row += 1
-
-            # Accept/Reject buttons (if in reviewable state)
-            if status in [
-                "local_draft_generated",
-                "handoff_generated",
-                "council_completed",
-            ]:
-                workload_row = ctk.CTkFrame(card, fg_color="transparent")
-                workload_row.grid(
-                    row=next_row,
-                    column=0,
-                    columnspan=4,
-                    padx=10,
-                    pady=(0, 8),
-                    sticky="w",
-                )
-                ctk.CTkLabel(
-                    workload_row,
-                    text="Review load",
-                    font=ctk.CTkFont(size=11, weight="bold"),
-                    text_color="#9ca3af",
-                ).pack(side="left", padx=(0, 8))
-                workload_var = ctk.StringVar(value="Not set")
-                workload_picker = ctk.CTkSegmentedButton(
-                    workload_row,
-                    values=["Not set", "Low", "Medium", "High"],
-                    variable=workload_var,
-                    height=28,
-                    font=ctk.CTkFont(size=11),
-                    selected_color="#4f46e5",
-                    selected_hover_color="#6366f1",
-                    fg_color="#1f2937",
-                )
-                workload_picker.pack(side="left")
-                self.review_workload_vars[t.task_id] = workload_var
-                next_row += 1
-
-                btn_frame = ctk.CTkFrame(card, fg_color="transparent")
-                btn_frame.grid(
-                    row=next_row, column=0, columnspan=4, padx=10, pady=(0, 10), sticky="w"
-                )
-
-                accept_btn = ctk.CTkButton(
-                    btn_frame,
-                    text="Approve & Load",
-                    width=132,
-                    height=32,
-                    fg_color="#166534",
-                    hover_color="#15803d",
-                    command=lambda t_id=t.task_id: self._review_task(t_id, True),
-                )
-                accept_btn.pack(side="left", padx=(0, 8))
-                self._add_focus_ring(accept_btn)
-
-                reject_btn = ctk.CTkButton(
-                    btn_frame,
-                    text="Deny",
-                    width=92,
-                    height=32,
-                    fg_color="#7f1d1d",
-                    hover_color="#991b1b",
-                    command=lambda t_id=t.task_id: self._review_task(t_id, False),
-                )
-                reject_btn.pack(side="left", padx=(0, 8))
-                self._add_focus_ring(reject_btn)
-
-                timer_lbl = ctk.CTkLabel(
-                    btn_frame,
-                    text="🕐 0s elapsed",
-                    font=ctk.CTkFont(size=12, weight="bold"),
-                    text_color="#38bdf8",
-                )
-                timer_lbl.pack(side="left", padx=(10, 0))
-                self.timer_labels[t.task_id] = (timer_lbl, t)
+        if not self.current_loaded_task_id and tasks:
+            self._select_ledger_task(tasks[0].task_id)
+        elif self.current_loaded_task_id:
+            self._render_context_inspector(self.current_loaded_task_id)
 
     def _refresh_compact_ledger_feed(self, force=True):
         if not hasattr(self, "ledger_feed_frame"):

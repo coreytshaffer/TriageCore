@@ -157,14 +157,14 @@ class WorkerBase:
     def _build_prompt(self, order: WorkOrder) -> str:
         raise NotImplementedError("Subclasses must implement _build_prompt")
 
-class RepoMapperWorker(WorkerBase):
+class ContextPlannerWorker(WorkerBase):
     def __init__(self):
-        super().__init__("repo_mapper", default_model="qwen2.5-coder:7b")
+        super().__init__("context_planner", default_model="qwen2.5-coder:7b")
         
     def _build_prompt(self, order: WorkOrder) -> str:
         template = self._load_skill_prompt(self.role)
         if not template:
-            template = """You are the RepoMapper.
+            template = """You are the ContextPlanner.
 Analyze these input artifacts: {input_artifacts}
 Provide a JSON summary answering this output requirement: {output_required}
 Format: {{"summary": "...", "files_identified": []}}"""
@@ -194,16 +194,16 @@ Format: {{"test_code": "...", "files_referenced": []}}"""
             output_required=order.output_required,
         )
 
-class ValidatorWorker(WorkerBase):
+class LLMReviewWorker(WorkerBase):
     def __init__(self):
-        super().__init__("validator", default_model="qwen2.5-coder:7b")
+        super().__init__("review_worker", default_model="qwen2.5-coder:7b")
 
     def _build_prompt(self, order: WorkOrder) -> str:
         template = self._load_skill_prompt(self.role)
         if not template:
-            template = """You are the Validator.
+            template = """You are the LLMReviewWorker.
 Input context: {input_artifacts}
-Verify if the code fulfills the requirement: {output_required}
+Critique the quality, completeness, and risks of the implementation: {output_required}
 Format: {{"is_valid": true/false, "issues_found": ["..."]}}"""
         return template.format(
             input_artifacts=self._resolve_artifacts(
@@ -212,14 +212,14 @@ Format: {{"is_valid": true/false, "issues_found": ["..."]}}"""
             output_required=order.output_required,
         )
 
-class CodeRepairWorker(WorkerBase):
+class ImplementerWorker(WorkerBase):
     def __init__(self):
-        super().__init__("code_repair", default_model="qwen2.5-coder:7b")
+        super().__init__("implementer", default_model="qwen2.5-coder:7b")
 
     def _build_prompt(self, order: WorkOrder) -> str:
         template = self._load_skill_prompt(self.role)
         if not template:
-            template = """You are the CodeRepairWorker.
+            template = """You are the ImplementerWorker.
 Input context: {input_artifacts}
 Task requirement: {output_required}
 Provide the fully repaired and hardened code based on the context and requirements.
@@ -234,10 +234,10 @@ Format: {{"repaired_code": "..."}}"""
 class WorkerRegistry:
     def __init__(self):
         self.workers = {
-            "repo_mapper": RepoMapperWorker(),
+            "context_planner": ContextPlannerWorker(),
             "test_stubber": TestStubberWorker(),
-            "validator": ValidatorWorker(),
-            "code_repair": CodeRepairWorker()
+            "review_worker": LLMReviewWorker(),
+            "implementer": ImplementerWorker()
         }
 
     def get_worker(self, role: str) -> Optional[WorkerBase]:

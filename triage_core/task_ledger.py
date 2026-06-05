@@ -73,6 +73,16 @@ class TaskRecord:
     duration_seconds: float = 0.0
 
 
+@dataclass
+class TaskContext:
+    record: TaskRecord
+    events: List[Dict[str, Any]] = field(default_factory=list)
+    artifact_paths: List[str] = field(default_factory=list)
+    latest_artifact_text: Optional[str] = None
+    telemetry_summary: Dict[str, Any] = field(default_factory=dict)
+    review_summary: Dict[str, Any] = field(default_factory=dict)
+
+
 class TaskLedger:
     def __init__(self, ledger_dir: str = ".triagecore"):
         self.ledger_dir = ledger_dir
@@ -144,6 +154,82 @@ class TaskLedger:
                 self._apply_event(tasks_map[task_id], event)
 
         return sorted(list(tasks_map.values()), key=lambda x: x.created_at, reverse=True)
+
+    def get_events(self, task_id: str) -> List[Dict[str, Any]]:
+        """Retrieve all raw events for a specific task."""
+        if not os.path.exists(self.ledger_path):
+            return []
+
+        events = []
+        with open(self.ledger_path, "r", encoding="utf-8") as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                try:
+                    event = json.loads(line)
+                    if event.get("task_id") == task_id:
+                        events.append(event)
+                except json.JSONDecodeError:
+                    continue
+        return events
+
+    def get_task_context(self, task_id: str) -> Optional[TaskContext]:
+        """Hydrate a full TaskContext object for the UI."""
+        record = self.get_task(task_id)
+        if not record:
+            return None
+
+        events = self.get_events(task_id)
+        
+        artifact_paths = list(record.artifact_paths)
+        latest_text = None
+        if artifact_paths:
+            latest_path = artifact_paths[-1]
+            if os.path.exists(latest_path):
+                with open(latest_path, "r", encoding="utf-8") as f:
+                    latest_text = f.read()
+
+        total_tok = record.total_tokens or ((record.estimated_input_tokens or 0) + (record.estimated_output_tokens or 0))
+        telemetry_summary = {
+            "duration_seconds": record.duration_seconds,
+            "energy_kwh": record.energy_kwh_estimate,
+            "emissions_gco2e": record.emissions_gco2e_estimate,
+            "water_liters": record.water_liters_estimate,
+            "embodied_gco2e": record.embodied_gco2e_allocated,
+            "total_tokens": total_tok
+        }
+
+        review_summary = {
+            "status": record.status,
+            "accepted": record.accepted,
+            "human_review_required": record.human_review_required,
+            "supervisor_tool": record.supervisor_tool,
+            "supervisor_decision": record.supervisor_decision
+        }
+
+        return TaskContext(
+            record=record,
+            events=events,
+            artifact_paths=artifact_paths,
+            latest_artifact_text=latest_text,
+            telemetry_summary=telemetry_summary,
+            review_summary=review_summary
+        )
+
+    def get_recent_tasks(self, limit: int = 25) -> List[TaskRecord]:
+        """Efficiently get the most recent tasks for list rendering."""
+        return self.get_all_tasks()[:limit]
+
+    def search_tasks(self, query: str) -> List[TaskRecord]:
+        """Simple substring search across title, description, and task_id."""
+        query = query.lower()
+        results = []
+        for task in self.get_all_tasks():
+            if (query in task.task_id.lower() or 
+                (task.title and query in task.title.lower()) or 
+                (task.description and query in task.description.lower())):
+                results.append(task)
+        return results
 
     def _apply_event(self, record: TaskRecord, event: Dict[str, Any]) -> None:
         """Single reducer used by both get_task and get_all_tasks."""

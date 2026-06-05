@@ -4,8 +4,9 @@ import json
 from typing import List, Dict, Any, Optional, Tuple
 from .work_orders import TaskBoard, WorkOrder
 from .worker_registry import WorkerRegistry
-from .union_rep import UnionRep
+from .project_steward import ProjectSteward
 from .config import default_config
+from .validator_tools import ValidatorTools
 
 
 def _compute_file_chunks(
@@ -53,7 +54,7 @@ class ProjectManager:
         self.board = TaskBoard()
         self.registry = WorkerRegistry()
         self.budgets = default_config.global_config.get("budgets", {})
-        self.union_rep = UnionRep(budgets=self.budgets)
+        self.steward = ProjectSteward(budgets=self.budgets)
 
     def dispatch_task(
         self,
@@ -65,7 +66,7 @@ class ProjectManager:
         """
         Takes a raw prompt and targets, splits large files into chunks, dispatches
         to specialized workers, handles validator loopbacks and early delegation,
-        then evaluates with UnionRep.
+        then evaluates with ProjectSteward.
         """
         task_id = str(uuid.uuid4())
         max_artifact_bytes: int = self.budgets.get("max_artifact_bytes", 12000)
@@ -92,17 +93,17 @@ class ProjectManager:
 
         # ── 2. Queue initial work orders ─────────────────────────────────────
         if needs_chunking:
-            # repo_mapper gets the first chunk of the first file (structural overview)
+            # context_planner gets the first chunk of the first file (structural overview)
             first_file = target_files[0]
             first_chunk_start, first_chunk_end = file_chunk_map[first_file][0]
-            if "repo_mapper" in required_roles:
+            if "context_planner" in required_roles:
                 self.board.add_order(
                     WorkOrder(
                         task_id=task_id,
-                        assigned_role="repo_mapper",
+                        assigned_role="context_planner",
                         input_artifacts=target_files + [prompt],
                         output_required=(
-                            "Summarise the file structure and list the PEP-8 issues."
+                            "Summarise the file structure and list the issues."
                         ),
                         max_tokens=max_tokens,
                         chunk_start=first_chunk_start,
@@ -110,36 +111,21 @@ class ProjectManager:
                     )
                 )
 
-            # One code_repair + validator pair per chunk
+            # One implementer per chunk
             for fp in target_files:
                 for chunk_start, chunk_end in file_chunk_map[fp]:
                     line_range = (
                         f"lines {chunk_start + 1}–"
                         + (str(chunk_end) if chunk_end else "EOF")
                     )
-                    if "code_repair" in required_roles:
+                    if "implementer" in required_roles:
                         self.board.add_order(
                             WorkOrder(
                                 task_id=task_id,
-                                assigned_role="code_repair",
+                                assigned_role="implementer",
                                 input_artifacts=[fp, prompt],
                                 output_required=(
-                                    f"Fix all PEP-8 issues in {fp} ({line_range})."
-                                ),
-                                max_tokens=max_tokens,
-                                chunk_start=chunk_start,
-                                chunk_end=chunk_end,
-                            )
-                        )
-                    if "validator" in required_roles:
-                        self.board.add_order(
-                            WorkOrder(
-                                task_id=task_id,
-                                assigned_role="validator",
-                                input_artifacts=[fp, prompt],
-                                output_required=(
-                                    f"Validate the repaired code for {fp} "
-                                    f"({line_range})."
+                                    f"Fix all issues in {fp} ({line_range})."
                                 ),
                                 max_tokens=max_tokens,
                                 chunk_start=chunk_start,
@@ -149,6 +135,9 @@ class ProjectManager:
         else:
             # Original flat dispatch (file fits in one pass)
             for role in required_roles:
+                if role == "review_worker":
+                    # review_worker is queued after implementer dynamically
+                    continue
                 self.board.add_order(
                     WorkOrder(
                         task_id=task_id,
@@ -164,13 +153,18 @@ class ProjectManager:
         # Map from chunk key -> context list so chunks don't bleed into each other
         # Key: (chunk_start, chunk_end) tuple; None for non-chunked flow
         chunk_contexts: Dict[tuple, List[str]] = {}
-        # Global context (repo_mapper output shared across chunks)
+        # Global context (context_planner output shared across chunks)
         global_context: List[str] = []
         MAX_CONTEXT_ITEMS = 2  # only inject the most recent N items per order
         repair_attempts = 0
         worker_error_count = 0
         forced_escalation = False
         escalation_target = "codex"
+        
+        # We will need the event loop logic for sending ledger events, but 
+        # normally TriageCore runs through `engine.py` / `TaskLedger`. We don't have
+        # direct access to the ledger here without passing it. For now, we will 
+        # just record result fields that engine.py can log.
 
         while True:
             pending = self.board.get_pending()
@@ -191,7 +185,7 @@ class ProjectManager:
 
             # Inject capped, chunk-scoped context into the order
             chunk_key = (order.chunk_start, order.chunk_end)
-            relevant_context = list(global_context)  # always include repo_mapper output
+            relevant_context = list(global_context)  # always include context_planner output
             relevant_context += chunk_contexts.get(chunk_key, [])[-MAX_CONTEXT_ITEMS:]
             for item in relevant_context:
                 if item not in order.input_artifacts:
@@ -219,8 +213,8 @@ class ProjectManager:
 
             # Store in the appropriate scoped context
             chunk_key = (order.chunk_start, order.chunk_end)
-            if order.assigned_role == "repo_mapper":
-                # repo_mapper output is global — relevant to all chunks
+            if order.assigned_role == "context_planner":
+                # context_planner output is global — relevant to all chunks
                 global_context.append(context_entry)
             else:
                 if chunk_key not in chunk_contexts:
@@ -228,7 +222,7 @@ class ProjectManager:
                 chunk_contexts[chunk_key].append(context_entry)
 
             # ── Explicit worker error detection ──────────────────────────────
-            if result.get("error") and order.assigned_role != "validator":
+            if result.get("error") and order.assigned_role != "review_worker":
                 worker_error_count += 1
                 if stream_callback:
                     snippet = str(result["error"])[:120]
@@ -282,61 +276,83 @@ class ProjectManager:
                         )
                     )
 
-            # ── Validator loopback ────────────────────────────────────────────
-            if order.assigned_role == "validator":
-                is_valid = result.get("is_valid", False)
-                # Treat a worker error as is_valid = False too
-                is_valid = is_valid and not result.get("error")
-                if not is_valid:
-                    if repair_attempts < max_repair_attempts:
-                        repair_attempts += 1
-                        issues = ", ".join(
-                            result.get("issues_found", ["Unknown validation issue"])
-                        )
-                        if stream_callback:
-                            stream_callback(
-                                f"\n↳ [DOUBT] Validator issues found: {issues}. "
-                                f"Routing back to code_repair "
-                                f"(Attempt {repair_attempts}/{max_repair_attempts})...\n"
-                            )
-                        self.board.add_order(
-                            WorkOrder(
-                                task_id=task_id,
-                                assigned_role="code_repair",
-                                input_artifacts=target_files
-                                + [prompt]
-                                + [f"Feedback from validator: {issues}"],
-                                output_required=(
-                                    "Fix the reported validation issues and output "
-                                    "repaired code."
-                                ),
-                                max_tokens=max_tokens,
-                                chunk_start=order.chunk_start,
-                                chunk_end=order.chunk_end,
-                            )
-                        )
-                        self.board.add_order(
-                            WorkOrder(
-                                task_id=task_id,
-                                assigned_role="validator",
-                                input_artifacts=target_files + [prompt],
-                                output_required=(
-                                    "Audit the updated repaired code to confirm fixes."
-                                ),
-                                max_tokens=max_tokens,
-                                chunk_start=order.chunk_start,
-                                chunk_end=order.chunk_end,
-                            )
-                        )
-                    else:
-                        if stream_callback:
-                            stream_callback(
-                                "\n↳ [ESCALATION] Validator failed after max repair "
-                                "attempts. Escalating...\n"
-                            )
+            # ── Deterministic Validation ──────────────────────────────────────
+            if order.assigned_role == "implementer":
+                if "repaired_code" in result or "raw_text" in result:
+                    text_to_validate = result.get("repaired_code", result.get("raw_text", ""))
+                    validators_to_run = order.validators or ValidatorTools.infer_validators(target_files)
+                    
+                    if validators_to_run:
+                        val_results = ValidatorTools.run(validators_to_run, text_to_validate, target_files)
+                        passed_all = all(vr.passed for vr in val_results)
+                        issues = []
+                        for vr in val_results:
+                            issues.extend(vr.issues)
+                            
+                        # Save validation results into the order result so the ledger picks it up
+                        result["validation_run"] = {
+                            "validators": validators_to_run,
+                            "passed": passed_all,
+                            "issues": issues
+                        }
 
-        # ── 4. Evaluate with UnionRep ─────────────────────────────────────────
-        evaluation = self.union_rep.evaluate(prompt, target_files, completed) or {}
+                        if not passed_all:
+                            if repair_attempts < max_repair_attempts:
+                                repair_attempts += 1
+                                issues_str = ", ".join(issues)
+                                if stream_callback:
+                                    stream_callback(
+                                        f"\n↳ [DOUBT] Deterministic Validator issues found: {issues_str}. "
+                                        f"Routing back to implementer "
+                                        f"(Attempt {repair_attempts}/{max_repair_attempts})...\n"
+                                    )
+                                self.board.add_order(
+                                    WorkOrder(
+                                        task_id=task_id,
+                                        assigned_role="implementer",
+                                        input_artifacts=target_files
+                                        + [prompt]
+                                        + [f"Feedback from validator tools: {issues_str}"],
+                                        output_required=(
+                                            "Fix the reported validation issues and output "
+                                            "repaired code."
+                                        ),
+                                        validators=order.validators,
+                                        max_tokens=max_tokens,
+                                        chunk_start=order.chunk_start,
+                                        chunk_end=order.chunk_end,
+                                    )
+                                )
+                            else:
+                                if stream_callback:
+                                    stream_callback(
+                                        "\n↳ [ESCALATION] Validator failed after max repair "
+                                        "attempts. Escalating...\n"
+                                    )
+                        else:
+                            # Validation passed, queue qualitative review if requested
+                            if "review_worker" in required_roles:
+                                if stream_callback:
+                                    stream_callback(
+                                        "\n↳ [VERIFIED] Deterministic checks passed. "
+                                        "Queueing LLMReviewWorker...\n"
+                                    )
+                                self.board.add_order(
+                                    WorkOrder(
+                                        task_id=task_id,
+                                        assigned_role="review_worker",
+                                        input_artifacts=target_files + [prompt, text_to_validate],
+                                        output_required=(
+                                            "Critique the quality, completeness, and risks of this implementation."
+                                        ),
+                                        max_tokens=max_tokens,
+                                        chunk_start=order.chunk_start,
+                                        chunk_end=order.chunk_end,
+                                    )
+                                )
+
+        # ── 4. Evaluate with ProjectSteward ─────────────────────────────────────────
+        evaluation = self.steward.evaluate(prompt, target_files, completed) or {}
         if forced_escalation:
             evaluation["local_result_status"] = "insufficient"
             evaluation["reason"] = (
@@ -344,19 +360,19 @@ class ProjectManager:
             )
             evaluation["recommended_escalation"] = escalation_target
 
-        # Promote worker errors to insufficient if all validators errored out
+        # Promote worker errors to insufficient if reviewers errored out
         if (
             worker_error_count > 0
             and evaluation.get("local_result_status") == "sufficient"
         ):
-            validators_ok = any(
-                o.assigned_role == "validator"
+            reviewers_ok = any(
+                o.assigned_role == "review_worker"
                 and o.result
                 and o.result.get("is_valid")
                 and not o.result.get("error")
                 for o in completed
             )
-            if not validators_ok:
+            if not reviewers_ok:
                 evaluation["local_result_status"] = "insufficient"
                 evaluation["reason"] = (
                     f"{worker_error_count} worker error(s) prevented successful "
@@ -367,7 +383,7 @@ class ProjectManager:
         # ── 5. Write escalation packet if needed ─────────────────────────────
         packet_path = None
         if evaluation.get("local_result_status") == "insufficient":
-            packet = self.union_rep.generate_escalation_packet(
+            packet = self.steward.generate_escalation_packet(
                 evaluation, prompt, target_files
             )
             try:
@@ -385,4 +401,5 @@ class ProjectManager:
             "evaluation": evaluation,
             "escalation_packet": packet_path,
             "work_orders": [o.work_order_id for o in completed],
+            "all_orders": completed,  # we inject this so engine.py can log them
         }

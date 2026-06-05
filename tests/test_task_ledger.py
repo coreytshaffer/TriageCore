@@ -228,3 +228,28 @@ def test_ledger_updates_updated_at_on_later_events():
         assert reviewed_record.created_at == created_at
         assert reviewed_record.updated_at >= created_at
         assert reviewed_record.status == "reviewed"
+
+def test_ledger_context_methods():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        ledger = TaskLedger(ledger_dir=temp_dir)
+        task_id = str(uuid.uuid4())
+
+        ledger.append_event(task_id, "task_created", {"title": "Context Task", "description": "Desc"})
+        ledger.append_event(task_id, "local_draft_generated", {"status": "success", "duration_seconds": 5.0})
+        
+        events = ledger.get_events(task_id)
+        assert len(events) == 2
+        assert events[0]["event_type"] == "task_created"
+        
+        ctx = ledger.get_task_context(task_id)
+        assert ctx is not None
+        assert ctx.record.title == "Context Task"
+        assert len(ctx.events) == 2
+        
+        recent = ledger.get_recent_tasks(10)
+        assert len(recent) == 1
+        
+        search_res = ledger.search_tasks("Context")
+        assert len(search_res) == 1
+        search_res2 = ledger.search_tasks("Not Found")
+        assert len(search_res2) == 0
