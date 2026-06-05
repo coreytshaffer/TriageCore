@@ -10,11 +10,11 @@ Last updated: 2026-06-05
 
 Recent commits:
 
+- `f69b02b Add context budget planning artifacts`
 - `cf0a119 Reconcile Antigravity local-first updates`
 - `427d22c Refactor worker council into hierarchical structure with deterministic ValidatorTools`
 - `22563f3 Recovery Pass: Update architecture docs and add energy heuristic telemetry`
 - `6fdfcca Expand supervised workflow telemetry`
-- `324759c feat: improve dispatch observability and controls`
 
 ## What Changed Tonight
 
@@ -106,3 +106,17 @@ The active backlog now begins with Phase 11: Token Efficiency And Context Discip
 - keep token-efficiency claims evidence-bound by reporting measured token intensity and benefit signals rather than unsupported absolute savings
 
 Next recommended slice: Story 11.3 Council Gating Rules.
+
+## Codex And Antigravity Role Separation
+
+The working protocol now treats Antigravity as the high-throughput
+implementation lane and Codex as the credibility/stabilization lane.
+Antigravity is best used for rapid IDE-native drafting, local model pipeline
+coordination, and larger backlog movement. Codex is best used for repo
+reconciliation, methodology and documentation credibility, evidence-bound
+claims, verification, and Git closeout.
+
+This is a practical division of labor, not a claim that either tool is
+automatically correct. Antigravity output remains reviewable draft work until
+the repo state, tests, ledger evidence, and paper-facing claims have been
+checked by Codex and/or human review.

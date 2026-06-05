@@ -183,44 +183,32 @@ Primary scientific outcome: tokens per accepted task, interpreted beside validat
   * [x] Link context packs to the task ledger so reports can audit what the model actually saw.
   * [x] Preserve reproducibility without forcing every future reviewer to reread the entire chat.
 
-* [ ] **Story 11.3: Council Gating Rules**
-  * Add deterministic rules for when Worker Council should run.
-  * Route small low-risk tasks through one local draft plus validator before council escalation.
-  * Escalate to council for ambiguous, safety-sensitive, multi-file, or repeated-failure work.
-  * Report tokens saved by avoiding unnecessary council passes as an operational benefit signal, not a formal savings claim without a baseline.
+* [ ] **Story 11.3: Cybernetic Ecology Boundary Harness Integration**
+  * Integrate framework principles (community/sovereignty boundaries, public health, regulatory interpretation) as active firewall policies in `ProjectSteward`.
+  * Let the harness dynamically inspect prompts and outputs, warning or blocking execution based on local-first policy files (JSON/YAML).
+  * Verify that the ethical firewall escalates sensitive contexts (e.g., Bloody Island, sacred/archaeological sites) cleanly.
 
-* [ ] **Story 11.4: Prompt And Output Compression Study**
-  * Create benchmark variants for short, structured, and verbose prompts.
-  * Measure tokens per accepted task, validator pass rate, handoff rate, and review workload.
-  * Compare compact output formats against full prose output where task quality permits.
-  * Add methodology notes so compression is not treated as better unless quality remains acceptable.
+* [ ] **Story 11.4: Escalate to Antigravity on Credit Allowance Depletion**
+  * Track a local token/credit allowance limit or budget within `ProjectSteward` or a credit coordinator.
+  * When the credit allowance runs out, trigger a structured handoff/escalation to Antigravity (cloud coordinator) for allowance optimization or approval, ensuring the steward remains operational.
 
-* [ ] **Story 11.5: Token Budget Alerts**
-  * Define soft and hard token budgets by benchmark category and runner lane.
-  * Surface budget warnings in TriageDesk before dispatch.
-  * Allow the human operator to override budget warnings with a recorded reason.
-  * Store budget exceedance events in the ledger for later analysis.
+* [ ] **Story 11.5: Early Stopping for Energy Budget Overruns (Study 003)**
+  * Implement dynamic "early stopping" during task execution when real-time energy telemetry (measured via `PowerSampler` or estimated) projects that the task will overrun its configured max energy budget.
+  * Base this early stopping method on recent research regarding energy-aware resource allocation, terminating model inference early to save local power.
 
-* [ ] **Story 11.6: Reusable Context Cache**
-  * Cache stable repo summaries, methodology summaries, project rules, and benchmark fixture summaries.
-  * Track cache freshness by file hash or timestamp.
-  * Prefer cached summaries when unchanged instead of regenerating context every run.
-  * Record cache hits and misses as token-efficiency evidence.
+* [ ] **Story 11.6: Post-Sprint Codex Stability Pass**
+  * Establish a formal Codex-run stability pass script/procedure (`triagecore stability-pass`) to run after each sprint.
+  * Automatically verify harness boundary enforcement, logging compliance, and regression safety across all benchmark tasks.
 
-* [ ] **Story 11.7: Token Efficiency Report Section**
-  * Add report sections for tokens per accepted task, tokens per rejected task, and supervisor tokens per accepted task.
-  * Separate local-only, worker-council, Codex-supervised, Antigravity-supervised, and mobile-reviewed lanes.
-  * Include "wasted token" indicators for rejected, failed, blocked, or superseded work.
-  * Keep wording cautious: report measured token intensity and benefit signals, not absolute savings without baseline comparisons.
+* [ ] **Story 11.7: Token Efficiency and Escaped Waste Reporting**
+  * Add reporting for wasted tokens (e.g., on cancelled/failed workers or early-stopped tasks).
+  * Track credit consumption and report on cost-benefit metrics per runner lane.
 
-* [ ] **Story 11.8: Token Efficiency Dashboard View**
-  * Add a dashboard panel that foregrounds tokens avoided or kept local as operator-facing motivation.
-  * Keep raw token consumption visible for scientific interpretation.
-  * Show context budget, local-first share, council gating decisions, and cache reuse in a compact view.
-  * Make the UI encouraging without turning preliminary benefit signals into unsupported scientific claims.
+* [ ] **Story 11.8: Integrated Telemetry Dashboard Controls**
+  * Surface early stopping events, firewall triggers, credit status, and stability pass results directly on the TriageDesk GUI.
 
 ## Current Phase 11 Decision Point
 
-Story 11.1 and Story 11.2 now have a first advisory implementation. Context pack artifacts are generated for CLI packets, benchmarks, pipeline runs, and TriageDesk dispatches; ledger records reduce the context budget fields and expanded UI details show the pack path/status.
+Story 11.1 and Story 11.2 now have a first advisory implementation. The backlog has been restructured following the Codex session to focus on enforcing Cybernetic Ecology principles, credit/energy early stopping, and post-sprint Codex stability passes.
 
-Next recommended slice: Story 11.3. Add council gating rules that use task risk, context budget status, file count, and prior failure evidence to decide when Worker Council is worth the extra token spend.
+Next recommended slice: Story 11.3. Define the active firewall policies for the Cybernetic Ecology framework boundaries inside `ProjectSteward`.

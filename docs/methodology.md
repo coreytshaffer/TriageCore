@@ -237,6 +237,25 @@ contexts, token costs, and human oversight patterns. Reports should therefore
 label supervised outcomes separately from local-only outcomes whenever they are
 used as scientific evidence.
 
+### Codex And Antigravity Role Separation
+
+For day-to-day project development, TriageCore treats Antigravity and Codex as
+different supervisory lanes with different strengths. Antigravity is the
+high-throughput implementation lane: it is well suited to IDE-native
+coordination, larger draft implementations, local model pipeline experiments,
+and rapid backlog movement. Codex is the credibility and stabilization lane: it
+is used to reconcile changes against the repository, strengthen methodology and
+documentation, check evidence boundaries, prepare paper-facing language, and
+run stability checks before work is treated as publication-ready.
+
+This role separation does not imply that Codex-processed documentation is
+automatically correct or that Antigravity-generated implementation is
+automatically accepted. Both lanes remain subject to human review, ledger
+evidence, test results, and explicit uncertainty labels. The separation exists
+to reduce workflow confusion: Antigravity helps produce draft volume, while
+Codex helps convert draft work into cautious, reproducible, falsifiable project
+artifacts.
+
 Supervisor review fields include the supervising tool, model, profile, decision,
 notes, linked artifact path, and estimated supervisor input/output tokens when
 exact usage is not available. Estimated token fields should be interpreted as

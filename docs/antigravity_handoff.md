@@ -15,6 +15,12 @@ Treat the latest Codex checkpoint as the stability baseline. Codex has just impl
 - context budget details visible in expanded TriageDesk ledger/details UI
 - methodology, evidence schema, verification guide, backlog, and session handoff updated
 
+Use the current Codex/Antigravity division of labor:
+
+- Antigravity is the high-throughput implementation lane for IDE-native drafting, local pipeline coordination, and rapid backlog movement.
+- Codex is the credibility and stabilization lane for repo reconciliation, methodology language, evidence boundaries, documentation quality, verification, and Git closeout.
+- Antigravity output should be concrete and useful, but still treated as a reviewable draft until Codex/human review confirms the repo state, tests, and paper-facing claims.
+
 Your next high-throughput implementation target is **Phase 11 Story 11.3: Council Gating Rules**.
 
 Build a first working slice that decides when Worker Council is worth the extra token spend. Keep it advisory first, not hard-blocking. Use task risk, context budget status, file count, task category, and prior failure evidence where available.
