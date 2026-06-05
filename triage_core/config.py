@@ -72,5 +72,8 @@ class Config:
     def get_timeout_seconds(self) -> int:
         return int(self.get_global("backend", "timeout_seconds", 30))
 
+    def get_boundary_rules_path(self) -> str:
+        return self.get_global("policies", "boundary_rules_path", "policies/cybernetic_ecology_boundary.yaml")
+
 # Default singleton for convenience
 default_config = Config()

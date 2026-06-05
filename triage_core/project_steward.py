@@ -1,6 +1,10 @@
+import os
+import re
+import yaml
 from typing import List, Dict, Any
 from .work_orders import WorkOrder
 from .handoff import HandoffPacket
+from .config import default_config
 
 
 class ProjectSteward:
@@ -16,6 +20,19 @@ class ProjectSteward:
 
     def __init__(self, budgets: Dict[str, Any] = None):
         self.budgets = budgets or {}
+        self.rules = self._load_boundary_rules()
+
+    def _load_boundary_rules(self) -> List[Dict[str, Any]]:
+        try:
+            path = default_config.get_boundary_rules_path()
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    data = yaml.safe_load(f)
+                    if isinstance(data, dict) and "rules" in data:
+                        return data["rules"]
+        except Exception as e:
+            print(f"Warning: Failed to load boundary rules: {e}")
+        return []
 
     def evaluate(
         self,
@@ -48,17 +65,56 @@ class ProjectSteward:
         recommended_escalation = "none"
 
         # Scan prompt and outputs for sensitive context
-        combined_text = task_prompt.lower()
+        combined_text = task_prompt
         for o in completed_orders:
             if o.result and "output" in o.result:
-                combined_text += " " + str(o.result["output"]).lower()
+                combined_text += " " + str(o.result["output"])
 
-        for kw in self.SENSITIVE_KEYWORDS:
-            if kw in combined_text:
-                needs_escalation = True
-                reasons.append(f"Ethical Firewall: Sensitive context detected ('{kw}').")
-                recommended_escalation = "human_only"
-                break
+        combined_text_lower = combined_text.lower()
+
+        # Run configured boundary rules
+        rules_run = False
+        if self.rules:
+            for rule in self.rules:
+                trigger = rule.get("trigger", {})
+                decision = rule.get("decision", "human_only")
+                msg = rule.get("message", "Sensitive context detected.")
+                
+                # Check string terms (case-insensitive)
+                matched_term = None
+                terms = trigger.get("terms", [])
+                for term in terms:
+                    if term.lower() in combined_text_lower:
+                        matched_term = term
+                        break
+                        
+                # Check regex patterns
+                matched_regex = None
+                regex_patterns = trigger.get("regex", [])
+                for pattern in regex_patterns:
+                    try:
+                        if re.search(pattern, combined_text):
+                            matched_regex = pattern
+                            break
+                    except Exception:
+                        pass
+                
+                if matched_term or matched_regex:
+                    needs_escalation = True
+                    trigger_detail = matched_term if matched_term else f"regex '{matched_regex}'"
+                    reasons.append(f"Ethical Firewall: Triggered rule '{rule.get('id')}' via {trigger_detail}. {msg}")
+                    recommended_escalation = decision
+                    rules_run = True
+                    break
+
+        # Fallback to hardcoded keywords if no rules were loaded or triggered
+        if not rules_run:
+            for kw in self.SENSITIVE_KEYWORDS:
+                if kw in combined_text_lower:
+                    needs_escalation = True
+                    reasons.append(f"Ethical Firewall: Sensitive context detected ('{kw}').")
+                    recommended_escalation = "human_only"
+                    break
 
         # 2. Validation Checks
         reviewers = [o for o in completed_orders if o.assigned_role == "review_worker"]

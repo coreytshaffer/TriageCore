@@ -22,3 +22,6 @@ device_lifetime_hours = 20000.0
 grid_intensity_api = "co2signal"
 grid_intensity_lat = ""
 grid_intensity_lon = ""
+
+[policies]
+boundary_rules_path = "policies/cybernetic_ecology_boundary.yaml"
