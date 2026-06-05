@@ -51,6 +51,24 @@ The schema supports two project goals:
 | `tokens_per_second` | Throughput estimate when token counts are available. |
 | `validator_passed` | Validator result: `true`, `false`, or `null` when no validator was used. |
 
+## Context Budget Fields
+
+These fields are produced by the advisory context budget planner before model
+dispatch. They estimate what the task is about to send or preserve as context;
+they do not replace exact backend token usage.
+
+| Field | Meaning |
+| --- | --- |
+| `context_pack_path` | JSON artifact that records the prompt, included context, excluded context, token estimates, and rationale. |
+| `context_strategy` | Planner version or strategy, currently `context_budget_planner_v1`. |
+| `context_estimated_tokens` | Pre-dispatch context token estimate using the project estimator. |
+| `context_budget_tokens` | Advisory token budget selected for the runner or benchmark category. |
+| `context_budget_status` | `within_budget` or `over_budget`. |
+| `context_required_items` | Count of context items classified as required. |
+| `context_helpful_items` | Count of context items classified as helpful. |
+| `context_optional_items` | Count of context items classified as optional. |
+| `context_excluded_items` | Count of context items excluded from the initial pack. |
+
 ## Resource And Review Fields
 
 | Field | Meaning |

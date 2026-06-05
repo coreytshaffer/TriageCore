@@ -175,6 +175,26 @@ them as benefit or avoidance signals unless a study defines a baseline
 comparison, such as local-first routing versus a remote-only workflow using the
 same benchmark fixture set.
 
+### Context Budgeting And Context Packs
+
+TriageCore estimates context cost before dispatch using a simple advisory
+planner. The planner classifies context items as `required`, `helpful`,
+`optional`, or `excluded`, selects a token budget from the runner or benchmark
+category, and writes a JSON context-pack artifact linked to the task ledger.
+
+The current estimator uses an approximate four-characters-per-token heuristic.
+This is intentionally conservative and reproducible, but it is not a substitute
+for exact backend token usage. Exact backend usage, when available, should remain
+the preferred measurement for final token accounting. Context packs answer a
+different question: what did TriageCore intend to include, exclude, summarize, or
+preserve before the model call?
+
+Context budget status (`within_budget` or `over_budget`) is advisory in this
+phase. Over-budget context produces a warning and evidence, not automatic
+blocking. Future studies may test whether enforcement improves tokens per
+accepted task without harming validator pass rate, handoff behavior, or review
+workload.
+
 ---
 
 ## 6. Model And Backend Comparison

@@ -253,3 +253,39 @@ def test_ledger_context_methods():
         assert len(search_res) == 1
         search_res2 = ledger.search_tasks("Not Found")
         assert len(search_res2) == 0
+
+
+def test_context_budget_event_reduces_to_task_record():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        ledger = TaskLedger(ledger_dir=temp_dir)
+        task_id = str(uuid.uuid4())
+
+        ledger.append_event(task_id, "task_created", {"title": "Context Budget"})
+        ledger.append_event(
+            task_id,
+            "context_budgeted",
+            {
+                "context_pack_path": ".triagecore/context_packs/context_pack_123.json",
+                "context_strategy": "context_budget_planner_v1",
+                "context_estimated_tokens": 120,
+                "context_budget_tokens": 4000,
+                "context_budget_status": "within_budget",
+                "context_required_items": 1,
+                "context_helpful_items": 2,
+                "context_optional_items": 0,
+                "context_excluded_items": 1,
+            },
+        )
+
+        record = ledger.get_task(task_id)
+        ctx = ledger.get_task_context(task_id)
+
+        assert record is not None
+        assert record.context_pack_path.endswith("context_pack_123.json")
+        assert record.context_estimated_tokens == 120
+        assert record.context_budget_tokens == 4000
+        assert record.context_budget_status == "within_budget"
+        assert record.context_excluded_items == 1
+        assert record.context_pack_path in record.artifact_paths
+        assert ctx is not None
+        assert ctx.telemetry_summary["context_estimated_tokens"] == 120

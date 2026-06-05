@@ -322,6 +322,15 @@ def _log_to_ledger(task_id: str, prompt: str, files: list[str], runner: str, art
     })
     
     ledger.append_event(task_id, "runner_selected", {"runner": runner})
+    _append_context_pack_event(
+        ledger=ledger,
+        task_id=task_id,
+        prompt=prompt,
+        files=files,
+        runner=runner,
+        category=cat,
+        ledger_dir=default_config.get_ledger_dir(),
+    )
     ledger.append_event(task_id, "handoff_generated", {"artifact_path": artifact_path})
 
 def _create_packet(prompt: str, files: list[str]) -> HandoffPacket:
@@ -440,6 +449,15 @@ def _run_benchmarks(
             "run_id": run_id,
         })
         ledger.append_event(task_id, "runner_selected", {"runner": "local_benchmark"})
+        _append_context_pack_event(
+            ledger=ledger,
+            task_id=task_id,
+            prompt=f"{task.prompt}\n\nData:\n{task.data}",
+            files=task.target_files,
+            runner="local_benchmark",
+            category=task.category,
+            ledger_dir=ledger_dir,
+        )
 
         result = client.run_task(
             prompt=task.prompt,
@@ -685,7 +703,44 @@ def _start_pipeline_task(
             },
         )
     ledger.append_event(pipeline_task_id, "runner_selected", {"runner": "pipeline"})
+    _append_context_pack_event(
+        ledger=ledger,
+        task_id=pipeline_task_id,
+        prompt=prompt,
+        files=files,
+        runner="pipeline",
+        category=None,
+        ledger_dir=ledger.ledger_dir,
+    )
     return pipeline_task_id
+
+
+def _append_context_pack_event(
+    ledger: TaskLedger,
+    task_id: str,
+    prompt: str,
+    files: list[str],
+    runner: str,
+    category: Optional[str],
+    ledger_dir: str,
+) -> Optional[str]:
+    from .context_budget import create_context_pack_artifact
+
+    pack, artifact_path, payload = create_context_pack_artifact(
+        task_id=task_id,
+        prompt=prompt,
+        files=files,
+        runner=runner,
+        category=category,
+        ledger_dir=ledger_dir,
+    )
+    ledger.append_event(task_id, "context_budgeted", payload)
+    if pack.budget_status == "over_budget":
+        print(
+            "Context budget warning: "
+            f"{pack.estimated_tokens}/{pack.budget_tokens} tokens estimated."
+        )
+    return artifact_path
 
 
 def _record_pipeline_success(

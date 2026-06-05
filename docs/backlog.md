@@ -2,6 +2,14 @@
 
 This backlog tracks the planned features and scientific enhancements for the local-compute-first orchestration harness and control plane.
 
+## Foundation Backlog Closure
+
+Status: closed as the completed foundation backlog.
+
+Phases 1 through 10 established the working TriageCore foundation: human review, ledger validation, skill routing, sustainability telemetry, visible infrastructure, study evidence, UI ergonomics, Codex/Antigravity supervision, private mobile review access, and persistent environmental feedback.
+
+The next active backlog begins at Phase 11 and shifts the project from "can we observe and coordinate the workflow?" to "can we measurably reduce unnecessary tokens while preserving accepted outcomes, human review, and scientific caution?"
+
 ## 🟢 Phase 1: Interactive Human review & Ledger Validation
 
 * [x] **Story 1.1: TriageDesk Task Review Buttons**
@@ -156,3 +164,63 @@ Local search note: Antigravity brain files currently show narrative token estima
 * [x] **Story 10.1: System Tray/Widget**
   * Add a desktop system tray object that displays throughput and basic stats (tasks processed, active backend, energy saved).
   * Integrate into `desktop.py` to provide a single background/foreground execution model.
+
+## 🧠 Phase 11: Token Efficiency And Context Discipline
+
+Goal: turn token accounting into active token stewardship. This phase should reduce unnecessary context, prompts, council calls, retries, and supervisor tokens while keeping all claims evidence-bound.
+
+Primary scientific outcome: tokens per accepted task, interpreted beside validator pass rate, review workload, handoff rate, and supervision lane.
+
+* [x] **Story 11.1: Context Budget Planner**
+  * [x] Estimate token cost before each local, council, Codex, Antigravity, benchmark, or pipeline run.
+  * [x] Classify context as required, helpful, optional, or excluded.
+  * [x] Warn when a task exceeds the expected budget for its category.
+  * [x] Keep the planner advisory until repeated evidence supports automatic enforcement.
+
+* [x] **Story 11.2: Context Pack Artifacts**
+  * [x] Write a compact context-pack artifact for each task attempt.
+  * [x] Record included files, excluded files, summaries, token estimates, and inclusion rationale.
+  * [x] Link context packs to the task ledger so reports can audit what the model actually saw.
+  * [x] Preserve reproducibility without forcing every future reviewer to reread the entire chat.
+
+* [ ] **Story 11.3: Council Gating Rules**
+  * Add deterministic rules for when Worker Council should run.
+  * Route small low-risk tasks through one local draft plus validator before council escalation.
+  * Escalate to council for ambiguous, safety-sensitive, multi-file, or repeated-failure work.
+  * Report tokens saved by avoiding unnecessary council passes as an operational benefit signal, not a formal savings claim without a baseline.
+
+* [ ] **Story 11.4: Prompt And Output Compression Study**
+  * Create benchmark variants for short, structured, and verbose prompts.
+  * Measure tokens per accepted task, validator pass rate, handoff rate, and review workload.
+  * Compare compact output formats against full prose output where task quality permits.
+  * Add methodology notes so compression is not treated as better unless quality remains acceptable.
+
+* [ ] **Story 11.5: Token Budget Alerts**
+  * Define soft and hard token budgets by benchmark category and runner lane.
+  * Surface budget warnings in TriageDesk before dispatch.
+  * Allow the human operator to override budget warnings with a recorded reason.
+  * Store budget exceedance events in the ledger for later analysis.
+
+* [ ] **Story 11.6: Reusable Context Cache**
+  * Cache stable repo summaries, methodology summaries, project rules, and benchmark fixture summaries.
+  * Track cache freshness by file hash or timestamp.
+  * Prefer cached summaries when unchanged instead of regenerating context every run.
+  * Record cache hits and misses as token-efficiency evidence.
+
+* [ ] **Story 11.7: Token Efficiency Report Section**
+  * Add report sections for tokens per accepted task, tokens per rejected task, and supervisor tokens per accepted task.
+  * Separate local-only, worker-council, Codex-supervised, Antigravity-supervised, and mobile-reviewed lanes.
+  * Include "wasted token" indicators for rejected, failed, blocked, or superseded work.
+  * Keep wording cautious: report measured token intensity and benefit signals, not absolute savings without baseline comparisons.
+
+* [ ] **Story 11.8: Token Efficiency Dashboard View**
+  * Add a dashboard panel that foregrounds tokens avoided or kept local as operator-facing motivation.
+  * Keep raw token consumption visible for scientific interpretation.
+  * Show context budget, local-first share, council gating decisions, and cache reuse in a compact view.
+  * Make the UI encouraging without turning preliminary benefit signals into unsupported scientific claims.
+
+## Current Phase 11 Decision Point
+
+Story 11.1 and Story 11.2 now have a first advisory implementation. Context pack artifacts are generated for CLI packets, benchmarks, pipeline runs, and TriageDesk dispatches; ledger records reduce the context budget fields and expanded UI details show the pack path/status.
+
+Next recommended slice: Story 11.3. Add council gating rules that use task risk, context budget status, file count, and prior failure evidence to decide when Worker Council is worth the extra token spend.

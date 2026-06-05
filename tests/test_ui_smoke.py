@@ -70,6 +70,10 @@ def test_ledger_detail_text_includes_review_and_benchmark_context():
         supervisor_notes="Local draft needs tests.",
         supervisor_input_tokens_est=1200,
         supervisor_output_tokens_est=300,
+        context_pack_path=".triagecore/context_packs/context_pack_task-123.json",
+        context_estimated_tokens=640,
+        context_budget_tokens=1200,
+        context_budget_status="within_budget",
         artifact_paths=["reports/study_001_trial_002_benchmark_report.md"],
     )
 
@@ -81,6 +85,8 @@ def test_ledger_detail_text_includes_review_and_benchmark_context():
     assert "Supervisor: tool=codex, decision=needs_revision, model=gpt-5" in text
     assert "tokens_est=1200 in/300 out" in text
     assert "Supervisor notes: Local draft needs tests." in text
+    assert "Context budget: 640/1200 tokens (within_budget)" in text
+    assert ".triagecore/context_packs/context_pack_task-123.json" in text
     assert "Benchmark: study=study_001, run=trial_002" in text
     assert "validator_passed=True" in text
     assert "reports/study_001_trial_002_benchmark_report.md" in text

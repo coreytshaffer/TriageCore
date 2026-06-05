@@ -1,20 +1,20 @@
 # Session Handoff
 
-Last updated: 2026-06-04
+Last updated: 2026-06-05
 
 ## Current State
 
 - Active branch: `main`
-- Current slice: Codex/Antigravity bridge for supervised local workflows
+- Current slice: Phase 11 token efficiency and context discipline
 - Runtime evidence files under `.triagecore/` and generated reports under `reports/` are intentionally ignored
 
 Recent commits:
 
+- `cf0a119 Reconcile Antigravity local-first updates`
+- `427d22c Refactor worker council into hierarchical structure with deterministic ValidatorTools`
+- `22563f3 Recovery Pass: Update architecture docs and add energy heuristic telemetry`
+- `6fdfcca Expand supervised workflow telemetry`
 - `324759c feat: improve dispatch observability and controls`
-- `1cdc7f1 feat: expand ledger cards with review details`
-- `bc74636 fix: clarify structured extraction and timestamp tasks`
-- `c170c7f feat: scope benchmark reports by run`
-- `71fc8bf docs: add session handoff checkpoint`
 
 ## What Changed Tonight
 
@@ -90,6 +90,19 @@ CLI commands that create or scan visible work now append `[cli]` activity lines 
 
 CLI `run-pipeline` now creates or appends a ledger task, records runner `pipeline`, stores success evidence as `local_draft_generated`, and records handoff outcomes as blocked tasks. This gives TriageDesk ledger views a concrete task record to display for CLI-started pipeline work.
 
-Next step: identify where Codex, Antigravity, Gemini, or IDE supervisor token usage is exposed in a stable exact format, then add tool-specific adapters that feed the generic importer while preserving manual estimates as the fallback.
+Superseded next step: exact supervisor-token import remains useful when a stable source appears, but the active backlog has moved to Phase 11 token efficiency. The current next step is Story 11.3 Council Gating Rules.
 
 Future idea captured in backlog: a private mobile app or mobile web control surface that connects to the locally hosted TriageCore/model pipeline at home through a private tunnel such as VPN, Tailscale, or WireGuard. The initial mobile scope should stay bounded to review, approve/deny, logs, and small task submission before any write-capable workflow.
+
+## Backlog Phase Transition
+
+The foundation backlog is now closed through Phase 10. Completed foundation work includes human review, ledger validation, skill routing, sustainability telemetry, visible infrastructure, study evidence, UI ergonomics, Codex/Antigravity supervision, private mobile review access, and persistent environmental feedback.
+
+The active backlog now begins with Phase 11: Token Efficiency And Context Discipline. Story 11.1 and Story 11.2 have a first advisory implementation:
+
+- context budget planner before dispatch
+- context pack artifacts that record included files, excluded files, summaries, token estimates, and inclusion rationale
+- `context_budgeted` ledger events reduced into task records and shown in expanded UI details
+- keep token-efficiency claims evidence-bound by reporting measured token intensity and benefit signals rather than unsupported absolute savings
+
+Next recommended slice: Story 11.3 Council Gating Rules.

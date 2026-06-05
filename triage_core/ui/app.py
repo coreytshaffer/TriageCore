@@ -48,6 +48,7 @@ from ..config import default_config
 from ..task_ledger import TaskLedger
 from ..classifier import DangerDetector, TaskClassifier
 from ..sustainability import SustainabilityEstimator, PowerMonitor
+from ..context_budget import create_context_pack_artifact
 
 # ─── Status color map ────────────────────────────────────────────────────────
 _STATUS_FG = {
@@ -151,6 +152,13 @@ def _ledger_detail_lines(task) -> list[str]:
         lines.append(f"Prompt: {task.description}")
     if task.target_files:
         lines.append(f"Target files: {', '.join(task.target_files)}")
+    if task.context_pack_path:
+        lines.append(
+            "Context budget: "
+            f"{task.context_estimated_tokens}/{task.context_budget_tokens} tokens "
+            f"({task.context_budget_status})"
+        )
+        lines.append(f"Context pack: {task.context_pack_path}")
 
     review_bits = []
     if task.status == "reviewed":
@@ -1476,6 +1484,17 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         ctk.CTkLabel(grid, text=f"💨 Emissions: {tel.get('emissions_gco2e', 0):.4f} gCO₂e", font=ctk.CTkFont(size=13)).grid(row=1, column=1, sticky="w", pady=4)
         ctk.CTkLabel(grid, text=f"💧 Water: {tel.get('water_liters', 0):.4f} L", font=ctk.CTkFont(size=13)).grid(row=2, column=0, sticky="w", pady=4)
         ctk.CTkLabel(grid, text=f"🔩 Embodied: {tel.get('embodied_gco2e', 0):.5f} gCO₂e", font=ctk.CTkFont(size=13)).grid(row=2, column=1, sticky="w", pady=4)
+        if tel.get("context_budget_tokens"):
+            ctk.CTkLabel(
+                grid,
+                text=(
+                    "🧠 Context: "
+                    f"{tel.get('context_estimated_tokens', 0)}/"
+                    f"{tel.get('context_budget_tokens', 0)} "
+                    f"({tel.get('context_budget_status', 'unknown')})"
+                ),
+                font=ctk.CTkFont(size=13),
+            ).grid(row=3, column=0, columnspan=2, sticky="w", pady=4)
 
     def _render_inspector_timeline(self, ctx):
         _SectionLabel(self.inspector_content, "Event Timeline").pack(anchor="w", pady=(0, 4))
@@ -2451,6 +2470,29 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
                 "reasons": danger.reasons,
             },
         )
+        runner_label = self._context_runner_label(runner_type)
+        context_pack, context_path, context_payload = create_context_pack_artifact(
+            task_id=task_id,
+            prompt=prompt,
+            files=files,
+            runner=runner_label,
+            category=cat,
+            ledger_dir=default_config.get_ledger_dir(),
+        )
+        self.ledger.append_event(task_id, "context_budgeted", context_payload)
+        self._log_activity(
+            "Context pack created "
+            f"for task {task_id[:8]}: {context_pack.estimated_tokens}/"
+            f"{context_pack.budget_tokens} tokens ({context_pack.budget_status})"
+        )
+        if context_pack.budget_status == "over_budget":
+            self.status_label.configure(
+                text=(
+                    "Context budget warning: "
+                    f"{context_pack.estimated_tokens}/{context_pack.budget_tokens} tokens"
+                ),
+                text_color="#f97316",
+            )
 
         power = PowerMonitor.get_status()
         is_heavy = danger.risk_level in ["medium", "high"] or runner_type in [
@@ -2488,6 +2530,16 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
 
         elif runner_type == "pipeline":
             self._dispatch_pipeline(task_id, prompt, files, danger)
+
+    @staticmethod
+    def _context_runner_label(runner_type: str) -> str:
+        return {
+            "local": "local_llm",
+            "council": "worker_council",
+            "codex": "codex",
+            "antigravity": "antigravity",
+            "pipeline": "pipeline",
+        }.get(runner_type, runner_type)
 
     # -- Local --
     def _dispatch_local(self, task_id, prompt, files, danger):

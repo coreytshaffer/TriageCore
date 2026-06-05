@@ -71,6 +71,15 @@ class TaskRecord:
     retry_count: int = 0
     hardware_profile: Optional[str] = None
     duration_seconds: float = 0.0
+    context_pack_path: str = ""
+    context_strategy: str = ""
+    context_estimated_tokens: int = 0
+    context_budget_tokens: int = 0
+    context_budget_status: str = ""
+    context_required_items: int = 0
+    context_helpful_items: int = 0
+    context_optional_items: int = 0
+    context_excluded_items: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize task state for lightweight UI/API responses."""
@@ -200,7 +209,10 @@ class TaskLedger:
             "emissions_gco2e": record.emissions_gco2e_estimate,
             "water_liters": record.water_liters_estimate,
             "embodied_gco2e": record.embodied_gco2e_allocated,
-            "total_tokens": total_tok
+            "total_tokens": total_tok,
+            "context_estimated_tokens": record.context_estimated_tokens,
+            "context_budget_tokens": record.context_budget_tokens,
+            "context_budget_status": record.context_budget_status,
         }
 
         review_summary = {
@@ -297,6 +309,18 @@ class TaskLedger:
             record.supervisor_token_source = payload.get("supervisor_token_source", "")
             if record.supervisor_artifact_path:
                 record.artifact_paths.append(record.supervisor_artifact_path)
+        elif etype == "context_budgeted":
+            record.context_pack_path = payload.get("context_pack_path", "")
+            record.context_strategy = payload.get("context_strategy", "")
+            record.context_estimated_tokens = payload.get("context_estimated_tokens", 0)
+            record.context_budget_tokens = payload.get("context_budget_tokens", 0)
+            record.context_budget_status = payload.get("context_budget_status", "")
+            record.context_required_items = payload.get("context_required_items", 0)
+            record.context_helpful_items = payload.get("context_helpful_items", 0)
+            record.context_optional_items = payload.get("context_optional_items", 0)
+            record.context_excluded_items = payload.get("context_excluded_items", 0)
+            if record.context_pack_path:
+                record.artifact_paths.append(record.context_pack_path)
         elif etype == "task_blocked":
             record.status = "blocked"
             record.handoff_reason = payload.get("reason", record.handoff_reason)

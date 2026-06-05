@@ -78,6 +78,20 @@ Pass condition:
 - CLI pipeline runs show a `pipeline` runner and either `local_draft_generated` or `blocked` status in the ledger.
 - The raw ledger view shows the same task/event if the Logs tab is switched to ledger mode.
 
+Check context budget artifacts:
+
+```powershell
+triagecore codex-task --prompt "Context budget smoke test" --files README.md
+Get-ChildItem .triagecore\context_packs
+```
+
+Pass condition:
+
+- A `context_budgeted` event is appended to `.triagecore/ledger.jsonl`.
+- The linked context pack JSON exists under `.triagecore\context_packs`.
+- Expanded ledger details show context estimated tokens, budget tokens, status, and artifact path.
+- Treat `within_budget` and `over_budget` as advisory evidence, not automatic proof of good or bad model behavior.
+
 ## 4. Study Evidence Verification
 
 Use this before trusting a benchmark run as scientific evidence.
