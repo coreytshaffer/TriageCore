@@ -113,3 +113,40 @@ def _same_number(value: object, expected: float) -> bool:
         return abs(float(value) - expected) < 0.001
     except (TypeError, ValueError):
         return False
+
+class ModestToolsValidator:
+    """
+    Validator that ensures generated Python scripts or configurations
+    do not use heavy dependencies when modest tools suffice.
+    """
+    HEAVY_DEPENDENCIES = {"sqlite3", "react", "sqlalchemy", "django", "flask", "fastapi"}
+
+    @staticmethod
+    def validate(output: str) -> bool:
+        cleaned = _strip_markdown_fence(output).lower()
+
+        # Check for heavy imports or keywords that indicate heavy tools
+        for dep in ModestToolsValidator.HEAVY_DEPENDENCIES:
+            if f"import {dep}" in cleaned or f"from {dep}" in cleaned or f"\"{dep}\"" in cleaned or f"'{dep}'" in cleaned:
+                print(f"[Validator] Ethical Failure: Used heavy dependency '{dep}' instead of modest tools.")
+                return False
+
+        return True
+
+
+class CyberneticReportValidator:
+    """
+    Validator that ensures environmental reports preserve uncertainty
+    and state limits explicitly beside results.
+    """
+
+    @staticmethod
+    def validate(output: str) -> bool:
+        cleaned = _strip_markdown_fence(output).lower()
+
+        # Must contain explicit section for limitations or uncertainty
+        if "## limitations" not in cleaned and "## uncertainty" not in cleaned:
+            print("[Validator] Ethical Failure: Report failed to state limits or preserve uncertainty.")
+            return False
+
+        return True

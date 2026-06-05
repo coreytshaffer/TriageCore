@@ -36,12 +36,26 @@ class TriageClient:
         If execution fails, times out, or the router blocks it, it creates a structured handoff.
         """
         from .classifier import TaskClassifier
+        from .project_steward import ProjectSteward
         
         # Step 1: Routing logic
         category = TaskClassifier.classify(prompt)
         route_decision = self.router.specialist.route_task(category, prompt, data)
         use_timeout = route_decision.get("timeout", self.engine.timeout)
         
+        steward = ProjectSteward()
+        steward_eval = steward.evaluate(task_prompt=prompt, target_files=[], completed_orders=[])
+        if steward_eval["local_result_status"] == "insufficient":
+            return {
+                "status": "handoff_required",
+                "source": "steward",
+                "reason": steward_eval["reason"],
+                "handoff_reason": steward_eval["reason"],
+                "backend_name": getattr(self.engine.backend, "name", None),
+                "model": getattr(self.engine.backend, "model", None),
+                "timeout_seconds": use_timeout,
+            }
+
         if route_decision.get("offload_recommended", False):
             reason = f"Router bypass: {route_decision.get('reason')}"
             return {

@@ -561,10 +561,10 @@ def _record_supervisor_review(
         },
     )
     _log_cli_activity(
-        f"supervisor review recorded task={task_id[:8]} tool={tool} decision={decision}",
+        f"supervisor review recorded task={task_id[:8]} tool={tool} model={model} profile={profile} decision={decision}",
         ledger_dir=ledger_dir,
     )
-    print(f"Recorded {tool} supervisor review for task {task_id}: {decision}.")
+    print(f"Recorded {tool} ({model}) supervisor review for task {task_id}: {decision}.")
 
 def _import_supervisor_usage(
     source_path: str,
@@ -628,10 +628,10 @@ def _import_supervisor_usage(
 
     verb = "Would import" if dry_run else "Imported"
     _log_cli_activity(
-        f"supervisor usage import dry_run={dry_run} imported={imported} skipped={skipped} source={source_path}",
+        f"supervisor usage import dry_run={dry_run} imported={imported} skipped={skipped} source={source_path} tool={tool} model={model}",
         ledger_dir=ledger_dir,
     )
-    print(f"{verb} {imported} supervisor usage record(s); skipped {skipped}.")
+    print(f"{verb} {imported} supervisor usage record(s) for {tool} ({model}); skipped {skipped}.")
     return imported
 
 def _scan_supervisor_usage(

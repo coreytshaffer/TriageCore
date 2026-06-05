@@ -8,6 +8,12 @@ class ProjectSteward:
     The steward agent that audits local worker results and decides if an escalation is required.
     """
 
+    # Sensitive terms from the Cybernetic Ecology framework
+    SENSITIVE_KEYWORDS = {
+        "water intake", "sewer lift", "tribal", "bo-no-po-ti", "bloody island", "sacred",
+        "archaeological", "burial", "confidential infrastructure"
+    }
+
     def __init__(self, budgets: Dict[str, Any] = None):
         self.budgets = budgets or {}
 
@@ -18,7 +24,7 @@ class ProjectSteward:
         completed_orders: List[WorkOrder],
     ) -> Dict[str, Any]:
         """
-        Evaluate local outputs against budgets and acceptance criteria.
+        Evaluate local outputs against budgets, acceptance criteria, and ethical firewalls.
         """
         total_energy_kwh = sum(
             o.result.get("resource_usage", {}).get("energy_kwh_estimate", 0)
@@ -36,7 +42,25 @@ class ProjectSteward:
             if o.result
         )
 
-        # Check validators if any (only the latest run determines final status)
+        # 1. Ethical Firewall (Sensitive GIS/Context)
+        needs_escalation = False
+        reasons = []
+        recommended_escalation = "none"
+
+        # Scan prompt and outputs for sensitive context
+        combined_text = task_prompt.lower()
+        for o in completed_orders:
+            if o.result and "output" in o.result:
+                combined_text += " " + str(o.result["output"]).lower()
+
+        for kw in self.SENSITIVE_KEYWORDS:
+            if kw in combined_text:
+                needs_escalation = True
+                reasons.append(f"Ethical Firewall: Sensitive context detected ('{kw}').")
+                recommended_escalation = "human_only"
+                break
+
+        # 2. Validation Checks
         reviewers = [o for o in completed_orders if o.assigned_role == "review_worker"]
         validation_passed = (
             reviewers[-1].result.get("is_valid", False)
@@ -44,22 +68,21 @@ class ProjectSteward:
             else True
         )
 
-        needs_escalation = False
-        reasons = []
+        if not needs_escalation:
+            if not reviewers:
+                pass
+            elif not validation_passed:
+                needs_escalation = True
+                reasons.append("Local reviewers failed validation.")
+                recommended_escalation = "codex"
 
-        if not reviewers:
-            # If no reviewers ran, maybe we escalate or just accept? For MVP, let's accept if there's output.
-            pass
-        elif not validation_passed:
-            needs_escalation = True
-            reasons.append("Local reviewers failed.")
-
-        max_energy = self.budgets.get("max_energy_kwh_per_task", 0.02)
-        if total_energy_kwh > max_energy:
-            needs_escalation = True
-            reasons.append(
-                f"Exceeded energy budget ({total_energy_kwh:.4f} > {max_energy})."
-            )
+            # 3. Energy/Token Budget Checks
+            max_energy = self.budgets.get("max_energy_kwh_per_task", 0.02)
+            if total_energy_kwh > max_energy:
+                needs_escalation = True
+                reasons.append(f"Exceeded energy budget ({total_energy_kwh:.4f} > {max_energy}).")
+                # Escalate to antigravity for credit allowance optimization
+                recommended_escalation = "antigravity"
 
         # Compile summaries
         local_work_summary = []
@@ -74,7 +97,7 @@ class ProjectSteward:
             "reason": (
                 " ".join(reasons) if needs_escalation else "Local workers succeeded."
             ),
-            "recommended_escalation": "codex" if needs_escalation else "none",
+            "recommended_escalation": recommended_escalation,
             "recommended_permission_profile": (
                 "workspace" if needs_escalation else "read-only"
             ),
@@ -90,18 +113,21 @@ class ProjectSteward:
     def generate_escalation_packet(
         self, evaluation: Dict[str, Any], task_prompt: str, target_files: List[str]
     ) -> HandoffPacket:
+        escalation_target = evaluation.get("recommended_escalation", "codex")
+        risk = "high" if escalation_target == "human_only" else "medium"
+
         return HandoffPacket(
-            title=f"Escalation: {task_prompt[:30]}",
+            title=f"Escalation [{escalation_target.upper()}]: {task_prompt[:30]}",
             summary=task_prompt,
             context=f"Local work attempted:\n{evaluation['handoff_summary']}\nReason for escalation: {evaluation['reason']}",
             target_files=target_files,
-            constraints=["Follow local codebase styling."],
-            acceptance_criteria=["Tests pass."],
+            constraints=["Follow Cybernetic Ecology principles.", "Follow local codebase styling."],
+            acceptance_criteria=["Ethical clearance verified if human_only.", "Tests pass."],
             test_commands=["pytest tests/"],
-            safety_notes=[],
-            recommended_backend=evaluation.get("recommended_escalation", "codex"),
+            safety_notes=[evaluation['reason']] if escalation_target == "human_only" else [],
+            recommended_backend=escalation_target,
             recommended_permission_profile=evaluation.get(
                 "recommended_permission_profile", "workspace"
             ),
-            risk_level="medium",
+            risk_level=risk,
         )

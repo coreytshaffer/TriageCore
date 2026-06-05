@@ -42,6 +42,33 @@ def test_backend_generate_success(mock_post):
     assert args[0] == "http://localhost:11434/v1/chat/completions"
     assert kwargs["json"]["model"] == "test-model"
 
+
+@patch("triage_core.backends.requests.post")
+def test_backend_generate_streaming_omits_stream_options(mock_post):
+    mock_resp = Mock()
+    mock_resp.iter_lines.return_value = [
+        b'data: {"choices":[{"delta":{"content":"Hello"}}]}',
+        b'data: {"choices":[{"delta":{"content":" World"}}],"usage":{"total_tokens":2}}',
+        b"data: [DONE]",
+    ]
+    mock_post.return_value = mock_resp
+
+    chunks = []
+    backend = create_backend("custom", base_url="http://localhost:1234/v1")
+    result = backend.generate(
+        [{"role": "user", "content": "hi"}],
+        stream_callback=chunks.append,
+    )
+
+    assert result.text == "Hello World"
+    assert chunks == ["Hello", " World"]
+    assert result.usage == {"total_tokens": 2}
+    args, kwargs = mock_post.call_args
+    assert args[0] == "http://localhost:1234/v1/chat/completions"
+    assert kwargs["stream"] is True
+    assert kwargs["json"]["stream"] is True
+    assert "stream_options" not in kwargs["json"]
+
 @patch("triage_core.backends.requests.post")
 def test_backend_generate_no_choices(mock_post):
     mock_resp = Mock()

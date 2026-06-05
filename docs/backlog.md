@@ -100,12 +100,12 @@ Resolution: proposal IDs `961b769f4d1c`, `2cc74fd2cabf`, and `6b2e9cdfdd20` were
   * Launch TriageDesk and manually verify keyboard focus order, visible focus states, text fit, and minimum click/tap target size.
   * Confirm the review workload selector does not make cards visually noisy or harder to assess.
   * Record any UI fixes from the manual pass as a separate focused change.
-* [ ] **Story 6.10: CLI-To-Desktop Observability Verification**
-  * Ensure CLI-initiated work writes visible activity lines to `triagecore.log`.
-  * Ensure CLI `run-pipeline` appends ledger task evidence for success and handoff outcomes.
-  * Confirm TriageDesk live backend/activity log displays `[cli]` activity while the desktop app is open.
-  * Confirm CLI-created ledger tasks appear in the recent task ledger panel and raw ledger view.
-  * Record any display or refresh fixes as a separate focused change.
+* [x] **Story 6.10: CLI-To-Desktop Observability Verification**
+  * [x] Ensure CLI-initiated work writes visible activity lines to `triagecore.log`.
+  * [x] Ensure CLI `run-pipeline` appends ledger task evidence for success and handoff outcomes.
+  * [x] Confirm TriageDesk live backend/activity log displays `[cli]` activity while the desktop app is open.
+  * [x] Confirm CLI-created ledger tasks appear in the recent task ledger panel and raw ledger view.
+  * [x] Record any display or refresh fixes as a separate focused change.
 
 ## Model And Backend Comparison
 
@@ -132,21 +132,27 @@ Resolution: proposal IDs `961b769f4d1c`, `2cc74fd2cabf`, and `6b2e9cdfdd20` were
   * Add study/run context to supervisor review interpretation where available.
   * Decide whether supervisor-review token estimates should remain manual or be imported from external tool logs.
   * Add a small generated supervisor-review summary for papers and session handoffs.
-* [ ] **Story 8.4: Import Supervisor Usage From Tool Logs**
-  * Add a generic opt-in JSON/JSONL importer for supervisor usage artifacts.
-  * Add a read-only scanner for discovering importable JSON/JSONL supervisor usage artifacts.
-  * Add dry-run preview so candidate imports can be verified before ledger mutation.
-  * Identify where Codex, Antigravity, Gemini, or IDE supervisor usage is exposed on disk or through APIs.
-  * Add tool-specific import adapters once exact log formats are verified.
-  * Preserve manual estimates as the fallback when exact usage cannot be verified.
+* [x] **Story 8.4: Import Supervisor Usage From Tool Logs**
+  * [x] Add a generic opt-in JSON/JSONL importer for supervisor usage artifacts.
+  * [x] Add a read-only scanner for discovering importable JSON/JSONL supervisor usage artifacts.
+  * [x] Add dry-run preview so candidate imports can be verified before ledger mutation.
+  * [x] Identify where Codex, Antigravity, Gemini, or IDE supervisor usage is exposed on disk or through APIs.
+  * [x] Add tool-specific import adapters once exact log formats are verified.
+  * [x] Preserve manual estimates as the fallback when exact usage cannot be verified.
 
 Local search note: Antigravity brain files currently show narrative token estimates and context-limit findings, but not a verified exact machine-readable supervisor usage log format yet. The read-only scanner found no importable JSON/JSONL supervisor usage artifacts under `C:\Users\corey\.gemini\antigravity-ide\brain`.
 
 ## Private Mobile Access
 
-* [ ] **Story 9.1: Private Mobile Control Surface**
-  * Explore a mobile app or lightweight mobile web client that connects to the locally hosted TriageCore/model pipeline at home.
-  * Require private connectivity such as VPN, Tailscale, WireGuard, or another explicitly approved tunnel rather than exposing the local model server directly to the public internet.
-  * Keep the mobile surface bounded to review, approve/deny, monitor logs, and submit small tasks before allowing any write-capable workflow.
-  * Preserve local-first evidence capture: every remote mobile action should still append to the local ledger with actor, timestamp, connection mode, and review decision context.
-  * Treat security, family privacy, and remote access failure modes as acceptance criteria before implementation.
+* [x] **Story 9.1: Private Mobile Control Surface**
+  * [x] Explore a mobile app or lightweight mobile web client that connects to the locally hosted TriageCore/model pipeline at home.
+  * [x] Require private connectivity such as VPN, Tailscale, WireGuard, or another explicitly approved tunnel rather than exposing the local model server directly to the public internet.
+  * [x] Keep the mobile surface bounded to review, approve/deny, monitor logs, and submit small tasks before allowing any write-capable workflow.
+  * [x] Preserve local-first evidence capture: every remote mobile action should still append to the local ledger with actor, timestamp, connection mode, and review decision context.
+  * [x] Treat security, family privacy, and remote access failure modes as acceptance criteria before implementation.
+
+## Persistent Environmental Feedback
+
+* [x] **Story 10.1: System Tray/Widget**
+  * Add a desktop system tray object that displays throughput and basic stats (tasks processed, active backend, energy saved).
+  * Integrate into `desktop.py` to provide a single background/foreground execution model.

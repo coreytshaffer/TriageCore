@@ -72,6 +72,10 @@ class TaskRecord:
     hardware_profile: Optional[str] = None
     duration_seconds: float = 0.0
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize task state for lightweight UI/API responses."""
+        return dataclasses.asdict(self)
+
 
 @dataclass
 class TaskContext:

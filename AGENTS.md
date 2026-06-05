@@ -130,7 +130,12 @@ When reviewing local output, the cloud supervisor must:
    Return the corrected artifact only. No explanations.
    ```
 
-4. **Do not introduce scope creep.** The review covers correctness against the
+4. **Enforce the Cybernetic Ecology Rubric.** The review must evaluate the output against these ethical and design principles:
+   - *Modest Tools First*: Ensure the local worker did not generate heavy infrastructure (e.g. databases, dashboards) when a CSV or Markdown file would suffice.
+   - *Preserve Uncertainty*: Ensure environmental data summaries explicitly include a `## Limitations` or `## Uncertainty` section.
+   - *Ethical Firewall*: If the local worker output includes sensitive geospatial or historical context (e.g., water intakes, tribal layers, Bo-No-Po-Ti), the supervisor must escalate to `human_only` clearance.
+
+5. **Do not introduce scope creep.** The review covers correctness against the
    original spec only — not style preferences or future refactoring opportunities.
 
 ---

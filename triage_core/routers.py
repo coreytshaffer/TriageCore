@@ -79,7 +79,7 @@ class SpecialistRouter:
                 "offload_recommended": False,
                 "timeout": 30,
                 "post_processor": None,
-                "model": "qwen2.5-coder:7b-triagecore",
+                "model": "qwen2.5-coder-7b-instruct",
                 "offline_fallback": not internet_up
             }
         elif category in ["structured_extraction", "log_summary", "docs_update", "architecture_planning"]:
@@ -87,7 +87,7 @@ class SpecialistRouter:
                 "offload_recommended": False,
                 "timeout": 120,
                 "post_processor": strip_code_fences,
-                "model": "deepseek-r1-0528",
+                "model": "deepseek/deepseek-r1-0528-qwen3-8b",
                 "offline_fallback": not internet_up
             }
             
@@ -95,7 +95,7 @@ class SpecialistRouter:
             "offload_recommended": False,
             "timeout": 45,
             "post_processor": None,
-            "model": "qwen2.5-coder:7b-triagecore",
+            "model": "qwen2.5-coder-7b-instruct",
             "offline_fallback": not internet_up
         }
 

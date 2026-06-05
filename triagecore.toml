@@ -2,7 +2,7 @@
 
 [backend]
 default_type = "ollama"
-default_model = "qwen2.5-coder:7b-triagecore"
+default_model = "qwen2.5-coder-7b-instruct"
 base_url = "http://localhost:11434/v1"
 timeout_seconds = 30
 

@@ -52,8 +52,7 @@ class OpenAICompatibleBackend:
 
         if stream_callback:
             payload["stream"] = True
-            if "stream_options" not in payload:
-                payload["stream_options"] = {"include_usage": True}
+            # LM Studio rejects stream_options, so we omit it. Usage might not be returned.
 
             response = requests.post(url, json=payload, timeout=timeout, stream=True)
             response.raise_for_status()
@@ -97,6 +96,8 @@ class OpenAICompatibleBackend:
 
         # Synchronous path
         response = requests.post(url, json=payload, timeout=timeout)
+        if not response.ok:
+            print(f"Backend Error Output: {response.text}")
         response.raise_for_status()
 
         data = response.json()

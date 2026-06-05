@@ -77,6 +77,9 @@ The schema supports two project goals:
 | `supervisor_output_tokens_est` | Estimated supervisor output tokens, if exact usage is unavailable. |
 | `supervisor_token_source` | Source label for supervisor token values: `manual_estimate`, `imported_estimate`, or `imported_exact`. |
 
+> **Note on Tool Support**: As of the current IDE build, the Antigravity engine does not export a machine-readable exact token usage log. Therefore, `manual_estimate` is formally accepted as the permanent fallback default for Antigravity-supervised workflows.
+
+
 ## Learning Linkage
 
 Learning proposal files should reference ledger evidence by `task_id`. Accepted lessons should remain review records until a human intentionally applies them as config or prompt changes.
