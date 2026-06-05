@@ -157,6 +157,24 @@ def main():
     stability_parser.add_argument("--study-id", type=str, default="stability_pass", help="Study identifier to tag stability pass benchmark evidence.")
     stability_parser.add_argument("--run-id", type=str, default=None, help="Optional run identifier to tag a specific trial.")
 
+    # stats
+    stats_parser = subparsers.add_parser("stats", help="Alias for 'lab report' - calculate primary scientific metrics.")
+    stats_parser.add_argument("--ledger-dir", type=str, default=default_config.get_ledger_dir(), help="Directory containing ledger.jsonl.")
+
+    # lab
+    lab_parser = subparsers.add_parser("lab", help="TriageLab analytical engine subcommands.")
+    lab_subparsers = lab_parser.add_subparsers(dest="lab_command", help="Lab subcommands")
+
+    lab_report_parser = lab_subparsers.add_parser("report", help="Calculate primary scientific metrics over historical runs.")
+    lab_report_parser.add_argument("--ledger-dir", type=str, default=default_config.get_ledger_dir(), help="Directory containing ledger.jsonl.")
+
+    lab_export_parser = lab_subparsers.add_parser("export", help="Export historical ledger runs to flat tabular dataset.")
+    lab_export_parser.add_argument("--output", type=str, default=None, help="Output CSV path. Defaults to .triagecore/lab_export.csv.")
+    lab_export_parser.add_argument("--ledger-dir", type=str, default=default_config.get_ledger_dir(), help="Directory containing ledger.jsonl.")
+
+    lab_train_parser = lab_subparsers.add_parser("train", help="Train a predictive success model on historical ledger runs.")
+    lab_train_parser.add_argument("--ledger-dir", type=str, default=default_config.get_ledger_dir(), help="Directory containing ledger.jsonl.")
+
     args = parser.parse_args()
 
     if args.command == "desk":
@@ -256,6 +274,17 @@ def main():
             study_id=args.study_id,
             run_id=args.run_id,
         )
+    elif args.command == "stats":
+        _lab_report(ledger_dir=args.ledger_dir)
+    elif args.command == "lab":
+        if args.lab_command == "report":
+            _lab_report(ledger_dir=args.ledger_dir)
+        elif args.lab_command == "export":
+            _lab_export(ledger_dir=args.ledger_dir, output_path=args.output)
+        elif args.lab_command == "train":
+            _lab_train(ledger_dir=args.ledger_dir)
+        else:
+            lab_parser.print_help()
     else:
         parser.print_help()
 
@@ -1097,6 +1126,103 @@ def _run_stability_pass(
         print("🚨 Stability Pass Completed: FAILED")
         _log_cli_activity("stability-pass completed status=failed", ledger_dir=ledger_dir)
         sys.exit(1)
+
+
+def _lab_report(ledger_dir: str):
+    from .task_ledger import TaskLedger
+    from .lab import calculate_scientific_metrics
+    
+    ledger = TaskLedger(ledger_dir=ledger_dir)
+    records = ledger.get_all_tasks()
+    if not records:
+        print("No task records found in the ledger to analyze.")
+        return
+        
+    metrics = calculate_scientific_metrics(records)
+    
+    print("# TriageLab Scientific Metrics Report")
+    print()
+    print("| Metric | Value |")
+    print("| --- | ---: |")
+    print(f"| Total Runs | {metrics['total_runs']} |")
+    print(f"| Total Reviewed | {metrics['total_reviewed']} |")
+    print(f"| Total Accepted | {metrics['total_accepted']} |")
+    print(f"| Accepted-Task Yield Rate | {metrics['accepted_yield_pct']:.1f}% |")
+    print(f"| Mean Review Burden | {metrics['mean_review_burden_mins']:.2f} mins |")
+    print(f"| Mean Tokens / Accepted Task | {metrics['mean_tokens_per_accepted_task']:.1f} |")
+    print(f"| Mean Energy / Accepted Task | {metrics['mean_energy_kwh_per_accepted_task']:.6f} kWh |")
+    print(f"| Mean Emissions / Accepted Task | {metrics['mean_emissions_gco2e_per_accepted_task']:.3f} gCO2e |")
+    print(f"| Mean Water / Accepted Task | {metrics['mean_water_liters_per_accepted_task']:.3f} L |")
+    print(f"| Total Tokens Consumed | {metrics['total_tokens']} |")
+    print(f"| Total Wasted Tokens | {metrics['total_wasted_tokens']} |")
+    print(f"| Token Efficiency Rate | {metrics['token_efficiency_pct']:.1f}% |")
+    print()
+
+
+def _lab_export(ledger_dir: str, output_path: Optional[str]):
+    from .task_ledger import TaskLedger
+    from .lab import export_tabular_dataset
+    
+    ledger = TaskLedger(ledger_dir=ledger_dir)
+    records = ledger.get_all_tasks()
+    if not records:
+        print("No task records found to export.")
+        return
+        
+    if not output_path:
+        output_path = os.path.join(ledger_dir, "lab_export.csv")
+        
+    export_tabular_dataset(records, output_path)
+    print(f"Success: Exported {len(records)} runs to '{output_path}'.")
+
+
+def _lab_train(ledger_dir: str):
+    from .task_ledger import TaskLedger
+    from .lab import LightweightDecisionTree
+    
+    ledger = TaskLedger(ledger_dir=ledger_dir)
+    records = ledger.get_all_tasks()
+    if not records:
+        print("No task records found to train on.")
+        return
+        
+    X = []
+    y = []
+    for r in records:
+        if not r.runner:
+            continue
+            
+        accepted_lbl = 0
+        if r.status == "reviewed" and r.accepted:
+            accepted_lbl = 1
+            
+        X.append({
+            "runner": r.runner or "unknown",
+            "risk_level": r.risk_level or "unknown",
+            "permission_profile": r.permission_profile or "unknown"
+        })
+        y.append(accepted_lbl)
+        
+    if not X:
+        print("No valid task runs with assigned runners found to train on.")
+        return
+        
+    features = ["runner", "risk_level", "permission_profile"]
+    model = LightweightDecisionTree(max_depth=4)
+    model.fit(X, y, features)
+    
+    model_path = os.path.join(ledger_dir, "predictive_model.json")
+    os.makedirs(os.path.dirname(os.path.abspath(model_path)), exist_ok=True)
+    import json
+    with open(model_path, "w", encoding="utf-8") as f:
+        json.dump(model.serialize(), f, indent=2)
+        
+    print(f"Success: Trained LightweightDecisionTree on {len(X)} samples.")
+    print(f"Model saved to '{model_path}'.")
+    print()
+    print("Learned Decision Rules Visualizer:")
+    print(model.render_tree_text())
+
 
 if __name__ == "__main__":
     main()

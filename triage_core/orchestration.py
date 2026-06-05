@@ -69,6 +69,39 @@ class ProjectManager:
         then evaluates with ProjectSteward.
         """
         task_id = str(uuid.uuid4())
+
+        # ── TriageLab Predictive Routing Check ──────────────────────────────
+        model_path = os.path.join(default_config.get_ledger_dir(), "predictive_model.json")
+        if os.path.exists(model_path):
+            try:
+                from .classifier import DangerDetector
+                from .lab import LightweightDecisionTree
+                
+                danger = DangerDetector.analyze(prompt, target_files)
+                sample = {
+                    "runner": "worker_council",
+                    "risk_level": danger.risk_level,
+                    "permission_profile": danger.recommended_profile
+                }
+                
+                with open(model_path, "r", encoding="utf-8") as f:
+                    model_data = json.load(f)
+                    
+                model = LightweightDecisionTree()
+                model.deserialize(model_data)
+                
+                pred, prob = model.predict(sample)
+                if pred == 0 or prob < 0.5:
+                    warning_msg = (
+                        f"⚠️ [TriageLab Warning] High likelihood of local failure/escalation predicted "
+                        f"for this task profile (Risk: {danger.risk_level}, Profile: {danger.recommended_profile}, Runner: worker_council)."
+                    )
+                    if stream_callback:
+                        stream_callback(f"\n{warning_msg}\n")
+                    print(warning_msg)
+            except Exception:
+                pass
+
         max_artifact_bytes: int = self.budgets.get("max_artifact_bytes", 12000)
         max_tokens: int = self.budgets.get("max_tokens", 800)
         max_repair_attempts: int = self.budgets.get("max_local_attempts", 2)
