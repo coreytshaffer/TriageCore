@@ -196,7 +196,7 @@ Primary scientific outcome: tokens per accepted task, interpreted beside validat
   * Implement dynamic "early stopping" during task execution when real-time energy telemetry (measured via `PowerSampler` or estimated) projects that the task will overrun its configured max energy budget.
   * Base this early stopping method on recent research regarding energy-aware resource allocation, terminating model inference early to save local power.
 
-* [ ] **Story 11.6: Post-Sprint Codex Stability Pass**
+* [x] **Story 11.6: Post-Sprint Codex Stability Pass**
   * Establish a formal Codex-run stability pass script/procedure (`triagecore stability-pass`) to run after each sprint.
   * Automatically verify harness boundary enforcement, logging compliance, and regression safety across all benchmark tasks.
 
@@ -207,8 +207,19 @@ Primary scientific outcome: tokens per accepted task, interpreted beside validat
 * [ ] **Story 11.8: Integrated Telemetry Dashboard Controls**
   * Surface early stopping events, firewall triggers, credit status, and stability pass results directly on the TriageDesk GUI.
 
+## 🧪 Phase 12: TriageLab Analytical Engine & Predictive Routing
+
+Goal: Shift from operational tracking to analytical optimization, converting the historical ledger into training datasets and predictive routing policies.
+
+* [ ] **Story 12.1: TriageLab Stats and Markdown Reporting CLI**
+  * Implement a derived view over `ledger.jsonl` calculating primary scientific metrics (e.g., accepted-task yield, mean review burden, mean tokens/kWh per accepted task).
+  * Expose via CLI: `triagecore stats` or `triagecore lab report`.
+* [ ] **Story 12.2: TriageLab Tabular Dataset Export**
+  * Implement `triagecore lab export --format csv` (and/or parquet) to extract an ML-ready flat feature table (e.g., including quantization, model, tokens, duration, and human acceptance).
+* [ ] **Story 12.3: Predictive Local Success Warning**
+  * Train an interpretable predictor (Logistic Regression / Decision Tree) on exported run data.
+  * Integrate an advisory warning before dispatching a task if local execution has a high projected failure/escalation probability.
+
 ## Current Phase 11 Decision Point
 
-Story 11.1 and Story 11.2 now have a first advisory implementation. The backlog has been restructured following the Codex session to focus on enforcing Cybernetic Ecology principles, credit/energy early stopping, and post-sprint Codex stability passes.
-
-Next recommended slice: Story 11.3. Define the active firewall policies for the Cybernetic Ecology framework boundaries inside `ProjectSteward`.
+Story 11.6 (Post-Sprint Codex Stability Pass) is complete. The next active story is Story 11.7 (Token Efficiency and Escaped Waste Reporting) to implement auditing of wasted token resources on failed or cancelled workers.

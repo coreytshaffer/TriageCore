@@ -143,6 +143,20 @@ def main():
     pipeline_parser.add_argument("--ledger-dir", type=str, default=default_config.get_ledger_dir(), help="Directory for pipeline ledger evidence.")
     pipeline_parser.add_argument("--task-id", type=str, default=None, help="Optional existing task ID to append pipeline evidence to.")
 
+    # stability-pass
+    stability_parser = subparsers.add_parser(
+        "stability-pass",
+        help="Run a post-sprint Codex stability pass to verify boundary, logging, and regression correctness.",
+    )
+    stability_parser.add_argument("--tasks", type=str, default=default_config.get_benchmarks_path(), help="Path to benchmark JSONL tasks.")
+    stability_parser.add_argument("--backend-type", type=str, default=default_config.get_backend_type(), help="Backend preset to use.")
+    stability_parser.add_argument("--model", type=str, default=default_config.get_backend_model(), help="Model name for the backend.")
+    stability_parser.add_argument("--base-url", type=str, default=default_config.get_backend_base_url(), help="Optional custom OpenAI-compatible base URL.")
+    stability_parser.add_argument("--timeout", type=int, default=default_config.get_timeout_seconds(), help="Local timeout budget in seconds.")
+    stability_parser.add_argument("--ledger-dir", type=str, default=default_config.get_ledger_dir(), help="Directory for the task ledger and activity logging.")
+    stability_parser.add_argument("--study-id", type=str, default="stability_pass", help="Study identifier to tag stability pass benchmark evidence.")
+    stability_parser.add_argument("--run-id", type=str, default=None, help="Optional run identifier to tag a specific trial.")
+
     args = parser.parse_args()
 
     if args.command == "desk":
@@ -231,6 +245,17 @@ def main():
         )
     elif args.command == "run-pipeline":
         _run_pipeline(args.prompt, args.files, args.output, args.ledger_dir, args.task_id)
+    elif args.command == "stability-pass":
+        _run_stability_pass(
+            tasks_path=args.tasks,
+            backend_type=args.backend_type,
+            model=args.model,
+            base_url=args.base_url,
+            timeout_seconds=args.timeout,
+            ledger_dir=args.ledger_dir,
+            study_id=args.study_id,
+            run_id=args.run_id,
+        )
     else:
         parser.print_help()
 
@@ -884,6 +909,156 @@ def _run_pipeline(
         print(f"Status: HANDOFF REQUIRED")
         print(f"Reason: {reason}")
         print("Escalating to Worker Council / Cloud...")
+
+def _run_stability_pass(
+    tasks_path: str,
+    backend_type: str,
+    model: str,
+    base_url: Optional[str],
+    timeout_seconds: int,
+    ledger_dir: str,
+    study_id: str,
+    run_id: Optional[str],
+):
+    import sys
+    import os
+    import uuid
+    from .benchmarks import load_benchmark_tasks, resolve_validator, result_to_model_event
+    from .client import TriageClient
+    from .task_ledger import TaskLedger
+
+    print("======================================================================")
+    print("🚀 Starting Codex Post-Sprint Stability Pass...")
+    print(f"Tasks: {tasks_path}")
+    print(f"Backend: {backend_type} | Model: {model}")
+    print("======================================================================")
+
+    # 1. Check/prepare logging and activity
+    ledger = TaskLedger(ledger_dir=ledger_dir)
+    log_dir = ledger_dir
+    os.makedirs(log_dir, exist_ok=True)
+    log_path = os.path.join(log_dir, "triagecore.log")
+
+    # Record start in CLI activity log
+    _log_cli_activity(f"stability-pass started backend={backend_type} model={model} study={study_id}", ledger_dir=ledger_dir)
+
+    try:
+        tasks = load_benchmark_tasks(tasks_path)
+    except Exception as e:
+        print(f"❌ Error loading benchmark tasks: {e}")
+        sys.exit(1)
+
+    client = TriageClient(
+        backend_type=backend_type,
+        model=model,
+        base_url=base_url,
+        timeout_seconds=timeout_seconds,
+    )
+
+    all_passed = True
+    results_summary = []
+
+    for task in tasks:
+        task_id = str(uuid.uuid4())
+        print(f"Running task {task.task_id} ({task.category})...")
+
+        ledger.append_event(task_id, "task_created", {
+            "title": f"Stability Pass: {task.task_id}",
+            "description": task.prompt,
+            "target_files": task.target_files,
+            "benchmark_task_id": task.task_id,
+            "study_id": study_id,
+            "run_id": run_id,
+        })
+        ledger.append_event(task_id, "runner_selected", {"runner": "stability_pass"})
+
+        # Log context pack
+        _append_context_pack_event(
+            ledger=ledger,
+            task_id=task_id,
+            prompt=f"{task.prompt}\n\nData:\n{task.data}",
+            files=task.target_files,
+            runner="stability_pass",
+            category=task.category,
+            ledger_dir=ledger_dir,
+        )
+
+        # Execute
+        result = client.run_task(
+            prompt=task.prompt,
+            data=task.data,
+            validator=resolve_validator(task.validator),
+        )
+
+        # Log completion
+        ledger.append_event(task_id, "model_evaluated", result_to_model_event(task, result))
+        if result.get("status") == "handoff_required":
+            ledger.append_event(task_id, "handoff_generated", {
+                "reason": result.get("handoff_reason") or result.get("reason"),
+            })
+
+        observed = result.get("status")
+        expected = task.expected_status
+        passed = (observed == expected)
+
+        status_char = "✅" if passed else "❌"
+        print(f"  {status_char} Observed: {observed} | Expected: {expected}")
+
+        _log_cli_activity(
+            f"stability-pass task={task.task_id} observed={observed} expected={expected} passed={passed}",
+            ledger_dir=ledger_dir,
+        )
+
+        results_summary.append({
+            "task_id": task.task_id,
+            "category": task.category,
+            "expected": expected,
+            "observed": observed,
+            "passed": passed
+        })
+
+        if not passed:
+            all_passed = False
+
+    # 2. Verify Logging Compliance
+    print("\n----------------------------------------------------------------------")
+    print("Checking Logging Compliance...")
+    logging_ok = False
+    if os.path.exists(log_path):
+        try:
+            with open(log_path, "r", encoding="utf-8") as f:
+                log_content = f.read()
+            # Verify that stability pass logs are present in the file
+            if f"stability-pass started backend={backend_type}" in log_content:
+                logging_ok = True
+                print("✅ Logging compliance check passed (triagecore.log verified).")
+            else:
+                print("❌ Logging compliance check failed (start message not found in log).")
+        except Exception as e:
+            print(f"❌ Error checking log file: {e}")
+    else:
+        print(f"❌ Log file {log_path} does not exist.")
+
+    if not logging_ok:
+        all_passed = False
+
+    print("======================================================================")
+    print("Stability Pass Summary:")
+    for res in results_summary:
+        status_str = "PASS" if res["passed"] else "FAIL"
+        print(f"  - {res['task_id']} ({res['category']}): {status_str} (Observed: {res['observed']}, Expected: {res['expected']})")
+
+    log_status_str = "PASS" if logging_ok else "FAIL"
+    print(f"  - Logging Compliance: {log_status_str}")
+    print("======================================================================")
+
+    if all_passed:
+        print("🎉 Stability Pass Completed: SUCCESS")
+        _log_cli_activity("stability-pass completed status=success", ledger_dir=ledger_dir)
+    else:
+        print("🚨 Stability Pass Completed: FAILED")
+        _log_cli_activity("stability-pass completed status=failed", ledger_dir=ledger_dir)
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
