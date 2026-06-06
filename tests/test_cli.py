@@ -1,4 +1,5 @@
 from triage_core.cli import _create_packet
+from triage_core.cli import _import_learning_seeds
 from triage_core.cli import _import_supervisor_usage
 from triage_core.cli import _log_cli_activity
 from triage_core.cli import _record_supervisor_review
@@ -9,6 +10,7 @@ from triage_core.cli import _start_pipeline_task
 from triage_core.task_ledger import TaskLedger
 
 import json
+import os
 import tempfile
 import uuid
 
@@ -164,6 +166,71 @@ def test_scan_supervisor_usage_reports_candidates():
         assert count == 1
 
 
+def test_import_learning_seeds_dry_run_does_not_write(capsys):
+    with tempfile.TemporaryDirectory() as temp_dir:
+        source_dir = f"{temp_dir}/examples"
+        ledger_dir = f"{temp_dir}/ledger"
+        os.makedirs(source_dir, exist_ok=True)
+        with open(f"{source_dir}/triagecore-assignment-preflights.safetask.jsonl", "w", encoding="utf-8") as f:
+            f.write(json.dumps({
+                "preflight_id": "preflight-1",
+                "created_at": "2026-06-05T00:00:00Z",
+                "source_project": "safetask-ai",
+                "assignment_goal": "Classify a compliance copy task.",
+                "task_class": "docs_update",
+                "complexity": "low",
+                "sensitivity": "medium",
+                "required_context": ["policy excerpt"],
+                "context_pack_type": "bounded_docs",
+                "candidate_combo": "local-small+validator",
+                "required_checks": ["schema_check"],
+                "stop_conditions": ["missing_policy_source"],
+                "human_review_required": True,
+                "confidence_before_assignment": 0.72,
+                "rationale": "Bounded source material with a required review gate.",
+            }) + "\n")
+        with open(f"{source_dir}/triagecore-context-packs.safetask.jsonl", "w", encoding="utf-8") as f:
+            f.write(json.dumps({
+                "context_pack_id": "context-1",
+                "pack_type": "bounded_docs",
+                "source_project": "safetask-ai",
+                "task_goal": "Classify a compliance copy task.",
+                "source_artifacts": ["docs/policy.md"],
+                "constraints": ["do not approve routing automatically"],
+                "required_checks": ["schema_check"],
+                "budget_note": "Small enough for local review.",
+            }) + "\n")
+        with open(f"{source_dir}/triagecore-assignment-outcomes.safetask.jsonl", "w", encoding="utf-8") as f:
+            f.write(json.dumps({
+                "task_id": "task-1",
+                "preflight_id": "preflight-1",
+                "context_pack_id": "context-1",
+                "observed_at": "2026-06-05T00:05:00Z",
+                "source_project": "safetask-ai",
+                "source_artifacts": ["docs/policy.md"],
+                "task_class": "docs_update",
+                "complexity": "low",
+                "sensitivity": "medium",
+                "assignment_goal": "Classify a compliance copy task.",
+                "model_combo": "local-small+validator",
+                "tool_path": "local",
+                "result_status": "accepted_with_review",
+                "verification": {"schema_check": "passed"},
+                "correction_burden": "low",
+                "waste_signal": "low",
+                "confidence_after_review": 0.84,
+                "lesson": "Bounded docs can route locally when review gates stay explicit.",
+                "human_review_required": True,
+            }) + "\n")
+
+        count = _import_learning_seeds(source_dir=source_dir, ledger_dir=ledger_dir, write=False)
+        captured = capsys.readouterr()
+
+        assert count == 3
+        assert "Would import 1 preflight(s)" in captured.out
+        assert not os.path.exists(os.path.join(ledger_dir, "learning_seeds"))
+
+
 def test_pipeline_helpers_record_desktop_visible_ledger_events():
     with tempfile.TemporaryDirectory() as temp_dir:
         ledger = TaskLedger(ledger_dir=temp_dir)
@@ -245,4 +312,3 @@ def test_pipeline_handoff_records_blocked_task_with_wasted_tokens():
         assert record.output_tokens == 50
         assert record.total_tokens == 200
         assert record.wasted_tokens == 200
-

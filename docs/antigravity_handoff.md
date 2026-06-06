@@ -6,14 +6,18 @@ Last updated: 2026-06-05
 
 You are continuing TriageCore from the current `main` branch.
 
-Treat the latest Codex checkpoint as the stability baseline. Codex has just implemented Phase 11 Story 11.1 and Story 11.2:
+Treat the latest Codex checkpoint as the Phase 13 backlog baseline. Codex has imported SafeTask-derived learning artifacts into `docs/learning/`, added the validation-first `import-learning-seeds` command, added the static resilience router, and updated `docs/backlog.md` with Phase 13: Resilience Routing And Assignment Learning Store.
 
-- advisory context budget planner
-- JSON context pack artifacts under `.triagecore/context_packs/`
-- `context_budgeted` ledger events
-- context budget fields reduced into `TaskRecord`
-- context budget details visible in expanded TriageDesk ledger/details UI
-- methodology, evidence schema, verification guide, backlog, and session handoff updated
+The imported artifacts define:
+
+- assignment outcome telemetry
+- assignment preflight records
+- context pack templates
+- task-class to local-combo routing
+- waste controls and escalation rules
+- improvement ranking and low-priority containers
+- resilience/capability-aware routing for cloud, local heavy, local fast, deterministic, and human-handoff paths
+- SafeTask-derived JSONL seed examples for preflights, context packs, and outcomes
 
 Use the current Codex/Antigravity division of labor:
 
@@ -21,23 +25,29 @@ Use the current Codex/Antigravity division of labor:
 - Codex is the credibility and stabilization lane for repo reconciliation, methodology language, evidence boundaries, documentation quality, verification, and Git closeout.
 - Antigravity output should be concrete and useful, but still treated as a reviewable draft until Codex/human review confirms the repo state, tests, and paper-facing claims.
 
-Your next high-throughput implementation target is **Phase 11 Story 11.3: Council Gating Rules**.
+Story 13.3 is complete enough for the current backlog: `python -m triage_core.cli import-learning-seeds --source-dir docs\learning\examples --ledger-dir .triagecore` validates the three SafeTask-derived seed files by default and requires `--write` before storing records under `.triagecore/learning_seeds/`.
 
-Build a first working slice that decides when Worker Council is worth the extra token spend. Keep it advisory first, not hard-blocking. Use task risk, context budget status, file count, task category, and prior failure evidence where available.
+Story 13.4 is complete enough for the current backlog: `triage_core/routing/resilience_router.py` exposes `choose_resilience_route()` with static decisions for cloud, local-heavy, local-fast, deterministic, and human-handoff paths.
+
+Your next high-throughput implementation target is **Phase 13 Story 13.5: Record Route-Decision And Worker-Result Ledger Events**.
+
+Build a first working slice that records route decisions and worker outcomes without yet making imported learning records authoritative. Keep it explicit and reviewable. The router may feed ledger events, but imported SafeTask records remain seed evidence until human-reviewed learning approvals promote rules.
 
 Suggested outputs:
 
-1. A small deterministic council-gating module.
-2. Ledger evidence for the gate decision, such as `council_gate_evaluated`.
-3. UI/CLI visibility for why council was recommended or skipped.
-4. Tests covering low-risk single-file work, over-budget context, high-risk/sensitive work, and repeated-failure escalation.
-5. Documentation that frames avoided council calls as an operational benefit signal, not a formal savings claim without a baseline comparison.
+1. A small event helper that turns `ResilienceRouteDecision` into a `route_decision` ledger payload.
+2. A `worker_result` payload shape for selected route, status, validation status, duration, tokens, and failure type.
+3. Integration at one narrow execution boundary, preferably CLI pipeline or `TriageClient`, with minimal behavior change.
+4. Tests proving route decisions are recorded and safety handoffs do not count as backend failures.
+5. Documentation that route telemetry is evidence for future learning, not automatic route approval.
 
 Important guardrails:
 
 - Do not remove or bypass human review.
-- Do not treat token savings as scientifically proven unless the evidence has a baseline comparison.
-- Preserve the current context pack artifacts and `context_budgeted` ledger fields.
+- Do not treat imported learning records as approved routing changes.
+- Do not re-combine SafeTask AI and TriageCore; SafeTask-derived records are external examples only.
+- Preserve the current context pack artifacts, `context_budgeted` ledger fields, and existing learning proposal/review files.
+- Keep SafeTask AI and TriageCore separate: SafeTask records are external seed evidence only.
 - Keep the implementation small enough for Codex to reconcile and stabilize afterward.
 
 Verification to run before handing back:
@@ -50,8 +60,9 @@ git status --short --branch
 Expected current baseline before your changes:
 
 - Branch: `main`
-- Latest published commit before this handoff: `cf0a119 Reconcile Antigravity local-first updates`
-- Codex closeout commit will include the Phase 11 context budget slice and this handoff.
+- Repo is ahead of origin with existing local changes; inspect `git status --short --branch` before editing.
+- Phase 13 backlog is defined in `docs/backlog.md`.
+- Seed artifacts are in `docs/learning/`.
 
 ## Codex Stability Notes
 

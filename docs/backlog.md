@@ -211,15 +211,66 @@ Primary scientific outcome: tokens per accepted task, interpreted beside validat
 
 Goal: Shift from operational tracking to analytical optimization, converting the historical ledger into training datasets and predictive routing policies.
 
-* [ ] **Story 12.1: TriageLab Stats and Markdown Reporting CLI**
+* [x] **Story 12.1: TriageLab Stats and Markdown Reporting CLI**
   * Implement a derived view over `ledger.jsonl` calculating primary scientific metrics (e.g., accepted-task yield, mean review burden, mean tokens/kWh per accepted task).
   * Expose via CLI: `triagecore stats` or `triagecore lab report`.
-* [ ] **Story 12.2: TriageLab Tabular Dataset Export**
+* [x] **Story 12.2: TriageLab Tabular Dataset Export**
   * Implement `triagecore lab export --format csv` (and/or parquet) to extract an ML-ready flat feature table (e.g., including quantization, model, tokens, duration, and human acceptance).
-* [ ] **Story 12.3: Predictive Local Success Warning**
+* [x] **Story 12.3: Predictive Local Success Warning**
   * Train an interpretable predictor (Logistic Regression / Decision Tree) on exported run data.
   * Integrate an advisory warning before dispatching a task if local execution has a high projected failure/escalation probability.
 
-## Current Phase 12 Decision Point
+## 🧭 Phase 13: Resilience Routing And Assignment Learning Store
 
-Phase 11 is complete. The next active story is Story 12.1 (TriageLab Stats and Markdown Reporting CLI) to implement derived views and CLI reports calculating primary scientific metrics over historical runs.
+Goal: turn TriageCore's local-first evidence loop into a concrete assignment-learning system that can route work across cloud, local heavy, local fast, deterministic, and human-handoff paths without wasting attempts or hiding uncertainty.
+
+Primary performance outcome: higher accepted work per local model call, lower retry waste, and more task classes confidently assignable to local LLM combinations.
+
+Boundary: SafeTask AI can provide seed examples and telemetry, but TriageCore owns the lesson store, routing policy, and implementation code.
+
+* [x] **Story 13.1: Import SafeTask-Derived Learning Seed Artifacts**
+  * [x] Create `docs/learning/` in the TriageCore repo.
+  * [x] Import assignment outcome, preflight, context-pack, routing-map, waste-control, ranking-gate, low-priority, resilience-routing, and performance-backlog artifacts.
+  * [x] Preserve SafeTask references as source-project evidence only.
+
+* [x] **Story 13.2: Establish Assignment Learning Schemas**
+  * [x] Define assignment outcome schema.
+  * [x] Define assignment preflight schema.
+  * [x] Define context pack templates.
+  * [x] Seed three SafeTask-derived preflight records, context packs, and outcome records.
+  * [x] Validate that outcome records reference existing preflight and context-pack IDs.
+
+* [x] **Story 13.3: Add Learning Seed Import Command**
+  * [x] Add `import-learning-seeds` to validate and import JSONL seed records into `.triagecore/learning_seeds/`.
+  * [x] Acceptance: invalid records report missing fields or broken references and do not mutate the lesson store.
+  * [x] Acceptance: imported records keep `source_project` labels so SafeTask data remains clearly external evidence.
+  * [x] Acceptance: command defaults to dry-run validation; `--write` is required before records are stored.
+
+* [x] **Story 13.4: Implement Static Resilience Router**
+  * [x] Add `triage_core/routing/resilience_router.py`.
+  * [x] Route across `cloud_primary`, `cloud_secondary`, `local_heavy`, `local_fast`, `deterministic`, and `human_handoff`.
+  * [x] Acceptance: route choice considers internet/cloud credit state, LM Studio health, local model availability, memory headroom, task class, sensitivity, deterministic tool availability, and recent failures.
+  * [x] Acceptance: high-sensitivity work routes to human handoff instead of silently using local or cloud automation.
+
+* [ ] **Story 13.5: Record Route-Decision And Worker-Result Ledger Events**
+  * Add structured `route_decision` and `worker_result` events.
+  * Acceptance: events capture selected route, selected model/backend, reason, provider health, fallback depth, validation status, duration, tokens, and failure type.
+
+* [ ] **Story 13.6: Add Circuit Breakers And Degraded Mode States**
+  * Add cooldown rules for failing cloud, local heavy, and local fast providers.
+  * Add mode states: `normal`, `degraded_cloud`, `offline_local`, `local_minimal`, `deterministic_only`, and `human_handoff`.
+  * Acceptance: repeated provider failure opens a circuit breaker; recovery requires stable checks before normal routing resumes.
+
+* [ ] **Story 13.7: Connect Preflight To Assignment Outcomes**
+  * Add preflight generation for non-trivial tasks.
+  * Compare predicted task class, selected combo, required checks, and stop conditions against the final outcome.
+  * Acceptance: TriageCore can report whether the preflight prevented waste or needs tuning.
+
+* [ ] **Story 13.8: Build Replay Benchmark Manifest**
+  * Define a local combo replay benchmark from the SafeTask-derived examples.
+  * Acceptance: replay tasks include prompt, allowed context, expected checks, pass/fail criteria, and scoring notes.
+  * Acceptance: replay results can update task-class confidence without automatic routing changes.
+
+## Current Phase 13 Next Step
+
+Start with Story 13.5. The seed files now have a TriageCore-owned validation/import path and a static resilience router, so the next performance slice is to record route-decision and worker-result ledger events for measurable routing outcomes.

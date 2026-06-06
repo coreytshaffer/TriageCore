@@ -92,6 +92,15 @@ def main():
     review_parser.add_argument("--notes", type=str, default="", help="Optional reviewer notes.")
     review_parser.add_argument("--output", type=str, default=os.path.join(default_config.get_ledger_dir(), "learning_reviews.jsonl"), help="JSONL output path for review records.")
 
+    # import-learning-seeds
+    seed_parser = subparsers.add_parser(
+        "import-learning-seeds",
+        help="Validate or import source-project learning seed JSONL records.",
+    )
+    seed_parser.add_argument("--source-dir", type=str, default=os.path.join("docs", "learning", "examples"), help="Directory containing learning seed JSONL files.")
+    seed_parser.add_argument("--ledger-dir", type=str, default=default_config.get_ledger_dir(), help="Directory where validated learning seed records should be stored.")
+    seed_parser.add_argument("--write", action="store_true", help="Write validated records. Default is validation-only dry run.")
+
     # record-supervisor-review
     supervisor_parser = subparsers.add_parser(
         "record-supervisor-review",
@@ -226,6 +235,12 @@ def main():
             decision=args.decision,
             notes=args.notes,
             output_path=args.output,
+        )
+    elif args.command == "import-learning-seeds":
+        _import_learning_seeds(
+            source_dir=args.source_dir,
+            ledger_dir=args.ledger_dir,
+            write=args.write,
         )
     elif args.command == "record-supervisor-review":
         _record_supervisor_review(
@@ -606,6 +621,50 @@ def _review_lesson(proposal_id: str, decision: str, notes: str, output_path: str
         notes=notes,
     )
     print(f"Recorded {review['decision']} review for proposal {review['proposal_id']}.")
+
+def _import_learning_seeds(source_dir: str, ledger_dir: str, write: bool = False) -> int:
+    from .learning import import_learning_seed_records
+
+    result = import_learning_seed_records(
+        source_dir=source_dir,
+        ledger_dir=ledger_dir,
+        dry_run=not write,
+    )
+    if result.errors:
+        print("Learning seed import failed validation:")
+        for error in result.errors:
+            print(f"- {error}")
+        _log_cli_activity(
+            f"learning seed import failed errors={len(result.errors)} source={source_dir}",
+            ledger_dir=ledger_dir,
+        )
+        return 0
+
+    verb = "Would import" if result.dry_run else "Imported"
+    print(
+        f"{verb} {result.preflight_count} preflight(s), "
+        f"{result.context_pack_count} context pack(s), "
+        f"and {result.outcome_count} outcome(s)."
+    )
+    if result.dry_run:
+        print("Dry run only. Re-run with --write to store validated seed records.")
+    else:
+        print(
+            "New records written: "
+            f"{result.preflight_imported} preflight(s), "
+            f"{result.context_pack_imported} context pack(s), "
+            f"{result.outcome_imported} outcome(s)."
+        )
+        for label, path in result.output_paths.items():
+            print(f"{label}: {path}")
+
+    _log_cli_activity(
+        "learning seed import "
+        f"dry_run={result.dry_run} total={result.total_count} imported={result.total_imported} "
+        f"source={source_dir}",
+        ledger_dir=ledger_dir,
+    )
+    return result.total_count
 
 def _record_supervisor_review(
     task_id: str,
@@ -1191,11 +1250,13 @@ def _lab_train(ledger_dir: str):
     for r in records:
         if not r.runner:
             continue
-            
-        accepted_lbl = 0
-        if r.status == "reviewed" and r.accepted:
-            accepted_lbl = 1
-            
+
+        # Only train on explicitly reviewed terminal states
+        if r.status != "reviewed":
+            continue
+
+        accepted_lbl = 1 if r.accepted else 0
+
         X.append({
             "runner": r.runner or "unknown",
             "risk_level": r.risk_level or "unknown",

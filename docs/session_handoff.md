@@ -90,7 +90,7 @@ CLI commands that create or scan visible work now append `[cli]` activity lines 
 
 CLI `run-pipeline` now creates or appends a ledger task, records runner `pipeline`, stores success evidence as `local_draft_generated`, and records handoff outcomes as blocked tasks. This gives TriageDesk ledger views a concrete task record to display for CLI-started pipeline work.
 
-Superseded next step: exact supervisor-token import remains useful when a stable source appears, but the active backlog has moved to Phase 11 token efficiency. The current next step is Story 11.3 Council Gating Rules.
+Superseded next step: exact supervisor-token import remains useful when a stable source appears, but the active backlog has moved past Phase 11 and Phase 12 into Phase 13 resilience routing and assignment learning. Story 13.3 Learning Seed Import Command and Story 13.4 Static Resilience Router are now complete enough for the current backlog; the current next step is Story 13.5 Route-Decision And Worker-Result Ledger Events.
 
 Future idea captured in backlog: a private mobile app or mobile web control surface that connects to the locally hosted TriageCore/model pipeline at home through a private tunnel such as VPN, Tailscale, or WireGuard. The initial mobile scope should stay bounded to review, approve/deny, logs, and small task submission before any write-capable workflow.
 
@@ -98,14 +98,18 @@ Future idea captured in backlog: a private mobile app or mobile web control surf
 
 The foundation backlog is now closed through Phase 10. Completed foundation work includes human review, ledger validation, skill routing, sustainability telemetry, visible infrastructure, study evidence, UI ergonomics, Codex/Antigravity supervision, private mobile review access, and persistent environmental feedback.
 
-The active backlog now begins with Phase 11: Token Efficiency And Context Discipline. Story 11.1 and Story 11.2 have a first advisory implementation:
+The active backlog now begins with Phase 13: Resilience Routing And Assignment Learning Store. SafeTask-derived learning artifacts have been imported into `docs/learning/` as seed evidence:
 
-- context budget planner before dispatch
-- context pack artifacts that record included files, excluded files, summaries, token estimates, and inclusion rationale
-- `context_budgeted` ledger events reduced into task records and shown in expanded UI details
-- keep token-efficiency claims evidence-bound by reporting measured token intensity and benefit signals rather than unsupported absolute savings
+- assignment outcome, preflight, and context-pack schemas
+- SafeTask-derived JSONL seed records for preflights, context packs, and outcomes
+- local-combo routing map, waste controls, ranking gate, low-priority container, and resilience-routing design
+- explicit boundary that SafeTask AI is source-project evidence and TriageCore owns the lesson store and router
 
-Next recommended slice: Story 11.3 Council Gating Rules.
+Completed slice: Story 13.3 Learning Seed Import Command. `import-learning-seeds` validates SafeTask-derived preflight, context-pack, and outcome JSONL records, checks outcome references, defaults to dry-run, and stores records under `.triagecore/learning_seeds/` only when `--write` is supplied.
+
+Completed slice: Story 13.4 Static Resilience Router. `triage_core/routing/resilience_router.py` provides `choose_resilience_route()` for cloud-primary, cloud-secondary, local-heavy, local-fast, deterministic, and human-handoff route modes using capability, credit, memory, task-class, sensitivity, and recent-failure inputs.
+
+Next recommended slice: Story 13.5 Route-Decision And Worker-Result Ledger Events. Add the ledger payloads and one narrow integration point so selected route, reason, fallback depth, validation status, tokens, and failure type become measurable telemetry without treating imported seed evidence as approved routing behavior.
 
 ## Codex And Antigravity Role Separation
 
