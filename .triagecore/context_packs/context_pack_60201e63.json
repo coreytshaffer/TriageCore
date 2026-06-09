@@ -1,0 +1,23 @@
+{
+  "task_id": "60201e63-e9a6-48c0-8b22-661b8ac055b9",
+  "created_at": "2026-06-07T04:56:00.685520+00:00",
+  "runner": "worker_council",
+  "category": "architecture_planning",
+  "budget_tokens": 8000,
+  "estimated_tokens": 203,
+  "budget_status": "within_budget",
+  "items": [
+    {
+      "kind": "prompt",
+      "label": "task_prompt",
+      "role": "required",
+      "estimated_tokens": 203,
+      "rationale": "The task prompt is required to execute or supervise the task.",
+      "exists": true,
+      "size_bytes": 0,
+      "snippet": "You are helping improve TriageDesk itself.\n\nGoal:\nDesign the next highest-ROI improvement: Artifact Workflow Controls v1.\n\nCurrent context:\n- LM Studio is the control plane/local draft lane.\n- Ollama is the Worker Council lane.\n- The UI now shows Control Plane, Worker Pool, and Route Trace.\n- The Generated Artifact pane is now readable.\n- Next improvement should help users act on generated output.\n\nPropose a minimal implementation plan for:\n1. Copy Output button\n2. Save Artifact button\n\nConstrai"
+    }
+  ],
+  "excluded_items": [],
+  "warnings": []
+}

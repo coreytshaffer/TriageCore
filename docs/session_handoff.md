@@ -90,7 +90,7 @@ CLI commands that create or scan visible work now append `[cli]` activity lines 
 
 CLI `run-pipeline` now creates or appends a ledger task, records runner `pipeline`, stores success evidence as `local_draft_generated`, and records handoff outcomes as blocked tasks. This gives TriageDesk ledger views a concrete task record to display for CLI-started pipeline work.
 
-Superseded next step: exact supervisor-token import remains useful when a stable source appears, but the active backlog has moved past Phase 11 and Phase 12 into Phase 13 resilience routing and assignment learning. Story 13.3 Learning Seed Import Command and Story 13.4 Static Resilience Router are now complete enough for the current backlog; the current next step is Story 13.5 Route-Decision And Worker-Result Ledger Events.
+Superseded next step: exact supervisor-token import remains useful when a stable source appears, but the active backlog has moved past Phase 11 and Phase 12 into Phase 13 resilience routing and assignment learning. Story 13.3 Learning Seed Import Command, Story 13.4 Static Resilience Router, and Story 13.5 Route-Decision And Worker-Result Ledger Events are now complete enough for the current backlog; the current next step is Story 13.6 Circuit Breakers And Degraded Mode States.
 
 Future idea captured in backlog: a private mobile app or mobile web control surface that connects to the locally hosted TriageCore/model pipeline at home through a private tunnel such as VPN, Tailscale, or WireGuard. The initial mobile scope should stay bounded to review, approve/deny, logs, and small task submission before any write-capable workflow.
 
@@ -109,7 +109,9 @@ Completed slice: Story 13.3 Learning Seed Import Command. `import-learning-seeds
 
 Completed slice: Story 13.4 Static Resilience Router. `triage_core/routing/resilience_router.py` provides `choose_resilience_route()` for cloud-primary, cloud-secondary, local-heavy, local-fast, deterministic, and human-handoff route modes using capability, credit, memory, task-class, sensitivity, and recent-failure inputs.
 
-Next recommended slice: Story 13.5 Route-Decision And Worker-Result Ledger Events. Add the ledger payloads and one narrow integration point so selected route, reason, fallback depth, validation status, tokens, and failure type become measurable telemetry without treating imported seed evidence as approved routing behavior.
+Completed slice: Story 13.5 Route-Decision And Worker-Result Ledger Events. `triage_core/routing/route_events.py` builds route and worker-result payloads from resilience-routing inputs and outcomes, and `TriageClient.run_task()` now emits those events into the ledger when a task ID and ledger are available. Benchmark and stability-pass runs record safety handoffs as router outcomes rather than backend failures.
+
+Next recommended slice: Story 13.6 Circuit Breakers And Degraded Mode States. Add explicit route cooldown and recovery state so unstable cloud/local routes stop retrying immediately and route choice can degrade deterministically before human handoff is required.
 
 ## Codex And Antigravity Role Separation
 

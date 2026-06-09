@@ -1,0 +1,23 @@
+{
+  "task_id": "e65af763-97ab-403a-91b3-e1894f573af7",
+  "created_at": "2026-06-05T18:47:06.358860+00:00",
+  "runner": "antigravity",
+  "category": "refactor",
+  "budget_tokens": 6000,
+  "estimated_tokens": 9,
+  "budget_status": "within_budget",
+  "items": [
+    {
+      "kind": "prompt",
+      "label": "task_prompt",
+      "role": "required",
+      "estimated_tokens": 9,
+      "rationale": "The task prompt is required to execute or supervise the task.",
+      "exists": true,
+      "size_bytes": 0,
+      "snippet": "Implement Epic 5: Spoken Dictation"
+    }
+  ],
+  "excluded_items": [],
+  "warnings": []
+}

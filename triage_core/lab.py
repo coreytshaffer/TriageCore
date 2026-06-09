@@ -5,6 +5,38 @@ import json
 from typing import List, Dict, Any, Optional, Tuple
 
 
+# ─── Usage Metrics Extraction ───────────────────────────────────────────────────
+
+def get_usage_metrics(r: Any) -> Tuple[int, int, float]:
+    """Robustly extract token and duration metrics handling fallbacks across system layers."""
+    total_tokens = getattr(r, "total_tokens", 0)
+    if not total_tokens:
+        in_tok = getattr(r, "input_tokens", 0)
+        out_tok = getattr(r, "output_tokens", 0)
+        if in_tok or out_tok:
+            total_tokens = in_tok + out_tok
+        else:
+            est_in = getattr(r, "estimated_input_tokens", 0)
+            est_out = getattr(r, "estimated_output_tokens", 0)
+            if est_in or est_out:
+                total_tokens = est_in + est_out
+            else:
+                sup_in = getattr(r, "supervisor_input_tokens_est", 0)
+                sup_out = getattr(r, "supervisor_output_tokens_est", 0)
+                if sup_in or sup_out:
+                    total_tokens = sup_in + sup_out
+                else:
+                    total_tokens = getattr(r, "context_estimated_tokens", 0)
+
+    wasted_tokens = getattr(r, "wasted_tokens", 0)
+
+    elapsed_seconds = getattr(r, "elapsed_seconds", 0.0)
+    if not elapsed_seconds:
+        elapsed_seconds = getattr(r, "duration_seconds", 0.0)
+
+    return total_tokens, wasted_tokens, elapsed_seconds
+
+
 # ─── Scientific Metrics ───────────────────────────────────────────────────────
 
 def calculate_scientific_metrics(records: List[Any]) -> Dict[str, Any]:
@@ -22,7 +54,7 @@ def calculate_scientific_metrics(records: List[Any]) -> Dict[str, Any]:
         
     mean_tokens_accepted = 0.0
     if len(accepted) > 0:
-        mean_tokens_accepted = sum(r.total_tokens for r in accepted) / len(accepted)
+        mean_tokens_accepted = sum(get_usage_metrics(r)[0] for r in accepted) / len(accepted)
         
     mean_energy_accepted = 0.0
     if len(accepted) > 0:
@@ -36,8 +68,12 @@ def calculate_scientific_metrics(records: List[Any]) -> Dict[str, Any]:
     if len(accepted) > 0:
         mean_water_accepted = sum(getattr(r, "water_liters_estimate", 0.0) for r in accepted) / len(accepted)
         
-    total_tokens = sum(r.total_tokens for r in records)
-    total_wasted = sum(getattr(r, "wasted_tokens", 0) for r in records)
+    total_tokens = 0
+    total_wasted = 0
+    for r in records:
+        t, w, _ = get_usage_metrics(r)
+        total_tokens += t
+        total_wasted += w
     
     token_efficiency_pct = 100.0
     if total_tokens > 0:
@@ -89,7 +125,9 @@ def export_tabular_dataset(records: List[Any], output_path: str):
             accepted_lbl = 0
             if r.status == "reviewed" and r.accepted:
                 accepted_lbl = 1
-                
+
+            total_tok, wasted_tok, elapsed_sec = get_usage_metrics(r)
+
             writer.writerow({
                 "task_id": r.task_id,
                 "created_at": r.created_at,
@@ -98,9 +136,9 @@ def export_tabular_dataset(records: List[Any], output_path: str):
                 "model": r.model or "unknown",
                 "risk_level": r.risk_level or "unknown",
                 "permission_profile": r.permission_profile or "unknown",
-                "total_tokens": r.total_tokens,
-                "wasted_tokens": getattr(r, "wasted_tokens", 0),
-                "elapsed_seconds": r.elapsed_seconds,
+                "total_tokens": total_tok,
+                "wasted_tokens": wasted_tok,
+                "elapsed_seconds": elapsed_sec,
                 "energy_kwh": r.energy_kwh_estimate,
                 "emissions_gco2e": r.emissions_gco2e_estimate,
                 "human_review_required": 1 if r.human_review_required else 0,

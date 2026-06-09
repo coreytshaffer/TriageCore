@@ -1,0 +1,23 @@
+{
+  "task_id": "40f6f9ac-9ae5-4746-b129-2b4614d3247b",
+  "created_at": "2026-06-05T18:42:03.503703+00:00",
+  "runner": "antigravity",
+  "category": "refactor",
+  "budget_tokens": 6000,
+  "estimated_tokens": 13,
+  "budget_status": "within_budget",
+  "items": [
+    {
+      "kind": "prompt",
+      "label": "task_prompt",
+      "role": "required",
+      "estimated_tokens": 13,
+      "rationale": "The task prompt is required to execute or supervise the task.",
+      "exists": true,
+      "size_bytes": 0,
+      "snippet": "Implement Epic 4: Constellation spatial event graph"
+    }
+  ],
+  "excluded_items": [],
+  "warnings": []
+}

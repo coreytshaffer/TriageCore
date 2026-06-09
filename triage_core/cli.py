@@ -532,6 +532,8 @@ def _run_benchmarks(
             prompt=task.prompt,
             data=task.data,
             validator=resolve_validator(task.validator),
+            ledger=ledger,
+            task_id=task_id,
         )
 
         observed = result.get("status")
@@ -1109,6 +1111,8 @@ def _run_stability_pass(
             prompt=task.prompt,
             data=task.data,
             validator=resolve_validator(task.validator),
+            ledger=ledger,
+            task_id=task_id,
         )
 
         observed = result.get("status")

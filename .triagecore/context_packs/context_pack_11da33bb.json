@@ -1,0 +1,23 @@
+{
+  "task_id": "11da33bb-fde3-46cb-b880-f53cb80c02f1",
+  "created_at": "2026-06-08T00:39:44.470387+00:00",
+  "runner": "local_llm",
+  "category": "architecture_planning",
+  "budget_tokens": 4000,
+  "estimated_tokens": 53,
+  "budget_status": "within_budget",
+  "items": [
+    {
+      "kind": "prompt",
+      "label": "task_prompt",
+      "role": "required",
+      "estimated_tokens": 53,
+      "rationale": "The task prompt is required to execute or supervise the task.",
+      "exists": true,
+      "size_bytes": 0,
+      "snippet": "Help me develop a framework that I can use to build a tool to take messy human input (source agnostic) and change it into token-light, structured text that can be human audited before injecting into a local llm"
+    }
+  ],
+  "excluded_items": [],
+  "warnings": []
+}

@@ -104,7 +104,7 @@ Improve TriageCore's ability to:
   - Artifact: `triagecore-resilience-routing.md`
 - [x] Story TC-6.2: Implement static resilience router in TriageCore.
   - Acceptance: Router chooses among `cloud_primary`, `cloud_secondary`, `local_heavy`, `local_fast`, `deterministic`, and `human_handoff`.
-- [ ] Story TC-6.3: Add route-decision and worker-result ledger events.
+- [x] Story TC-6.3: Add route-decision and worker-result ledger events.
   - Acceptance: TriageCore records selected route, reason, provider health, fallback depth, validation status, and failure type.
 - [ ] Story TC-6.4: Add circuit breakers.
   - Acceptance: Repeated failures cool down a backend instead of retrying indefinitely.
@@ -130,4 +130,4 @@ Improve TriageCore's ability to:
 
 ## Next Best Step
 
-The learning artifacts now live in the actual TriageCore repo under `docs/learning/`, `import-learning-seeds` validates the seed preflight, context-pack, and outcome JSONL records before optional `--write` import into `.triagecore/learning_seeds/`, and `triage_core/routing/resilience_router.py` can choose safe cloud, local, deterministic, or human-handoff paths from static capability inputs. Start Story TC-6.3 / Phase 13 Story 13.5: record route-decision and worker-result ledger events so routing outcomes become measurable telemetry.
+The learning artifacts now live in the actual TriageCore repo under `docs/learning/`, `import-learning-seeds` validates the seed preflight, context-pack, and outcome JSONL records before optional `--write` import into `.triagecore/learning_seeds/`, `triage_core/routing/resilience_router.py` can choose safe cloud, local, deterministic, or human-handoff paths from static capability inputs, and `route_decision` plus `worker_result` events now land in the ledger for benchmark and stability-pass runs. Start Story TC-6.4 / Phase 13 Story 13.6: add circuit breakers and degraded mode states so unstable routes cool down instead of retrying immediately.

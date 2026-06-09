@@ -1,0 +1,42 @@
+{
+  "feature": "runner",
+  "label": 0,
+  "prob": 0.12903225806451613,
+  "children": {
+    "local_benchmark": {
+      "label": 0,
+      "prob": 0.14
+    },
+    "pipeline": {
+      "feature": "risk_level",
+      "label": 0,
+      "prob": 0.3333333333333333,
+      "children": {
+        "unknown": {
+          "label": 0,
+          "prob": 0.0
+        },
+        "low": {
+          "label": 1,
+          "prob": 1.0
+        }
+      }
+    },
+    "local_llm": {
+      "label": 0,
+      "prob": 0.125
+    },
+    "worker_council": {
+      "label": 0,
+      "prob": 0.0
+    },
+    "codex": {
+      "label": 0,
+      "prob": 0.0
+    },
+    "antigravity": {
+      "label": 0,
+      "prob": 0.0
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "task_id": "e9c1e36e-355e-4e1f-83cb-8a76abafe6ee",
+  "created_at": "2026-06-08T02:34:23.423761+00:00",
+  "runner": "local_llm",
+  "category": "refactor",
+  "budget_tokens": 4000,
+  "estimated_tokens": 65,
+  "budget_status": "within_budget",
+  "items": [
+    {
+      "kind": "prompt",
+      "label": "task_prompt",
+      "role": "required",
+      "estimated_tokens": 65,
+      "rationale": "The task prompt is required to execute or supervise the task.",
+      "exists": true,
+      "size_bytes": 0,
+      "snippet": "1. Convert messy text into TaskPacket YAML\n2. Extract file paths, errors, constraints, requested changes\n3. Summarize repo tree while respecting ignore rules\n4. Compact logs into top errors and repeated-line groups\n5. Estimate raw vs compressed token savings"
+    }
+  ],
+  "excluded_items": [],
+  "warnings": []
+}

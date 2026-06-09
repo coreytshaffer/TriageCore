@@ -12,6 +12,10 @@ class BenchmarkSummary:
     handoffs: int = 0
     mismatches: int = 0
     validator_failures: int = 0
+    safety_handoffs: int = 0
+    timeouts: int = 0
+    backend_failures: int = 0
+    invalid_outputs: int = 0
     total_elapsed_seconds: float = 0.0
     total_tokens: int = 0
     total_wasted_tokens: int = 0
@@ -170,14 +174,23 @@ def render_benchmark_report_markdown(report: BenchmarkReport) -> str:
 
 def _apply_record(summary: BenchmarkSummary, record: TaskRecord) -> None:
     summary.runs += 1
-    if record.observed_status == "success":
+    if _is_success_record(record):
         summary.successes += 1
     if record.observed_status == "handoff_required" or record.handoff_reason:
         summary.handoffs += 1
     if record.expected_status and record.observed_status and record.expected_status != record.observed_status:
         summary.mismatches += 1
-    if record.validator_passed is False:
+    if record.validation_status == "failed" or record.validator_passed is False:
         summary.validator_failures += 1
+        
+    if record.worker_result_status == "timed_out":
+        summary.timeouts += 1
+    elif record.worker_result_status == "worker_failed":
+        summary.backend_failures += 1
+    elif record.worker_result_status == "invalid_output":
+        summary.invalid_outputs += 1
+    elif record.failure_type == "safety_handoff":
+        summary.safety_handoffs += 1
 
     summary.total_elapsed_seconds += record.elapsed_seconds
     summary.total_tokens += record.total_tokens
@@ -185,6 +198,16 @@ def _apply_record(summary: BenchmarkSummary, record: TaskRecord) -> None:
     if record.tokens_per_second > 0:
         summary.total_tokens_per_second += record.tokens_per_second
         summary.token_speed_runs += 1
+
+
+def _is_success_record(record: TaskRecord) -> bool:
+    if record.observed_status != "success":
+        return False
+    if record.artifact_status == "generated":
+        return False
+    if record.worker_result_status in (None, "", "completed"):
+        return True
+    return False
 
 
 def _apply_supervisor_review(summary: SupervisorReviewSummary, record: TaskRecord) -> None:
@@ -232,8 +255,8 @@ def _summary_table(summaries: List[BenchmarkSummary]) -> str:
         return "_No benchmark evidence found._"
 
     rows = [
-        "| Group | Runs | Success Rate | Handoff Rate | Mismatches | Validator Failures | Avg Seconds | Total Tokens | Wasted Tokens | Token Eff | Avg Tok/s |",
-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| Group | Runs | Success Rate | Safety Handoffs | Timeouts | Backend Fails | Invalid Output | Val Fails | Avg Seconds | Total Tokens | Wasted Tokens | Token Eff | Avg Tok/s |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for summary in summaries:
         efficiency = 1.0
@@ -248,8 +271,10 @@ def _summary_table(summaries: List[BenchmarkSummary]) -> str:
                     summary.label,
                     str(summary.runs),
                     _format_percent(summary.success_rate),
-                    _format_percent(summary.handoff_rate),
-                    str(summary.mismatches),
+                    str(summary.safety_handoffs),
+                    str(summary.timeouts),
+                    str(summary.backend_failures),
+                    str(summary.invalid_outputs),
                     str(summary.validator_failures),
                     f"{summary.average_elapsed_seconds:.2f}",
                     str(summary.total_tokens),

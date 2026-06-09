@@ -1,0 +1,23 @@
+{
+  "task_id": "f3a53761-d32f-4bce-b2fc-dcf1bbdddce4",
+  "created_at": "2026-06-05T04:48:38.536424+00:00",
+  "runner": "antigravity",
+  "category": "refactor",
+  "budget_tokens": 6000,
+  "estimated_tokens": 17,
+  "budget_status": "within_budget",
+  "items": [
+    {
+      "kind": "prompt",
+      "label": "task_prompt",
+      "role": "required",
+      "estimated_tokens": 17,
+      "rationale": "The task prompt is required to execute or supervise the task.",
+      "exists": true,
+      "size_bytes": 0,
+      "snippet": "Implement DomainRegistry to load domain packs from safetask/domains"
+    }
+  ],
+  "excluded_items": [],
+  "warnings": []
+}

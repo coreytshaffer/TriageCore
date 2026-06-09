@@ -252,9 +252,10 @@ Boundary: SafeTask AI can provide seed examples and telemetry, but TriageCore ow
   * [x] Acceptance: route choice considers internet/cloud credit state, LM Studio health, local model availability, memory headroom, task class, sensitivity, deterministic tool availability, and recent failures.
   * [x] Acceptance: high-sensitivity work routes to human handoff instead of silently using local or cloud automation.
 
-* [ ] **Story 13.5: Record Route-Decision And Worker-Result Ledger Events**
-  * Add structured `route_decision` and `worker_result` events.
-  * Acceptance: events capture selected route, selected model/backend, reason, provider health, fallback depth, validation status, duration, tokens, and failure type.
+* [x] **Story 13.5: Record Route-Decision And Worker-Result Ledger Events**
+  * [x] Add structured `route_decision` and `worker_result` events.
+  * [x] Acceptance: events capture selected route, selected model/backend, reason, provider health, fallback depth, validation status, duration, tokens, and failure type.
+  * [x] Acceptance: safety handoffs are recorded as `not_attempted` router outcomes instead of backend failures.
 
 * [ ] **Story 13.6: Add Circuit Breakers And Degraded Mode States**
   * Add cooldown rules for failing cloud, local heavy, and local fast providers.
@@ -273,4 +274,71 @@ Boundary: SafeTask AI can provide seed examples and telemetry, but TriageCore ow
 
 ## Current Phase 13 Next Step
 
-Start with Story 13.5. The seed files now have a TriageCore-owned validation/import path and a static resilience router, so the next performance slice is to record route-decision and worker-result ledger events for measurable routing outcomes.
+Start with Story 13.6. The seed files now have a TriageCore-owned validation/import path, the static resilience router exists, and route-decision plus worker-result telemetry now lands in the ledger for benchmark and stability-pass runs. The next performance slice is to add circuit breakers and degraded mode states so failing routes cool down instead of retrying indefinitely.
+
+## Future Phase 14: Local Compute Fabric v0.1
+
+Status: deferred architecture backlog. Do not begin this phase until Phase 13 route telemetry, circuit breakers, preflight/outcome comparison, and replay benchmarks are complete enough to provide a stable routing foundation.
+
+Goal: model trusted local devices as capability-bearing nodes, route explicit tasks to compatible nodes, execute only allowlisted deterministic actions, and preserve human approval and auditability. The first version may run entirely on one machine; it should establish the system shape before adding real networking.
+
+* [ ] **Story 14.1: Add Node Capability Manifests**
+  * Define node ID, display name, node type, trust level, capabilities, concurrency limit, and task timeout.
+  * Acceptance: valid JSON manifests load; missing fields and malformed capabilities fail with actionable errors.
+
+* [ ] **Story 14.2: Add Explicit Task Request Schema**
+  * Define task ID, project, intent, required capabilities, inputs, risk level, and approval requirement.
+  * Support risk levels: `read_only`, `safe_tool`, `draft_write`, `repo_write`, `external_write`, and `destructive`.
+  * Acceptance: unknown risk levels and malformed task requests fail closed.
+
+* [ ] **Story 14.3: Add Local Fabric Audit Store**
+  * Persist nodes, tasks, task events, and task results using a modest local store such as SQLite.
+  * Acceptance: lifecycle events are timestamped, ordered, JSON-serializable, and queryable.
+  * Reuse or bridge the existing TriageCore ledger where practical instead of creating competing runtime truth.
+
+* [ ] **Story 14.4: Add Deterministic Capability Router**
+  * Filter active nodes by required capabilities, trust level, risk level, concurrency, and availability.
+  * Return an explainable routed or unroutable decision.
+  * Acceptance: no compatible node produces a safe, auditable fallback instead of an implicit execution attempt.
+
+* [ ] **Story 14.5: Add Allowlisted Command Executor**
+  * Start with structured command recipes for `git status`, `python -m pytest`, and `python -m compileall`.
+  * Never accept arbitrary shell strings.
+  * Acceptance: unknown command IDs are rejected; output, timeout, exit status, and result metadata are recorded.
+
+* [ ] **Story 14.6: Add Single-Node Worker Loop**
+  * Register one local node, claim one compatible task, execute an allowlisted action, and record completion or failure.
+  * Acceptance: worker exits cleanly, respects concurrency/time limits, and cannot bypass approval state.
+
+* [ ] **Story 14.7: Add Fabric CLI Commands**
+  * Add bounded commands for initialization, node registration, task submission, routing, one-task execution, status, and recent events.
+  * Acceptance: CLI output clearly distinguishes pending, awaiting approval, routed, running, completed, failed, rejected, and unroutable tasks.
+
+* [ ] **Story 14.8: Add LM Studio Provider Capability Stub**
+  * Represent `llm.local.chat`, `llm.local.summarize`, and `llm.local.review` as optional node capabilities.
+  * Read the LM Studio base URL from configuration and provide a health check.
+  * Acceptance: LM Studio being offline disables the capability without crashing deterministic fabric operations.
+
+* [ ] **Story 14.9: Add Dry-Run Fabric Routing**
+  * Show the selected node and explain why other nodes were rejected without mutating task state.
+  * Acceptance: dry-run output is suitable for capability-manifest debugging and human review.
+
+* [ ] **Story 14.10: Add Human Approval Gate**
+  * Hold `repo_write`, `external_write`, and `destructive` tasks in `awaiting_approval`.
+  * Add explicit approve/reject actions and audit both decisions.
+  * Acceptance: high-risk tasks cannot route to execution without recorded human approval; destructive tasks remain blocked by default.
+
+### Phase 14 Definition Of Done
+
+The local-only fabric milestone is complete when one registered node can receive a capability-matched task, execute an allowlisted deterministic command, record ordered audit events and results, and fail safely when capabilities or approvals are missing.
+
+### Phase 14 Non-Goals
+
+- mobile UI changes
+- LAN auto-discovery
+- peer-to-peer mesh or consensus
+- container orchestration
+- arbitrary remote shell execution
+- autonomous GitHub pushes
+- autonomous deletion or destructive actions
+- community compute contribution accounting

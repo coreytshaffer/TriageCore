@@ -6,6 +6,17 @@ from typing import Any, Callable, Dict, List, Optional
 from .validators import ErrorWarningMarkdownValidator, MonitoringJsonValidator, PythonSyntaxValidator, ModestToolsValidator, CyberneticReportValidator
 
 
+class ValidatorWrapper:
+    def __init__(self, func: Callable[[str], bool], name: str, scope: str, version: str = "1"):
+        self.func = func
+        self.name = name
+        self.scope = scope
+        self.version = version
+
+    def __call__(self, text: str) -> bool:
+        return self.func(text)
+
+
 @dataclass
 class BenchmarkTask:
     task_id: str
@@ -41,15 +52,15 @@ def resolve_validator(name: Optional[str]) -> Optional[Callable[[str], bool]]:
     if name in (None, "", "none"):
         return None
     if name == "python_syntax":
-        return PythonSyntaxValidator.validate
+        return ValidatorWrapper(PythonSyntaxValidator.validate, "python_syntax", "syntax_only")
     if name == "monitoring_json":
-        return MonitoringJsonValidator.validate
+        return ValidatorWrapper(MonitoringJsonValidator.validate, "monitoring_json", "json_format")
     if name == "error_warning_markdown":
-        return ErrorWarningMarkdownValidator.validate
+        return ValidatorWrapper(ErrorWarningMarkdownValidator.validate, "error_warning_markdown", "markdown_format")
     if name == "modest_tools":
-        return ModestToolsValidator.validate
+        return ValidatorWrapper(ModestToolsValidator.validate, "modest_tools", "dependency_check")
     if name == "cybernetic_report":
-        return CyberneticReportValidator.validate
+        return ValidatorWrapper(CyberneticReportValidator.validate, "cybernetic_report", "ethical_report")
     raise ValueError(f"Unknown benchmark validator: {name}")
 
 
@@ -68,6 +79,13 @@ def result_to_model_event(task: BenchmarkTask, result: Dict[str, Any]) -> Dict[s
         "total_tokens": result.get("total_tokens", 0),
         "tokens_per_second": result.get("tokens_per_second", 0.0),
         "validator_passed": result.get("validator_passed"),
+        "worker_result_status": result.get("worker_result_status", "not_attempted"),
+        "failure_type": result.get("failure_type"),
+        "failure_stage": result.get("failure_stage"),
+        "validation_status": result.get("validation_status", "not_run"),
+        "validator_name": result.get("validator_name"),
+        "validator_version": result.get("validator_version"),
+        "validator_scope": result.get("validator_scope"),
         "handoff_reason": result.get("handoff_reason") or result.get("reason"),
         "early_stopped": result.get("early_stopped", False),
         "early_stop_reason": result.get("early_stop_reason", ""),

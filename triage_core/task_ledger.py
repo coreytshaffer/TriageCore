@@ -7,10 +7,15 @@ from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional
 
+LEDGER_SCHEMA_VERSION = "0.2.0"
+ROLE_TAXONOMY_VERSION = "2026-06-worker-council-v2"
+
 
 @dataclass
 class TaskRecord:
     task_id: str
+    schema_version: Optional[str] = None
+    role_taxonomy_version: Optional[str] = None
     created_at: str = ""
     updated_at: str = ""
     title: str = ""
@@ -55,6 +60,28 @@ class TaskRecord:
     human_review_required: bool = False
     accepted: bool = False
     artifact_paths: List[str] = field(default_factory=list)
+    artifact_status: Optional[str] = None
+    task_outcome: Optional[str] = None
+    review_decision: Optional[str] = None
+    selected_route: Optional[str] = None
+    route_reason: Optional[str] = None
+    route_source: Optional[str] = None
+    fallback_depth: Optional[int] = None
+    selected_backend: Optional[str] = None
+    worker_result_status: Optional[str] = None
+    failure_type: Optional[str] = None
+    failure_stage: Optional[str] = None
+    backend_failure: Optional[bool] = None
+    validation_status: Optional[str] = None
+    validator_name: Optional[str] = None
+    validator_version: Optional[str] = None
+    validator_scope: Optional[str] = None
+    checked_artifacts: List[str] = field(default_factory=list)
+    checked_files: List[str] = field(default_factory=list)
+    reviewer_notes: Optional[str] = None
+    correction_summary: Optional[str] = None
+    affected_files: List[str] = field(default_factory=list)
+    remaining_risk: Optional[str] = None
 
     # Token balance experiment / extended sustainability fields (Antigravity)
     experiment_id: Optional[str] = None
@@ -123,6 +150,8 @@ class TaskLedger:
             "event_id": str(uuid.uuid4()),
             "task_id": task_id,
             "timestamp": datetime.now(timezone.utc).isoformat(),
+            "schema_version": LEDGER_SCHEMA_VERSION,
+            "role_taxonomy_version": ROLE_TAXONOMY_VERSION,
             "event_type": event_type,
             "payload": payload
         }
@@ -272,6 +301,11 @@ class TaskLedger:
         if event_timestamp:
             record.updated_at = event_timestamp
 
+        if "schema_version" in event:
+            record.schema_version = event["schema_version"]
+        if "role_taxonomy_version" in event:
+            record.role_taxonomy_version = event["role_taxonomy_version"]
+
         if etype == "task_created":
             record.created_at = event_timestamp
             record.title = payload.get("title", "")
@@ -291,6 +325,9 @@ class TaskLedger:
         elif etype in ["handoff_generated", "local_draft_generated", "council_completed"]:
             record.status = etype
             record.completed_at = event_timestamp
+            record.artifact_status = "generated"
+            if record.task_outcome != "resolved":
+                record.task_outcome = "unresolved"
             if "artifact_path" in payload:
                 record.artifact_paths.append(payload["artifact_path"])
             self._apply_model_evaluation(record, payload)
@@ -305,6 +342,28 @@ class TaskLedger:
             self._apply_story_118_signals(record, payload)
         elif etype == "validator_completed":
             record.validator_passed = payload.get("passed")
+            if "validation_status" in payload:
+                record.validation_status = payload["validation_status"]
+            elif payload.get("passed") is True:
+                record.validation_status = "passed"
+            elif payload.get("passed") is False:
+                record.validation_status = "failed"
+            else:
+                record.validation_status = "inconclusive"
+
+            if "validator_name" in payload:
+                record.validator_name = payload["validator_name"]
+            if "validator_version" in payload:
+                record.validator_version = payload["validator_version"]
+            if "validator_scope" in payload:
+                record.validator_scope = payload["validator_scope"]
+            if "checked_artifacts" in payload:
+                record.checked_artifacts = payload["checked_artifacts"]
+            if "checked_files" in payload:
+                record.checked_files = payload["checked_files"]
+
+            if payload.get("passed"):
+                record.artifact_status = "validated"
         elif etype == "energy_estimated":
             record.energy_kwh_estimate += payload.get("energy_kwh", 0.0)
             record.emissions_gco2e_estimate += payload.get("emissions_gco2e", 0.0)
@@ -318,6 +377,34 @@ class TaskLedger:
             record.accepted = payload.get("accepted", False)
             record.human_review_minutes = payload.get("human_review_minutes", 0.0)
             record.review_workload = payload.get("review_workload", "")
+            record.reviewer_notes = payload.get("reviewer_notes", record.reviewer_notes)
+            record.correction_summary = payload.get("correction_summary", record.correction_summary)
+            if "affected_files" in payload:
+                record.affected_files = payload["affected_files"]
+            record.remaining_risk = payload.get("remaining_risk", record.remaining_risk)
+
+            if "review_decision" in payload:
+                record.review_decision = payload["review_decision"]
+            elif "accepted" in payload:
+                record.review_decision = "accepted" if payload["accepted"] else "rejected"
+
+            if "task_outcome" in payload:
+                record.task_outcome = payload["task_outcome"]
+            elif "accepted" in payload:
+                # Do not infer resolved from old boolean accepted
+                if not record.task_outcome:
+                    record.task_outcome = "unresolved"
+
+            if record.review_decision in ["accepted", "accepted_with_minor_edits"]:
+                record.artifact_status = "reviewed"
+            elif record.review_decision == "rejected":
+                record.artifact_status = "rejected"
+        elif etype == "outcome_revised":
+            if "revised_outcome" in payload:
+                record.task_outcome = payload["revised_outcome"]
+            record.reviewer_notes = payload.get("reason", record.reviewer_notes)
+            if "affected_files" in payload:
+                record.affected_files = payload["affected_files"]
         elif etype == "supervisor_reviewed":
             record.supervisor_tool = payload.get("supervisor_tool", "")
             record.supervisor_model = payload.get("supervisor_model", "")
@@ -342,6 +429,45 @@ class TaskLedger:
             record.context_excluded_items = payload.get("context_excluded_items", 0)
             if record.context_pack_path:
                 record.artifact_paths.append(record.context_pack_path)
+        elif etype == "route_decision":
+            record.selected_route = payload.get("selected_route", record.selected_route)
+            record.route_reason = payload.get("reason", record.route_reason)
+            record.route_source = payload.get("route_source", record.route_source)
+            if "fallback_depth" in payload:
+                record.fallback_depth = payload["fallback_depth"]
+            if "selected_backend" in payload:
+                record.selected_backend = payload["selected_backend"]
+            if "selected_model" in payload and not record.model:
+                record.model = payload["selected_model"]
+            if payload.get("human_review_required"):
+                record.human_review_required = True
+        elif etype == "worker_result":
+            if "worker_result_status" in payload:
+                record.worker_result_status = payload["worker_result_status"]
+            if "failure_type" in payload:
+                record.failure_type = payload["failure_type"]
+            if "failure_stage" in payload:
+                record.failure_stage = payload["failure_stage"]
+            if "backend_failure" in payload:
+                record.backend_failure = bool(payload["backend_failure"])
+            if "validation_status" in payload:
+                record.validation_status = payload["validation_status"]
+            if "elapsed_seconds" in payload:
+                record.elapsed_seconds = payload["elapsed_seconds"]
+            if "input_tokens" in payload:
+                record.input_tokens = payload["input_tokens"]
+            if "output_tokens" in payload:
+                record.output_tokens = payload["output_tokens"]
+            if "total_tokens" in payload:
+                record.total_tokens = payload["total_tokens"]
+            if "tokens_per_second" in payload:
+                record.tokens_per_second = payload["tokens_per_second"]
+            if "selected_route" in payload:
+                record.selected_route = payload["selected_route"]
+            if "selected_backend" in payload:
+                record.selected_backend = payload["selected_backend"]
+            if "selected_model" in payload and payload["selected_model"]:
+                record.model = payload["selected_model"]
         elif etype == "task_blocked":
             record.status = "blocked"
             record.handoff_reason = payload.get("reason", record.handoff_reason)
@@ -394,6 +520,22 @@ class TaskLedger:
             record.human_review_required = True
         if "wasted_tokens" in payload:
             record.wasted_tokens = payload["wasted_tokens"]
+        if "worker_result_status" in payload:
+            record.worker_result_status = payload["worker_result_status"]
+        if "failure_type" in payload:
+            record.failure_type = payload["failure_type"]
+        if "failure_stage" in payload:
+            record.failure_stage = payload["failure_stage"]
+        if "backend_failure" in payload:
+            record.backend_failure = bool(payload["backend_failure"])
+        if "validation_status" in payload:
+            record.validation_status = payload["validation_status"]
+        if "validator_name" in payload:
+            record.validator_name = payload["validator_name"]
+        if "validator_version" in payload:
+            record.validator_version = payload["validator_version"]
+        if "validator_scope" in payload:
+            record.validator_scope = payload["validator_scope"]
 
     @staticmethod
     def _apply_story_118_signals(record: TaskRecord, payload: Dict[str, Any]) -> None:

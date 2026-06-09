@@ -14,6 +14,8 @@ The schema supports two project goals:
 | Field | Meaning |
 | --- | --- |
 | `task_id` | Unique run identifier for this task attempt. |
+| `schema_version` | The version of the ledger event schema (e.g., `0.2.0`). Old events may lack this field. |
+| `role_taxonomy_version` | The version of the role taxonomy used (e.g., `2026-06-worker-council-v2`). Old events may lack this field. |
 | `created_at` | Timestamp when the task entered the ledger. |
 | `updated_at` | Timestamp of the most recent ledger event applied to the task record. |
 | `title` | Human-readable task title. |

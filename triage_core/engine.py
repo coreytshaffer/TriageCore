@@ -45,7 +45,19 @@ class TriageEngine:
                 response_text = post_processor(response_text)
             
             # Run quality gates if provided
-            if validator and not validator(response_text):
+            validation_status = "not_run"
+            passed = None
+            if validator:
+                try:
+                    passed = validator(response_text)
+                    validation_status = "passed" if passed else "failed"
+                except Exception as e:
+                    passed = False
+                    validation_status = "inconclusive"
+                    import logging
+                    logging.getLogger(__name__).warning(f"[!] Validator error: {e}")
+
+            if validator and not passed:
                 handoff = self._trigger_handoff(task_prompt, raw_data, "Local output failed quality gate validation.")
                 handoff["timeout_seconds"] = use_timeout
                 handoff.update({
@@ -55,6 +67,11 @@ class TriageEngine:
                     "usage": backend_response.usage,
                     "timings": backend_response.timings,
                     "validator_passed": False,
+                    "worker_result_status": "completed",
+                    "validation_status": validation_status,
+                    "validator_name": getattr(validator, "name", "unknown"),
+                    "validator_version": getattr(validator, "version", "unknown"),
+                    "validator_scope": getattr(validator, "scope", "unknown"),
                     **token_metrics,
                 })
                 return handoff
@@ -69,7 +86,12 @@ class TriageEngine:
                 "timeout_seconds": use_timeout,
                 "usage": backend_response.usage,
                 "timings": backend_response.timings,
-                "validator_passed": None if validator is None else True,
+                "validator_passed": passed,
+                "worker_result_status": "completed",
+                "validation_status": validation_status,
+                "validator_name": getattr(validator, "name", "unknown") if validator else None,
+                "validator_version": getattr(validator, "version", "unknown") if validator else None,
+                "validator_scope": getattr(validator, "scope", "unknown") if validator else None,
                 **token_metrics,
             }
 
@@ -77,10 +99,24 @@ class TriageEngine:
             # Handle the temporal budget exhaustion
             handoff = self._trigger_handoff(task_prompt, raw_data, f"Local worker exceeded temporal budget of {use_timeout}s.")
             handoff["timeout_seconds"] = use_timeout
+            handoff["worker_result_status"] = "timed_out"
+            handoff["failure_type"] = "timeout"
+            handoff["failure_stage"] = "local_backend_generate"
+            return handoff
+        except ValueError as e:
+            # Empty choices or missing content
+            handoff = self._trigger_handoff(task_prompt, raw_data, f"Local worker returned invalid output: {str(e)}")
+            handoff["timeout_seconds"] = use_timeout
+            handoff["worker_result_status"] = "invalid_output"
+            handoff["failure_type"] = "invalid_backend_response"
+            handoff["failure_stage"] = "response_parse"
             return handoff
         except Exception as e:
             handoff = self._trigger_handoff(task_prompt, raw_data, f"Local runtime error: {str(e)}")
             handoff["timeout_seconds"] = use_timeout
+            handoff["worker_result_status"] = "worker_failed"
+            handoff["failure_type"] = "backend_error"
+            handoff["failure_stage"] = "local_backend_generate"
             return handoff
 
     def _trigger_handoff(self, prompt: str, data: str, reason: str) -> Dict[str, Any]:

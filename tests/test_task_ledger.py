@@ -309,6 +309,59 @@ def test_ledger_tracks_wasted_tokens():
         assert record.wasted_tokens == 1500
 
 
+def test_route_decision_and_worker_result_reduce_to_task_record():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        ledger = TaskLedger(ledger_dir=temp_dir)
+        task_id = str(uuid.uuid4())
+
+        ledger.append_event(task_id, "task_created", {"title": "Route Telemetry"})
+        ledger.append_event(
+            task_id,
+            "route_decision",
+            {
+                "selected_route": "local_fast",
+                "selected_backend": "ollama",
+                "selected_model": "qwen2.5-coder:7b",
+                "reason": "local_fast_available_for_small_or_repetitive_task",
+                "fallback_depth": 3,
+                "route_source": "resilience_router_v1",
+                "human_review_required": False,
+            },
+        )
+        ledger.append_event(
+            task_id,
+            "worker_result",
+            {
+                "selected_route": "local_fast",
+                "selected_backend": "ollama",
+                "selected_model": "qwen2.5-coder:7b",
+                "worker_result_status": "completed",
+                "validation_status": "passed",
+                "failure_type": None,
+                "failure_stage": None,
+                "backend_failure": False,
+                "elapsed_seconds": 1.25,
+                "input_tokens": 10,
+                "output_tokens": 4,
+                "total_tokens": 14,
+                "tokens_per_second": 11.2,
+            },
+        )
+
+        record = ledger.get_task(task_id)
+
+        assert record is not None
+        assert record.selected_route == "local_fast"
+        assert record.selected_backend == "ollama"
+        assert record.route_reason == "local_fast_available_for_small_or_repetitive_task"
+        assert record.route_source == "resilience_router_v1"
+        assert record.fallback_depth == 3
+        assert record.worker_result_status == "completed"
+        assert record.validation_status == "passed"
+        assert record.backend_failure is False
+        assert record.total_tokens == 14
+
+
 def test_ledger_tracks_story_118_control_signals():
     with tempfile.TemporaryDirectory() as temp_dir:
         ledger = TaskLedger(ledger_dir=temp_dir)
@@ -346,3 +399,133 @@ def test_ledger_tracks_story_118_control_signals():
         assert ctx is not None
         assert ctx.telemetry_summary["early_stopped"] is True
         assert ctx.telemetry_summary["credit_allowance_exhausted"] is True
+
+
+def test_append_event_adds_schema_version():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        ledger = TaskLedger(ledger_dir=temp_dir)
+        task_id = str(uuid.uuid4())
+
+        ledger.append_event(task_id, "task_created", {"title": "Test Version"})
+        events = ledger.get_events(task_id)
+
+        assert len(events) == 1
+        assert "schema_version" in events[0]
+        assert events[0]["schema_version"] == "0.2.0"
+
+        record = ledger.get_task(task_id)
+        assert record is not None
+        assert record.schema_version == "0.2.0"
+
+def test_append_event_adds_role_taxonomy_version():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        ledger = TaskLedger(ledger_dir=temp_dir)
+        task_id = str(uuid.uuid4())
+
+        ledger.append_event(task_id, "task_created", {"title": "Test Role Taxonomy"})
+        events = ledger.get_events(task_id)
+
+        assert len(events) == 1
+        assert "role_taxonomy_version" in events[0]
+        assert events[0]["role_taxonomy_version"] == "2026-06-worker-council-v2"
+
+        record = ledger.get_task(task_id)
+        assert record is not None
+        assert record.role_taxonomy_version == "2026-06-worker-council-v2"
+
+def test_legacy_events_without_versions_still_reduce():
+    import json
+    from datetime import datetime, timezone
+    with tempfile.TemporaryDirectory() as temp_dir:
+        ledger = TaskLedger(ledger_dir=temp_dir)
+        task_id = str(uuid.uuid4())
+
+        # Manually write an old-style event without version fields
+        event = {
+            "event_id": str(uuid.uuid4()),
+            "task_id": task_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "event_type": "task_created",
+            "payload": {"title": "Legacy Task"}
+        }
+        with open(ledger.ledger_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(event) + "\n")
+
+        record = ledger.get_task(task_id)
+        assert record is not None
+        assert record.title == "Legacy Task"
+        assert record.schema_version is None
+        assert record.role_taxonomy_version is None
+
+def test_mixed_schema_versions_do_not_crash():
+    import json
+    from datetime import datetime, timezone
+    with tempfile.TemporaryDirectory() as temp_dir:
+        ledger = TaskLedger(ledger_dir=temp_dir)
+        task_id = str(uuid.uuid4())
+
+        # 1. Manually write an old-style event
+        event_old = {
+            "event_id": str(uuid.uuid4()),
+            "task_id": task_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "event_type": "task_created",
+            "payload": {"title": "Mixed Version Task"}
+        }
+        with open(ledger.ledger_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(event_old) + "\n")
+
+        # 2. Append new event (which will have versions)
+        ledger.append_event(task_id, "review_completed", {"accepted": True})
+
+        # 3. Read it back
+        record = ledger.get_task(task_id)
+        assert record is not None
+        assert record.title == "Mixed Version Task"
+        assert record.status == "reviewed"
+        # Since the second event had versions, the record should have the latest version.
+        assert record.schema_version == "0.2.0"
+        assert record.role_taxonomy_version == "2026-06-worker-council-v2"
+
+def test_handoff_generated_sets_artifact_not_resolution():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        ledger = TaskLedger(ledger_dir=temp_dir)
+        task_id = str(uuid.uuid4())
+        ledger.append_event(task_id, "handoff_generated", {})
+        record = ledger.get_task(task_id)
+        assert record.artifact_status == "generated"
+        assert record.task_outcome == "unresolved"
+
+def test_local_draft_generated_sets_artifact_not_resolution():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        ledger = TaskLedger(ledger_dir=temp_dir)
+        task_id = str(uuid.uuid4())
+        ledger.append_event(task_id, "local_draft_generated", {})
+        record = ledger.get_task(task_id)
+        assert record.artifact_status == "generated"
+        assert record.task_outcome == "unresolved"
+
+def test_review_completed_can_set_resolved_task_outcome():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        ledger = TaskLedger(ledger_dir=temp_dir)
+        task_id = str(uuid.uuid4())
+        ledger.append_event(task_id, "review_completed", {
+            "review_decision": "accepted",
+            "task_outcome": "resolved"
+        })
+        record = ledger.get_task(task_id)
+        assert record.artifact_status == "reviewed"
+        assert record.task_outcome == "resolved"
+        assert record.review_decision == "accepted"
+
+def test_legacy_accepted_boolean_does_not_imply_resolved():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        ledger = TaskLedger(ledger_dir=temp_dir)
+        task_id = str(uuid.uuid4())
+        ledger.append_event(task_id, "review_completed", {
+            "accepted": True
+        })
+        record = ledger.get_task(task_id)
+        assert record.artifact_status == "reviewed"
+        assert record.task_outcome == "unresolved"
+        assert record.review_decision == "accepted"

@@ -6,7 +6,7 @@ Last updated: 2026-06-05
 
 You are continuing TriageCore from the current `main` branch.
 
-Treat the latest Codex checkpoint as the Phase 13 backlog baseline. Codex has imported SafeTask-derived learning artifacts into `docs/learning/`, added the validation-first `import-learning-seeds` command, added the static resilience router, and updated `docs/backlog.md` with Phase 13: Resilience Routing And Assignment Learning Store.
+Treat the latest Codex checkpoint as the Phase 13 backlog baseline. Codex has imported SafeTask-derived learning artifacts into `docs/learning/`, added the validation-first `import-learning-seeds` command, added the static resilience router, added route-decision and worker-result ledger telemetry, and updated `docs/backlog.md` with Phase 13: Resilience Routing And Assignment Learning Store.
 
 The imported artifacts define:
 
@@ -29,17 +29,19 @@ Story 13.3 is complete enough for the current backlog: `python -m triage_core.cl
 
 Story 13.4 is complete enough for the current backlog: `triage_core/routing/resilience_router.py` exposes `choose_resilience_route()` with static decisions for cloud, local-heavy, local-fast, deterministic, and human-handoff paths.
 
-Your next high-throughput implementation target is **Phase 13 Story 13.5: Record Route-Decision And Worker-Result Ledger Events**.
+Story 13.5 is complete enough for the current backlog: `route_decision` and `worker_result` events are built from the resilience router and emitted at the `TriageClient.run_task()` boundary for benchmark and stability-pass runs. Safety routes record `worker_result_status=not_attempted` and do not count as backend failures.
 
-Build a first working slice that records route decisions and worker outcomes without yet making imported learning records authoritative. Keep it explicit and reviewable. The router may feed ledger events, but imported SafeTask records remain seed evidence until human-reviewed learning approvals promote rules.
+Your next high-throughput implementation target is **Phase 13 Story 13.6: Add Circuit Breakers And Degraded Mode States**.
+
+Build a first working slice that cools down unstable routes and exposes degraded-mode state explicitly. Keep it deterministic and reviewable. Imported SafeTask records remain seed evidence until human-reviewed learning approvals promote rules.
 
 Suggested outputs:
 
-1. A small event helper that turns `ResilienceRouteDecision` into a `route_decision` ledger payload.
-2. A `worker_result` payload shape for selected route, status, validation status, duration, tokens, and failure type.
-3. Integration at one narrow execution boundary, preferably CLI pipeline or `TriageClient`, with minimal behavior change.
-4. Tests proving route decisions are recorded and safety handoffs do not count as backend failures.
-5. Documentation that route telemetry is evidence for future learning, not automatic route approval.
+1. A circuit-breaker state module for cloud, local-heavy, and local-fast routes.
+2. Explicit mode states such as `normal`, `degraded_cloud`, `offline_local`, `local_minimal`, `deterministic_only`, and `human_handoff`.
+3. A small state-transition policy driven by recent route failures and recoveries.
+4. Tests proving unstable routes cool down, successful recovery does not flap immediately, and degraded mode affects route choice deterministically.
+5. Documentation that degraded mode and circuit-breaker state are execution guardrails, not automatic learning-rule approvals.
 
 Important guardrails:
 

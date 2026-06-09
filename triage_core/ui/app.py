@@ -40,6 +40,7 @@ except ImportError:
 
 
 import os
+import csv
 import uuid
 import threading
 import time
@@ -1017,8 +1018,8 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         logging.info("TriageDesk Control Plane initialized.")
 
         self.title("TriageDesk Control Plane")
-        self.geometry("1060x680")
-        self.minsize(900, 580)
+        self.geometry("1280x820")
+        self.minsize(1050, 680)
 
         # Set icon
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -1033,7 +1034,9 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         self.bind("<F11>", self.toggle_fullscreen)
         self.bind("<Escape>", self.exit_fullscreen)
 
-        self.grid_rowconfigure(0, weight=1)
+        # Dashboard is split into a primary workbench and a secondary telemetry band.
+        # The generated artifact needs visual priority during review.
+        self.grid_rowconfigure(0, weight=4)
         self.grid_rowconfigure(1, weight=1)
         self.grid_columnconfigure(1, weight=1)
 
@@ -1267,7 +1270,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             row=1, column=0, padx=24, pady=(0, 8), sticky="w"
         )
 
-        self.prompt_box = ctk.CTkTextbox(f, height=120, text_color=("gray52", "gray62"))
+        self.prompt_box = ctk.CTkTextbox(f, height=90, text_color=("gray52", "gray62"))
         self.prompt_box.grid(row=2, column=0, padx=24, pady=(0, 6), sticky="ew")
         self.prompt_box.insert("0.0", "Describe your task here…")
 
@@ -1379,7 +1382,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         result_outer = ctk.CTkScrollableFrame(
             f,
             corner_radius=8,
-            label_text="Result",
+            label_text="Generated Artifact",
             label_font=ctk.CTkFont(size=12, weight="bold"),
         )
         result_outer.grid(row=6, column=0, padx=24, pady=(0, 20), sticky="nsew")
@@ -1393,15 +1396,15 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
 
         self.output_box = ctk.CTkTextbox(
             result_outer,
-            height=180,
+            height=390,
             state="disabled",
-            font=ctk.CTkFont(family="Courier", size=12),
+            font=ctk.CTkFont(family="Consolas", size=13),
         )
         self.output_box.grid(row=1, column=0, sticky="nsew", pady=(0, 8))
 
         self.inline_log_label = ctk.CTkLabel(
             result_outer,
-            text="Live backend/activity log",
+            text="Route Trace & System Log",
             font=ctk.CTkFont(size=11, weight="bold"),
             text_color="#9ca3af",
             anchor="w",
@@ -1410,9 +1413,9 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
 
         self.inline_log_box = ctk.CTkTextbox(
             result_outer,
-            height=110,
+            height=72,
             state="disabled",
-            font=ctk.CTkFont(family="Courier", size=11),
+            font=ctk.CTkFont(family="Consolas", size=10),
         )
         self.inline_log_box.grid(row=3, column=0, sticky="ew")
 
@@ -1434,11 +1437,29 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             fg_color="transparent",
             border_width=1,
             command=lambda: self.select_frame("ledger"),
-        ).grid(row=0, column=1, sticky="e")
+        ).grid(row=0, column=1, padx=(6, 0), sticky="e")
+        ctk.CTkButton(
+            feed_hdr,
+            text="Export CSV",
+            width=96,
+            height=24,
+            fg_color="transparent",
+            border_width=1,
+            command=lambda: self._export_ledger("csv"),
+        ).grid(row=0, column=2, padx=(6, 0), sticky="e")
+        ctk.CTkButton(
+            feed_hdr,
+            text="Export JSON",
+            width=104,
+            height=24,
+            fg_color="transparent",
+            border_width=1,
+            command=lambda: self._export_ledger("json"),
+        ).grid(row=0, column=3, padx=(6, 0), sticky="e")
 
         self.ledger_feed_frame = ctk.CTkScrollableFrame(
             result_outer,
-            height=150,
+            height=82,
             corner_radius=8,
             fg_color=("gray88", "gray18"),
         )
@@ -2052,11 +2073,20 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         self.after(1000, self._update_live_logs)
 
     def _inline_log_content(self) -> str:
-        backend = self.active_backend.name if self.active_backend else "none"
-        model = getattr(self.active_backend, "model", None) or "none"
+        control = getattr(self, "control_plane_backend", None) or self.active_backend
+        control_name = self._backend_label(control) if hasattr(self, "_backend_label") else (
+            control.name if control else "none"
+        )
+        control_model = self._model_label(control) if hasattr(self, "_model_label") else (
+            getattr(control, "model", None) or "none"
+        )
+        worker_pool = self._worker_pool_label() if hasattr(self, "_worker_pool_label") else "unknown"
+        route_trace = getattr(self, "last_route_trace", "none recorded this session")
         header = [
-            f"Active backend: {backend}",
-            f"Active model: {model}",
+            f"Control plane: {control_name}",
+            f"Control model: {control_model}",
+            f"Worker pool: {worker_pool}",
+            f"Last route: {route_trace}",
             "Source: TriageCore backend/activity events",
             "",
         ]
@@ -2236,6 +2266,103 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             )
 
         default_config.__init__()
+
+    # ─── Export Helpers ───────────────────────────────────────────────────────
+    def _export_safe_value(self, value):
+        import json
+
+        if value is None or isinstance(value, (str, int, float, bool)):
+            return value
+        try:
+            return json.dumps(value, ensure_ascii=False)
+        except Exception:
+            return str(value)
+
+    def _task_export_row(self, task):
+        if hasattr(task, "__dict__"):
+            raw = dict(task.__dict__)
+        else:
+            raw = {}
+            for name in dir(task):
+                if name.startswith("_"):
+                    continue
+                try:
+                    value = getattr(task, name)
+                except Exception:
+                    continue
+                if callable(value):
+                    continue
+                raw[name] = value
+
+        row = {}
+        for key, value in raw.items():
+            if key.startswith("_"):
+                continue
+            row[key] = self._export_safe_value(value)
+        return row
+
+    def _export_ledger(self, fmt):
+        import csv
+        import json
+
+        fmt = (fmt or "").lower().strip()
+        if fmt not in {"csv", "json"}:
+            self.status_label.configure(
+                text=f"Export error: unsupported format {fmt}",
+                text_color="#ef4444",
+            )
+            return
+
+        try:
+            tasks = self.ledger.get_all_tasks()
+            rows = [self._task_export_row(task) for task in tasks]
+            export_dir = os.path.join(default_config.get_ledger_dir(), "exports")
+            os.makedirs(export_dir, exist_ok=True)
+            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+            output_path = os.path.join(export_dir, f"triagedesk_ledger_{timestamp}.{fmt}")
+
+            if fmt == "json":
+                payload = {
+                    "schema": "triagedesk.ledger.export.v1",
+                    "exported_at": datetime.now(timezone.utc).isoformat(),
+                    "task_count": len(rows),
+                    "tasks": rows,
+                }
+                with open(output_path, "w", encoding="utf-8") as fh:
+                    json.dump(payload, fh, indent=2, ensure_ascii=False)
+            else:
+                fieldnames = sorted({key for row in rows for key in row.keys()})
+                with open(output_path, "w", encoding="utf-8", newline="") as fh:
+                    writer = csv.DictWriter(fh, fieldnames=fieldnames)
+                    writer.writeheader()
+                    for row in rows:
+                        writer.writerow(row)
+
+            self.status_label.configure(
+                text=f"✓ Exported {len(rows)} ledger task(s) to {output_path}",
+                text_color="#22c55e",
+            )
+            self._log_activity(f"Ledger exported as {fmt}: {output_path}")
+
+            if getattr(self, "current_loaded_task_id", None):
+                self.ledger.append_event(
+                    self.current_loaded_task_id,
+                    "ledger_exported",
+                    {
+                        "format": fmt,
+                        "artifact_path": output_path,
+                        "task_count": len(rows),
+                    },
+                )
+
+            self._refresh_inline_logs(force=True)
+        except Exception as exc:
+            self.status_label.configure(
+                text=f"Export error: {exc}",
+                text_color="#ef4444",
+            )
+            self._log_activity(f"Ledger export error ({fmt}): {exc}", level="error")
+
 
     # ─── Telemetry Frame ──────────────────────────────────────────────────────
     def _build_telemetry_frame(self):
@@ -2571,44 +2698,218 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
 
         self.after(5000, self._update_ticker)
 
-    # ─── Backend Check ────────────────────────────────────────────────────────
+    # ─── Backend Check / Runtime Observability ────────────────────────────────
+    def _backend_label(self, backend):
+        if not backend:
+            return "none"
+        name = getattr(backend, "name", None) or "unknown"
+        if name == "lmstudio":
+            return "LM Studio"
+        if name == "ollama":
+            return "Ollama"
+        return name
+
+    def _model_label(self, backend):
+        if not backend:
+            return "none"
+        model = getattr(backend, "model", None) or "auto"
+        if (
+            getattr(backend, "name", "") == "lmstudio"
+            and model in {"", "auto", "loaded-model", "local-model"}
+        ):
+            return "auto (loaded in LM Studio)"
+        return model
+
+    def _lmstudio_runtime_status(self, base_url=None, timeout=0.75):
+        import requests
+
+        base_url = (base_url or os.getenv("TRIAGE_SUPERVISOR_BASE_URL", "http://localhost:1234/v1")).rstrip("/")
+        root_url = base_url[:-3] if base_url.endswith("/v1") else base_url
+        candidates = [
+            f"{root_url}/api/v1/models",
+            f"{base_url}/models",
+        ]
+        info = {
+            "provider": "lmstudio",
+            "online": False,
+            "base_url": base_url,
+            "models": [],
+            "display": "LM Studio inventory unknown",
+        }
+
+        for url in candidates:
+            try:
+                response = requests.get(url, timeout=timeout)
+                if response.status_code != 200:
+                    continue
+                data = response.json()
+                models = []
+                raw_models = data.get("data") if isinstance(data, dict) else None
+                if raw_models is None and isinstance(data, dict):
+                    raw_models = data.get("models")
+                if raw_models is None and isinstance(data, list):
+                    raw_models = data
+                for item in raw_models or []:
+                    if isinstance(item, dict):
+                        model_id = item.get("id") or item.get("model") or item.get("name") or item.get("path")
+                        state = item.get("state") or item.get("status")
+                        if model_id:
+                            models.append(f"{model_id} ({state})" if state else str(model_id))
+                    elif item:
+                        models.append(str(item))
+                info["online"] = True
+                info["models"] = models
+                if models:
+                    shown = ", ".join(models[:2])
+                    if len(models) > 2:
+                        shown += f", +{len(models) - 2} more"
+                    info["display"] = f"LM Studio inventory: {shown}"
+                else:
+                    info["display"] = "LM Studio online, no models listed"
+                return info
+            except Exception:
+                continue
+
+        return info
+
+    def _lmstudio_runtime_label(self):
+        info = getattr(self, "lmstudio_runtime_status", None) or {}
+        return info.get("display", "LM Studio inventory unknown")
+
+    def _native_ollama_status(self, timeout=0.75):
+        import requests
+
+        base_url = os.getenv("TRIAGE_OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
+        info = {
+            "provider": "ollama",
+            "online": False,
+            "base_url": base_url,
+            "models": [],
+            "display": "Ollama offline",
+        }
+        try:
+            response = requests.get(f"{base_url}/api/tags", timeout=timeout)
+            if response.status_code == 200:
+                data = response.json()
+                models = []
+                for item in data.get("models", []) or []:
+                    if isinstance(item, dict):
+                        name = item.get("name") or item.get("model")
+                        if name:
+                            models.append(name)
+                    elif item:
+                        models.append(str(item))
+                info["online"] = True
+                info["models"] = models
+                if models:
+                    info["display"] = f"Ollama online, {len(models)} model(s)"
+                else:
+                    info["display"] = "Ollama online, no models listed"
+        except Exception:
+            pass
+        return info
+
+    def _worker_pool_label(self):
+        info = getattr(self, "worker_pool_status", None) or {}
+        if not info:
+            return "unknown"
+        return info.get("display", "unknown")
+
+    def _runtime_trace(self, runner_type):
+        control = self._backend_label(
+            getattr(self, "control_plane_backend", None) or getattr(self, "active_backend", None)
+        )
+        control_model = self._model_label(
+            getattr(self, "control_plane_backend", None) or getattr(self, "active_backend", None)
+        )
+        workers = self._worker_pool_label()
+
+        if runner_type == "local":
+            return f"Route: UI -> Control Plane<{control}/{control_model}> -> Local Draft"
+        if runner_type == "council":
+            return f"Route: UI -> Worker Council<{workers}> -> RepoMapper/CodeRepair/Validator"
+        if runner_type == "pipeline":
+            return f"Route: UI -> Pipeline -> Control Plane<{control}/{control_model}> -> Review/Handoff"
+        if runner_type == "codex":
+            return "Route: UI -> Codex Handoff Packet"
+        if runner_type == "antigravity":
+            return "Route: UI -> Antigravity Task Bundle"
+        return f"Route: UI -> {runner_type}"
+
     def _check_backends(self):
         from ..backends import create_backend
         from ..config import default_config
 
         def _check():
-            model = default_config.get_global(
-                "backend", "default_model", "qwen2.5-coder:7b-triagecore"
+            model = default_config.get_backend_model()
+            supervisor_base_url = os.getenv(
+                "TRIAGE_SUPERVISOR_BASE_URL", "http://localhost:1234/v1"
             )
-            ollama = create_backend("ollama", model=model)
-            if ollama.ping():
-                self.active_backend = ollama
-                self.backend_status_label.configure(
-                    text=f"Engine: Ollama 🟢  ·  {model}", text_color="#22c55e"
-                )
-                self._t_backend.configure(text="Ollama 🟢", text_color="#22c55e")
-                self._t_model.configure(text=model, text_color="#93c5fd")
-                return
+            self.lmstudio_runtime_status = self._lmstudio_runtime_status(supervisor_base_url)
+            self.worker_pool_status = self._native_ollama_status()
 
+            # Control-plane first: LM Studio is the supervisor/control surface.
             lmstudio = create_backend(
-                "custom", base_url="http://localhost:1234/v1", model=model
+                "lmstudio",
+                base_url=supervisor_base_url,
+                model=model,
             )
             if lmstudio.ping():
+                self.control_plane_backend = lmstudio
                 self.active_backend = lmstudio
+                model_label = self._model_label(lmstudio)
+                worker_label = self._worker_pool_label()
                 self.backend_status_label.configure(
-                    text=f"Engine: LM Studio 🟢  ·  {model}", text_color="#22c55e"
+                    text=(
+                        f"Control Plane: LM Studio online · requested: {model_label} · "
+                        f"{self._lmstudio_runtime_label()}  |  Worker Pool: {worker_label}"
+                    ),
+                    text_color="#22c55e",
                 )
-                self._t_backend.configure(text="LM Studio 🟢", text_color="#22c55e")
-                self._t_model.configure(text=model, text_color="#93c5fd")
+                self._t_backend.configure(
+                    text="Control: LM Studio online",
+                    text_color="#22c55e",
+                )
+                self._t_model.configure(
+                    text=f"Requested: {model_label} · {self._lmstudio_runtime_label()} · Workers: {worker_label}",
+                    text_color="#93c5fd",
+                )
+                self._log_activity(
+                    "Runtime map updated: "
+                    f"control=LM Studio base={supervisor_base_url} model={model_label}; "
+                    f"workers={worker_label}"
+                )
                 return
 
+            # Fallback path: native Ollama can still serve as a single local engine.
+            ollama_model = os.getenv("TRIAGE_OLLAMA_MODEL", model)
+            ollama = create_backend("ollama", model=ollama_model)
+            # Use native status here because OllamaBackend.ping may intentionally
+            # decline the control-plane role when LM Studio is available.
+            if (getattr(self, "worker_pool_status", {}) or {}).get("online"):
+                self.control_plane_backend = None
+                self.active_backend = ollama
+                model_label = self._model_label(ollama)
+                self.backend_status_label.configure(
+                    text=f"Fallback Engine: Ollama online · {model_label}",
+                    text_color="#22c55e",
+                )
+                self._t_backend.configure(
+                    text="Fallback: Ollama online",
+                    text_color="#22c55e",
+                )
+                self._t_model.configure(text=f"Model: {model_label}", text_color="#93c5fd")
+                self._log_activity(f"Runtime map updated: fallback=Ollama model={model_label}")
+                return
+
+            self.control_plane_backend = None
             self.active_backend = None
             self.backend_status_label.configure(
-                text="Engine: Offline 🔴  (Start Ollama or LM Studio)",
+                text="Runtime: Offline (Start LM Studio or Ollama)",
                 text_color="#ef4444",
             )
-            self._t_backend.configure(text="Offline 🔴", text_color="#ef4444")
-            self._t_model.configure(text="—")
+            self._t_backend.configure(text="Offline", text_color="#ef4444")
+            self._t_model.configure(text="-")
 
         threading.Thread(target=_check, daemon=True).start()
 
@@ -2729,16 +3030,27 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             )
             return
 
-        self.ledger.append_event(task_id, "runner_selected", {"runner": "local_llm"})
+        route_trace = self._runtime_trace("local")
+        self.last_route_trace = route_trace
+        self.ledger.append_event(
+            task_id,
+            "runner_selected",
+            {
+                "runner": "local_llm",
+                "route_trace": route_trace,
+                "control_plane": self._backend_label(self.active_backend),
+                "control_model": self._model_label(self.active_backend),
+            },
+        )
         self.status_label.configure(
-            text=f"Drafting locally via {self.active_backend.name}…",
+            text=f"{route_trace}…",
             text_color="#93c5fd",
         )
         self._log_activity(
             f"Local draft started for task {task_id[:8]} via {self.active_backend.name}"
         )
         self.btn_local.configure(state="disabled")
-        self._clear_output("Sending to local model…")
+        self._clear_output(f"{route_trace}\n\nSending to local model…")
 
         def _run():
             from ..sustainability import PowerSampler, integrate_energy_kwh
@@ -2765,6 +3077,8 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
                 resp = self.active_backend.generate(
                     messages, stream_callback=_stream_cb
                 )
+                served_model = resp.raw.get("model") or self._model_label(self.active_backend)
+                self.last_served_model = served_model
                 duration = time.time() - t0
                 samples = sampler.stop()
 
@@ -2791,7 +3105,12 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
                         "status": "success",
                         "duration_seconds": duration,
                         "backend": self.active_backend.name,
-                        "model": self.active_backend.model,
+                        "model": served_model,
+                        "requested_model": self.active_backend.model,
+                        "served_model": served_model,
+                        "route_trace": route_trace,
+                        "control_plane": self._backend_label(self.active_backend),
+                        "control_model": self._model_label(self.active_backend),
                         "input_tokens": tokens_in,
                         "output_tokens": tokens_out,
                         **metrics,
@@ -2801,7 +3120,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
                 self.ledger.append_event(task_id, "energy_estimated", metrics)
 
                 self._show_result_metrics(
-                    self.active_backend.model,
+                    served_model,
                     self.active_backend.name,
                     tokens_in,
                     tokens_out,
@@ -2813,7 +3132,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
                 )
 
                 self.status_label.configure(
-                    text=f"✓ Draft in {duration:.1f}s · Risk: {danger.risk_level}",
+                    text=f"✓ Draft in {duration:.1f}s · Served: {served_model} · Risk: {danger.risk_level}",
                     text_color="#22c55e",
                 )
                 self._log_activity(
@@ -2838,14 +3157,22 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             )
             return
 
+        route_trace = self._runtime_trace("council")
+        self.last_route_trace = route_trace
         self.ledger.append_event(
-            task_id, "runner_selected", {"runner": "worker_council"}
+            task_id,
+            "runner_selected",
+            {
+                "runner": "worker_council",
+                "route_trace": route_trace,
+                "worker_pool": self._worker_pool_label(),
+            },
         )
         self.status_label.configure(
-            text="🏭 Dispatching to Worker Council…", text_color="#38bdf8"
+            text=f"{route_trace}…", text_color="#38bdf8"
         )
         self.btn_council.configure(state="disabled")
-        self._clear_output("Worker Council initialising…\n")
+        self._clear_output(f"{route_trace}\n\nWorker Council initialising…\n")
         self._reset_agent_indicators(queued=True)
         self._log_activity(f"Council dispatch started for task {task_id[:8]}")
 
@@ -2968,8 +3295,8 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
                 self.ledger.append_event(task_id, "energy_estimated", metrics)
 
                 self._show_result_metrics(
-                    "Specialized Models",
-                    "ollama (council)",
+                    "Council roles",
+                    "Ollama worker pool",
                     total_in,
                     total_out,
                     duration,
@@ -3185,7 +3512,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
                 self.ledger.append_event(task_id, "energy_estimated", metrics)
 
                 self._show_result_metrics(
-                    self.active_backend.model,
+                    served_model,
                     self.active_backend.name,
                     tokens_in,
                     tokens_out,

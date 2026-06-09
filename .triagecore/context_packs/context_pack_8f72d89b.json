@@ -1,0 +1,23 @@
+{
+  "task_id": "8f72d89b-8fc2-4636-b086-1198cb5c1f11",
+  "created_at": "2026-06-05T18:50:30.073044+00:00",
+  "runner": "antigravity",
+  "category": "refactor",
+  "budget_tokens": 6000,
+  "estimated_tokens": 9,
+  "budget_status": "within_budget",
+  "items": [
+    {
+      "kind": "prompt",
+      "label": "task_prompt",
+      "role": "required",
+      "estimated_tokens": 9,
+      "rationale": "The task prompt is required to execute or supervise the task.",
+      "exists": true,
+      "size_bytes": 0,
+      "snippet": "Implement Epic 6: Active Duty Stack"
+    }
+  ],
+  "excluded_items": [],
+  "warnings": []
+}

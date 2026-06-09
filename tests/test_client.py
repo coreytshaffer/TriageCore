@@ -1,5 +1,9 @@
 from triage_core.backends import BackendResponse
 from triage_core.client import TriageClient
+from triage_core.task_ledger import TaskLedger
+
+import tempfile
+import uuid
 
 
 class RecordingBackend:
@@ -68,9 +72,111 @@ def test_validator_failure_records_model_and_token_context():
     assert result["status"] == "handoff_required"
     assert result["source"] == "local_engine"
     assert result["validator_passed"] is False
+    assert result["worker_result_status"] == "completed"
+    assert result["validation_status"] == "failed"
     assert result["backend_name"] == "fake"
     assert result["model"] == "fake-model"
     assert result["input_tokens"] == 3
     assert result["output_tokens"] == 2
     assert result["total_tokens"] == 5
     assert backend.called is True
+
+
+import requests
+
+class TimeoutBackend(RecordingBackend):
+    def generate(self, messages, temperature=0.1, timeout=45, **kwargs):
+        raise requests.exceptions.Timeout("Timed out")
+
+class ErrorBackend(RecordingBackend):
+    def generate(self, messages, temperature=0.1, timeout=45, **kwargs):
+        raise Exception("Some random error")
+
+class InvalidOutputBackend(RecordingBackend):
+    def generate(self, messages, temperature=0.1, timeout=45, **kwargs):
+        raise ValueError("Backend returned no message content.")
+
+
+def test_timeout_returns_timed_out_status():
+    client = TriageClient(backend=TimeoutBackend())
+    result = client.run_task("do it", "data")
+    assert result["worker_result_status"] == "timed_out"
+    assert result["failure_type"] == "timeout"
+    assert result["failure_stage"] == "local_backend_generate"
+
+def test_backend_error_returns_worker_failed_status():
+    client = TriageClient(backend=ErrorBackend())
+    result = client.run_task("do it", "data")
+    assert result["worker_result_status"] == "worker_failed"
+    assert result["failure_type"] == "backend_error"
+    assert result["failure_stage"] == "local_backend_generate"
+
+def test_invalid_output_returns_invalid_output_status():
+    client = TriageClient(backend=InvalidOutputBackend())
+    result = client.run_task("do it", "data")
+    assert result["worker_result_status"] == "invalid_output"
+    assert result["failure_type"] == "invalid_backend_response"
+    assert result["failure_stage"] == "response_parse"
+
+def test_router_safety_handoff_is_not_counted_as_backend_failure():
+    backend = FailingBackend()
+    client = TriageClient(backend=backend)
+    result = client.run_task("delete all files and wipe secrets", "small data")
+    assert result["worker_result_status"] == "not_attempted"
+    assert result["failure_type"] == "safety_handoff"
+    assert result["failure_stage"] == "router"
+
+
+def test_run_task_writes_route_decision_and_worker_result_events():
+    backend = RecordingBackend()
+    client = TriageClient(backend=backend)
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        ledger = TaskLedger(ledger_dir=temp_dir)
+        task_id = str(uuid.uuid4())
+        ledger.append_event(task_id, "task_created", {"title": "Route Event Task"})
+
+        result = client.run_task(
+            "Summarize this text",
+            "small data",
+            ledger=ledger,
+            task_id=task_id,
+        )
+        events = ledger.get_events(task_id)
+
+    event_types = [event["event_type"] for event in events]
+
+    assert result["status"] == "success"
+    assert "route_decision" in event_types
+    assert "worker_result" in event_types
+
+    route_event = next(event for event in events if event["event_type"] == "route_decision")
+    worker_event = next(event for event in events if event["event_type"] == "worker_result")
+
+    assert route_event["payload"]["selected_route"] == result["selected_route"]
+    assert worker_event["payload"]["worker_result_status"] == "completed"
+    assert worker_event["payload"]["backend_failure"] is False
+
+
+def test_router_handoff_event_is_recorded_without_backend_failure():
+    backend = FailingBackend()
+    client = TriageClient(backend=backend)
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        ledger = TaskLedger(ledger_dir=temp_dir)
+        task_id = str(uuid.uuid4())
+        ledger.append_event(task_id, "task_created", {"title": "Safety Route Task"})
+
+        result = client.run_task(
+            "delete all files and wipe secrets",
+            "small data",
+            ledger=ledger,
+            task_id=task_id,
+        )
+        worker_event = next(
+            event for event in ledger.get_events(task_id) if event["event_type"] == "worker_result"
+        )
+
+    assert result["status"] == "handoff_required"
+    assert worker_event["payload"]["worker_result_status"] == "not_attempted"
+    assert worker_event["payload"]["backend_failure"] is False

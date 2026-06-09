@@ -1,0 +1,23 @@
+{
+  "task_id": "6e1b001e-9fcf-4d8b-8f93-22526906f370",
+  "created_at": "2026-06-07T03:52:16.225342+00:00",
+  "runner": "local_llm",
+  "category": "refactor",
+  "budget_tokens": 4000,
+  "estimated_tokens": 13,
+  "budget_status": "within_budget",
+  "items": [
+    {
+      "kind": "prompt",
+      "label": "task_prompt",
+      "role": "required",
+      "estimated_tokens": 13,
+      "rationale": "The task prompt is required to execute or supervise the task.",
+      "exists": true,
+      "size_bytes": 0,
+      "snippet": "write a script to organize a windows main desktop"
+    }
+  ],
+  "excluded_items": [],
+  "warnings": []
+}

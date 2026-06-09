@@ -1,0 +1,23 @@
+{
+  "task_id": "52da8e42-ee73-47a8-a934-a821caf41bdb",
+  "created_at": "2026-06-07T03:20:05.535190+00:00",
+  "runner": "local_llm",
+  "category": "refactor",
+  "budget_tokens": 4000,
+  "estimated_tokens": 8,
+  "budget_status": "within_budget",
+  "items": [
+    {
+      "kind": "prompt",
+      "label": "task_prompt",
+      "role": "required",
+      "estimated_tokens": 8,
+      "rationale": "The task prompt is required to execute or supervise the task.",
+      "exists": true,
+      "size_bytes": 0,
+      "snippet": "write a sonnet about spaghetti"
+    }
+  ],
+  "excluded_items": [],
+  "warnings": []
+}
