@@ -239,7 +239,7 @@ def tc_propose(cr_id: str, title: str, add_to_changelog: bool):
                     cl_content = f.read()
                     
                 entry = f"- Proposed {cr_id} ({title.replace('-', ' ').title()}): \n"
-                if entry.strip() in cl_content:
+                if cr_id in cl_content:
                     print(f"Notice: Changelog entry for {cr_id} already exists.")
                 elif "## [Unreleased]" in cl_content:
                     # Insert after ## [Unreleased]
