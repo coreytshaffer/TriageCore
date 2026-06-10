@@ -3,6 +3,7 @@ import os
 import sys
 import glob
 import subprocess
+import json
 from typing import List
 
 from triage_core.task_packet import TaskPacket, PrivacyMetadata
@@ -148,6 +149,54 @@ def tc_handoff(latest: bool, print_only: bool):
         else:
             print(f"[!] Clipboard access failed. Handoff is available at: {os.path.abspath(latest_path)}")
 
+def tc_audit(kind: str, last: int):
+    ledger_path = os.path.join(".triagecore", "ledger.jsonl")
+    if not os.path.exists(ledger_path):
+        print(f"Error: {ledger_path} not found.")
+        sys.exit(1)
+        
+    records = []
+    try:
+        with open(ledger_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    record = json.loads(line)
+                    if kind and record.get("event_type") != kind:
+                        continue
+                    records.append(record)
+                except json.JSONDecodeError:
+                    pass
+    except Exception as e:
+        print(f"Error reading {ledger_path}: {e}")
+        sys.exit(1)
+        
+    if last > 0:
+        records = records[-last:]
+        
+    if not records:
+        print(f"No records found" + (f" for kind '{kind}'" if kind else "") + ".")
+        return
+        
+    for r in records:
+        print(f"[{r.get('timestamp', 'unknown')}] Task: {r.get('task_id', 'unknown')} | Type: {r.get('event_type')}")
+        payload = r.get("payload", {})
+        if r.get("event_type") == "route_audit":
+            print(f"  Decision: {payload.get('decision')} | Reason: {payload.get('reason_code')}")
+            print(f"  Privacy: {payload.get('privacy_level')} (Scan Passed: {payload.get('privacy_scan_passed')})")
+            print(f"  Local Only: {payload.get('is_local_only')} | Route: {payload.get('recommended_route')} | Backend: {payload.get('selected_backend')}")
+        else:
+            # General safe metadata fallback
+            for k, v in payload.items():
+                if k in ["prompt", "data", "content", "raw_data", "raw_prompt"]:
+                    continue # Do not log raw prompt, raw data, or file contents
+                if isinstance(v, str) and len(v) > 200:
+                    v = v[:200] + "..."
+                print(f"  {k}: {v}")
+        print("-" * 60)
+
 def main():
     parser = argparse.ArgumentParser(description="TriageCore Operator Workflow")
     subparsers = parser.add_subparsers(dest="command")
@@ -165,12 +214,19 @@ def main():
     # status
     subparsers.add_parser("status", help="Print operator status")
 
+    # audit
+    audit_parser = subparsers.add_parser("audit", help="Inspect ledger audit events safely")
+    audit_parser.add_argument("--kind", type=str, default="route_audit", help="The event_type to filter by (default: route_audit)")
+    audit_parser.add_argument("--last", type=int, default=10, help="Number of recent records to display (default: 10)")
+
     args = parser.parse_args()
 
     if args.command == "preflight":
         tc_preflight(args.cr_id, args.files)
     elif args.command == "handoff":
         tc_handoff(args.target == "latest", args.print)
+    elif args.command == "audit":
+        tc_audit(args.kind, args.last)
     elif args.command == "status":
         print("TriageCore Operator Workflow active.")
     else:

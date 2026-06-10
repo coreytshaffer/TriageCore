@@ -5,6 +5,7 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+- Implemented CR-009 (Audit Inspection CLI): Add `audit` subcommand to inspect ledger events safely.
 - Implemented CR-008 (Route Decision Audit Trail): Introduce a deterministic, append-only audit trail for all routing decisions.
 - Implemented CR-004B (Local-Only Privacy Routing Enforcement): Enforce safety boundaries to ensure sensitive tasks never leave local execution.
 - Implemented CR-003 (Safe TaskPacket): Added `VerifiedTaskPacket`, `ExternalSafeTaskPacket`, and pre-routing boundary enforcement.
