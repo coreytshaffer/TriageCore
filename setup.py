@@ -16,6 +16,7 @@ setup(
     entry_points={
         "console_scripts": [
             "triagecore=triage_core.cli:main",
+            "tc=triage_core.tc_cli:main",
         ]
     },
     extras_require={
