@@ -51,7 +51,7 @@ Thumbs.db
 .agent_tasks/
 triage_tasks/
 reports/
-
+.triagecore/handoffs/
 # Ollama Modelfile (local path reference — not portable)
 **/**/Modelfile
 
