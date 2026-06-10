@@ -1,7 +1,7 @@
 # CR-012: Environment Doctor Cli
 
 ## Status
-Proposed
+Implemented
 
 ## Scope
 

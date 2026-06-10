@@ -252,6 +252,79 @@ def tc_propose(cr_id: str, title: str, add_to_changelog: bool):
             except Exception as e:
                 print(f"Error modifying changelog: {e}")
 
+def tc_doctor():
+    print("TriageCore Doctor")
+    print("-" * 30)
+    
+    cwd = os.getcwd()
+    print(f"CWD: {cwd}")
+    
+    try:
+        repo_root = subprocess.check_output(["git", "rev-parse", "--show-toplevel"], stderr=subprocess.DEVNULL).decode('utf-8').strip()
+        print(f"Git Repo Root: {repo_root}")
+    except Exception:
+        print("Git Repo Root: unavailable")
+        
+    print(f"Python Executable: {sys.executable}")
+    print(f"Python Version: {sys.version.split()[0]}")
+    
+    try:
+        import triage_core
+        print(f"triage_core path: {triage_core.__file__}")
+    except ImportError:
+        print("triage_core path: unavailable")
+        
+    try:
+        cmd = "where" if sys.platform == "win32" else "which"
+        tc_path = subprocess.check_output([cmd, "tc"], stderr=subprocess.DEVNULL).decode('utf-8').strip().split('\n')[0]
+        if tc_path:
+            print(f"tc path: {tc_path}")
+        else:
+            print("tc path: unavailable")
+    except Exception:
+        print("tc path: unavailable")
+        
+    try:
+        branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], stderr=subprocess.DEVNULL).decode('utf-8').strip()
+        print(f"Git Branch: {branch}")
+    except Exception:
+        print("Git Branch: unavailable")
+        
+    try:
+        status_out = subprocess.check_output(["git", "status", "--porcelain"], stderr=subprocess.DEVNULL).decode('utf-8')
+        status = "dirty" if status_out.strip() else "clean"
+        print(f"Git Status: {status}")
+    except Exception:
+        print("Git Status: unavailable")
+        
+    ledger_path = os.path.join(cwd, ".triagecore", "ledger.jsonl")
+    if os.path.exists(ledger_path):
+        print(f"Ledger Path: {ledger_path}")
+    else:
+        print("Ledger Path: unavailable")
+        
+    handoff_path = os.path.join(cwd, ".triagecore", "handoffs", "latest.md")
+    if os.path.exists(handoff_path):
+        print(f"Handoff Latest: {handoff_path}")
+    else:
+        print("Handoff Latest: unavailable")
+        
+    pyproject_path = os.path.join(cwd, "pyproject.toml")
+    if os.path.exists(pyproject_path):
+        print(f"pytest config: {pyproject_path}")
+        try:
+            with open(pyproject_path, "r", encoding="utf-8") as f:
+                content = f.read()
+                if 'norecursedirs = ["scratch"]' in content or "norecursedirs = ['scratch']" in content:
+                    print("Scratch Excluded: yes")
+                else:
+                    print("Scratch Excluded: no")
+        except Exception:
+            print("Scratch Excluded: unavailable")
+    else:
+        print("pytest config: unavailable")
+        print("Scratch Excluded: unavailable")
+
 def main():
     parser = argparse.ArgumentParser(description="TriageCore Operator Workflow")
     subparsers = parser.add_subparsers(dest="command")
@@ -280,6 +353,9 @@ def main():
     propose_parser.add_argument("title", type=str, nargs="+", help="The title of the change request")
     propose_parser.add_argument("--changelog", action="store_true", help="Automatically add to changelog")
 
+    # doctor
+    subparsers.add_parser("doctor", help="Print a TriageCore environment report")
+
     args = parser.parse_args()
 
     if args.command == "propose":
@@ -293,6 +369,8 @@ def main():
         tc_audit(args.kind, args.last)
     elif args.command == "status":
         print("TriageCore Operator Workflow active.")
+    elif args.command == "doctor":
+        tc_doctor()
     else:
         parser.print_help()
 
