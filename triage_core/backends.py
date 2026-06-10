@@ -2,11 +2,18 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Protocol, Callable
 import json
 import os
+import urllib.parse
 
 import requests
 
 
 _AUTO_MODEL_SENTINELS = {"", "auto", "loaded-model", "local-model"}
+
+
+class BackendUnavailableError(Exception):
+    """Raised when a local backend is offline, unreachable, or times out."""
+    pass
+
 
 
 @dataclass
@@ -34,6 +41,9 @@ class LocalBackend(Protocol):
         ...
 
     def ping(self, timeout: float = 1.0) -> bool:
+        ...
+
+    def get_sanitized_uri(self) -> str:
         ...
 
 
@@ -80,6 +90,10 @@ class OpenAICompatibleBackend:
     model: str = "auto"
     api_key: str = "not-needed"
 
+    def get_sanitized_uri(self) -> str:
+        parsed = urllib.parse.urlparse(self.base_url)
+        return f"{parsed.scheme}://{parsed.hostname}" + (f":{parsed.port}" if parsed.port else "") + parsed.path
+
     def resolve_model(self, timeout: float = 1.0) -> str:
         if self.model and self.model not in _AUTO_MODEL_SENTINELS:
             return self.model
@@ -118,8 +132,11 @@ class OpenAICompatibleBackend:
 
         if stream_callback:
             payload["stream"] = True
-            response = requests.post(url, json=payload, timeout=timeout, stream=True)
-            response.raise_for_status()
+            try:
+                response = requests.post(url, json=payload, timeout=timeout, stream=True)
+                response.raise_for_status()
+            except requests.exceptions.RequestException as e:
+                raise BackendUnavailableError(f"OpenAI compatible backend unavailable at {url}: {e}")
 
             text_parts = []
             final_usage = {}
@@ -155,10 +172,13 @@ class OpenAICompatibleBackend:
                 backend_name=self.name,
             )
 
-        response = requests.post(url, json=payload, timeout=timeout)
-        if not response.ok:
-            print(f"Backend Error Output: {response.text}")
-        response.raise_for_status()
+        try:
+            response = requests.post(url, json=payload, timeout=timeout)
+            if not response.ok:
+                print(f"Backend Error Output: {response.text}")
+            response.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            raise BackendUnavailableError(f"OpenAI compatible backend unavailable at {url}: {e}")
 
         data = response.json()
         choices = data.get("choices", [])
@@ -199,6 +219,10 @@ class OllamaBackend:
     name: str = "ollama"
     base_url: str = "http://localhost:11434"
     model: str = "auto"
+
+    def get_sanitized_uri(self) -> str:
+        parsed = urllib.parse.urlparse(self.base_url)
+        return f"{parsed.scheme}://{parsed.hostname}" + (f":{parsed.port}" if parsed.port else "") + parsed.path
 
     def resolve_model(self, timeout: float = 1.0) -> str:
         if self.model and self.model not in _AUTO_MODEL_SENTINELS:
@@ -244,8 +268,11 @@ class OllamaBackend:
         payload.update(kwargs)
 
         if stream_callback:
-            response = requests.post(url, json=payload, timeout=timeout, stream=True)
-            response.raise_for_status()
+            try:
+                response = requests.post(url, json=payload, timeout=timeout, stream=True)
+                response.raise_for_status()
+            except requests.exceptions.RequestException as e:
+                raise BackendUnavailableError(f"Ollama backend unavailable at {url}: {e}")
             text_parts: List[str] = []
             final_raw: Dict[str, Any] = {}
             for line in response.iter_lines():
@@ -272,10 +299,13 @@ class OllamaBackend:
                 backend_name=self.name,
             )
 
-        response = requests.post(url, json=payload, timeout=timeout)
-        if not response.ok:
-            print(f"Backend Error Output: {response.text}")
-        response.raise_for_status()
+        try:
+            response = requests.post(url, json=payload, timeout=timeout)
+            if not response.ok:
+                print(f"Backend Error Output: {response.text}")
+            response.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            raise BackendUnavailableError(f"Ollama backend unavailable at {url}: {e}")
         data = response.json()
         message = data.get("message") or {}
         text = message.get("content")

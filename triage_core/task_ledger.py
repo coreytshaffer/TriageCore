@@ -36,6 +36,44 @@ class TaskRecord:
     early_stop_reason: str = ""
     firewall_triggered: bool = False
     firewall_reason: str = ""
+import csv
+import dataclasses
+import json
+import os
+import uuid
+from datetime import datetime, timezone
+from dataclasses import dataclass, field
+from typing import Dict, Any, List, Optional
+
+LEDGER_SCHEMA_VERSION = "0.2.0"
+ROLE_TAXONOMY_VERSION = "2026-06-worker-council-v2"
+
+
+@dataclass
+class TaskRecord:
+    task_id: str
+    schema_version: Optional[str] = None
+    role_taxonomy_version: Optional[str] = None
+    created_at: str = ""
+    updated_at: str = ""
+    title: str = ""
+    description: str = ""
+    target_files: List[str] = field(default_factory=list)
+    runner: Optional[str] = None
+    status: str = "pending"
+    study_id: Optional[str] = None
+    run_id: Optional[str] = None
+    permission_profile: Optional[str] = None
+    risk_level: Optional[str] = None
+    energy_kwh_estimate: float = 0.0
+    emissions_gco2e_estimate: float = 0.0
+    grid_intensity_gco2e_per_kwh: float = 0.0
+    grid_intensity_source: str = "static_config"
+    wasted_tokens: int = 0
+    early_stopped: bool = False
+    early_stop_reason: str = ""
+    firewall_triggered: bool = False
+    firewall_reason: str = ""
     credit_allowance_total: int = 0
     credit_allowance_used: int = 0
     credit_allowance_remaining: int = 0
@@ -45,6 +83,8 @@ class TaskRecord:
     backend_name: Optional[str] = None
     model: Optional[str] = None
     backend: Optional[str] = None          # alias used by worker_registry
+    backend_uri: Optional[str] = None
+    execution_node: str = "localhost"
     benchmark_task_id: Optional[str] = None
     benchmark_category: Optional[str] = None
     expected_status: Optional[str] = None
@@ -468,37 +508,15 @@ class TaskLedger:
                 record.selected_backend = payload["selected_backend"]
             if "selected_model" in payload and payload["selected_model"]:
                 record.model = payload["selected_model"]
+            if "backend_uri" in payload:
+                record.backend_uri = payload["backend_uri"]
+            if "execution_node" in payload:
+                record.execution_node = payload["execution_node"]
         elif etype == "task_blocked":
             record.status = "blocked"
             record.handoff_reason = payload.get("reason", record.handoff_reason)
             record.human_review_required = True
             self._apply_story_118_signals(record, payload)
-            if "input_tokens" in payload:
-                record.input_tokens = payload["input_tokens"]
-            if "output_tokens" in payload:
-                record.output_tokens = payload["output_tokens"]
-            if "total_tokens" in payload:
-                record.total_tokens = payload["total_tokens"]
-            if "wasted_tokens" in payload:
-                record.wasted_tokens = payload["wasted_tokens"]
-
-    @staticmethod
-    def _apply_model_evaluation(record: TaskRecord, payload: Dict[str, Any]) -> None:
-        """Apply benchmark/model evaluation fields from a payload dict."""
-        if "backend_name" in payload:
-            record.backend_name = payload["backend_name"]
-        if "study_id" in payload:
-            record.study_id = payload["study_id"]
-        if "run_id" in payload:
-            record.run_id = payload["run_id"]
-        if "model" in payload:
-            record.model = payload["model"]
-        if "benchmark_task_id" in payload:
-            record.benchmark_task_id = payload["benchmark_task_id"]
-        if "benchmark_category" in payload:
-            record.benchmark_category = payload["benchmark_category"]
-        if "expected_status" in payload:
-            record.expected_status = payload["expected_status"]
         if "observed_status" in payload:
             record.observed_status = payload["observed_status"]
         if "timeout_seconds" in payload:
@@ -536,6 +554,29 @@ class TaskLedger:
             record.validator_version = payload["validator_version"]
         if "validator_scope" in payload:
             record.validator_scope = payload["validator_scope"]
+
+
+    @staticmethod
+    def _apply_model_evaluation(record: TaskRecord, payload: Dict[str, Any]) -> None:
+        """Apply benchmark/model evaluation fields from a payload dict."""
+        if "backend_name" in payload:
+            record.backend_name = payload["backend_name"]
+        if "study_id" in payload:
+            record.study_id = payload["study_id"]
+        if "run_id" in payload:
+            record.run_id = payload["run_id"]
+        if "model" in payload:
+            record.model = payload["model"]
+        if "backend_uri" in payload:
+            record.backend_uri = payload["backend_uri"]
+        if "execution_node" in payload:
+            record.execution_node = payload["execution_node"]
+        if "benchmark_task_id" in payload:
+            record.benchmark_task_id = payload["benchmark_task_id"]
+        if "benchmark_category" in payload:
+            record.benchmark_category = payload["benchmark_category"]
+        if "expected_status" in payload:
+            record.expected_status = payload["expected_status"]
 
     @staticmethod
     def _apply_story_118_signals(record: TaskRecord, payload: Dict[str, Any]) -> None:

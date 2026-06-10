@@ -9,6 +9,7 @@ from .routing import (
     choose_resilience_route,
 )
 from .task_ledger import TaskLedger
+from .privacy_scanner import scan_task_packet, PrivacyViolationError
 
 class TriageClient:
     def __init__(
@@ -37,11 +38,12 @@ class TriageClient:
 
     def run_task(
         self,
-        prompt: str,
-        data: str,
+        prompt: Optional[str] = None,
+        data: Optional[str] = None,
         validator: Optional[Callable[[str], bool]] = None,
         ledger: Optional[TaskLedger] = None,
         task_id: Optional[str] = None,
+        task_packet: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """
         Runs a given prompt and data through the execution engine.
@@ -51,13 +53,57 @@ class TriageClient:
         """
         from .classifier import TaskClassifier
         from .project_steward import ProjectSteward
+        from .task_packet import TaskPacket
+
+        if task_packet is None:
+            if prompt is None or data is None:
+                raise ValueError("Must provide either a task_packet or both prompt and data.")
+            task_packet = TaskPacket(
+                prompt=prompt,
+                data=data,
+                task_id=task_id,
+                validator=validator,
+                # Legacy inputs get default public metadata
+            )
+        else:
+            prompt = task_packet.prompt
+            data = task_packet.data
+            validator = task_packet.validator
+            if task_packet.task_id is not None:
+                task_id = task_packet.task_id
+        
+        from .safe_task_packet import verify_packet, VerifiedTaskPacket, UnsafePacketError, make_external_safe_packet, LocalRouteUnavailableError
+        
+        verified_packet = verify_packet(task_packet)
+        if not isinstance(verified_packet, VerifiedTaskPacket):
+            raise UnsafePacketError("Only VerifiedTaskPacket may enter routing boundary.")
+            
+        try:
+            make_external_safe_packet(verified_packet)
+            is_local_only = False
+        except UnsafePacketError:
+            is_local_only = True
+            
+        prompt = verified_packet.prompt
+        data = verified_packet.data
         
         # Step 1: Routing logic
         category = TaskClassifier.classify(prompt)
         route_decision = self.router.specialist.route_task(category, prompt, data)
         use_timeout = route_decision.get("timeout", self.engine.timeout)
         resilience_input = self._build_resilience_route_input(category=category, validator=validator)
+        
+        if is_local_only:
+            resilience_input.privacy_level = "local_only"
+            
         resilience_decision = choose_resilience_route(resilience_input)
+        
+        # Ensure local-only packets only use explicitly local routes
+        if is_local_only:
+            if resilience_decision.selected_route not in ["local_heavy", "local_fast", "deterministic"]:
+                raise LocalRouteUnavailableError(f"Local backend unavailable or route '{resilience_decision.selected_route}' is not proven local-safe for local-only packet. Failing closed.")
+            if route_decision.get("offload_recommended", False):
+                raise LocalRouteUnavailableError("Specialist router recommended offload for a local-only packet. Failing closed.")
         route_payload = build_route_decision_payload(
             resilience_input,
             resilience_decision,

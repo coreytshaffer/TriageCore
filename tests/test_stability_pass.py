@@ -13,7 +13,7 @@ class FakeClient:
         self.outcomes = outcomes
         self.call_count = 0
 
-    def run_task(self, prompt, data, validator=None):
+    def run_task(self, prompt=None, data=None, validator=None, **kwargs):
         out = self.outcomes[min(self.call_count, len(self.outcomes) - 1)]
         self.call_count += 1
         return out

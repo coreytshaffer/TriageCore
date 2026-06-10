@@ -529,3 +529,24 @@ def test_legacy_accepted_boolean_does_not_imply_resolved():
         assert record.artifact_status == "reviewed"
         assert record.task_outcome == "unresolved"
         assert record.review_decision == "accepted"
+
+def test_ledger_tracks_provenance_fields():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        ledger = TaskLedger(ledger_dir=temp_dir)
+        task_id = str(uuid.uuid4())
+
+        ledger.append_event(task_id, "task_created", {
+            "title": "Evaluate local model provenance",
+        })
+        ledger.append_event(task_id, "model_evaluated", {
+            "backend_name": "ollama",
+            "backend_uri": "http://localhost:11434",
+            "execution_node": "localhost",
+            "model": "qwen2.5-coder:7b"
+        })
+
+        record = ledger.get_task(task_id)
+
+        assert record is not None
+        assert record.backend_uri == "http://localhost:11434"
+        assert record.execution_node == "localhost"

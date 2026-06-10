@@ -1,6 +1,7 @@
 from triage_core.backends import BackendResponse
 from triage_core.client import TriageClient
 from triage_core.task_ledger import TaskLedger
+from triage_core.task_packet import TaskPacket, PrivacyMetadata
 
 import tempfile
 import uuid
@@ -125,6 +126,19 @@ def test_router_safety_handoff_is_not_counted_as_backend_failure():
     assert result["worker_result_status"] == "not_attempted"
     assert result["failure_type"] == "safety_handoff"
     assert result["failure_stage"] == "router"
+
+def test_client_run_task_with_explicit_task_packet():
+    client = TriageClient(backend=RecordingBackend())
+    metadata = PrivacyMetadata(data_class="restricted", external_model_allowed=False)
+    packet = TaskPacket(
+        prompt="Analyze sensitive data",
+        data="Name: Secret",
+        privacy_metadata=metadata,
+        task_id="tp-001"
+    )
+    result = client.run_task(task_packet=packet)
+    assert result["status"] == "success"
+    assert result["output"] == "LOCAL_RAN"
 
 
 def test_run_task_writes_route_decision_and_worker_result_events():
