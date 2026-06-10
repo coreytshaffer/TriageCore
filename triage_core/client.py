@@ -73,16 +73,36 @@ class TriageClient:
                 task_id = task_packet.task_id
         
         from .safe_task_packet import verify_packet, VerifiedTaskPacket, UnsafePacketError, make_external_safe_packet, LocalRouteUnavailableError
+        from .privacy_scanner import PrivacyViolationError
+        from .route_audit import RouteDecisionAudit
         
-        verified_packet = verify_packet(task_packet)
+        try:
+            verified_packet = verify_packet(task_packet)
+            scan_passed = True
+        except PrivacyViolationError:
+            audit = RouteDecisionAudit(
+                task_id=task_id,
+                privacy_level="unknown",
+                privacy_scan_passed=False,
+                is_local_only=True,
+                recommended_route=None,
+                selected_backend=None,
+                decision="blocked",
+                reason_code="privacy_violation"
+            )
+            self._append_optional_event(ledger, task_id, "route_audit", audit.to_dict())
+            raise
+            
         if not isinstance(verified_packet, VerifiedTaskPacket):
             raise UnsafePacketError("Only VerifiedTaskPacket may enter routing boundary.")
             
         try:
             make_external_safe_packet(verified_packet)
             is_local_only = False
+            privacy_level = "external_safe"
         except UnsafePacketError:
             is_local_only = True
+            privacy_level = "local_only"
             
         prompt = verified_packet.prompt
         data = verified_packet.data
@@ -97,13 +117,32 @@ class TriageClient:
             resilience_input.privacy_level = "local_only"
             
         resilience_decision = choose_resilience_route(resilience_input)
+        selected_route = resilience_decision.selected_route
+        selected_backend_name = getattr(self.engine.backend, "name", "")
         
         # Ensure local-only packets only use explicitly local routes
         if is_local_only:
-            if resilience_decision.selected_route not in ["local_heavy", "local_fast", "deterministic"]:
-                raise LocalRouteUnavailableError(f"Local backend unavailable or route '{resilience_decision.selected_route}' is not proven local-safe for local-only packet. Failing closed.")
+            if selected_route not in ["local_heavy", "local_fast", "deterministic"]:
+                audit = RouteDecisionAudit(task_id, privacy_level, True, True, selected_route, selected_backend_name, "blocked", "ambiguous_or_remote_route")
+                self._append_optional_event(ledger, task_id, "route_audit", audit.to_dict())
+                raise LocalRouteUnavailableError(f"Local backend unavailable or route '{selected_route}' is not proven local-safe for local-only packet. Failing closed.")
             if route_decision.get("offload_recommended", False):
+                audit = RouteDecisionAudit(task_id, privacy_level, True, True, selected_route, selected_backend_name, "blocked", "offload_recommended_for_local_only")
+                self._append_optional_event(ledger, task_id, "route_audit", audit.to_dict())
                 raise LocalRouteUnavailableError("Specialist router recommended offload for a local-only packet. Failing closed.")
+        
+        # Allowed Route Audit
+        audit = RouteDecisionAudit(
+            task_id=task_id,
+            privacy_level=privacy_level,
+            privacy_scan_passed=True,
+            is_local_only=is_local_only,
+            recommended_route=selected_route,
+            selected_backend=selected_backend_name,
+            decision="allowed",
+            reason_code="route_allowed"
+        )
+        self._append_optional_event(ledger, task_id, "route_audit", audit.to_dict())
         route_payload = build_route_decision_payload(
             resilience_input,
             resilience_decision,
