@@ -197,6 +197,61 @@ def tc_audit(kind: str, last: int):
                 print(f"  {k}: {v}")
         print("-" * 60)
 
+import re
+
+def _slugify(text: str) -> str:
+    text = text.lower()
+    text = re.sub(r'[^a-z0-9]+', '-', text)
+    return text.strip('-')
+
+def tc_propose(cr_id: str, title: str, add_to_changelog: bool):
+    if not re.match(r"^CR-\d{3}[A-Z]?$", cr_id):
+        print(f"Error: Invalid CR ID format '{cr_id}'. Expected format like CR-003 or CR-004B.")
+        sys.exit(1)
+        
+    slug = _slugify(title)
+    if not slug:
+        print("Error: Invalid title for slugification.")
+        sys.exit(1)
+        
+    filename = f"docs/change/requests/{cr_id}-{slug}.md"
+    if os.path.exists(filename):
+        print(f"Error: File '{filename}' already exists. Refusing to overwrite.")
+        sys.exit(1)
+        
+    os.makedirs(os.path.dirname(filename), exist_ok=True)
+    
+    content = f"# {cr_id}: {title.replace('-', ' ').title()}\n\n## Status\nProposed\n\n## Scope\n\n\n## Implementation Authority\nNot authorized for implementation. This CR must be approved prior to any code changes.\n\n## Description\n\n\n## Acceptance Criteria\n- [ ] \n"
+    
+    try:
+        with open(filename, "w", encoding="utf-8") as f:
+            f.write(content)
+        print(f"Success: Created proposal template at '{filename}'")
+    except Exception as e:
+        print(f"Error writing to '{filename}': {e}")
+        sys.exit(1)
+        
+    if add_to_changelog:
+        cl_path = "docs/change/change_log.md"
+        if os.path.exists(cl_path):
+            try:
+                with open(cl_path, "r", encoding="utf-8") as f:
+                    cl_content = f.read()
+                    
+                entry = f"- Proposed {cr_id} ({title.replace('-', ' ').title()}): \n"
+                if entry.strip() in cl_content:
+                    print(f"Notice: Changelog entry for {cr_id} already exists.")
+                elif "## [Unreleased]" in cl_content:
+                    # Insert after ## [Unreleased]
+                    new_cl = cl_content.replace("## [Unreleased]\n", f"## [Unreleased]\n{entry}")
+                    with open(cl_path, "w", encoding="utf-8") as f:
+                        f.write(new_cl)
+                    print(f"Success: Added '{cr_id}' to [Unreleased] in changelog.")
+                else:
+                    print("Error: Could not find '## [Unreleased]' section in changelog.")
+            except Exception as e:
+                print(f"Error modifying changelog: {e}")
+
 def main():
     parser = argparse.ArgumentParser(description="TriageCore Operator Workflow")
     subparsers = parser.add_subparsers(dest="command")
@@ -219,9 +274,18 @@ def main():
     audit_parser.add_argument("--kind", type=str, default="route_audit", help="The event_type to filter by (default: route_audit)")
     audit_parser.add_argument("--last", type=int, default=10, help="Number of recent records to display (default: 10)")
 
+    # propose
+    propose_parser = subparsers.add_parser("propose", help="Scaffold a new Change Request")
+    propose_parser.add_argument("cr_id", type=str, help="The CR ID (e.g., CR-012)")
+    propose_parser.add_argument("title", type=str, nargs="+", help="The title of the change request")
+    propose_parser.add_argument("--changelog", action="store_true", help="Automatically add to changelog")
+
     args = parser.parse_args()
 
-    if args.command == "preflight":
+    if args.command == "propose":
+        title_str = " ".join(args.title)
+        tc_propose(args.cr_id, title_str, args.changelog)
+    elif args.command == "preflight":
         tc_preflight(args.cr_id, args.files)
     elif args.command == "handoff":
         tc_handoff(args.target == "latest", args.print)
