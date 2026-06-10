@@ -7,7 +7,7 @@ Implemented
 Introduce a `tc propose` subcommand to the `tc_cli` utility. This command will generate a new boilerplate Change Request markdown file in `docs/change/requests/` using an explicit CR ID.
 
 ## Implementation Authority
-Not authorized for implementation. This CR must be approved prior to any code changes.
+Implemented after operator approval. Future changes to this command require a new CR or explicit operator approval.
 
 ## Description
 Currently, when proposing a new Change Request, the operator or agent must manually create the file, and copy-paste boilerplate markdown (Status, Scope, Implementation Authority, Description, Acceptance Criteria).
