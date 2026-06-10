@@ -38,3 +38,7 @@ mobile = [
 [project.scripts]
 triagecore = "triage_core.cli:main"
 tc = "triage_core.tc_cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = ["scratch"]
