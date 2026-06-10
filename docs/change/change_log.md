@@ -5,7 +5,7 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
-- Proposed CR-011 (Change Request Scaffold CLI): Add `tc propose` command to automate CR boilerplate generation.
+- Implemented CR-011 (Change Request Scaffold CLI): Add `tc propose` command to automate CR boilerplate generation.
 - Implemented CR-010 (Audit CLI Test Hardening): Add regression tests for the `tc audit` subcommand.
 - Implemented CR-009 (Audit Inspection CLI): Add `audit` subcommand to inspect ledger events safely.
 - Implemented CR-008 (Route Decision Audit Trail): Introduce a deterministic, append-only audit trail for all routing decisions.
