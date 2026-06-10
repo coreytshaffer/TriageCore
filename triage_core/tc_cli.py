@@ -259,6 +259,7 @@ def tc_doctor():
     cwd = os.getcwd()
     print(f"CWD: {cwd}")
     
+    repo_root = ""
     try:
         repo_root = subprocess.check_output(["git", "rev-parse", "--show-toplevel"], stderr=subprocess.DEVNULL).decode('utf-8').strip()
         print(f"Git Repo Root: {repo_root}")
@@ -297,19 +298,21 @@ def tc_doctor():
     except Exception:
         print("Git Status: unavailable")
         
-    ledger_path = os.path.join(cwd, ".triagecore", "ledger.jsonl")
+    base_dir = repo_root if repo_root else cwd
+    
+    ledger_path = os.path.join(base_dir, ".triagecore", "ledger.jsonl")
     if os.path.exists(ledger_path):
         print(f"Ledger Path: {ledger_path}")
     else:
         print("Ledger Path: unavailable")
         
-    handoff_path = os.path.join(cwd, ".triagecore", "handoffs", "latest.md")
+    handoff_path = os.path.join(base_dir, ".triagecore", "handoffs", "latest.md")
     if os.path.exists(handoff_path):
         print(f"Handoff Latest: {handoff_path}")
     else:
         print("Handoff Latest: unavailable")
         
-    pyproject_path = os.path.join(cwd, "pyproject.toml")
+    pyproject_path = os.path.join(base_dir, "pyproject.toml")
     if os.path.exists(pyproject_path):
         print(f"pytest config: {pyproject_path}")
         try:
