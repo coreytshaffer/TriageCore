@@ -10,9 +10,9 @@ Its job is not to replace operator judgment. Its job is to keep AI-assisted work
 
 Read these in order:
 
-1. [judge_quickstart.md](C:/Users/corey/Documents/Science/AI/triagecore/docs/submission/judge_quickstart.md)
-2. [track_mapping.md](C:/Users/corey/Documents/Science/AI/triagecore/docs/submission/track_mapping.md)
-3. [claim_boundaries.md](C:/Users/corey/Documents/Science/AI/triagecore/docs/submission/claim_boundaries.md)
+1. [judge_quickstart.md](judge_quickstart.md)
+2. [track_mapping.md](track_mapping.md)
+3. [claim_boundaries.md](claim_boundaries.md)
 
 ## What Problem This Addresses
 
@@ -69,7 +69,7 @@ Use the existing command path:
 
 ```powershell
 tc doctor
-tc preflight CR-014
+tc preflight CR-017
 tc handoff latest --print
 tc audit --self-test
 tc audit --kind route_audit --last 10
@@ -85,14 +85,16 @@ git status
 ## Expected Outputs
 
 - `tc doctor` confirms repo-root, Python, CLI, ledger, and pytest visibility.
-- `tc preflight CR-014` writes a handoff artifact under `.triagecore/handoffs/`.
+- `tc preflight CR-017` writes a handoff artifact under `.triagecore/handoffs/`.
 - `tc handoff latest --print` prints a reviewable handoff packet.
 - `tc audit --self-test` writes one privacy-safe `route_audit` event.
 - `tc audit --kind route_audit --last 10` shows routing metadata without raw payload fields.
 
 ## Related Docs
 
-- [judge_quickstart.md](C:/Users/corey/Documents/Science/AI/triagecore/docs/submission/judge_quickstart.md)
-- [track_mapping.md](C:/Users/corey/Documents/Science/AI/triagecore/docs/submission/track_mapping.md)
-- [claim_boundaries.md](C:/Users/corey/Documents/Science/AI/triagecore/docs/submission/claim_boundaries.md)
-- [hackathon_demo.md](C:/Users/corey/Documents/Science/AI/triagecore/docs/workflows/hackathon_demo.md)
+- [judge_quickstart.md](judge_quickstart.md)
+- [track_mapping.md](track_mapping.md)
+- [claim_boundaries.md](claim_boundaries.md)
+- [hackathon_demo.md](../workflows/hackathon_demo.md)
+
+

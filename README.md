@@ -2,22 +2,109 @@
 
 **A Local-First Developer-Agent Control Harness**
 
-TriageCore provides safety rails, task classification, and structured handoff packets for AI coding agents. Instead of giving agents unbounded access or treating expensive cloud models as an automatic fallback, TriageCore evaluates tasks locally using a TaskClassifier and a Local Worker Council. It assigns permission profiles and generates `.md` packets (Handoff Packets) so that cloud models act as supervisors (like Codex and Antigravity) rather than primary executors.
+TriageCore is an early research workbench for AI-assisted software work that keeps local control, reviewable artifacts, and privacy boundaries visible to the operator. It can generate preflight and handoff packets, inspect privacy-safe route audit events, run local benchmark/report workflows, and support a bounded Qwen Cloud path for external-safe packets. The project is real and runnable today, but it should be read as a prototype and research harness, not a finished production framework. Cloud supervisors are optional and intentional here, not the default path for every task.
 
-## Permacomputing Orientation
+> **Status**
+> TriageCore is active as a local-first prototype/workbench. Current capabilities, supporting docs, tests, and demo paths are in-repo now. Broader governance, release polish, and long-term environmental-edge integrations should be treated as ongoing work, not completed product claims.
 
-TriageCore is inspired by sustainable and permacomputing practices that emphasize sufficiency, repairability, visible infrastructure, and graceful operation under constraints.
+## What It Does Today
 
-Rather than optimizing for maximum automation, TriageCore optimizes for bounded, reviewable, locally controlled developer-agent work.
+- Verifies operator environment and local repo state with `tc doctor`.
+- Generates reviewable preflight and handoff artifacts with `tc preflight` and `tc handoff`.
+- Records and inspects privacy-safe route audit events with `tc audit`.
+- Supports local benchmark fixtures and benchmark reports without hiding the evidence trail.
+- Enforces local-only privacy boundaries before any optional external-safe Qwen Cloud path is considered.
 
-**Design commitments:**
-- Prefer local files over remote services.
-- Prefer Markdown, JSON, and TOML over opaque state.
-- Prefer small task packets over broad autonomous sessions.
-- Prefer explicit permission recommendations over silent execution.
-- Prefer deferral or refusal when a task is too broad, risky, or wasteful.
-- Preserve human review as a first-class part of the workflow.
-- Treat compute, attention, battery, trust, and hardware lifespan as scarce resources.
+## Why It Matters
+
+- It makes local vs cloud execution explicit instead of burying that decision inside an agent loop.
+- It preserves human review, permission boundaries, and fail-closed local-only handling as core workflow rules.
+- It produces inspectable artifacts and route evidence instead of relying on vague autonomy claims.
+- It is useful today as safer AI-assisted SDLC framing and useful later as a control pattern for environmental edge workflows.
+
+## Current, Planned, And Research Framing
+
+**Current capabilities**
+- local-first operator workflow
+- route audit inspection
+- benchmark scaffolding and reports
+- bounded Qwen Cloud escalation for external-safe packets only
+
+**Planned / future-facing**
+- public release polish such as CI badge, release tagging, and GitHub metadata
+- deeper environmental-edge packaging around Clear Lake Watch style workflows
+
+**Research framing**
+- methodology, evidence schema, and benchmark comparison docs remain first-class because the project is also an evaluation workbench, not only a tool wrapper
+
+## 5-Minute Reviewer Path
+
+Install locally:
+
+```bash
+git clone https://github.com/coreytshaffer/TriageCore
+cd TriageCore
+pip install -e .
+```
+
+Then run:
+
+```powershell
+tc doctor
+tc preflight CR-017
+tc handoff latest --print
+tc audit --self-test
+tc audit --kind route_audit --last 10
+triagecore benchmark --list-only
+```
+
+Expected outputs:
+
+- `tc doctor` confirms repo root, Python, CLI path, ledger path, and pytest visibility.
+- `tc preflight CR-017` writes a handoff artifact under `.triagecore/handoffs/`.
+- `tc handoff latest --print` prints a reviewable handoff packet.
+- `tc audit --self-test` writes one privacy-safe `route_audit` event.
+- `tc audit --kind route_audit --last 10` shows routing metadata without raw prompt/data leakage.
+- `triagecore benchmark --list-only` shows the benchmark fixture set without contacting a backend.
+
+Sample audit transcript:
+
+```text
+> tc audit --self-test
+Success: Wrote privacy-safe route_audit self-test event to ...\.triagecore\ledger.jsonl.
+
+> tc audit --kind route_audit --last 10
+[2026-06-11T03:39:17.292773+00:00] Task: audit-self-test | Type: route_audit
+  Decision: allowed | Reason: audit_self_test
+  Privacy: public (Scan Passed: True)
+  Local Only: False | Route: self_test | Backend: self_test
+```
+
+Start here if you want the shortest guided path:
+
+- [Hackathon Demo](docs/workflows/hackathon_demo.md)
+- [Judge Submission Bundle](docs/submission/README.md)
+- [Verification Guide](docs/verification_guide.md)
+- [Evidence Schema](docs/evidence_schema.md)
+- [Benchmark Fixtures](benchmarks/tasks.jsonl)
+- [Public Evidence Example](docs/submission/public_evidence_example.md)
+
+## Proof Markers
+
+Current in-repo proof markers:
+
+- a runnable reviewer path using existing commands
+- a judge-facing submission bundle under [`docs/submission/`](docs/submission/README.md)
+- a privacy-safe route audit self-test and public evidence example
+- benchmark fixtures and benchmark-report scaffolding
+- a full offline-oriented test suite runnable with `python -m pytest -q`
+
+Proof markers that still depend on GitHub/release state rather than repository files:
+
+- CI/test badge
+- first release tag
+- GitHub About description
+- GitHub topics
 
 ## Installation
 
@@ -27,42 +114,6 @@ You can install TriageCore locally for CLI access:
 git clone https://github.com/coreytshaffer/TriageCore
 cd TriageCore
 pip install -e .
-```
-
-## Pluggable Local Backends
-
-TriageCore supports pluggable backends so you can process tasks against any local runner without manually wrangling URLs. All local generations route through a unified `OpenAICompatibleBackend` adapter.
-
-You can configure your `TriageClient` with the following presets:
-
-### 1. Ollama (Default: `http://localhost:11434/v1`)
-```python
-from triage_core import TriageClient
-
-client = TriageClient(backend_type="ollama", model="qwen2.5-coder:7b")
-```
-
-### 2. vLLM (Default: `http://localhost:8000/v1`)
-```python
-client = TriageClient(backend_type="vllm", model="Qwen/Qwen2.5-Coder-7B-Instruct")
-```
-
-### 3. llama.cpp (Default: `http://localhost:8080/v1`)
-```python
-client = TriageClient(backend_type="llama.cpp", model="local-model")
-```
-
-### 4. Custom Backend (e.g., LM Studio)
-```python
-from triage_core.backends import OpenAICompatibleBackend
-from triage_core import TriageClient
-
-backend = OpenAICompatibleBackend(
-    name="lmstudio",
-    base_url="http://localhost:1234/v1",
-    model="local-model"
-)
-client = TriageClient(backend=backend)
 ```
 
 ## Features
@@ -98,6 +149,42 @@ triagecore audit <task_id> --files src/main.py
 - **Profile Adherence:** Blocks changes if the task was rated `read-only`.
 - **Escalation Detection:** Static analysis checks for `requests`, `socket`, `subprocess`, etc., if the task was classified as low-risk.
 
+## Pluggable Local Backends
+
+TriageCore supports pluggable backends so you can process tasks against any local runner without manually wrangling URLs. All local generations route through a unified `OpenAICompatibleBackend` adapter, and the Qwen Cloud path stays bounded behind explicit external-safe routing.
+
+You can configure your `TriageClient` with the following presets:
+
+### 1. Ollama (Default: `http://localhost:11434/v1`)
+```python
+from triage_core import TriageClient
+
+client = TriageClient(backend_type="ollama", model="qwen2.5-coder:7b")
+```
+
+### 2. vLLM (Default: `http://localhost:8000/v1`)
+```python
+client = TriageClient(backend_type="vllm", model="Qwen/Qwen2.5-Coder-7B-Instruct")
+```
+
+### 3. llama.cpp (Default: `http://localhost:8080/v1`)
+```python
+client = TriageClient(backend_type="llama.cpp", model="local-model")
+```
+
+### 4. Custom Backend (e.g. LM Studio)
+```python
+from triage_core.backends import OpenAICompatibleBackend
+from triage_core import TriageClient
+
+backend = OpenAICompatibleBackend(
+    name="lmstudio",
+    base_url="http://localhost:1234/v1",
+    model="local-model"
+)
+client = TriageClient(backend=backend)
+```
+
 ## Scientific Methodology
 
 TriageCore is also being developed as a scientific model evaluation and token-balancing workbench. Each task attempt can be treated as an experimental observation that records routing decisions, backend behavior, token use, validation outcomes, energy estimates, and human review results.
@@ -107,6 +194,21 @@ The project methodology is documented in [`docs/methodology.md`](docs/methodolog
 The shared evidence schema is documented in [`docs/evidence_schema.md`](docs/evidence_schema.md). The first repeatable study plan is [`docs/study_001_local_model_baseline.md`](docs/study_001_local_model_baseline.md), model/backend comparison is planned in [`docs/study_002_model_backend_comparison.md`](docs/study_002_model_backend_comparison.md), and Codex/Antigravity supervision is described in [`docs/codex_antigravity_bridge.md`](docs/codex_antigravity_bridge.md).
 
 Use [`docs/verification_guide.md`](docs/verification_guide.md) for practical code, UI, study-evidence, and human-review verification checks.
+
+## Permacomputing Orientation
+
+TriageCore is inspired by sustainable and permacomputing practices that emphasize sufficiency, repairability, visible infrastructure, and graceful operation under constraints.
+
+Rather than optimizing for maximum automation, TriageCore optimizes for bounded, reviewable, locally controlled developer-agent work.
+
+**Design commitments:**
+- Prefer local files over remote services.
+- Prefer Markdown, JSON, and TOML over opaque state.
+- Prefer small task packets over broad autonomous sessions.
+- Prefer explicit permission recommendations over silent execution.
+- Prefer deferral or refusal when a task is too broad, risky, or wasteful.
+- Preserve human review as a first-class part of the workflow.
+- Treat compute, attention, battery, trust, and hardware lifespan as scarce resources.
 
 ## Benchmark Tasks
 
@@ -208,3 +310,4 @@ pytest tests/
 
 ## License
 MIT
+

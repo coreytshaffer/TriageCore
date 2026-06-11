@@ -15,7 +15,7 @@ Show the implemented local-first workflow, reviewable artifacts, and privacy-saf
 Recommended shell:
 
 ```powershell
-cd C:\Users\corey\Documents\Science\AI\triagecore
+cd TriageCore
 ```
 
 ## Fastest Path
@@ -24,7 +24,7 @@ Run:
 
 ```powershell
 tc doctor
-tc preflight CR-014
+tc preflight CR-017
 tc handoff latest --print
 tc audit --self-test
 tc audit --kind route_audit --last 10
@@ -42,7 +42,7 @@ Shows:
 - handoff path
 - pytest config visibility
 
-### `tc preflight CR-014`
+### `tc preflight CR-017`
 
 Shows:
 
@@ -105,14 +105,14 @@ python -m triage_core.tc_cli --help
 Check:
 
 - you are in repo root
-- `docs/change/requests/CR-014-qwen-cloud-backend-adapter.md` exists
+- `docs/change/requests/CR-017-public-legibility-pass.md` exists
 
 ### Handoff print fails
 
 Re-run:
 
 ```powershell
-tc preflight CR-014
+tc preflight CR-017
 tc handoff latest --print
 ```
 
@@ -127,7 +127,11 @@ tc audit --kind route_audit --last 10
 
 ## Related Docs
 
-- [hackathon_submission_overview.md](C:/Users/corey/Documents/Science/AI/triagecore/docs/submission/hackathon_submission_overview.md)
-- [track_mapping.md](C:/Users/corey/Documents/Science/AI/triagecore/docs/submission/track_mapping.md)
-- [claim_boundaries.md](C:/Users/corey/Documents/Science/AI/triagecore/docs/submission/claim_boundaries.md)
-- [hackathon_demo.md](C:/Users/corey/Documents/Science/AI/triagecore/docs/workflows/hackathon_demo.md)
+- [hackathon_submission_overview.md](hackathon_submission_overview.md)
+- [track_mapping.md](track_mapping.md)
+- [claim_boundaries.md](claim_boundaries.md)
+- [public_evidence_example.md](public_evidence_example.md)
+- [hackathon_demo.md](../workflows/hackathon_demo.md)
+
+
+
