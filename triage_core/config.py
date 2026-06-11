@@ -26,7 +26,18 @@ _BACKEND_ENV_OVERRIDES = {
     ("backend", "default_model"): "TRIAGE_MODEL",
     ("backend", "base_url"): "TRIAGE_BASE_URL",
     ("backend", "timeout_seconds"): "TRIAGE_TIMEOUT_SECONDS",
+    ("qwen", "enabled"): "TRIAGE_QWEN_ENABLED",
+    ("qwen", "api_key"): "TRIAGE_QWEN_API_KEY",
+    ("qwen", "base_url"): "TRIAGE_QWEN_BASE_URL",
+    ("qwen", "model"): "TRIAGE_QWEN_MODEL",
 }
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
 class Config:
@@ -86,6 +97,25 @@ class Config:
 
     def get_timeout_seconds(self) -> int:
         return int(self.get_global("backend", "timeout_seconds", 30))
+
+    def get_qwen_enabled(self) -> bool:
+        env_value = os.getenv("TRIAGE_QWEN_ENABLED")
+        if env_value is not None:
+            return _env_bool("TRIAGE_QWEN_ENABLED", False)
+        return bool(self.get_global("qwen", "enabled", False))
+
+    def get_qwen_api_key(self):
+        return self.get_global("qwen", "api_key", None)
+
+    def get_qwen_base_url(self) -> str:
+        return self.get_global(
+            "qwen",
+            "base_url",
+            "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+        )
+
+    def get_qwen_model(self) -> str:
+        return self.get_global("qwen", "model", "qwen-max")
 
     def get_boundary_rules_path(self) -> str:
         return self.get_global("policies", "boundary_rules_path", "policies/cybernetic_ecology_boundary.yaml")

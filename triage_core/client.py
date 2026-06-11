@@ -10,6 +10,7 @@ from .routing import (
 )
 from .task_ledger import TaskLedger
 from .privacy_scanner import scan_task_packet, PrivacyViolationError
+from .config import default_config
 
 class TriageClient:
     def __init__(
@@ -97,10 +98,11 @@ class TriageClient:
             raise UnsafePacketError("Only VerifiedTaskPacket may enter routing boundary.")
             
         try:
-            make_external_safe_packet(verified_packet)
+            external_safe_packet = make_external_safe_packet(verified_packet)
             is_local_only = False
             privacy_level = "external_safe"
         except UnsafePacketError:
+            external_safe_packet = None
             is_local_only = True
             privacy_level = "local_only"
             
@@ -118,7 +120,7 @@ class TriageClient:
             
         resilience_decision = choose_resilience_route(resilience_input)
         selected_route = resilience_decision.selected_route
-        selected_backend_name = getattr(self.engine.backend, "name", "")
+        selected_backend_name = self._selected_backend_name(selected_route)
         
         # Ensure local-only packets only use explicitly local routes
         if is_local_only:
@@ -146,8 +148,12 @@ class TriageClient:
         route_payload = build_route_decision_payload(
             resilience_input,
             resilience_decision,
-            selected_backend=getattr(self.engine.backend, "name", ""),
-            selected_model=route_decision.get("model") or getattr(self.engine.backend, "model", ""),
+            selected_backend=selected_backend_name,
+            selected_model=(
+                default_config.get_qwen_model()
+                if selected_route in {"cloud_primary", "cloud_secondary"}
+                else route_decision.get("model") or getattr(self.engine.backend, "model", "")
+            ),
         )
         self._append_optional_event(
             ledger=ledger,
@@ -206,6 +212,23 @@ class TriageClient:
                 payload=build_worker_result_payload(route_payload, result),
             )
             return self._merge_route_fields(result, route_payload)
+
+        if selected_route in {"cloud_primary", "cloud_secondary"}:
+            result = self._execute_cloud_task(
+                task_packet=external_safe_packet,
+                task_prompt=prompt,
+                raw_data=data,
+                validator=validator,
+                timeout=use_timeout,
+                post_processor=route_decision.get("post_processor"),
+            )
+            self._append_optional_event(
+                ledger=ledger,
+                task_id=task_id,
+                event_type="worker_result",
+                payload=build_worker_result_payload(route_payload, result),
+            )
+            return self._merge_route_fields(result, route_payload)
             
         # Step 2: Local execution
         post_processor = route_decision.get("post_processor")
@@ -253,6 +276,75 @@ class TriageClient:
         merged["fallback_depth"] = route_payload.get("fallback_depth")
         return merged
 
+    def _selected_backend_name(self, selected_route: str) -> str:
+        if selected_route in {"cloud_primary", "cloud_secondary"}:
+            return "qwen"
+        return getattr(self.engine.backend, "name", "unknown")
+
+    @staticmethod
+    def _execute_cloud_task(
+        *,
+        task_packet: Optional[Any],
+        task_prompt: str,
+        raw_data: str,
+        validator: Optional[Callable[[str], bool]],
+        timeout: int,
+        post_processor: Optional[Callable[[str], str]],
+    ) -> Dict[str, Any]:
+        from .engine import TriageEngine
+        from .safe_task_packet import ExternalSafeTaskPacket
+
+        if not isinstance(task_packet, ExternalSafeTaskPacket):
+            return {
+                "status": "handoff_required",
+                "source": "router",
+                "reason": "Cloud execution requires an external-safe packet. Failing closed.",
+                "handoff_reason": "Cloud execution requires an external-safe packet. Failing closed.",
+                "worker_result_status": "not_attempted",
+                "failure_type": "safety_handoff",
+                "failure_stage": "router",
+            }
+
+        if not default_config.get_qwen_enabled():
+            return {
+                "status": "handoff_required",
+                "source": "router",
+                "reason": "Cloud route selected but Qwen Cloud execution is not enabled.",
+                "handoff_reason": "Cloud route selected but Qwen Cloud execution is not enabled.",
+                "worker_result_status": "not_attempted",
+                "failure_type": "safety_handoff",
+                "failure_stage": "router",
+            }
+
+        try:
+            cloud_backend = create_backend(
+                backend_type="qwen",
+                model=default_config.get_qwen_model(),
+                base_url=default_config.get_qwen_base_url(),
+                api_key=default_config.get_qwen_api_key(),
+            )
+        except ValueError as exc:
+            return {
+                "status": "handoff_required",
+                "source": "router",
+                "reason": f"Cloud route selected but Qwen Cloud is not configured: {exc}",
+                "handoff_reason": f"Cloud route selected but Qwen Cloud is not configured: {exc}",
+                "worker_result_status": "not_attempted",
+                "failure_type": "backend_unavailable",
+                "failure_stage": "router",
+            }
+
+        cloud_engine = TriageEngine(backend=cloud_backend, timeout_seconds=timeout)
+        result = cloud_engine.execute_task(
+            task_prompt=task_prompt,
+            raw_data=raw_data,
+            validator=validator,
+            timeout=timeout,
+            post_processor=post_processor,
+        )
+        result["source"] = "cloud"
+        return result
+
     @staticmethod
     def _build_resilience_route_input(
         *,
@@ -294,10 +386,10 @@ class TriageClient:
             complexity=complexity_map.get(category, "medium"),
             sensitivity=sensitivity_map.get(category, "low"),
             privacy_level="local_ok",
-            internet_ok=False,
-            cloud_primary_available=False,
+            internet_ok=default_config.get_qwen_enabled(),
+            cloud_primary_available=default_config.get_qwen_enabled(),
             cloud_secondary_available=False,
-            cloud_credit_state="none",
+            cloud_credit_state="ok" if default_config.get_qwen_enabled() else "none",
             lm_studio_ok=True,
             local_heavy_available=True,
             local_fast_available=True,

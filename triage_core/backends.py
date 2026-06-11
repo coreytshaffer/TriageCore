@@ -94,13 +94,19 @@ class OpenAICompatibleBackend:
         parsed = urllib.parse.urlparse(self.base_url)
         return f"{parsed.scheme}://{parsed.hostname}" + (f":{parsed.port}" if parsed.port else "") + parsed.path
 
+    def _request_headers(self) -> Dict[str, str]:
+        headers = {"Content-Type": "application/json"}
+        if self.api_key and self.api_key != "not-needed":
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        return headers
+
     def resolve_model(self, timeout: float = 1.0) -> str:
         if self.model and self.model not in _AUTO_MODEL_SENTINELS:
             return self.model
 
         url = f"{self.base_url.rstrip('/')}/models"
         try:
-            response = requests.get(url, timeout=timeout)
+            response = requests.get(url, timeout=timeout, headers=self._request_headers())
             response.raise_for_status()
             resolved = _model_id_from_openai_models(response.json())
             if resolved:
@@ -133,7 +139,13 @@ class OpenAICompatibleBackend:
         if stream_callback:
             payload["stream"] = True
             try:
-                response = requests.post(url, json=payload, timeout=timeout, stream=True)
+                response = requests.post(
+                    url,
+                    json=payload,
+                    timeout=timeout,
+                    stream=True,
+                    headers=self._request_headers(),
+                )
                 response.raise_for_status()
             except requests.exceptions.RequestException as e:
                 raise BackendUnavailableError(f"OpenAI compatible backend unavailable at {url}: {e}")
@@ -173,7 +185,12 @@ class OpenAICompatibleBackend:
             )
 
         try:
-            response = requests.post(url, json=payload, timeout=timeout)
+            response = requests.post(
+                url,
+                json=payload,
+                timeout=timeout,
+                headers=self._request_headers(),
+            )
             if not response.ok:
                 print(f"Backend Error Output: {response.text}")
             response.raise_for_status()
@@ -201,7 +218,7 @@ class OpenAICompatibleBackend:
     def ping(self, timeout: float = 1.0) -> bool:
         url = f"{self.base_url.rstrip('/')}/models"
         try:
-            response = requests.get(url, timeout=timeout)
+            response = requests.get(url, timeout=timeout, headers=self._request_headers())
             if response.status_code == 200 and self.model in _AUTO_MODEL_SENTINELS:
                 try:
                     resolved = _model_id_from_openai_models(response.json())
@@ -212,6 +229,14 @@ class OpenAICompatibleBackend:
             return response.status_code == 200
         except requests.exceptions.RequestException:
             return False
+
+
+@dataclass
+class QwenCloudBackend(OpenAICompatibleBackend):
+    name: str = "qwen"
+    base_url: str = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+    model: str = "qwen-max"
+    api_key: str = ""
 
 
 @dataclass
@@ -358,6 +383,7 @@ def create_backend(
     backend_type: str = "ollama",
     model: str = "auto",
     base_url: Optional[str] = None,
+    api_key: Optional[str] = None,
 ) -> LocalBackend:
     normalized_type = (backend_type or "ollama").lower()
 
@@ -365,6 +391,16 @@ def create_backend(
         return OllamaBackend(
             base_url=base_url or os.getenv("TRIAGE_OLLAMA_BASE_URL", "http://localhost:11434"),
             model=model,
+        )
+
+    if normalized_type == "qwen":
+        resolved_api_key = api_key or os.getenv("TRIAGE_QWEN_API_KEY")
+        if not resolved_api_key:
+            raise ValueError("qwen backend requires api_key")
+        return QwenCloudBackend(
+            base_url=base_url or os.getenv("TRIAGE_QWEN_BASE_URL", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"),
+            model=model if model not in _AUTO_MODEL_SENTINELS else os.getenv("TRIAGE_QWEN_MODEL", "qwen-max"),
+            api_key=resolved_api_key,
         )
 
     presets = {

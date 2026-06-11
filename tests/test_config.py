@@ -59,3 +59,51 @@ def test_config_environment_overrides_backend_values(tmp_path, monkeypatch):
     assert config.get_backend_type() == "vllm"
     assert config.get_backend_model() == "env-model"
     assert config.get_backend_base_url() == "http://env.local/v1"
+
+
+def test_config_reads_qwen_settings(tmp_path):
+    (tmp_path / "triagecore.toml").write_text(
+        "\n".join(
+            [
+                "[qwen]",
+                "enabled = true",
+                'api_key = "configured-qwen-key"',
+                'base_url = "https://configured.qwen/v1"',
+                'model = "qwen-plus"',
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    config = Config(root_dir=str(tmp_path))
+
+    assert config.get_qwen_enabled() is True
+    assert config.get_qwen_api_key() == "configured-qwen-key"
+    assert config.get_qwen_base_url() == "https://configured.qwen/v1"
+    assert config.get_qwen_model() == "qwen-plus"
+
+
+def test_config_environment_overrides_qwen_settings(tmp_path, monkeypatch):
+    (tmp_path / "triagecore.toml").write_text(
+        "\n".join(
+            [
+                "[qwen]",
+                "enabled = false",
+                'api_key = "configured-qwen-key"',
+                'base_url = "https://configured.qwen/v1"',
+                'model = "configured-qwen-model"',
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("TRIAGE_QWEN_ENABLED", "true")
+    monkeypatch.setenv("TRIAGE_QWEN_API_KEY", "env-qwen-key")
+    monkeypatch.setenv("TRIAGE_QWEN_BASE_URL", "https://env.qwen/v1")
+    monkeypatch.setenv("TRIAGE_QWEN_MODEL", "env-qwen-model")
+
+    config = Config(root_dir=str(tmp_path))
+
+    assert config.get_qwen_enabled() is True
+    assert config.get_qwen_api_key() == "env-qwen-key"
+    assert config.get_qwen_base_url() == "https://env.qwen/v1"
+    assert config.get_qwen_model() == "env-qwen-model"
