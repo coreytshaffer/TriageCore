@@ -1,5 +1,7 @@
 # TriageCore
 
+[![tests](https://github.com/coreytshaffer/TriageCore/actions/workflows/tests.yml/badge.svg)](https://github.com/coreytshaffer/TriageCore/actions/workflows/tests.yml)
+
 **A Local-First Developer-Agent Control Harness**
 
 TriageCore is an early research workbench for AI-assisted software work that keeps local control, reviewable artifacts, and privacy boundaries visible to the operator. It can generate preflight and handoff packets, inspect privacy-safe route audit events, run local benchmark/report workflows, and support a bounded Qwen Cloud path for external-safe packets. The project is real and runnable today, but it should be read as a prototype and research harness, not a finished production framework. Cloud supervisors are optional and intentional here, not the default path for every task.
@@ -31,7 +33,7 @@ TriageCore is an early research workbench for AI-assisted software work that kee
 - bounded Qwen Cloud escalation for external-safe packets only
 
 **Planned / future-facing**
-- public release polish such as CI badge, release tagging, and GitHub metadata
+- public release polish such as release tagging and GitHub metadata
 - deeper environmental-edge packaging around Clear Lake Watch style workflows
 
 **Research framing**
@@ -98,10 +100,10 @@ Current in-repo proof markers:
 - a privacy-safe route audit self-test and public evidence example
 - benchmark fixtures and benchmark-report scaffolding
 - a full offline-oriented test suite runnable with `python -m pytest -q`
+- a public README test badge backed by the GitHub Actions workflow
 
 Proof markers that still depend on GitHub/release state rather than repository files:
 
-- CI/test badge
 - first release tag
 - GitHub About description
 - GitHub topics

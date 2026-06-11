@@ -6,6 +6,7 @@ This file provides a chronological, human-readable record of applied codebase an
 
 ## [Unreleased]
 
+- Implemented CR-018 (CI and Release Hygiene): Add a GitHub Actions pytest workflow and public CI trust marker for the alpha release.
 - Implemented CR-017 (Public Legibility Pass): Compress the README opening, add a 5-minute reviewer path, and add a canonical privacy-safe public evidence example for first-time reviewers.
 - Implemented CR-016 (Hackathon Submission Bundle): Add a judge-facing submission bundle with overview, quickstart, track mapping, and claim boundaries using existing commands only.
 - Implemented CR-015 (Hackathon Demo Scenario): Add a documentation-first hackathon walkthrough using existing commands, route audit inspection, and TriageCore/Qwen framing without requiring live cloud credentials.
@@ -25,4 +26,3 @@ This file provides a chronological, human-readable record of applied codebase an
 - Implemented CR-001 (TaskPacket Privacy Metadata): Added `TaskPacket` and `PrivacyMetadata` schemas and integrated them backward-compatibly into `TriageClient.run_task()`.
 - Initial creation of the change management documentation layer.
 - Added CR-004 (Local LLM Provenance and Smoke Tests) as proposed documentation only.
-- Proposed CR-018 (CI and Release Hygiene): Add a GitHub Actions pytest workflow and public CI trust marker for the alpha release.

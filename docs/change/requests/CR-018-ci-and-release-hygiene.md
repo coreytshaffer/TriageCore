@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Implemented
 
 ## Goal
 
@@ -18,9 +18,9 @@ Add basic automated trust markers for the public alpha release.
 
 ## Acceptance Criteria
 
-- [ ] GitHub Actions workflow exists under `.github/workflows/`.
-- [ ] Workflow runs on push and pull request.
-- [ ] Workflow installs the package and runs `python -m pytest -q`.
-- [ ] Workflow passes on `main`.
-- [ ] README includes a test/status badge after the first successful run.
-- [ ] No routing, backend, or runtime behavior changes.
+- [x] GitHub Actions workflow exists under `.github/workflows/`.
+- [x] Workflow runs on push and pull request.
+- [x] Workflow installs the package and runs `python -m pytest -q`.
+- [x] Workflow passes on `main`.
+- [x] README includes a test/status badge after the first successful run.
+- [x] No routing, backend, or runtime behavior changes.
