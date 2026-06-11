@@ -4,6 +4,7 @@ import sys
 import glob
 import subprocess
 import json
+from pathlib import Path
 from typing import List
 
 from triage_core.task_packet import TaskPacket, PrivacyMetadata
@@ -150,15 +151,33 @@ def tc_handoff(latest: bool, print_only: bool):
         else:
             print(f"[!] Clipboard access failed. Handoff is available at: {os.path.abspath(latest_path)}")
 
+
+def _repo_root_or_cwd() -> Path:
+    try:
+        repo_root = subprocess.check_output(
+            ["git", "rev-parse", "--show-toplevel"],
+            stderr=subprocess.DEVNULL,
+        ).decode("utf-8").strip()
+        if repo_root:
+            return Path(repo_root)
+    except Exception:
+        pass
+
+    return Path.cwd()
+
+
+def _ledger_path() -> Path:
+    return _repo_root_or_cwd() / ".triagecore" / "ledger.jsonl"
+
 def tc_audit(kind: str, last: int):
-    ledger_path = os.path.join(".triagecore", "ledger.jsonl")
-    if not os.path.exists(ledger_path):
+    ledger_path = _ledger_path()
+    if not ledger_path.exists():
         print(f"Error: {ledger_path} not found.")
         sys.exit(1)
         
     records = []
     try:
-        with open(ledger_path, "r", encoding="utf-8") as f:
+        with ledger_path.open("r", encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -217,9 +236,11 @@ def tc_audit_self_test() -> None:
         "recommended_route": "self_test",
         "selected_backend": "self_test",
     }
-    ledger = TaskLedger(".triagecore")
+    ledger_path = _ledger_path()
+    ledger_path.parent.mkdir(parents=True, exist_ok=True)
+    ledger = TaskLedger(str(ledger_path.parent))
     ledger.append_event("audit-self-test", "route_audit", payload)
-    print("Success: Wrote privacy-safe route_audit self-test event to .triagecore/ledger.jsonl.")
+    print(f"Success: Wrote privacy-safe route_audit self-test event to {ledger_path}.")
 
 import re
 

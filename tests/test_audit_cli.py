@@ -1,6 +1,7 @@
 import os
 import json
 import pytest
+from pathlib import Path
 from unittest.mock import patch
 from triage_core.tc_cli import tc_audit, tc_audit_self_test
 
@@ -25,7 +26,7 @@ def mock_ledger(tmp_path):
     return str(ledger_path)
 
 def test_missing_ledger_fails_gracefully(capsys):
-    with patch("os.path.join", return_value="nonexistent_ledger.jsonl"):
+    with patch("triage_core.tc_cli._ledger_path", return_value=Path("nonexistent_ledger.jsonl")):
         with pytest.raises(SystemExit) as exc:
             tc_audit("route_audit", 10)
         assert exc.value.code == 1
@@ -34,7 +35,7 @@ def test_missing_ledger_fails_gracefully(capsys):
     assert "Error: nonexistent_ledger.jsonl not found." in out
 
 def test_audit_filters_by_kind_and_ignores_malformed(mock_ledger, capsys):
-    with patch("os.path.join", return_value=mock_ledger):
+    with patch("triage_core.tc_cli._ledger_path", return_value=Path(mock_ledger)):
         tc_audit("route_audit", 10)
         
     out, err = capsys.readouterr()
@@ -45,7 +46,7 @@ def test_audit_filters_by_kind_and_ignores_malformed(mock_ledger, capsys):
     assert "Task: 3" not in out
 
 def test_audit_last_limits_output(mock_ledger, capsys):
-    with patch("os.path.join", return_value=mock_ledger):
+    with patch("triage_core.tc_cli._ledger_path", return_value=Path(mock_ledger)):
         tc_audit("route_audit", 2)
         
     out, err = capsys.readouterr()
@@ -55,7 +56,7 @@ def test_audit_last_limits_output(mock_ledger, capsys):
     assert "Task: 4" in out
 
 def test_audit_no_raw_fields_displayed(mock_ledger, capsys):
-    with patch("os.path.join", return_value=mock_ledger):
+    with patch("triage_core.tc_cli._ledger_path", return_value=Path(mock_ledger)):
         # Query for 'other_event'
         tc_audit("other_event", 10)
         
@@ -75,7 +76,8 @@ def test_audit_no_raw_fields_displayed(mock_ledger, capsys):
 def test_audit_self_test_writes_route_audit_event(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
 
-    tc_audit_self_test()
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_audit_self_test()
 
     out, err = capsys.readouterr()
     ledger_path = tmp_path / ".triagecore" / "ledger.jsonl"
@@ -100,10 +102,12 @@ def test_audit_self_test_writes_route_audit_event(tmp_path, monkeypatch, capsys)
 
 def test_audit_self_test_event_is_displayed_by_kind_route_audit(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
-    tc_audit_self_test()
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_audit_self_test()
     capsys.readouterr()
 
-    tc_audit("route_audit", 10)
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_audit("route_audit", 10)
 
     out, err = capsys.readouterr()
     assert "Task: audit-self-test | Type: route_audit" in out
@@ -114,7 +118,8 @@ def test_audit_self_test_event_is_displayed_by_kind_route_audit(tmp_path, monkey
 def test_audit_self_test_event_contains_no_raw_payload_fields(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
-    tc_audit_self_test()
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_audit_self_test()
 
     ledger_path = tmp_path / ".triagecore" / "ledger.jsonl"
     record = json.loads(ledger_path.read_text(encoding="utf-8").splitlines()[0])
@@ -130,7 +135,8 @@ def test_audit_self_test_works_when_ledger_missing(tmp_path, monkeypatch):
     ledger_path = tmp_path / ".triagecore" / "ledger.jsonl"
     assert not ledger_path.exists()
 
-    tc_audit_self_test()
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_audit_self_test()
 
     assert ledger_path.exists()
 
@@ -141,6 +147,51 @@ def test_audit_self_test_creates_parent_directory_if_needed(tmp_path, monkeypatc
     ledger_dir = tmp_path / ".triagecore"
     assert not ledger_dir.exists()
 
-    tc_audit_self_test()
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_audit_self_test()
 
     assert ledger_dir.is_dir()
+
+
+def test_audit_reads_repo_ledger_from_subdirectory(tmp_path, monkeypatch, capsys):
+    repo = tmp_path
+    ledger_dir = repo / ".triagecore"
+    ledger_dir.mkdir()
+    ledger = ledger_dir / "ledger.jsonl"
+    ledger.write_text(
+        json.dumps(
+            {
+                "timestamp": "2026-06-11T00:00:00+00:00",
+                "task_id": "audit-self-test",
+                "event_type": "route_audit",
+                "payload": {
+                    "decision": "allowed",
+                    "reason_code": "audit_self_test",
+                    "privacy_level": "public",
+                    "privacy_scan_passed": True,
+                    "is_local_only": False,
+                    "recommended_route": "self_test",
+                    "selected_backend": "self_test",
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    subdir = repo / "tests"
+    subdir.mkdir()
+    monkeypatch.chdir(subdir)
+
+    with patch("subprocess.check_output") as mock_check_output:
+        def fake_check_output(args, **kwargs):
+            if args[:3] == ["git", "rev-parse", "--show-toplevel"]:
+                return str(repo).encode("utf-8")
+            raise Exception("unexpected command")
+
+        mock_check_output.side_effect = fake_check_output
+        tc_audit("route_audit", 10)
+
+    out = capsys.readouterr().out
+    assert "audit-self-test" in out
+    assert "audit_self_test" in out
