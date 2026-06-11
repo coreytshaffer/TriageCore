@@ -67,6 +67,16 @@ client = TriageClient(backend=backend)
 
 ## Features
 
+## Hackathon Demo
+
+For a bounded operator walkthrough that works with existing commands, see [docs/workflows/hackathon_demo.md](docs/workflows/hackathon_demo.md).
+
+That demo is designed to support:
+
+- TriageCore local-first plus optional Qwen Cloud escalation as the primary story
+- safer AI-assisted SDLC as the secondary framing
+- Clear Lake Watch or other environmental edge workflows as a future extension
+
 ### 1. The TriageDesk GUI
 Launch the local control plane GUI to actively manage tasks, monitor telemetry, and interact with the local LLM engine:
 ```bash

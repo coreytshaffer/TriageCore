@@ -5,7 +5,7 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
-- Proposed CR-015 (Hackathon Demo Scenario): 
+- Implemented CR-015 (Hackathon Demo Scenario): Add a documentation-first hackathon walkthrough using existing commands, route audit inspection, and TriageCore/Qwen framing without requiring live cloud credentials.
 - Implemented CR-014 (Qwen Cloud Backend Adapter): Add a mocked-testable Qwen Cloud backend, config accessors, and an external-safe-only cloud execution path that preserves local-only fail-closed routing.
 - Implemented CR-013 (Audit Smoke Event): Add `tc audit --self-test` to append one privacy-safe `route_audit` event with no raw payload fields.
 - Implemented CR-012 (Environment Doctor Cli): 
