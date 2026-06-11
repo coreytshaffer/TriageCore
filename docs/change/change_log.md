@@ -6,6 +6,7 @@ This file provides a chronological, human-readable record of applied codebase an
 
 ## [Unreleased]
 
+- Implemented CR-020 (Persistent Artifact Privacy Invariant): Add a central validator for persistent ledger events and fail closed before writing prohibited raw-content keys.
 - Implemented CR-019 (Mobile API Access Boundary): Require bearer authentication, default to loopback, restrict network binding, return privacy-safe task projections, disable logs, and validate review decisions.
 - Implemented CR-018 (CI and Release Hygiene): Add a GitHub Actions pytest workflow and public CI trust marker for the alpha release.
 - Implemented CR-017 (Public Legibility Pass): Compress the README opening, add a 5-minute reviewer path, and add a canonical privacy-safe public evidence example for first-time reviewers.

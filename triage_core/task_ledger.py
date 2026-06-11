@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional
 
+from .privacy_invariants import validate_persistent_artifact_payload
+
 LEDGER_SCHEMA_VERSION = "0.2.0"
 ROLE_TAXONOMY_VERSION = "2026-06-worker-council-v2"
 
@@ -186,6 +188,7 @@ class TaskLedger:
             ) from e
 
     def append_event(self, task_id: str, event_type: str, payload: Dict[str, Any]):
+        validate_persistent_artifact_payload(payload)
         event = {
             "event_id": str(uuid.uuid4()),
             "task_id": task_id,
