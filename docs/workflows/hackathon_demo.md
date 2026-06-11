@@ -1,5 +1,7 @@
 # Hackathon Demo Workflow
 
+For the judge-facing submission packet, start with [docs/submission/README.md](C:/Users/corey/Documents/Science/AI/triagecore/docs/submission/README.md).
+
 This workflow is the operator-facing demo path for TriageCore in hackathon settings.
 
 It is designed to cover three presentation needs with one bounded walkthrough:

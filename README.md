@@ -71,6 +71,8 @@ client = TriageClient(backend=backend)
 
 For a bounded operator walkthrough that works with existing commands, see [docs/workflows/hackathon_demo.md](docs/workflows/hackathon_demo.md).
 
+For the judge-facing submission bundle, start with [docs/submission/README.md](docs/submission/README.md).
+
 That demo is designed to support:
 
 - TriageCore local-first plus optional Qwen Cloud escalation as the primary story
