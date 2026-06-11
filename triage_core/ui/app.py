@@ -44,6 +44,7 @@ import csv
 import uuid
 import threading
 import time
+from typing import Optional
 from datetime import datetime, timezone
 from ..config import default_config
 from ..task_ledger import TaskLedger
@@ -3649,7 +3650,6 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             self.after(1000, self._check_ipc_inbox)
 
     def _get_glow_target(self, task) -> Optional[str]:
-        from typing import Optional
         if not task:
             return "local"
         
