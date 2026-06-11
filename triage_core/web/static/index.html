@@ -5,35 +5,38 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>TriageCore Mobile</title>
     <link rel="stylesheet" href="/static/style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
     <header class="app-header">
         <h1>TriageCore</h1>
-        <div class="tabs">
-            <button class="tab-btn active" data-tab="ledger">Ledger</button>
-            <button class="tab-btn" data-tab="logs">Logs</button>
-        </div>
+        <p id="connection-status" class="connection-status">Not connected</p>
     </header>
 
     <main class="app-content">
-        <!-- LEDGER TAB -->
-        <section id="ledger-tab" class="tab-pane active">
-            <div id="task-list" class="task-list">
-                <div class="loading">Loading tasks...</div>
-            </div>
+        <section id="auth-panel" class="auth-panel">
+            <h2>Connect to local review</h2>
+            <p>Enter the bearer token configured on the TriageCore host.</p>
+            <form id="auth-form">
+                <label for="mobile-token">Mobile token</label>
+                <input
+                    id="mobile-token"
+                    name="mobile-token"
+                    type="password"
+                    autocomplete="current-password"
+                    required
+                >
+                <button type="submit" class="btn primary">Connect</button>
+            </form>
+            <p id="auth-error" class="error-message" role="alert"></p>
         </section>
 
-        <!-- LOGS TAB -->
-        <section id="logs-tab" class="tab-pane">
-            <div id="log-console" class="log-console">
-                <div class="loading">Loading logs...</div>
+        <section id="ledger-panel" class="hidden">
+            <div id="task-list" class="task-list">
+                <div class="loading">Connect to load tasks.</div>
             </div>
-            <button id="refresh-logs" class="btn primary">Refresh Logs</button>
         </section>
     </main>
 
-    <!-- REVIEW MODAL -->
     <div id="review-modal" class="modal hidden">
         <div class="modal-content">
             <div class="modal-header">
@@ -42,7 +45,6 @@
             </div>
             <div class="modal-body">
                 <h3 id="modal-task-title"></h3>
-                <p id="modal-task-desc"></p>
                 <div class="modal-meta">
                     <span id="modal-task-runner" class="badge"></span>
                     <span id="modal-task-status" class="badge"></span>

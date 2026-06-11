@@ -1,36 +1,46 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // TABS
-    const tabBtns = document.querySelectorAll('.tab-btn');
-    const tabPanes = document.querySelectorAll('.tab-pane');
-    
-    tabBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            tabBtns.forEach(b => b.classList.remove('active'));
-            tabPanes.forEach(p => p.classList.remove('active'));
-            
-            btn.classList.add('active');
-            document.getElementById(`${btn.dataset.tab}-tab`).classList.add('active');
-            
-            if (btn.dataset.tab === 'logs') loadLogs();
-        });
-    });
-
-    // MODAL
+    const authForm = document.getElementById('auth-form');
+    const authPanel = document.getElementById('auth-panel');
+    const authError = document.getElementById('auth-error');
+    const tokenInput = document.getElementById('mobile-token');
+    const ledgerPanel = document.getElementById('ledger-panel');
+    const connectionStatus = document.getElementById('connection-status');
     const modal = document.getElementById('review-modal');
     const btnClose = document.getElementById('close-modal');
     const btnReject = document.getElementById('btn-reject');
     const btnAccept = document.getElementById('btn-accept');
-    
+
+    let apiToken = '';
     let currentTask = null;
+
+    function showAuthentication(message = '') {
+        apiToken = '';
+        authError.textContent = message;
+        connectionStatus.textContent = 'Not connected';
+        authPanel.classList.remove('hidden');
+        ledgerPanel.classList.add('hidden');
+        tokenInput.focus();
+    }
+
+    async function apiFetch(url, options = {}) {
+        const headers = new Headers(options.headers || {});
+        headers.set('Authorization', `Bearer ${apiToken}`);
+
+        const response = await fetch(url, { ...options, headers });
+        if (response.status === 401 || response.status === 503) {
+            showAuthentication('Authentication failed. Check the host token.');
+        }
+        return response;
+    }
 
     function openModal(task) {
         currentTask = task;
-        document.getElementById('modal-task-title').textContent = task.title || task.task_id.substring(0,8);
-        document.getElementById('modal-task-desc').textContent = task.description || '';
+        document.getElementById('modal-task-title').textContent =
+            `Task ${task.task_id.substring(0, 8)}`;
         document.getElementById('modal-task-runner').textContent = task.runner || 'unknown';
         document.getElementById('modal-task-status').textContent = task.status || 'unknown';
         document.getElementById('review-workload').value = 'not_recorded';
-        
+
         modal.classList.remove('hidden');
     }
 
@@ -44,15 +54,18 @@ document.addEventListener('DOMContentLoaded', () => {
     async function submitReview(decision) {
         if (!currentTask) return;
         const workload = document.getElementById('review-workload').value;
-        
+
         try {
-            await fetch(`/api/tasks/${currentTask.task_id}/review`, {
+            const response = await apiFetch(`/api/tasks/${currentTask.task_id}/review`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ decision, workload })
             });
+            if (!response.ok) {
+                throw new Error(`Review failed with status ${response.status}`);
+            }
             closeModal();
-            loadTasks();
+            await loadTasks();
         } catch (e) {
             alert('Failed to submit review');
         }
@@ -61,45 +74,57 @@ document.addEventListener('DOMContentLoaded', () => {
     btnReject.addEventListener('click', () => submitReview('rejected'));
     btnAccept.addEventListener('click', () => submitReview('accepted'));
 
-    // TASKS
     async function loadTasks() {
         try {
-            const res = await fetch('/api/tasks');
-            const data = await res.json();
+            const response = await apiFetch('/api/tasks');
+            if (!response.ok) {
+                throw new Error(`Task load failed with status ${response.status}`);
+            }
+
+            const data = await response.json();
             const list = document.getElementById('task-list');
-            list.innerHTML = '';
-            
+            list.replaceChildren();
+
             data.tasks.forEach(task => {
                 const card = document.createElement('div');
+                const title = document.createElement('h3');
+                const status = document.createElement('span');
+                const metadata = document.createElement('div');
+
                 card.className = 'task-card';
-                card.innerHTML = `
-                    <h3>${task.title || task.task_id.substring(0,8)}</h3>
-                    <p>${task.description || ''}</p>
-                    <div><span class="badge">${task.status}</span></div>
-                `;
+                title.textContent = `Task ${task.task_id.substring(0, 8)}`;
+                status.className = 'badge';
+                status.textContent = task.status || 'unknown';
+                metadata.appendChild(status);
+                card.appendChild(title);
+                card.appendChild(metadata);
                 card.addEventListener('click', () => openModal(task));
                 list.appendChild(card);
             });
+
+            authError.textContent = '';
+            authPanel.classList.add('hidden');
+            ledgerPanel.classList.remove('hidden');
+            connectionStatus.textContent = 'Connected';
         } catch (e) {
-            document.getElementById('task-list').innerHTML = 'Failed to load tasks.';
+            if (apiToken) {
+                document.getElementById('task-list').textContent =
+                    'Failed to load tasks.';
+            }
         }
     }
 
-    // LOGS
-    async function loadLogs() {
-        try {
-            const res = await fetch('/api/logs');
-            const data = await res.json();
-            const consoleEl = document.getElementById('log-console');
-            consoleEl.innerHTML = data.logs.join('');
-            consoleEl.scrollTop = consoleEl.scrollHeight;
-        } catch (e) {
-            document.getElementById('log-console').innerHTML = 'Failed to load logs.';
+    authForm.addEventListener('submit', async event => {
+        event.preventDefault();
+        const suppliedToken = tokenInput.value.trim();
+        tokenInput.value = '';
+        if (!suppliedToken) {
+            showAuthentication('A mobile token is required.');
+            return;
         }
-    }
 
-    document.getElementById('refresh-logs').addEventListener('click', loadLogs);
-
-    // INIT
-    loadTasks();
+        apiToken = suppliedToken;
+        connectionStatus.textContent = 'Connecting...';
+        await loadTasks();
+    });
 });
