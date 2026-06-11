@@ -2,7 +2,7 @@ import os
 import json
 import pytest
 from unittest.mock import patch
-from triage_core.tc_cli import tc_audit
+from triage_core.tc_cli import tc_audit, tc_audit_self_test
 
 @pytest.fixture
 def mock_ledger(tmp_path):
@@ -70,3 +70,77 @@ def test_audit_no_raw_fields_displayed(mock_ledger, capsys):
     assert "raw_prompt:" not in out
     assert "content:" not in out
     assert "raw_data:" not in out
+
+
+def test_audit_self_test_writes_route_audit_event(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+
+    tc_audit_self_test()
+
+    out, err = capsys.readouterr()
+    ledger_path = tmp_path / ".triagecore" / "ledger.jsonl"
+    assert "Success: Wrote privacy-safe route_audit self-test event" in out
+    assert ledger_path.exists()
+
+    records = [json.loads(line) for line in ledger_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert len(records) == 1
+    record = records[0]
+    payload = record["payload"]
+
+    assert record["event_type"] == "route_audit"
+    assert record["task_id"] == "audit-self-test"
+    assert payload["decision"] == "allowed"
+    assert payload["reason"] == "audit_self_test"
+    assert payload["privacy_level"] == "public"
+    assert payload["privacy_passed"] is True
+    assert payload["local_only"] is False
+    assert payload["requested_backend"] == "self_test"
+    assert payload["selected_backend"] == "self_test"
+
+
+def test_audit_self_test_event_is_displayed_by_kind_route_audit(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    tc_audit_self_test()
+    capsys.readouterr()
+
+    tc_audit("route_audit", 10)
+
+    out, err = capsys.readouterr()
+    assert "Task: audit-self-test | Type: route_audit" in out
+    assert "Decision: allowed | Reason: audit_self_test" in out
+    assert "Backend: self_test" in out
+
+
+def test_audit_self_test_event_contains_no_raw_payload_fields(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    tc_audit_self_test()
+
+    ledger_path = tmp_path / ".triagecore" / "ledger.jsonl"
+    record = json.loads(ledger_path.read_text(encoding="utf-8").splitlines()[0])
+    payload = record["payload"]
+
+    for forbidden_field in ["prompt", "data", "content", "raw_prompt", "raw_data"]:
+        assert forbidden_field not in payload
+
+
+def test_audit_self_test_works_when_ledger_missing(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    ledger_path = tmp_path / ".triagecore" / "ledger.jsonl"
+    assert not ledger_path.exists()
+
+    tc_audit_self_test()
+
+    assert ledger_path.exists()
+
+
+def test_audit_self_test_creates_parent_directory_if_needed(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    ledger_dir = tmp_path / ".triagecore"
+    assert not ledger_dir.exists()
+
+    tc_audit_self_test()
+
+    assert ledger_dir.is_dir()

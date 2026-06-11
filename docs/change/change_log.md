@@ -5,6 +5,7 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+- Implemented CR-013 (Audit Smoke Event): Add `tc audit --self-test` to append one privacy-safe `route_audit` event with no raw payload fields.
 - Implemented CR-012 (Environment Doctor Cli): 
 - Implemented CR-011 (Change Request Scaffold CLI): Add `tc propose` command to automate CR boilerplate generation.
 - Implemented CR-010 (Audit CLI Test Hardening): Add regression tests for the `tc audit` subcommand.

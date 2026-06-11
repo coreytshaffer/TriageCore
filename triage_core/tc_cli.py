@@ -10,6 +10,7 @@ from triage_core.task_packet import TaskPacket, PrivacyMetadata
 from triage_core.compression import compress_context
 from triage_core.config import default_config
 from triage_core.backends import LocalBackend
+from triage_core.task_ledger import TaskLedger
 
 def _find_cr_file(cr_id: str) -> str:
     # search in docs/change/requests/
@@ -184,9 +185,13 @@ def tc_audit(kind: str, last: int):
         print(f"[{r.get('timestamp', 'unknown')}] Task: {r.get('task_id', 'unknown')} | Type: {r.get('event_type')}")
         payload = r.get("payload", {})
         if r.get("event_type") == "route_audit":
-            print(f"  Decision: {payload.get('decision')} | Reason: {payload.get('reason_code')}")
-            print(f"  Privacy: {payload.get('privacy_level')} (Scan Passed: {payload.get('privacy_scan_passed')})")
-            print(f"  Local Only: {payload.get('is_local_only')} | Route: {payload.get('recommended_route')} | Backend: {payload.get('selected_backend')}")
+            reason = payload.get("reason_code", payload.get("reason"))
+            privacy_passed = payload.get("privacy_scan_passed", payload.get("privacy_passed"))
+            local_only = payload.get("is_local_only", payload.get("local_only"))
+            route = payload.get("recommended_route", payload.get("requested_backend"))
+            print(f"  Decision: {payload.get('decision')} | Reason: {reason}")
+            print(f"  Privacy: {payload.get('privacy_level')} (Scan Passed: {privacy_passed})")
+            print(f"  Local Only: {local_only} | Route: {route} | Backend: {payload.get('selected_backend')}")
         else:
             # General safe metadata fallback
             for k, v in payload.items():
@@ -196,6 +201,25 @@ def tc_audit(kind: str, last: int):
                     v = v[:200] + "..."
                 print(f"  {k}: {v}")
         print("-" * 60)
+
+
+def tc_audit_self_test() -> None:
+    payload = {
+        "decision": "allowed",
+        "reason": "audit_self_test",
+        "reason_code": "audit_self_test",
+        "privacy_level": "public",
+        "privacy_passed": True,
+        "privacy_scan_passed": True,
+        "local_only": False,
+        "is_local_only": False,
+        "requested_backend": "self_test",
+        "recommended_route": "self_test",
+        "selected_backend": "self_test",
+    }
+    ledger = TaskLedger(".triagecore")
+    ledger.append_event("audit-self-test", "route_audit", payload)
+    print("Success: Wrote privacy-safe route_audit self-test event to .triagecore/ledger.jsonl.")
 
 import re
 
@@ -349,6 +373,7 @@ def main():
     audit_parser = subparsers.add_parser("audit", help="Inspect ledger audit events safely")
     audit_parser.add_argument("--kind", type=str, default="route_audit", help="The event_type to filter by (default: route_audit)")
     audit_parser.add_argument("--last", type=int, default=10, help="Number of recent records to display (default: 10)")
+    audit_parser.add_argument("--self-test", action="store_true", help="Write one privacy-safe route_audit self-test event")
 
     # propose
     propose_parser = subparsers.add_parser("propose", help="Scaffold a new Change Request")
@@ -369,7 +394,10 @@ def main():
     elif args.command == "handoff":
         tc_handoff(args.target == "latest", args.print)
     elif args.command == "audit":
-        tc_audit(args.kind, args.last)
+        if args.self_test:
+            tc_audit_self_test()
+        else:
+            tc_audit(args.kind, args.last)
     elif args.command == "status":
         print("TriageCore Operator Workflow active.")
     elif args.command == "doctor":
