@@ -82,7 +82,13 @@ class SpecialistRouter:
                 "model": "qwen2.5-coder-7b-instruct",
                 "offline_fallback": not internet_up
             }
-        elif category in ["structured_extraction", "log_summary", "docs_update", "architecture_planning"]:
+        elif category in [
+            "structured_extraction",
+            "log_summary",
+            "docs_update",
+            "architecture_planning",
+            "novel_design",
+        ]:
             return {
                 "offload_recommended": False,
                 "timeout": 120,

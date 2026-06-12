@@ -6,11 +6,16 @@ class TaskClassifier:
     """Classifies prompts into task categories."""
     CATEGORIES = [
         "docs_update", "bugfix", "test_addition", "refactor", 
-        "packaging", "security_review", "architecture_planning", "blocked_or_high_risk"
+        "packaging", "security_review", "architecture_planning", "novel_design",
+        "blocked_or_high_risk"
     ]
 
     @classmethod
     def classify(cls, prompt: str, backend=None) -> str:
+        prompt_lower = prompt.lower()
+        if "[triagecore:novel_design]" in prompt_lower:
+            return "novel_design"
+
         # If backend is not provided, try to create default (Ollama)
         if not backend:
             try:
@@ -34,6 +39,7 @@ class TaskClassifier:
                     "- packaging: setup.py, pyproject.toml, package requirements, build.\n"
                     "- security_review: Vulnerabilities, secrets, secure code paths.\n"
                     "- architecture_planning: Design systems, architecture docs, folder structures.\n"
+                    "- novel_design: New public, non-sensitive product or workflow concepts that benefit from cloud reasoning.\n"
                     "- blocked_or_high_risk: Destructive operations (delete, wipe, format all).\n\n"
                     "Rules:\n"
                     "1. Do NOT solve the task.\n"
@@ -56,7 +62,6 @@ class TaskClassifier:
                 pass # Fall back to regex classifier
 
         # Fallback Heuristic Regex Classifier
-        prompt_lower = prompt.lower()
         if any(word in prompt_lower for word in ["delete", "remove all", "wipe", "format"]):
             return "blocked_or_high_risk"
         if "test" in prompt_lower or "pytest" in prompt_lower:
@@ -69,6 +74,8 @@ class TaskClassifier:
             return "refactor"
         if "security" in prompt_lower or "vulnerability" in prompt_lower:
             return "security_review"
+        if "novel design" in prompt_lower:
+            return "novel_design"
         if "design" in prompt_lower or "architecture" in prompt_lower:
             return "architecture_planning"
         return "refactor" # default fallback

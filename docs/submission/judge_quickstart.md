@@ -90,6 +90,30 @@ python -m pytest -q
 git status
 ```
 
+## Optional Live Qwen Proof
+
+The baseline quickstart does not require cloud credentials. When an operator has
+configured Qwen Cloud, run:
+
+```powershell
+$env:TRIAGE_QWEN_ENABLED="true"
+$env:TRIAGE_QWEN_API_KEY="<operator-supplied-key>"
+$env:TRIAGE_QWEN_MODEL="qwen-max"
+python -m triage_core.qwen_demo
+tc audit --kind route_audit --last 10
+```
+
+Expected proof markers:
+
+- `Privacy: external_safe`
+- `Route: cloud_primary`
+- `Backend: qwen`
+- `Validation: passed`
+- token and latency evidence
+
+See [qwen_cloud_proof.md](qwen_cloud_proof.md) for the architecture diagram,
+claim boundaries, and credential-free test path.
+
 ## Troubleshooting
 
 ### `tc` not found
@@ -131,6 +155,7 @@ tc audit --kind route_audit --last 10
 - [track_mapping.md](track_mapping.md)
 - [claim_boundaries.md](claim_boundaries.md)
 - [public_evidence_example.md](public_evidence_example.md)
+- [qwen_cloud_proof.md](qwen_cloud_proof.md)
 - [hackathon_demo.md](../workflows/hackathon_demo.md)
 
 

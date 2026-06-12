@@ -359,6 +359,7 @@ class TriageClient:
             "packaging": "configuration_review",
             "security_review": "security_review",
             "architecture_planning": "architecture_planning",
+            "novel_design": "novel_design",
             "blocked_or_high_risk": "security_review",
         }
         complexity_map = {
@@ -369,6 +370,7 @@ class TriageClient:
             "packaging": "medium",
             "security_review": "high",
             "architecture_planning": "high",
+            "novel_design": "high",
             "blocked_or_high_risk": "high",
         }
         sensitivity_map = {
@@ -379,6 +381,7 @@ class TriageClient:
             "packaging": "medium",
             "security_review": "high",
             "architecture_planning": "medium",
+            "novel_design": "low",
             "blocked_or_high_risk": "high",
         }
         return ResilienceRouteInput(
