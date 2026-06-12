@@ -1,10 +1,12 @@
-# Change Log
+﻿# Change Log
 
 This file provides a chronological, human-readable record of applied codebase and architecture changes to TriageCore.
 
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+
+- Added CR-020 (Persistent Cryptographic Agent Identities) as proposed documentation for crypto-backed agent provenance, signed ledger events, scoped capabilities, revocation, and PQC-ready algorithm metadata.
 
 - Implemented CR-019 (Mobile API Access Boundary): Require bearer authentication, default to loopback, restrict network binding, return privacy-safe task projections, disable logs, and validate review decisions.
 - Implemented CR-018 (CI and Release Hygiene): Add a GitHub Actions pytest workflow and public CI trust marker for the alpha release.
@@ -27,3 +29,4 @@ This file provides a chronological, human-readable record of applied codebase an
 - Implemented CR-001 (TaskPacket Privacy Metadata): Added `TaskPacket` and `PrivacyMetadata` schemas and integrated them backward-compatibly into `TriageClient.run_task()`.
 - Initial creation of the change management documentation layer.
 - Added CR-004 (Local LLM Provenance and Smoke Tests) as proposed documentation only.
+
