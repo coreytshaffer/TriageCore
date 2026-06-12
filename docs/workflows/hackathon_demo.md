@@ -29,7 +29,7 @@ The main demo should stay centered on TriageCore and the Qwen Cloud integration 
 - Run from the repository root.
 - The editable CLI install should already work.
 - No live Qwen Cloud credential is required for this walkthrough.
-- The demo uses existing commands only. It does not require a new demo mode, seeded cloud call, or router mutation.
+- The deterministic dry run calls no model backend and requires no credentials.
 
 Recommended shell:
 
@@ -43,10 +43,12 @@ Run these commands in order:
 
 ```powershell
 tc doctor
+tc demo --dry-run
 tc preflight CR-014
 tc handoff latest --print
 tc audit --self-test
 tc audit --kind route_audit --last 10
+tc audit --kind demo_dry_run --last 5
 ```
 
 Optional evidence command if you want to show the existing seed examples:
@@ -74,7 +76,38 @@ What to point out:
 - TriageCore is operating from the local repo.
 - The operator can inspect the local ledger and artifact paths directly.
 
-### 2. `tc preflight CR-014`
+### 2. `tc demo --dry-run`
+
+Expected themes:
+
+- shows the messy-request fixture and a bounded `TaskPacket` summary
+- runs the existing privacy scan
+- selects a deterministic offline route with a visible rationale
+- shows a scoped context summary with `raw_context_included: False`
+- produces a proposed output marked `pending_review`
+- runs a deterministic validator
+- leaves the human decision pending by default
+- writes one metadata-only `demo_dry_run` event
+- prints the ledger path
+
+What to point out:
+
+- this is a deterministic dry run, not a model-generated result
+- it runs offline and does not call Qwen, Ollama, LM Studio, or another backend
+- it does not mutate source files
+- the messy request and proposed output are visible in the terminal but are not
+  persisted to the ledger
+- it demonstrates workflow structure and control gates, not production AI
+  safety or certification
+
+Optional human-decision simulations:
+
+```powershell
+tc demo --dry-run --decision approve
+tc demo --dry-run --decision reject
+```
+
+### 3. `tc preflight CR-014`
 
 Expected themes:
 
@@ -87,7 +120,7 @@ What to point out:
 - the system creates a reviewable handoff artifact before implementation work
 - this is a bounded operator workflow, not silent autonomous execution
 
-### 3. `tc handoff latest --print`
+### 4. `tc handoff latest --print`
 
 Expected themes:
 
@@ -101,7 +134,7 @@ What to point out:
 - the handoff is readable and auditable
 - the artifact is designed for human review or supervised continuation
 
-### 4. `tc audit --self-test`
+### 5. `tc audit --self-test`
 
 Expected themes:
 
@@ -113,7 +146,7 @@ What to point out:
 - TriageCore can demonstrate its audit trail without executing a real user task
 - the event contains metadata only
 
-### 5. `tc audit --kind route_audit --last 10`
+### 6. `tc audit --kind route_audit --last 10`
 
 Expected themes:
 
@@ -125,6 +158,16 @@ What to point out:
 
 - operators can inspect routing evidence directly
 - the audit view is privacy-safe by design
+
+### 7. `tc audit --kind demo_dry_run --last 5`
+
+Expected themes:
+
+- displays the deterministic route and review metadata
+- confirms `raw_context_included: False`
+- displays validation and decision state
+- does not display the messy request, raw packet data, full context, or proposed
+  output
 
 ## Privacy And Local-First Explanation
 
@@ -186,17 +229,19 @@ Suggested talk track:
 
 1. "TriageCore is a local-first control harness for AI-assisted software work, not a blind cloud agent."
 2. "First I verify the local operator environment with `tc doctor` so the demo starts from inspectable local state."
-3. "Next I generate a preflight handoff for CR-014. This creates a review artifact before code work."
-4. "Then I print the handoff to show that TriageCore produces human-readable scope, constraints, and file references."
-5. "Now I trigger a privacy-safe audit self-test and inspect recent route audit events."
-6. "This shows the core value: local-first workflow, bounded artifacts, privacy-safe auditability, and optional cloud escalation only when a task is external-safe and explicitly configured."
-7. "For safer AI-assisted SDLC, that means reviewable control instead of hidden autonomy."
+3. "Then I run one deterministic offline command that makes the packet, privacy, route, context, validation, and human-review checkpoints visible."
+4. "Next I generate and print a preflight handoff for CR-014. This creates a review artifact before code work."
+5. "Now I inspect both route-audit and deterministic-demo ledger evidence."
+6. "The ledger contains useful metadata without storing the raw request, context, or proposed output."
+7. "This shows the core value: local-first workflow, bounded artifacts, privacy-safe auditability, and optional cloud escalation only when a task is external-safe and explicitly configured."
 8. "For future environmental and edge workflows like Clear Lake Watch, the same pattern supports offline-resilient local operation before optional cloud help."
 
 ## What Not To Claim
 
 Do not claim:
 
+- that the deterministic dry run executed an AI model
+- that the deterministic dry run proves production safety or certification
 - that the demo proves live production cloud execution
 - that TriageCore automatically solves SDLC governance
 - that local-first means zero human review
@@ -243,6 +288,15 @@ tc audit --self-test
 tc audit --kind route_audit --last 10
 ```
 
+### `tc audit --kind demo_dry_run --last 5` shows nothing
+
+Run the dry run first:
+
+```powershell
+tc demo --dry-run
+tc audit --kind demo_dry_run --last 5
+```
+
 ### Qwen Cloud questions come up during judging
 
 Clarify:
@@ -258,6 +312,7 @@ This workflow is intentionally bounded.
 
 It demonstrates:
 
+- a deterministic offline acceptance-chain proof
 - local-first operator workflow
 - reviewable handoff generation
 - privacy-safe route auditing
@@ -265,6 +320,7 @@ It demonstrates:
 
 It does not demonstrate:
 
+- AI-generated output in the deterministic dry run
 - live production cloud calls
 - autonomous end-to-end delivery
 - domain-complete environmental deployment
