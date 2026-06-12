@@ -11,6 +11,16 @@ MAX_CONTEXT_SNIPPET_CHARS = 500
 HELPFUL_FILE_CHAR_LIMIT = 20_000
 OPTIONAL_FILE_CHAR_LIMIT = 80_000
 
+DEFAULT_INCLUDED_FACETS = {
+    "task_prompt",
+    "target_file",
+}
+
+DEFAULT_EXCLUDED_FACETS = {
+    "conversation_history",
+    "user_preferences",
+}
+
 RUNNER_BUDGETS = {
     "local_llm": 4_000,
     "pipeline": 5_000,
@@ -36,6 +46,8 @@ class ContextItem:
     role: str
     estimated_tokens: int
     rationale: str
+    facet: str = "unknown"
+    included: bool = True
     exists: bool = True
     size_bytes: int = 0
     snippet: str = ""
@@ -81,8 +93,12 @@ def build_context_pack(
     runner: str,
     category: Optional[str] = None,
     budget_tokens: Optional[int] = None,
+    exclude_facets: Optional[set[str]] = None,
 ) -> ContextPack:
     budget = budget_tokens or budget_for(runner, category)
+    excluded_facets = set(DEFAULT_EXCLUDED_FACETS)
+    if exclude_facets:
+        excluded_facets.update(exclude_facets)
     items: List[ContextItem] = [
         ContextItem(
             kind="prompt",
@@ -90,10 +106,13 @@ def build_context_pack(
             role="required",
             estimated_tokens=estimate_tokens(prompt),
             rationale="The task prompt is required to execute or supervise the task.",
+            facet="task_prompt",
             snippet=prompt[:MAX_CONTEXT_SNIPPET_CHARS],
         )
     ]
     excluded: List[ContextItem] = []
+    items, pruned_items = _prune_items_by_facet(items, excluded_facets)
+    excluded.extend(pruned_items)
 
     for file_path in files:
         item = _context_item_for_file(file_path)
@@ -160,6 +179,7 @@ def create_context_pack_artifact(
     ledger_dir: str = ".triagecore",
     category: Optional[str] = None,
     budget_tokens: Optional[int] = None,
+    exclude_facets: Optional[set[str]] = None,
 ) -> tuple[ContextPack, str, Dict[str, Any]]:
     pack = build_context_pack(
         task_id=task_id,
@@ -168,6 +188,7 @@ def create_context_pack_artifact(
         runner=runner,
         category=category,
         budget_tokens=budget_tokens,
+        exclude_facets=exclude_facets,
     )
     artifact_path = write_context_pack(pack, ledger_dir=ledger_dir)
     return pack, artifact_path, context_pack_event_payload(pack, artifact_path)
@@ -182,6 +203,8 @@ def _context_item_for_file(file_path: str) -> ContextItem:
             exists=False,
             estimated_tokens=0,
             rationale="The requested file path does not exist.",
+            facet="target_file",
+            included=False,
         )
 
     size = os.path.getsize(file_path)
@@ -210,6 +233,8 @@ def _context_item_for_file(file_path: str) -> ContextItem:
         kind="file",
         label=file_path,
         role=role,
+        facet="target_file",
+        included=role != "excluded",
         exists=True,
         size_bytes=size,
         estimated_tokens=estimated_tokens,
@@ -224,3 +249,33 @@ def estimate_tokens_by_size(size_bytes: int) -> int:
 
 def _count_role(items: List[ContextItem], role: str) -> int:
     return sum(1 for item in items if item.role == role)
+
+
+def _prune_items_by_facet(
+    items: List[ContextItem],
+    excluded_facets: set[str],
+) -> tuple[List[ContextItem], List[ContextItem]]:
+    included_items: List[ContextItem] = []
+    excluded_items: List[ContextItem] = []
+
+    for item in items:
+        if item.facet in excluded_facets:
+            excluded_items.append(
+                ContextItem(
+                    kind=item.kind,
+                    label=item.label,
+                    role="excluded",
+                    estimated_tokens=0,
+                    rationale=f"Excluded by deterministic facet policy for '{item.facet}'.",
+                    facet=item.facet,
+                    included=False,
+                    exists=item.exists,
+                    size_bytes=item.size_bytes,
+                    snippet="",
+                )
+            )
+            continue
+
+        included_items.append(item)
+
+    return included_items, excluded_items

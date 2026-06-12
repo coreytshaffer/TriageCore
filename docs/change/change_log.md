@@ -5,6 +5,7 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+- Implemented CR-022 (Context Facet Pruning Plan): Add deterministic facet metadata and explicit facet exclusion to context budgeting while keeping context-pack event payloads metadata-only.
 - Implemented CR-021 (Persistent Artifact Privacy Invariant): Add a central recursive validator for persistent ledger events and fail closed before writing prohibited raw-content keys.
 
 - Added CR-020 (Persistent Cryptographic Agent Identities) as proposed documentation for crypto-backed agent provenance, signed ledger events, scoped capabilities, revocation, and PQC-ready algorithm metadata.
