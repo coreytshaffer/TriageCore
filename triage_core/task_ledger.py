@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional
 
+from triage_core.privacy_invariants import assert_persistent_privacy_safe
+
 LEDGER_SCHEMA_VERSION = "0.2.0"
 ROLE_TAXONOMY_VERSION = "2026-06-worker-council-v2"
 
@@ -186,6 +188,10 @@ class TaskLedger:
             ) from e
 
     def append_event(self, task_id: str, event_type: str, payload: Dict[str, Any]):
+        assert_persistent_privacy_safe(
+            payload,
+            artifact_name=f"TaskLedger payload for event_type={event_type}",
+        )
         event = {
             "event_id": str(uuid.uuid4()),
             "task_id": task_id,
