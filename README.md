@@ -305,6 +305,14 @@ triagecore antigravity-task --prompt "Add pytest coverage for handoff.py" --file
 
 TriageCore uses `pytest` to ensure all routing and safety logic operates completely offline without network calls. Tests actively mock the backend `requests` module to verify payload structures across Ollama, vLLM, and llama.cpp presets.
 
+## Safety and Compliance Scope
+
+TriageCore is a research-stage orchestration and workflow-control project. It is designed to support privacy-aware routing, local-first execution, human approval gates, and auditable task records.
+
+TriageCore is not a certified safety system, compliance system, medical device, legal decision system, emergency dispatch system, or critical infrastructure control system. It does not guarantee safe, lawful, complete, accurate, or compliant outcomes.
+
+Operators are responsible for validating outputs, configuring policies, reviewing logs, and ensuring that any deployment satisfies applicable legal, security, privacy, safety, and sector-specific requirements.
+
 ```bash
 pip install pytest
 pytest tests/
