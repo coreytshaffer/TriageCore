@@ -5,6 +5,7 @@ import os
 import uuid
 from datetime import datetime, timezone
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from triage_core.agent_identity import AgentIdentityRegistry
@@ -136,6 +137,22 @@ class TaskContext:
     latest_artifact_text: Optional[str] = None
     telemetry_summary: Dict[str, Any] = field(default_factory=dict)
     review_summary: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class RouteAuditSignatureVerificationSummary:
+    valid_signed: int = 0
+    invalid_signed: int = 0
+    unsigned: int = 0
+    malformed: int = 0
+    skipped_non_route_audit: int = 0
+
+    def should_fail(self, *, strict: bool) -> bool:
+        return (
+            self.invalid_signed > 0
+            or self.malformed > 0
+            or (strict and self.unsigned > 0)
+        )
 
 
 class TaskLedger:
@@ -653,3 +670,42 @@ def verify_route_audit_event_signature(
         route_audit_signature_payload(event),
         signature_metadata,
     )
+
+
+def verify_route_audit_signatures_in_ledger(
+    ledger_path: str | Path,
+) -> RouteAuditSignatureVerificationSummary:
+    summary = RouteAuditSignatureVerificationSummary()
+    ledger_path = Path(ledger_path)
+    registry = AgentIdentityRegistry(ledger_dir=ledger_path.parent)
+    registry.load()
+
+    with ledger_path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            line = line.strip()
+            if not line:
+                continue
+
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                summary.malformed += 1
+                continue
+
+            if event.get("event_type") != "route_audit":
+                summary.skipped_non_route_audit += 1
+                continue
+
+            if "signature_metadata" not in event:
+                summary.unsigned += 1
+                continue
+
+            try:
+                if verify_route_audit_event_signature(event, registry):
+                    summary.valid_signed += 1
+                else:
+                    summary.invalid_signed += 1
+            except Exception:
+                summary.invalid_signed += 1
+
+    return summary

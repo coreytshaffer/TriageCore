@@ -11,7 +11,7 @@ from triage_core.task_packet import TaskPacket, PrivacyMetadata
 from triage_core.compression import compress_context
 from triage_core.config import default_config
 from triage_core.backends import LocalBackend
-from triage_core.task_ledger import TaskLedger
+from triage_core.task_ledger import TaskLedger, verify_route_audit_signatures_in_ledger
 from triage_core.demo_dry_run import format_demo_dry_run, run_demo_dry_run
 from triage_core.privacy_invariants import find_forbidden_persistent_fields
 
@@ -300,6 +300,29 @@ def tc_audit_privacy_invariants() -> None:
     )
 
 
+def tc_audit_verify_signatures(strict: bool = False) -> None:
+    ledger_path = _ledger_path()
+    if not ledger_path.exists():
+        print(f"Error: {ledger_path} not found.")
+        sys.exit(1)
+
+    summary = verify_route_audit_signatures_in_ledger(ledger_path)
+    status = "failed" if summary.should_fail(strict=strict) else "passed"
+    strict_mode = "on" if strict else "off"
+    print(
+        "Route audit signature verification "
+        f"{status}: "
+        f"valid_signed={summary.valid_signed} "
+        f"invalid_signed={summary.invalid_signed} "
+        f"unsigned={summary.unsigned} "
+        f"malformed={summary.malformed} "
+        f"skipped_non_route_audit={summary.skipped_non_route_audit} "
+        f"strict={strict_mode}"
+    )
+    if summary.should_fail(strict=strict):
+        sys.exit(1)
+
+
 def tc_demo_dry_run(decision: str = "pending") -> None:
     ledger_path = _ledger_path()
     result = run_demo_dry_run(
@@ -467,6 +490,16 @@ def main():
         action="store_true",
         help="Audit persistent ledger records for forbidden raw-content fields",
     )
+    audit_parser.add_argument(
+        "--verify-signatures",
+        action="store_true",
+        help="Verify signed route_audit ledger events using registered public identities",
+    )
+    audit_parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Fail route_audit signature verification when legacy unsigned events are present",
+    )
 
     # propose
     propose_parser = subparsers.add_parser("propose", help="Scaffold a new Change Request")
@@ -504,10 +537,24 @@ def main():
     elif args.command == "handoff":
         tc_handoff(args.target == "latest", args.print)
     elif args.command == "audit":
-        if args.self_test and args.privacy_invariants:
-            audit_parser.error("--self-test and --privacy-invariants cannot be used together")
+        active_audit_modes = sum(
+            bool(flag)
+            for flag in (
+                args.self_test,
+                args.privacy_invariants,
+                args.verify_signatures,
+            )
+        )
+        if active_audit_modes > 1:
+            audit_parser.error(
+                "--self-test, --privacy-invariants, and --verify-signatures cannot be used together"
+            )
+        if args.strict and not args.verify_signatures:
+            audit_parser.error("--strict requires --verify-signatures")
         if args.privacy_invariants:
             tc_audit_privacy_invariants()
+        elif args.verify_signatures:
+            tc_audit_verify_signatures(strict=args.strict)
         elif args.self_test:
             tc_audit_self_test()
         else:

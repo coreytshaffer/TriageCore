@@ -10,7 +10,7 @@ This document summarizes the active TriageCore backlog after CR-021 through CR-0
   - Status: open
   - Related CR: CR-020
   - Purpose: add persistent local agent identities, signed ledger-event metadata, revocation, capability checks, and crypto-agile algorithm metadata.
-  - Current phase: Phase 3 route_audit signed ledger metadata in progress
+  - Current phase: Phase 4 route_audit verification CLI in progress
 
 ## Candidate Future Work
 
@@ -28,6 +28,6 @@ This document summarizes the active TriageCore backlog after CR-021 through CR-0
 
 ## Current Recommendation
 
-Continue CR-020 in small phases. Phase 3 should remain limited to an opt-in,
-metadata-only `route_audit` ledger-signing path before any broader TaskLedger
-integration work.
+Continue CR-020 in small phases. Phase 4 should remain limited to operator
+verification of signed `route_audit` ledger events before any broader
+TaskLedger signing expansion.

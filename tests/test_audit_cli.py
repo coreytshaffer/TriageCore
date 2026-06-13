@@ -3,7 +3,14 @@ import json
 import pytest
 from pathlib import Path
 from unittest.mock import patch
-from triage_core.tc_cli import tc_audit, tc_audit_privacy_invariants, tc_audit_self_test
+from triage_core.agent_identity import AgentIdentityRegistry
+from triage_core.task_ledger import TaskLedger
+from triage_core.tc_cli import (
+    tc_audit,
+    tc_audit_privacy_invariants,
+    tc_audit_self_test,
+    tc_audit_verify_signatures,
+)
 
 @pytest.fixture
 def mock_ledger(tmp_path):
@@ -279,3 +286,150 @@ def test_audit_privacy_invariants_missing_ledger_fails(capsys):
     assert exc.value.code == 1
     out = capsys.readouterr().out
     assert "Error: missing-ledger.jsonl not found." in out
+
+
+def test_audit_verify_signatures_passes_with_signed_and_unsigned_route_audit(
+    tmp_path, capsys
+):
+    ledger_dir = tmp_path / ".triagecore"
+    ledger = TaskLedger(str(ledger_dir))
+    registry = AgentIdentityRegistry(ledger_dir=ledger_dir)
+    registry.generate_identity(
+        "project-steward",
+        "project_steward",
+        ["route_audit:sign"],
+    )
+
+    ledger.append_signed_route_audit_event(
+        "signed-task",
+        {
+            "decision": "allowed",
+            "reason_code": "safe_signed_route",
+            "privacy_level": "public",
+            "privacy_scan_passed": True,
+            "is_local_only": False,
+            "recommended_route": "qwen_cloud",
+            "selected_backend": "qwen_cloud",
+        },
+        signing_registry=registry,
+        signing_agent_id="project-steward",
+    )
+    ledger.append_event(
+        "unsigned-task",
+        "route_audit",
+        {
+            "decision": "allowed",
+            "reason_code": "legacy_unsigned_route",
+        },
+    )
+    ledger.append_event(
+        "other-task",
+        "other_event",
+        {
+            "safe_field": "still_ignored",
+        },
+    )
+
+    with patch("triage_core.tc_cli._ledger_path", return_value=ledger_dir / "ledger.jsonl"):
+        tc_audit_verify_signatures()
+
+    out = capsys.readouterr().out
+    assert "Route audit signature verification passed" in out
+    assert "valid_signed=1" in out
+    assert "invalid_signed=0" in out
+    assert "unsigned=1" in out
+    assert "malformed=0" in out
+    assert "skipped_non_route_audit=1" in out
+    assert "safe_signed_route" not in out
+    assert "legacy_unsigned_route" not in out
+
+
+def test_audit_verify_signatures_fails_for_invalid_signed_route_audit(
+    tmp_path, capsys
+):
+    ledger_dir = tmp_path / ".triagecore"
+    ledger = TaskLedger(str(ledger_dir))
+    registry = AgentIdentityRegistry(ledger_dir=ledger_dir)
+    registry.generate_identity(
+        "validator-tools",
+        "validator_tools",
+        ["route_audit:sign"],
+    )
+
+    event = ledger.append_signed_route_audit_event(
+        "signed-task",
+        {
+            "decision": "allowed",
+            "reason_code": "tamper_target",
+            "privacy_level": "public",
+        },
+        signing_registry=registry,
+        signing_agent_id="validator-tools",
+    )
+    tampered = dict(event)
+    tampered["payload"] = dict(event["payload"])
+    tampered["payload"]["decision"] = "blocked"
+
+    (ledger_dir / "ledger.jsonl").write_text(json.dumps(tampered) + "\n", encoding="utf-8")
+
+    with patch("triage_core.tc_cli._ledger_path", return_value=ledger_dir / "ledger.jsonl"):
+        with pytest.raises(SystemExit) as exc:
+            tc_audit_verify_signatures()
+
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "Route audit signature verification failed" in out
+    assert "valid_signed=0" in out
+    assert "invalid_signed=1" in out
+    assert "tamper_target" not in out
+
+
+def test_audit_verify_signatures_strict_fails_on_unsigned_route_audit(
+    tmp_path, capsys
+):
+    ledger_dir = tmp_path / ".triagecore"
+    ledger = TaskLedger(str(ledger_dir))
+    ledger.append_event(
+        "unsigned-task",
+        "route_audit",
+        {
+            "decision": "allowed",
+            "reason_code": "legacy_only",
+        },
+    )
+
+    with patch("triage_core.tc_cli._ledger_path", return_value=ledger_dir / "ledger.jsonl"):
+        with pytest.raises(SystemExit) as exc:
+            tc_audit_verify_signatures(strict=True)
+
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "Route audit signature verification failed" in out
+    assert "unsigned=1" in out
+    assert "strict=on" in out
+
+
+def test_audit_verify_signatures_fails_on_malformed_json(tmp_path, capsys):
+    ledger_dir = tmp_path / ".triagecore"
+    ledger_dir.mkdir(parents=True)
+    ledger_path = ledger_dir / "ledger.jsonl"
+    ledger_path.write_text("{not json\n", encoding="utf-8")
+
+    with patch("triage_core.tc_cli._ledger_path", return_value=ledger_path):
+        with pytest.raises(SystemExit) as exc:
+            tc_audit_verify_signatures()
+
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "Route audit signature verification failed" in out
+    assert "malformed=1" in out
+
+
+def test_audit_verify_signatures_missing_ledger_fails(capsys):
+    with patch("triage_core.tc_cli._ledger_path", return_value=Path("missing-signatures-ledger.jsonl")):
+        with pytest.raises(SystemExit) as exc:
+            tc_audit_verify_signatures()
+
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "Error: missing-signatures-ledger.jsonl not found." in out
