@@ -5,6 +5,8 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+- Proposed CR-025 (Backlog Documentation Alignment Pass): Align backlog, README proof markers, release metadata, and current project status after CR-021 through CR-024.
+- Implemented CR-023 (Offline Demo Dry-Run Evidence): Add deterministic offline demo evidence with metadata-only `demo_dry_run` ledger events and reviewer-path documentation.
 - Implemented CR-024 (Persistent Artifact Audit Command): Add `tc audit --privacy-invariants` to scan existing ledger records for forbidden raw-content fields using the CR-021 invariant.
 - Implemented CR-022 (Context Facet Pruning Plan): Add deterministic facet metadata and explicit facet exclusion to context budgeting while keeping context-pack event payloads metadata-only.
 - Implemented CR-021 (Persistent Artifact Privacy Invariant): Add a central recursive validator for persistent ledger events and fail closed before writing prohibited raw-content keys.

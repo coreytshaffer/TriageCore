@@ -70,7 +70,7 @@ TriageCore v0.1.0 establishes the first public proof-marker release of the proje
 - CR-017 reviewer path and public evidence example are present and validated.
 - Task routing and review workflows are structured around explicit approval boundaries.
 - Privacy and security hardening work is underway, including mobile API boundary hardening.
-- Current validation evidence includes a full passing test suite: `241 passed, 2 skipped`.
+- Current validation evidence includes a full passing test suite: `264 passed, 2 skipped`.
 
 ### Intended Audience
 

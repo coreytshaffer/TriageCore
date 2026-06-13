@@ -59,6 +59,7 @@ tc handoff latest --print
 tc audit --self-test
 tc audit --kind route_audit --last 10
 tc audit --kind demo_dry_run --last 5
+tc audit --privacy-invariants
 triagecore benchmark --list-only
 ```
 
@@ -71,6 +72,7 @@ Expected outputs:
 - `tc audit --self-test` writes one privacy-safe `route_audit` event.
 - `tc audit --kind route_audit --last 10` shows routing metadata without raw prompt/data leakage.
 - `tc audit --kind demo_dry_run --last 5` shows the deterministic demo evidence without raw request or proposed-output content.
+- `tc audit --privacy-invariants` scans the persistent ledger for forbidden raw-content keys and confirms the CR-021 invariant still holds.
 - `triagecore benchmark --list-only` shows the benchmark fixture set without contacting a backend.
 
 Sample audit transcript:
@@ -106,6 +108,7 @@ Current in-repo proof markers:
 - a runnable reviewer path using existing commands
 - a judge-facing submission bundle under [`docs/submission/`](docs/submission/README.md)
 - a privacy-safe route audit self-test and public evidence example
+- persistent artifact privacy invariant audit via `tc audit --privacy-invariants`
 - benchmark fixtures and benchmark-report scaffolding
 - a full offline-oriented test suite runnable with `python -m pytest -q`
 - a public README test badge backed by the GitHub Actions workflow
