@@ -2,7 +2,7 @@
 
 ## Status
 
-Partially Implemented - Phase 4 route_audit verification CLI
+Partially Implemented - Phase 5 identity initialization CLI
 
 ## Linked Issue
 
@@ -267,6 +267,14 @@ Implemented an operator-facing `tc audit --verify-signatures` command that
 scans ledger records, verifies signed `route_audit` events against registered
 public identities, reports aggregate valid/invalid/unsigned/malformed counts,
 and supports a strict mode for legacy unsigned events.
+
+### Phase 5: identity initialization CLI
+
+Implemented operator-facing `tc identity init` and `tc identity list`
+commands for local Ed25519 identity initialization and safe public metadata
+inspection. Identity initialization writes private key material only under
+`.triagecore/identity/keys/` and writes public metadata to
+`.triagecore/identity/agents.json`.
 
 Global ledger signing, automatic signing across all event types, and signing of
 raw prompt or data content remain out of scope for this phase.

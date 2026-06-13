@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from typing import List
 
+from triage_core.agent_identity import AgentIdentityError, AgentIdentityRegistry
 from triage_core.task_packet import TaskPacket, PrivacyMetadata
 from triage_core.compression import compress_context
 from triage_core.config import default_config
@@ -171,6 +172,10 @@ def _repo_root_or_cwd() -> Path:
 def _ledger_path() -> Path:
     return _repo_root_or_cwd() / ".triagecore" / "ledger.jsonl"
 
+
+def _identity_registry() -> AgentIdentityRegistry:
+    return AgentIdentityRegistry(ledger_dir=_repo_root_or_cwd() / ".triagecore")
+
 def tc_audit(kind: str, last: int):
     ledger_path = _ledger_path()
     if not ledger_path.exists():
@@ -330,6 +335,50 @@ def tc_demo_dry_run(decision: str = "pending") -> None:
         decision=decision,
     )
     print(format_demo_dry_run(result))
+
+
+def tc_identity_init(agent_id: str, role: str, capabilities: List[str]) -> None:
+    registry = _identity_registry()
+    try:
+        identity = registry.generate_identity(
+            agent_id=agent_id,
+            role=role,
+            capabilities=capabilities,
+        )
+    except AgentIdentityError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
+    key_path = registry.keys_dir / f"{identity.agent_id}.key"
+    print(
+        "Success: Initialized local identity "
+        f"agent_id={identity.agent_id} "
+        f"role={identity.role} "
+        f"key_algorithm={identity.key_algorithm} "
+        f"capabilities={','.join(identity.capabilities)}"
+    )
+    print(f"Registry: {registry.registry_path}")
+    print(f"Private key path: {key_path}")
+
+
+def tc_identity_list() -> None:
+    registry = _identity_registry()
+    identities = registry.load()
+    if not identities:
+        print(f"No identities found in {registry.registry_path}.")
+        return
+
+    print(f"Identities: {len(identities)}")
+    for identity in sorted(identities.values(), key=lambda item: item.agent_id):
+        capabilities = ",".join(identity.capabilities)
+        print(
+            f"- agent_id={identity.agent_id} "
+            f"role={identity.role} "
+            f"status={identity.status} "
+            f"key_algorithm={identity.key_algorithm} "
+            f"fingerprint={identity.public_key_fingerprint} "
+            f"capabilities={capabilities}"
+        )
 
 
 import re
@@ -510,6 +559,23 @@ def main():
     # doctor
     subparsers.add_parser("doctor", help="Print a TriageCore environment report")
 
+    # identity
+    identity_parser = subparsers.add_parser("identity", help="Manage local persistent agent identities")
+    identity_subparsers = identity_parser.add_subparsers(dest="identity_command")
+
+    identity_init_parser = identity_subparsers.add_parser("init", help="Initialize a local agent identity")
+    identity_init_parser.add_argument("--agent-id", required=True, help="Stable local agent identity id")
+    identity_init_parser.add_argument("--role", required=True, help="Human-readable agent role")
+    identity_init_parser.add_argument(
+        "--capability",
+        dest="capabilities",
+        action="append",
+        required=True,
+        help="Capability to grant; repeat for multiple capabilities",
+    )
+
+    identity_subparsers.add_parser("list", help="List registered public agent identities")
+
     # demo
     demo_parser = subparsers.add_parser(
         "demo",
@@ -563,6 +629,13 @@ def main():
         print("TriageCore Operator Workflow active.")
     elif args.command == "doctor":
         tc_doctor()
+    elif args.command == "identity":
+        if args.identity_command == "init":
+            tc_identity_init(args.agent_id, args.role, args.capabilities)
+        elif args.identity_command == "list":
+            tc_identity_list()
+        else:
+            identity_parser.error("identity requires a subcommand: init or list")
     elif args.command == "demo":
         if not args.dry_run:
             demo_parser.error("the demo command currently requires --dry-run")
