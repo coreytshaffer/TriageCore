@@ -1,7 +1,18 @@
 import os
 import uuid
 import tempfile
-from triage_core.task_ledger import TaskLedger
+import pytest
+
+from triage_core.agent_identity import (
+    AgentIdentityRegistry,
+    REVOKED_STATUS,
+    RevokedAgentError,
+    UnauthorizedCapabilityError,
+)
+from triage_core.task_ledger import (
+    TaskLedger,
+    verify_route_audit_event_signature,
+)
 
 def test_ledger_append_and_read():
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -550,3 +561,152 @@ def test_ledger_tracks_provenance_fields():
         assert record is not None
         assert record.backend_uri == "http://localhost:11434"
         assert record.execution_node == "localhost"
+
+
+def test_append_signed_route_audit_event_writes_signature_metadata():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        ledger = TaskLedger(ledger_dir=temp_dir)
+        registry = AgentIdentityRegistry(ledger_dir=temp_dir)
+        registry.generate_identity(
+            "project-steward",
+            "project_steward",
+            ["route_audit:sign"],
+        )
+
+        payload = {
+            "decision": "allowed",
+            "reason_code": "public_safe_demo",
+            "privacy_level": "public",
+            "privacy_scan_passed": True,
+            "is_local_only": False,
+            "recommended_route": "qwen_cloud",
+            "selected_backend": "qwen_cloud",
+        }
+        written_event = ledger.append_signed_route_audit_event(
+            "task-123",
+            payload,
+            signing_registry=registry,
+            signing_agent_id="project-steward",
+        )
+
+        assert written_event["event_type"] == "route_audit"
+        assert written_event["payload"] == payload
+        assert written_event["signature_metadata"]["agent_id"] == "project-steward"
+        assert written_event["signature_metadata"]["capability"] == "route_audit:sign"
+        assert verify_route_audit_event_signature(written_event, registry) is True
+
+        stored_events = ledger.get_events("task-123")
+        assert len(stored_events) == 1
+        assert "signature_metadata" in stored_events[0]
+        assert verify_route_audit_event_signature(stored_events[0], registry) is True
+
+
+def test_signed_route_audit_event_verification_fails_after_payload_tamper():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        ledger = TaskLedger(ledger_dir=temp_dir)
+        registry = AgentIdentityRegistry(ledger_dir=temp_dir)
+        registry.generate_identity(
+            "validator-tools",
+            "validator_tools",
+            ["route_audit:sign"],
+        )
+
+        event = ledger.append_signed_route_audit_event(
+            "task-456",
+            {
+                "decision": "allowed",
+                "reason_code": "public_safe_demo",
+                "privacy_level": "public",
+                "privacy_scan_passed": True,
+                "is_local_only": False,
+                "recommended_route": "qwen_cloud",
+                "selected_backend": "qwen_cloud",
+            },
+            signing_registry=registry,
+            signing_agent_id="validator-tools",
+        )
+
+        tampered_event = dict(event)
+        tampered_event["payload"] = dict(event["payload"])
+        tampered_event["payload"]["decision"] = "blocked"
+
+        assert verify_route_audit_event_signature(tampered_event, registry) is False
+
+
+def test_unsigned_route_audit_events_still_work():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        ledger = TaskLedger(ledger_dir=temp_dir)
+
+        ledger.append_event(
+            "task-789",
+            "route_audit",
+            {
+                "decision": "allowed",
+                "reason_code": "legacy_unsigned_route_audit",
+            },
+        )
+
+        stored_events = ledger.get_events("task-789")
+        assert len(stored_events) == 1
+        assert stored_events[0]["event_type"] == "route_audit"
+        assert "signature_metadata" not in stored_events[0]
+        registry = AgentIdentityRegistry(ledger_dir=temp_dir)
+        assert verify_route_audit_event_signature(stored_events[0], registry) is False
+
+
+def test_signed_route_audit_event_fails_for_revoked_agent():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        ledger = TaskLedger(ledger_dir=temp_dir)
+        registry = AgentIdentityRegistry(ledger_dir=temp_dir)
+        registry.generate_identity(
+            "revoked-route-auditor",
+            "validator_tools",
+            ["route_audit:sign"],
+            status=REVOKED_STATUS,
+        )
+
+        event = {
+            "event_id": "evt-1",
+            "task_id": "task-999",
+            "timestamp": "2026-06-12T00:00:00+00:00",
+            "schema_version": "0.2.0",
+            "role_taxonomy_version": "2026-06-worker-council-v2",
+            "event_type": "route_audit",
+            "payload": {
+                "decision": "allowed",
+                "reason_code": "public_safe_demo",
+            },
+            "signature_metadata": {
+                "agent_id": "revoked-route-auditor",
+                "capability": "route_audit:sign",
+                "payload_hash": "abc",
+                "signature_algorithm": "ed25519",
+                "signed_at": "2026-06-12T00:00:00+00:00",
+                "signature": "ZmFrZQ==",
+            },
+        }
+
+        with pytest.raises(RevokedAgentError):
+            verify_route_audit_event_signature(event, registry)
+
+
+def test_append_signed_route_audit_event_fails_for_unauthorized_agent():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        ledger = TaskLedger(ledger_dir=temp_dir)
+        registry = AgentIdentityRegistry(ledger_dir=temp_dir)
+        registry.generate_identity(
+            "context-planner",
+            "context_planner",
+            ["validation_result:sign"],
+        )
+
+        with pytest.raises(UnauthorizedCapabilityError):
+            ledger.append_signed_route_audit_event(
+                "task-unauthorized",
+                {
+                    "decision": "allowed",
+                    "reason_code": "public_safe_demo",
+                },
+                signing_registry=registry,
+                signing_agent_id="context-planner",
+            )

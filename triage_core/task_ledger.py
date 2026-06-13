@@ -5,50 +5,14 @@ import os
 import uuid
 from datetime import datetime, timezone
 from dataclasses import dataclass, field
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
 
+from triage_core.agent_identity import AgentIdentityRegistry
 from triage_core.privacy_invariants import assert_persistent_privacy_safe
 
 LEDGER_SCHEMA_VERSION = "0.2.0"
 ROLE_TAXONOMY_VERSION = "2026-06-worker-council-v2"
-
-
-@dataclass
-class TaskRecord:
-    task_id: str
-    schema_version: Optional[str] = None
-    role_taxonomy_version: Optional[str] = None
-    created_at: str = ""
-    updated_at: str = ""
-    title: str = ""
-    description: str = ""
-    target_files: List[str] = field(default_factory=list)
-    runner: Optional[str] = None
-    status: str = "pending"
-    study_id: Optional[str] = None
-    run_id: Optional[str] = None
-    permission_profile: Optional[str] = None
-    risk_level: Optional[str] = None
-    energy_kwh_estimate: float = 0.0
-    emissions_gco2e_estimate: float = 0.0
-    grid_intensity_gco2e_per_kwh: float = 0.0
-    grid_intensity_source: str = "static_config"
-    wasted_tokens: int = 0
-    early_stopped: bool = False
-    early_stop_reason: str = ""
-    firewall_triggered: bool = False
-    firewall_reason: str = ""
-import csv
-import dataclasses
-import json
-import os
-import uuid
-from datetime import datetime, timezone
-from dataclasses import dataclass, field
-from typing import Dict, Any, List, Optional
-
-LEDGER_SCHEMA_VERSION = "0.2.0"
-ROLE_TAXONOMY_VERSION = "2026-06-worker-council-v2"
+ROUTE_AUDIT_SIGN_CAPABILITY = "route_audit:sign"
 
 
 @dataclass
@@ -192,17 +156,49 @@ class TaskLedger:
             payload,
             artifact_name=f"TaskLedger payload for event_type={event_type}",
         )
-        event = {
+        event = self._build_event(task_id, event_type, payload)
+        with open(self.ledger_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(event) + "\n")
+
+    def append_signed_route_audit_event(
+        self,
+        task_id: str,
+        payload: Dict[str, Any],
+        *,
+        signing_registry: AgentIdentityRegistry,
+        signing_agent_id: str,
+        signature_algorithm: str = "ed25519",
+    ) -> Dict[str, Any]:
+        assert_persistent_privacy_safe(
+            payload,
+            artifact_name="TaskLedger payload for event_type=route_audit",
+        )
+        event = self._build_event(task_id, "route_audit", payload)
+        event["signature_metadata"] = signing_registry.sign_payload(
+            signing_agent_id,
+            ROUTE_AUDIT_SIGN_CAPABILITY,
+            route_audit_signature_payload(event),
+            signature_algorithm=signature_algorithm,
+        )
+        with open(self.ledger_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(event) + "\n")
+        return event
+
+    def _build_event(
+        self,
+        task_id: str,
+        event_type: str,
+        payload: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        return {
             "event_id": str(uuid.uuid4()),
             "task_id": task_id,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "schema_version": LEDGER_SCHEMA_VERSION,
             "role_taxonomy_version": ROLE_TAXONOMY_VERSION,
             "event_type": event_type,
-            "payload": payload
+            "payload": payload,
         }
-        with open(self.ledger_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(event) + "\n")
 
     def get_task(self, task_id: str) -> Optional[TaskRecord]:
         if not os.path.exists(self.ledger_path):
@@ -630,3 +626,30 @@ class TaskLedger:
                 row["target_files"] = ";".join(row["target_files"]) if row["target_files"] else ""
                 row["artifact_paths"] = ";".join(row["artifact_paths"]) if row["artifact_paths"] else ""
                 writer.writerow(row)
+
+
+def route_audit_signature_payload(event: Dict[str, Any]) -> Dict[str, Any]:
+    if event.get("event_type") != "route_audit":
+        raise ValueError("route_audit_signature_payload only supports route_audit events.")
+    return {
+        "event_id": event["event_id"],
+        "task_id": event["task_id"],
+        "timestamp": event["timestamp"],
+        "schema_version": event["schema_version"],
+        "role_taxonomy_version": event["role_taxonomy_version"],
+        "event_type": event["event_type"],
+        "payload": event["payload"],
+    }
+
+
+def verify_route_audit_event_signature(
+    event: Dict[str, Any],
+    signing_registry: AgentIdentityRegistry,
+) -> bool:
+    signature_metadata = event.get("signature_metadata")
+    if not signature_metadata:
+        return False
+    return signing_registry.verify_signed_payload(
+        route_audit_signature_payload(event),
+        signature_metadata,
+    )

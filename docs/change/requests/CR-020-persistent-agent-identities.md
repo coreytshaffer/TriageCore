@@ -2,7 +2,7 @@
 
 ## Status
 
-Partially Implemented - Phase 2 signing foundation
+Partially Implemented - Phase 3 route_audit signed ledger metadata
 
 ## Linked Issue
 
@@ -254,7 +254,15 @@ Implemented local Ed25519 key generation, private key storage under
 helpers, verification helpers, tamper-failure checks, and capability/status
 enforcement around signing and verification.
 
-Ledger integration remains a future phase.
+### Phase 3: route_audit signed ledger metadata
+
+Implemented an opt-in signed ledger path for `route_audit` events only, using
+metadata-only event envelopes and existing Ed25519 signing helpers. Added
+verification helpers and compatibility coverage proving that unsigned legacy
+ledger events still read normally.
+
+Global ledger signing, automatic signing across all event types, and signing of
+raw prompt or data content remain out of scope for this phase.
 
 Recommended phased implementation:
 
