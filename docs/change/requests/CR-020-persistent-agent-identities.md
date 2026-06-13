@@ -2,7 +2,7 @@
 
 ## Status
 
-Partially Implemented - Phase 3 route_audit signed ledger metadata
+Partially Implemented - Phase 4 route_audit verification CLI
 
 ## Linked Issue
 
@@ -260,6 +260,13 @@ Implemented an opt-in signed ledger path for `route_audit` events only, using
 metadata-only event envelopes and existing Ed25519 signing helpers. Added
 verification helpers and compatibility coverage proving that unsigned legacy
 ledger events still read normally.
+
+### Phase 4: route_audit verification CLI
+
+Implemented an operator-facing `tc audit --verify-signatures` command that
+scans ledger records, verifies signed `route_audit` events against registered
+public identities, reports aggregate valid/invalid/unsigned/malformed counts,
+and supports a strict mode for legacy unsigned events.
 
 Global ledger signing, automatic signing across all event types, and signing of
 raw prompt or data content remain out of scope for this phase.
