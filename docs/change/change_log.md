@@ -5,7 +5,7 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
-- Partially Implemented CR-020 (Persistent Cryptographic Agent Identities): Add the phase 2 signing foundation with local Ed25519 key generation, public identity registration, canonical payload hashing, signing helpers, verification helpers, tamper checks, and private-key gitignore protection.
+- Partially Implemented CR-020 (Persistent Cryptographic Agent Identities): Add the phase 3 `route_audit` signed-ledger path with metadata-only signature envelopes, verification helpers, and compatibility coverage for unsigned legacy events.
 - Proposed CR-025 (Backlog Documentation Alignment Pass): Align backlog, README proof markers, release metadata, and current project status after CR-021 through CR-024.
 - Implemented CR-023 (Offline Demo Dry-Run Evidence): Add deterministic offline demo evidence with metadata-only `demo_dry_run` ledger events and reviewer-path documentation.
 - Implemented CR-024 (Persistent Artifact Audit Command): Add `tc audit --privacy-invariants` to scan existing ledger records for forbidden raw-content fields using the CR-021 invariant.
