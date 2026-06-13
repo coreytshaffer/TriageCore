@@ -10,7 +10,7 @@ This document summarizes the active TriageCore backlog after CR-021 through CR-0
   - Status: open
   - Related CR: CR-020
   - Purpose: add persistent local agent identities, signed ledger-event metadata, revocation, capability checks, and crypto-agile algorithm metadata.
-  - Current phase: Phase 1 identity foundation in progress
+  - Current phase: Phase 2 signing foundation in progress
 
 ## Candidate Future Work
 
@@ -28,6 +28,7 @@ This document summarizes the active TriageCore backlog after CR-021 through CR-0
 
 ## Current Recommendation
 
-Continue CR-020 in small phases. Phase 1 should remain limited to identity
-metadata, registry persistence, status checks, capability authorization, and
-algorithm validation before any signing or ledger integration work.
+Continue CR-020 in small phases. Phase 2 should remain limited to local key
+generation, public identity registration, signing and verification helpers,
+tamper-failure checks, and authorization gating before any live TaskLedger
+integration work.
