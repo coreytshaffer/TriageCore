@@ -46,6 +46,7 @@ Thumbs.db
 .triagecore/learning_proposals.jsonl
 .triagecore/learning_reviews.jsonl
 .triagecore/*.log
+.triagecore/identity/keys/
 
 # TriageCore generated task output
 .agent_tasks/

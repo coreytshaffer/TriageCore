@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Partially Implemented - Phase 1 identity foundation
 
 ## Linked Issue
 
@@ -237,6 +237,17 @@ Targeted validation should include any new test files added for:
 - no private key leakage in exported or printed records
 
 ## Implementation Notes
+
+## Implementation Progress
+
+### Phase 1: Agent identity foundation
+
+Implemented public identity metadata, local registry loading/saving, status
+checks, capability authorization checks, algorithm metadata validation, and
+gitignore protection for private key storage.
+
+Signing, verification, key generation, and ledger integration remain future
+phases.
 
 Recommended phased implementation:
 

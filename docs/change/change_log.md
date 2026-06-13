@@ -5,13 +5,12 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+- Partially Implemented CR-020 (Persistent Cryptographic Agent Identities): Add the phase 1 agent identity foundation with public identity metadata, local registry persistence, capability checks, status checks, algorithm validation, and private-key gitignore protection.
 - Proposed CR-025 (Backlog Documentation Alignment Pass): Align backlog, README proof markers, release metadata, and current project status after CR-021 through CR-024.
 - Implemented CR-023 (Offline Demo Dry-Run Evidence): Add deterministic offline demo evidence with metadata-only `demo_dry_run` ledger events and reviewer-path documentation.
 - Implemented CR-024 (Persistent Artifact Audit Command): Add `tc audit --privacy-invariants` to scan existing ledger records for forbidden raw-content fields using the CR-021 invariant.
 - Implemented CR-022 (Context Facet Pruning Plan): Add deterministic facet metadata and explicit facet exclusion to context budgeting while keeping context-pack event payloads metadata-only.
 - Implemented CR-021 (Persistent Artifact Privacy Invariant): Add a central recursive validator for persistent ledger events and fail closed before writing prohibited raw-content keys.
-
-- Added CR-020 (Persistent Cryptographic Agent Identities) as proposed documentation for crypto-backed agent provenance, signed ledger events, scoped capabilities, revocation, and PQC-ready algorithm metadata.
 
 - Implemented CR-019 (Mobile API Access Boundary): Require bearer authentication, default to loopback, restrict network binding, return privacy-safe task projections, disable logs, and validate review decisions.
 - Implemented CR-018 (CI and Release Hygiene): Add a GitHub Actions pytest workflow and public CI trust marker for the alpha release.
