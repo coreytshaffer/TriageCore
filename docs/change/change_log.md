@@ -5,6 +5,7 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+- Implemented CR-026 (Post-Identity Privacy and Security Audit): Add a focused audit of CR-020 identity initialization, local key storage, signed `route_audit` verification, privacy boundaries, and remaining key-lifecycle risks.
 - Partially Implemented CR-020 (Persistent Cryptographic Agent Identities): Add the phase 5 `tc identity init` and `tc identity list` commands for local Ed25519 identity initialization and safe public metadata inspection.
 - Proposed CR-025 (Backlog Documentation Alignment Pass): Align backlog, README proof markers, release metadata, and current project status after CR-021 through CR-024.
 - Implemented CR-023 (Offline Demo Dry-Run Evidence): Add deterministic offline demo evidence with metadata-only `demo_dry_run` ledger events and reviewer-path documentation.
