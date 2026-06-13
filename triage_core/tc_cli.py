@@ -13,6 +13,7 @@ from triage_core.config import default_config
 from triage_core.backends import LocalBackend
 from triage_core.task_ledger import TaskLedger
 from triage_core.demo_dry_run import format_demo_dry_run, run_demo_dry_run
+from triage_core.privacy_invariants import find_forbidden_persistent_fields
 
 def _find_cr_file(cr_id: str) -> str:
     # search in docs/change/requests/
@@ -244,6 +245,61 @@ def tc_audit_self_test() -> None:
     print(f"Success: Wrote privacy-safe route_audit self-test event to {ledger_path}.")
 
 
+def tc_audit_privacy_invariants() -> None:
+    ledger_path = _ledger_path()
+    if not ledger_path.exists():
+        print(f"Error: {ledger_path} not found.")
+        sys.exit(1)
+
+    checked_records = 0
+    malformed_lines = 0
+    violation_count = 0
+
+    try:
+        with ledger_path.open("r", encoding="utf-8") as f:
+            for line_number, line in enumerate(f, start=1):
+                line = line.strip()
+                if not line:
+                    continue
+
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    malformed_lines += 1
+                    print(f"FAIL line {line_number}: malformed JSON")
+                    continue
+
+                checked_records += 1
+                violations = find_forbidden_persistent_fields(record)
+                for violation in violations:
+                    violation_count += 1
+                    print(
+                        "FAIL "
+                        f"line {line_number}: "
+                        f"task={record.get('task_id', 'unknown')} "
+                        f"event_type={record.get('event_type', 'unknown')} "
+                        f"path={violation.path} "
+                        f"key={violation.key}"
+                    )
+    except Exception as e:
+        print(f"Error reading {ledger_path}: {e}")
+        sys.exit(1)
+
+    if violation_count or malformed_lines:
+        print(
+            "Privacy invariant audit failed: "
+            f"{violation_count} violation(s), "
+            f"{malformed_lines} malformed line(s), "
+            f"{checked_records} record(s) checked."
+        )
+        sys.exit(1)
+
+    print(
+        "Privacy invariant audit passed: "
+        f"{checked_records} record(s) checked in {ledger_path}."
+    )
+
+
 def tc_demo_dry_run(decision: str = "pending") -> None:
     ledger_path = _ledger_path()
     result = run_demo_dry_run(
@@ -406,6 +462,11 @@ def main():
     audit_parser.add_argument("--kind", type=str, default="route_audit", help="The event_type to filter by (default: route_audit)")
     audit_parser.add_argument("--last", type=int, default=10, help="Number of recent records to display (default: 10)")
     audit_parser.add_argument("--self-test", action="store_true", help="Write one privacy-safe route_audit self-test event")
+    audit_parser.add_argument(
+        "--privacy-invariants",
+        action="store_true",
+        help="Audit persistent ledger records for forbidden raw-content fields",
+    )
 
     # propose
     propose_parser = subparsers.add_parser("propose", help="Scaffold a new Change Request")
@@ -443,7 +504,11 @@ def main():
     elif args.command == "handoff":
         tc_handoff(args.target == "latest", args.print)
     elif args.command == "audit":
-        if args.self_test:
+        if args.self_test and args.privacy_invariants:
+            audit_parser.error("--self-test and --privacy-invariants cannot be used together")
+        if args.privacy_invariants:
+            tc_audit_privacy_invariants()
+        elif args.self_test:
             tc_audit_self_test()
         else:
             tc_audit(args.kind, args.last)

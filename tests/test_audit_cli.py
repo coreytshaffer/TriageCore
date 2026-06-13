@@ -3,7 +3,7 @@ import json
 import pytest
 from pathlib import Path
 from unittest.mock import patch
-from triage_core.tc_cli import tc_audit, tc_audit_self_test
+from triage_core.tc_cli import tc_audit, tc_audit_privacy_invariants, tc_audit_self_test
 
 @pytest.fixture
 def mock_ledger(tmp_path):
@@ -195,3 +195,87 @@ def test_audit_reads_repo_ledger_from_subdirectory(tmp_path, monkeypatch, capsys
     out = capsys.readouterr().out
     assert "audit-self-test" in out
     assert "audit_self_test" in out
+
+
+def test_audit_privacy_invariants_passes_safe_ledger(tmp_path, capsys):
+    ledger_path = tmp_path / "ledger.jsonl"
+    ledger_path.write_text(
+        json.dumps(
+            {
+                "timestamp": "2026-06-12T00:00:00+00:00",
+                "task_id": "safe-task",
+                "event_type": "route_audit",
+                "payload": {
+                    "decision": "allowed",
+                    "reason_code": "safe_metadata_only",
+                    "privacy_level": "public",
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with patch("triage_core.tc_cli._ledger_path", return_value=ledger_path):
+        tc_audit_privacy_invariants()
+
+    out = capsys.readouterr().out
+    assert "Privacy invariant audit passed" in out
+    assert "1 record(s) checked" in out
+
+
+def test_audit_privacy_invariants_fails_without_echoing_sensitive_values(tmp_path, capsys):
+    ledger_path = tmp_path / "ledger.jsonl"
+    sensitive_value = "secret raw prompt value"
+    ledger_path.write_text(
+        json.dumps(
+            {
+                "timestamp": "2026-06-12T00:00:00+00:00",
+                "task_id": "unsafe-task",
+                "event_type": "route_audit",
+                "payload": {
+                    "decision": "blocked",
+                    "nested": {
+                        "raw_prompt": sensitive_value,
+                    },
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with patch("triage_core.tc_cli._ledger_path", return_value=ledger_path):
+        with pytest.raises(SystemExit) as exc:
+            tc_audit_privacy_invariants()
+
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "Privacy invariant audit failed" in out
+    assert "$.payload.nested.raw_prompt" in out
+    assert "raw_prompt" in out
+    assert sensitive_value not in out
+
+
+def test_audit_privacy_invariants_flags_malformed_json(tmp_path, capsys):
+    ledger_path = tmp_path / "ledger.jsonl"
+    ledger_path.write_text("{not json\n", encoding="utf-8")
+
+    with patch("triage_core.tc_cli._ledger_path", return_value=ledger_path):
+        with pytest.raises(SystemExit) as exc:
+            tc_audit_privacy_invariants()
+
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "FAIL line 1: malformed JSON" in out
+    assert "Privacy invariant audit failed" in out
+
+
+def test_audit_privacy_invariants_missing_ledger_fails(capsys):
+    with patch("triage_core.tc_cli._ledger_path", return_value=Path("missing-ledger.jsonl")):
+        with pytest.raises(SystemExit) as exc:
+            tc_audit_privacy_invariants()
+
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "Error: missing-ledger.jsonl not found." in out
