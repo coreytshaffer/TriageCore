@@ -2,7 +2,7 @@
 
 ## Status
 
-Partially Implemented - Phase 1 identity foundation
+Partially Implemented - Phase 2 signing foundation
 
 ## Linked Issue
 
@@ -246,8 +246,15 @@ Implemented public identity metadata, local registry loading/saving, status
 checks, capability authorization checks, algorithm metadata validation, and
 gitignore protection for private key storage.
 
-Signing, verification, key generation, and ledger integration remain future
-phases.
+### Phase 2: Signing foundation
+
+Implemented local Ed25519 key generation, private key storage under
+`.triagecore/identity/keys/`, public identity registration in
+`.triagecore/identity/agents.json`, canonical payload hashing, signing
+helpers, verification helpers, tamper-failure checks, and capability/status
+enforcement around signing and verification.
+
+Ledger integration remains a future phase.
 
 Recommended phased implementation:
 
