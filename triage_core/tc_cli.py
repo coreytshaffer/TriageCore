@@ -12,6 +12,7 @@ from triage_core.compression import compress_context
 from triage_core.config import default_config
 from triage_core.backends import LocalBackend
 from triage_core.task_ledger import TaskLedger
+from triage_core.demo_dry_run import format_demo_dry_run, run_demo_dry_run
 
 def _find_cr_file(cr_id: str) -> str:
     # search in docs/change/requests/
@@ -242,6 +243,16 @@ def tc_audit_self_test() -> None:
     ledger.append_event("audit-self-test", "route_audit", payload)
     print(f"Success: Wrote privacy-safe route_audit self-test event to {ledger_path}.")
 
+
+def tc_demo_dry_run(decision: str = "pending") -> None:
+    ledger_path = _ledger_path()
+    result = run_demo_dry_run(
+        ledger_dir=ledger_path.parent,
+        decision=decision,
+    )
+    print(format_demo_dry_run(result))
+
+
 import re
 
 def _slugify(text: str) -> str:
@@ -405,6 +416,23 @@ def main():
     # doctor
     subparsers.add_parser("doctor", help="Print a TriageCore environment report")
 
+    # demo
+    demo_parser = subparsers.add_parser(
+        "demo",
+        help="Run deterministic, offline reviewer demos",
+    )
+    demo_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show the deterministic safety-control loop without a backend call",
+    )
+    demo_parser.add_argument(
+        "--decision",
+        choices=["pending", "approve", "reject"],
+        default="pending",
+        help="Simulate the human review decision (default: pending)",
+    )
+
     args = parser.parse_args()
 
     if args.command == "propose":
@@ -423,6 +451,10 @@ def main():
         print("TriageCore Operator Workflow active.")
     elif args.command == "doctor":
         tc_doctor()
+    elif args.command == "demo":
+        if not args.dry_run:
+            demo_parser.error("the demo command currently requires --dry-run")
+        tc_demo_dry_run(args.decision)
     else:
         parser.print_help()
 

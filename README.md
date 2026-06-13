@@ -53,20 +53,24 @@ Then run:
 
 ```powershell
 tc doctor
+tc demo --dry-run
 tc preflight CR-017
 tc handoff latest --print
 tc audit --self-test
 tc audit --kind route_audit --last 10
+tc audit --kind demo_dry_run --last 5
 triagecore benchmark --list-only
 ```
 
 Expected outputs:
 
 - `tc doctor` confirms repo root, Python, CLI path, ledger path, and pytest visibility.
+- `tc demo --dry-run` shows the offline safety-control loop from packet summary through human review and writes one metadata-only demo event.
 - `tc preflight CR-017` writes a handoff artifact under `.triagecore/handoffs/`.
 - `tc handoff latest --print` prints a reviewable handoff packet.
 - `tc audit --self-test` writes one privacy-safe `route_audit` event.
 - `tc audit --kind route_audit --last 10` shows routing metadata without raw prompt/data leakage.
+- `tc audit --kind demo_dry_run --last 5` shows the deterministic demo evidence without raw request or proposed-output content.
 - `triagecore benchmark --list-only` shows the benchmark fixture set without contacting a backend.
 
 Sample audit transcript:
@@ -81,6 +85,10 @@ Success: Wrote privacy-safe route_audit self-test event to ...\.triagecore\ledge
   Privacy: public (Scan Passed: True)
   Local Only: False | Route: self_test | Backend: self_test
 ```
+
+The deterministic demo runs offline, calls no model backend, and changes no
+source files. It demonstrates the current workflow structure and review gates;
+it is not evidence of production safety certification.
 
 Start here if you want the shortest guided path:
 
