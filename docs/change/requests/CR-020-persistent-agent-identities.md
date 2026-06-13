@@ -276,6 +276,13 @@ inspection. Identity initialization writes private key material only under
 `.triagecore/identity/keys/` and writes public metadata to
 `.triagecore/identity/agents.json`.
 
+### Key lifecycle hardening checkpoint
+
+CR-027 adds restrictive private-key permissions where supported,
+transactional identity creation with partial-write cleanup, and
+`tc identity check` for missing keys, orphaned keys, malformed registry data,
+and permission warnings.
+
 Global ledger signing, automatic signing across all event types, and signing of
 raw prompt or data content remain out of scope for this phase.
 
