@@ -1,4 +1,7 @@
 import json
+import os
+from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -8,11 +11,13 @@ from triage_core.agent_identity import (
     AgentIdentity,
     AgentIdentityError,
     AgentIdentityRegistry,
+    PrivateKeyPermissionError,
     RevokedAgentError,
     UnauthorizedCapabilityError,
     UnknownAgentError,
     UnsupportedKeyAlgorithmError,
     canonical_payload_hash,
+    check_private_key_permissions,
 )
 
 
@@ -311,3 +316,102 @@ def test_private_key_material_is_not_in_public_metadata_or_errors(tmp_path):
 
     assert "PRIVATE KEY" not in str(exc.value)
     assert key_material not in str(exc.value)
+
+
+def test_generating_second_identity_preserves_existing_registry_entries(tmp_path):
+    ledger_dir = tmp_path / ".triagecore"
+    AgentIdentityRegistry(ledger_dir).generate_identity(
+        "project-steward",
+        "ProjectSteward",
+        ["route_audit:sign"],
+    )
+
+    second_registry = AgentIdentityRegistry(ledger_dir)
+    second_registry.generate_identity(
+        "validator-tools",
+        "ValidatorTools",
+        ["route_audit:sign"],
+    )
+
+    loaded = AgentIdentityRegistry(ledger_dir)
+    identities = loaded.load()
+
+    assert sorted(identities) == ["project-steward", "validator-tools"]
+
+
+def test_identity_creation_rolls_back_key_when_registry_commit_fails(tmp_path):
+    ledger_dir = tmp_path / ".triagecore"
+    registry = AgentIdentityRegistry(ledger_dir)
+    registry.generate_identity(
+        "project-steward",
+        "ProjectSteward",
+        ["route_audit:sign"],
+    )
+    original_registry = registry.registry_path.read_bytes()
+    real_replace = os.replace
+
+    def fail_registry_replace(source, destination):
+        if Path(destination).name == "agents.json":
+            raise OSError("simulated registry replace failure")
+        return real_replace(source, destination)
+
+    with patch("triage_core.agent_identity.os.replace", side_effect=fail_registry_replace):
+        with pytest.raises(AgentIdentityError, match="partial files were cleaned up"):
+            registry.generate_identity(
+                "validator-tools",
+                "ValidatorTools",
+                ["route_audit:sign"],
+            )
+
+    assert registry.registry_path.read_bytes() == original_registry
+    assert not (registry.keys_dir / "validator-tools.key").exists()
+    assert not list(registry.identity_dir.glob("*.tmp"))
+    assert not list(registry.keys_dir.glob("*.tmp"))
+
+
+def test_agent_id_cannot_escape_private_key_directory(tmp_path):
+    registry = AgentIdentityRegistry(tmp_path / ".triagecore")
+
+    with pytest.raises(AgentIdentityError, match="agent_id must use only"):
+        registry.generate_identity(
+            "../outside",
+            "Invalid",
+            ["route_audit:sign"],
+        )
+
+    assert not (tmp_path / "outside.key").exists()
+
+
+def test_generated_private_key_permissions_are_restrictive(tmp_path):
+    registry = AgentIdentityRegistry(tmp_path / ".triagecore")
+    registry.generate_identity(
+        "project-steward",
+        "ProjectSteward",
+        ["route_audit:sign"],
+    )
+
+    warning = check_private_key_permissions(
+        registry.keys_dir / "project-steward.key"
+    )
+
+    assert warning is None
+
+
+def test_permission_hardening_failure_leaves_no_identity_artifacts(tmp_path):
+    registry = AgentIdentityRegistry(tmp_path / ".triagecore")
+
+    with patch(
+        "triage_core.agent_identity.harden_private_key_permissions",
+        side_effect=PrivateKeyPermissionError("simulated permission failure"),
+    ):
+        with pytest.raises(PrivateKeyPermissionError):
+            registry.generate_identity(
+                "project-steward",
+                "ProjectSteward",
+                ["route_audit:sign"],
+            )
+
+    assert not registry.registry_path.exists()
+    assert not (registry.keys_dir / "project-steward.key").exists()
+    assert not list(registry.identity_dir.glob("*.tmp"))
+    assert not list(registry.keys_dir.glob("*.tmp"))

@@ -381,6 +381,39 @@ def tc_identity_list() -> None:
         )
 
 
+def tc_identity_check() -> None:
+    registry = _identity_registry()
+    report = registry.check_consistency()
+    if report.has_errors:
+        status = "failed"
+    elif report.permission_warnings:
+        status = "warnings"
+    else:
+        status = "passed"
+
+    print(
+        "Identity check "
+        f"{status}: "
+        f"identities={report.identity_count} "
+        f"keys={report.key_count} "
+        f"missing_keys={len(report.missing_key_agent_ids)} "
+        f"orphaned_keys={len(report.orphaned_key_agent_ids)} "
+        f"malformed_registry={int(report.malformed_registry)} "
+        f"permission_warnings={len(report.permission_warnings)}"
+    )
+    if report.malformed_registry:
+        print("ERROR malformed_registry")
+    for agent_id in report.missing_key_agent_ids:
+        print(f"ERROR missing_private_key agent_id={agent_id}")
+    for agent_id in report.orphaned_key_agent_ids:
+        print(f"ERROR orphaned_private_key agent_id={agent_id}")
+    for warning in report.permission_warnings:
+        print(f"WARNING private_key_permissions {warning}")
+
+    if report.has_errors:
+        sys.exit(1)
+
+
 import re
 
 def _slugify(text: str) -> str:
@@ -575,6 +608,10 @@ def main():
     )
 
     identity_subparsers.add_parser("list", help="List registered public agent identities")
+    identity_subparsers.add_parser(
+        "check",
+        help="Check identity registry and private-key consistency",
+    )
 
     # demo
     demo_parser = subparsers.add_parser(
@@ -634,8 +671,10 @@ def main():
             tc_identity_init(args.agent_id, args.role, args.capabilities)
         elif args.identity_command == "list":
             tc_identity_list()
+        elif args.identity_command == "check":
+            tc_identity_check()
         else:
-            identity_parser.error("identity requires a subcommand: init or list")
+            identity_parser.error("identity requires a subcommand: init, list, or check")
     elif args.command == "demo":
         if not args.dry_run:
             demo_parser.error("the demo command currently requires --dry-run")
