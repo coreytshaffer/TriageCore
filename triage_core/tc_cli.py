@@ -250,6 +250,39 @@ def tc_audit_self_test() -> None:
     print(f"Success: Wrote privacy-safe route_audit self-test event to {ledger_path}.")
 
 
+def tc_audit_signed_smoke_test(agent_id: str) -> None:
+    payload = {
+        "decision": "allowed",
+        "reason_code": "signed_smoke_test",
+        "privacy_level": "public",
+        "privacy_scan_passed": True,
+        "is_local_only": True,
+        "recommended_route": "local",
+        "selected_backend": "local",
+        "smoke_test": True,
+    }
+    ledger_path = _ledger_path()
+    ledger_path.parent.mkdir(parents=True, exist_ok=True)
+    ledger = TaskLedger(str(ledger_path.parent))
+    registry = _identity_registry()
+    registry.load()
+    try:
+        ledger.append_signed_route_audit_event(
+            "audit-signed-smoke-test",
+            payload,
+            signing_registry=registry,
+            signing_agent_id=agent_id,
+        )
+    except AgentIdentityError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
+    print(
+        "Success: Wrote metadata-only signed route_audit smoke test event "
+        f"to {ledger_path} using agent_id={agent_id}."
+    )
+
+
 def tc_audit_privacy_invariants() -> None:
     ledger_path = _ledger_path()
     if not ledger_path.exists():
@@ -568,6 +601,16 @@ def main():
     audit_parser.add_argument("--last", type=int, default=10, help="Number of recent records to display (default: 10)")
     audit_parser.add_argument("--self-test", action="store_true", help="Write one privacy-safe route_audit self-test event")
     audit_parser.add_argument(
+        "--signed-smoke-test",
+        action="store_true",
+        help="Write one metadata-only signed route_audit smoke-test event",
+    )
+    audit_parser.add_argument(
+        "--agent-id",
+        type=str,
+        help="Existing agent identity to use for signed smoke-test events",
+    )
+    audit_parser.add_argument(
         "--privacy-invariants",
         action="store_true",
         help="Audit persistent ledger records for forbidden raw-content fields",
@@ -644,20 +687,25 @@ def main():
             bool(flag)
             for flag in (
                 args.self_test,
+                args.signed_smoke_test,
                 args.privacy_invariants,
                 args.verify_signatures,
             )
         )
         if active_audit_modes > 1:
             audit_parser.error(
-                "--self-test, --privacy-invariants, and --verify-signatures cannot be used together"
+                "--self-test, --signed-smoke-test, --privacy-invariants, and --verify-signatures cannot be used together"
             )
         if args.strict and not args.verify_signatures:
             audit_parser.error("--strict requires --verify-signatures")
+        if args.signed_smoke_test and not args.agent_id:
+            audit_parser.error("--signed-smoke-test requires --agent-id")
         if args.privacy_invariants:
             tc_audit_privacy_invariants()
         elif args.verify_signatures:
             tc_audit_verify_signatures(strict=args.strict)
+        elif args.signed_smoke_test:
+            tc_audit_signed_smoke_test(args.agent_id)
         elif args.self_test:
             tc_audit_self_test()
         else:
