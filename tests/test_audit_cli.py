@@ -8,6 +8,7 @@ from triage_core.task_ledger import TaskLedger
 from triage_core.tc_cli import (
     tc_audit,
     tc_audit_privacy_invariants,
+    tc_audit_signed_smoke_test,
     tc_audit_self_test,
     tc_audit_verify_signatures,
 )
@@ -158,6 +159,107 @@ def test_audit_self_test_creates_parent_directory_if_needed(tmp_path, monkeypatc
         tc_audit_self_test()
 
     assert ledger_dir.is_dir()
+
+
+def test_signed_smoke_test_writes_signed_route_audit_event(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    ledger_dir = tmp_path / ".triagecore"
+    registry = AgentIdentityRegistry(ledger_dir=ledger_dir)
+    registry.generate_identity(
+        "project-steward",
+        "ProjectSteward",
+        ["route_audit:sign"],
+    )
+
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_audit_signed_smoke_test("project-steward")
+
+    out = capsys.readouterr().out
+    ledger_path = ledger_dir / "ledger.jsonl"
+    assert "Success: Wrote metadata-only signed route_audit smoke test event" in out
+    assert "agent_id=project-steward" in out
+    assert ledger_path.exists()
+
+    records = [
+        json.loads(line)
+        for line in ledger_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert len(records) == 1
+    record = records[0]
+    payload = record["payload"]
+
+    assert record["event_type"] == "route_audit"
+    assert record["task_id"] == "audit-signed-smoke-test"
+    assert record["signature_metadata"]["agent_id"] == "project-steward"
+    assert record["signature_metadata"]["capability"] == "route_audit:sign"
+    assert payload == {
+        "decision": "allowed",
+        "reason_code": "signed_smoke_test",
+        "privacy_level": "public",
+        "privacy_scan_passed": True,
+        "is_local_only": True,
+        "recommended_route": "local",
+        "selected_backend": "local",
+        "smoke_test": True,
+    }
+    for forbidden_field in ["prompt", "data", "content", "raw_prompt", "raw_data"]:
+        assert forbidden_field not in payload
+
+
+def test_signed_smoke_test_fails_if_identity_missing(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        with pytest.raises(SystemExit) as exc:
+            tc_audit_signed_smoke_test("missing-agent")
+
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "Error: Unknown agent identity: missing-agent" in out
+
+
+def test_signed_smoke_test_fails_if_identity_lacks_route_audit_sign(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    ledger_dir = tmp_path / ".triagecore"
+    registry = AgentIdentityRegistry(ledger_dir=ledger_dir)
+    registry.generate_identity(
+        "project-steward",
+        "ProjectSteward",
+        ["validation_result:sign"],
+    )
+
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        with pytest.raises(SystemExit) as exc:
+            tc_audit_signed_smoke_test("project-steward")
+
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "route_audit:sign" in out
+
+
+def test_signed_smoke_test_event_verifies_with_signature_audit(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    ledger_dir = tmp_path / ".triagecore"
+    registry = AgentIdentityRegistry(ledger_dir=ledger_dir)
+    registry.generate_identity(
+        "project-steward",
+        "ProjectSteward",
+        ["route_audit:sign"],
+    )
+
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_audit_signed_smoke_test("project-steward")
+    capsys.readouterr()
+
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_audit_verify_signatures()
+
+    out = capsys.readouterr().out
+    assert "Route audit signature verification passed" in out
+    assert "valid_signed=1" in out
+    assert "invalid_signed=0" in out
+    assert "unsigned=0" in out
 
 
 def test_audit_reads_repo_ledger_from_subdirectory(tmp_path, monkeypatch, capsys):
