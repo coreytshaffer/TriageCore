@@ -5,6 +5,7 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+- Implemented CR-030 (Identity Rotation and Recovery Policy): Define rotation semantics, recovery assumptions, historical verification policy, and future CLI expectations before any runtime rotation work.
 - Implemented CR-029 (Identity Revocation CLI): Add `tc identity revoke --agent-id <id>` to mark local identities revoked without deleting keys, and enforce revoked-agent signing and verification failure under current policy.
 - Implemented CR-028 (Signed Smoke-Path Evidence): Add `tc audit --signed-smoke-test --agent-id <id>` to append one metadata-only signed `route_audit` event using an existing authorized identity.
 - Implemented CR-027 (Identity Key Hardening and Consistency Check): Add restrictive private-key permissions where supported, transactional identity creation cleanup, and `tc identity check` for registry/key consistency.
