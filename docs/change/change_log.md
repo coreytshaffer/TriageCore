@@ -5,10 +5,11 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+- Implemented CR-029 (Identity Revocation CLI): Add `tc identity revoke --agent-id <id>` to mark local identities revoked without deleting keys, and enforce revoked-agent signing and verification failure under current policy.
 - Implemented CR-028 (Signed Smoke-Path Evidence): Add `tc audit --signed-smoke-test --agent-id <id>` to append one metadata-only signed `route_audit` event using an existing authorized identity.
 - Implemented CR-027 (Identity Key Hardening and Consistency Check): Add restrictive private-key permissions where supported, transactional identity creation cleanup, and `tc identity check` for registry/key consistency.
 - Implemented CR-026 (Post-Identity Privacy and Security Audit): Add a focused audit of CR-020 identity initialization, local key storage, signed `route_audit` verification, privacy boundaries, and remaining key-lifecycle risks.
-- Partially Implemented CR-020 (Persistent Cryptographic Agent Identities): Add identity foundation, Ed25519 signing helpers, signed `route_audit`, verification CLI, identity init/list/check, and signed smoke-path evidence while keeping revocation, rotation, and broader signing out of scope.
+- Partially Implemented CR-020 (Persistent Cryptographic Agent Identities): Add identity foundation, Ed25519 signing helpers, signed `route_audit`, verification CLI, identity init/list/check/revoke, and signed smoke-path evidence while keeping rotation, recovery, and broader signing out of scope.
 - Proposed CR-025 (Backlog Documentation Alignment Pass): Align backlog, README proof markers, release metadata, and current project status after CR-021 through CR-024.
 - Implemented CR-023 (Offline Demo Dry-Run Evidence): Add deterministic offline demo evidence with metadata-only `demo_dry_run` ledger events and reviewer-path documentation.
 - Implemented CR-024 (Persistent Artifact Audit Command): Add `tc audit --privacy-invariants` to scan existing ledger records for forbidden raw-content fields using the CR-021 invariant.

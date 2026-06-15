@@ -10,8 +10,8 @@ This document summarizes the active TriageCore backlog after CR-021 through CR-0
   - Status: open
   - Related CR: CR-020
   - Purpose: add persistent local agent identities, signed ledger-event metadata, revocation, capability checks, and crypto-agile algorithm metadata.
-  - Current phase: identity foundation, signing helpers, signed `route_audit`, verification CLI, identity init/list/check, CR-027 key hardening, and CR-028 signed smoke-path evidence complete
-  - Next gate: key revocation, rotation/recovery policy, and any decision about expanding signing beyond `route_audit`
+  - Current phase: identity foundation, signing helpers, signed `route_audit`, verification CLI, identity init/list/check/revoke, CR-027 key hardening, and CR-028 signed smoke-path evidence complete
+  - Next gate: rotation/recovery policy and any decision about expanding signing beyond `route_audit`
 
 ## Candidate Future Work
 
@@ -28,10 +28,12 @@ This document summarizes the active TriageCore backlog after CR-021 through CR-0
 - CR-024: Persistent Artifact Audit Command
 - CR-026: Post-Identity Privacy and Security Audit
 - CR-027: Identity Key Hardening and Consistency Check
+- CR-028: Signed Smoke-Path Evidence
+- CR-029: Identity Revocation CLI
 
 ## Current Recommendation
 
 Keep Issue #4 open and pause signing expansion beyond `route_audit`.
 Private-key permission and consistency checks plus metadata-only signed smoke
-evidence are now implemented. Revocation and rotation/recovery policy remain
-the next key gates before adding signed event types.
+evidence plus identity revocation are now implemented. Rotation/recovery policy
+remains the next key gate before adding signed event types.

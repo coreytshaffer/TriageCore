@@ -7,6 +7,7 @@ from triage_core.tc_cli import (
     tc_identity_check,
     tc_identity_init,
     tc_identity_list,
+    tc_identity_revoke,
 )
 
 
@@ -205,4 +206,104 @@ def test_identity_check_reports_permission_warning_without_key_contents(
     assert "Identity check warnings" in out
     assert "permission_warnings=1" in out
     assert "WARNING private_key_permissions project-steward.key" in out
+    assert "PRIVATE KEY" not in out
+
+
+def test_identity_revoke_marks_identity_revoked_and_preserves_key(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_identity_init(
+            "revocation-test-agent",
+            "ProjectSteward",
+            ["route_audit:sign"],
+        )
+    capsys.readouterr()
+
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_identity_revoke("revocation-test-agent")
+
+    out = capsys.readouterr().out
+    registry_path = tmp_path / ".triagecore" / "identity" / "agents.json"
+    key_path = tmp_path / ".triagecore" / "identity" / "keys" / "revocation-test-agent.key"
+    assert "Success: Revoked local identity" in out
+    assert "agent_id=revocation-test-agent" in out
+    assert "status=revoked" in out
+    assert key_path.exists()
+
+    payload = json.loads(registry_path.read_text(encoding="utf-8"))
+    metadata = payload["agents"][0]
+    assert metadata["agent_id"] == "revocation-test-agent"
+    assert metadata["status"] == "revoked"
+    assert "public_key" in metadata
+
+
+def test_identity_list_shows_revoked_status(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_identity_init(
+            "revocation-test-agent",
+            "ProjectSteward",
+            ["route_audit:sign"],
+        )
+        tc_identity_revoke("revocation-test-agent")
+    capsys.readouterr()
+
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_identity_list()
+
+    out = capsys.readouterr().out
+    assert "agent_id=revocation-test-agent" in out
+    assert "status=revoked" in out
+    assert "PRIVATE KEY" not in out
+
+
+def test_identity_revoke_unknown_identity_fails_cleanly(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        with pytest.raises(SystemExit) as exc:
+            tc_identity_revoke("missing-agent")
+
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "Error: Unknown agent identity: missing-agent" in out
+
+
+def test_identity_revoke_is_idempotent_for_already_revoked_identity(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_identity_init(
+            "revocation-test-agent",
+            "ProjectSteward",
+            ["route_audit:sign"],
+        )
+        tc_identity_revoke("revocation-test-agent")
+    capsys.readouterr()
+
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_identity_revoke("revocation-test-agent")
+
+    out = capsys.readouterr().out
+    assert "Notice: Identity already revoked" in out
+    assert "agent_id=revocation-test-agent" in out
+    assert "PRIVATE KEY" not in out
+
+
+def test_identity_check_passes_for_revoked_identity_with_existing_key(tmp_path, capsys):
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_identity_init(
+            "revocation-test-agent",
+            "ProjectSteward",
+            ["route_audit:sign"],
+        )
+        tc_identity_revoke("revocation-test-agent")
+    capsys.readouterr()
+
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_identity_check()
+
+    out = capsys.readouterr().out
+    assert "Identity check passed" in out
+    assert "identities=1" in out
+    assert "keys=1" in out
     assert "PRIVATE KEY" not in out

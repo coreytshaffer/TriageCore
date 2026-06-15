@@ -242,6 +242,26 @@ class AgentIdentityRegistry:
         self._loaded = True
         return self._identities
 
+    def revoke_identity(self, agent_id: str) -> AgentIdentity:
+        self._ensure_loaded()
+        identity = self.get_identity(agent_id)
+        if identity.status == REVOKED_STATUS:
+            return identity
+
+        revoked_identity = AgentIdentity(
+            agent_id=identity.agent_id,
+            role=identity.role,
+            public_key=identity.public_key,
+            public_key_fingerprint=identity.public_key_fingerprint,
+            key_algorithm=identity.key_algorithm,
+            created_at=identity.created_at,
+            status=REVOKED_STATUS,
+            capabilities=identity.capabilities,
+        )
+        self._identities[agent_id] = revoked_identity
+        self.save()
+        return revoked_identity
+
     def check_consistency(self) -> AgentIdentityCheckReport:
         report = AgentIdentityCheckReport()
         identities: Dict[str, AgentIdentity] = {}
@@ -270,6 +290,7 @@ class AgentIdentityRegistry:
         return report
 
     def get_identity(self, agent_id: str) -> AgentIdentity:
+        self._ensure_loaded()
         if agent_id not in self._identities:
             raise UnknownAgentError(f"Unknown agent identity: {agent_id}")
         return self._identities[agent_id]

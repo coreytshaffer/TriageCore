@@ -11,6 +11,7 @@ from triage_core.tc_cli import (
     tc_audit_signed_smoke_test,
     tc_audit_self_test,
     tc_audit_verify_signatures,
+    tc_identity_revoke,
 )
 
 @pytest.fixture
@@ -260,6 +261,65 @@ def test_signed_smoke_test_event_verifies_with_signature_audit(tmp_path, monkeyp
     assert "valid_signed=1" in out
     assert "invalid_signed=0" in out
     assert "unsigned=0" in out
+
+
+def test_signed_smoke_test_fails_for_revoked_identity(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        registry = AgentIdentityRegistry(ledger_dir=tmp_path / ".triagecore")
+        registry.generate_identity(
+            "revoked-smoke-agent",
+            "ProjectSteward",
+            ["route_audit:sign"],
+        )
+        tc_identity_revoke("revoked-smoke-agent")
+    capsys.readouterr()
+
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        with pytest.raises(SystemExit) as exc:
+            tc_audit_signed_smoke_test("revoked-smoke-agent")
+
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "is not active" in out
+    assert "status=revoked" in out
+
+
+def test_audit_verify_signatures_fails_for_revoked_signing_identity(tmp_path, capsys):
+    ledger_dir = tmp_path / ".triagecore"
+    ledger = TaskLedger(str(ledger_dir))
+    registry = AgentIdentityRegistry(ledger_dir=ledger_dir)
+    registry.generate_identity(
+        "revoked-smoke-agent",
+        "ProjectSteward",
+        ["route_audit:sign"],
+    )
+    ledger.append_signed_route_audit_event(
+        "signed-task",
+        {
+            "decision": "allowed",
+            "reason_code": "revoked_identity_target",
+            "privacy_level": "public",
+            "privacy_scan_passed": True,
+            "is_local_only": True,
+            "recommended_route": "local",
+            "selected_backend": "local",
+        },
+        signing_registry=registry,
+        signing_agent_id="revoked-smoke-agent",
+    )
+    registry.revoke_identity("revoked-smoke-agent")
+
+    with patch("triage_core.tc_cli._ledger_path", return_value=ledger_dir / "ledger.jsonl"):
+        with pytest.raises(SystemExit) as exc:
+            tc_audit_verify_signatures()
+
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "Route audit signature verification failed" in out
+    assert "valid_signed=0" in out
+    assert "invalid_signed=1" in out
+    assert "revoked_identity_target" not in out
 
 
 def test_audit_reads_repo_ledger_from_subdirectory(tmp_path, monkeypatch, capsys):
