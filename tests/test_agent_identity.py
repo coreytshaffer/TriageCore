@@ -274,6 +274,40 @@ def test_revoked_agents_fail_verification(tmp_path):
         registry.verify_signed_payload(payload, signature_metadata)
 
 
+def test_revoke_identity_marks_status_and_preserves_public_metadata(tmp_path):
+    registry = AgentIdentityRegistry(tmp_path / ".triagecore")
+    created = registry.generate_identity(
+        "revocation-test-agent",
+        "ProjectSteward",
+        ["route_audit:sign"],
+    )
+
+    revoked = registry.revoke_identity("revocation-test-agent")
+
+    assert revoked.agent_id == created.agent_id
+    assert revoked.role == created.role
+    assert revoked.public_key == created.public_key
+    assert revoked.public_key_fingerprint == created.public_key_fingerprint
+    assert revoked.capabilities == created.capabilities
+    assert revoked.created_at == created.created_at
+    assert revoked.status == REVOKED_STATUS
+
+
+def test_revoke_identity_is_idempotent(tmp_path):
+    registry = AgentIdentityRegistry(tmp_path / ".triagecore")
+    registry.generate_identity(
+        "revocation-test-agent",
+        "ProjectSteward",
+        ["route_audit:sign"],
+    )
+
+    first = registry.revoke_identity("revocation-test-agent")
+    second = registry.revoke_identity("revocation-test-agent")
+
+    assert first.status == REVOKED_STATUS
+    assert second.status == REVOKED_STATUS
+
+
 def test_verification_dispatches_by_signature_algorithm(tmp_path):
     registry = AgentIdentityRegistry(tmp_path / ".triagecore")
     registry.generate_identity(

@@ -414,6 +414,31 @@ def tc_identity_list() -> None:
         )
 
 
+def tc_identity_revoke(agent_id: str) -> None:
+    registry = _identity_registry()
+    try:
+        identity = registry.get_identity(agent_id)
+        already_revoked = identity.status == "revoked"
+        revoked_identity = registry.revoke_identity(agent_id)
+    except AgentIdentityError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
+    if already_revoked:
+        print(
+            "Notice: Identity already revoked "
+            f"agent_id={revoked_identity.agent_id} "
+            f"status={revoked_identity.status}"
+        )
+    else:
+        print(
+            "Success: Revoked local identity "
+            f"agent_id={revoked_identity.agent_id} "
+            f"status={revoked_identity.status}"
+        )
+    print(f"Registry: {registry.registry_path}")
+
+
 def tc_identity_check() -> None:
     registry = _identity_registry()
     report = registry.check_consistency()
@@ -651,6 +676,15 @@ def main():
     )
 
     identity_subparsers.add_parser("list", help="List registered public agent identities")
+    identity_revoke_parser = identity_subparsers.add_parser(
+        "revoke",
+        help="Mark a local agent identity as revoked",
+    )
+    identity_revoke_parser.add_argument(
+        "--agent-id",
+        required=True,
+        help="Stable local agent identity id",
+    )
     identity_subparsers.add_parser(
         "check",
         help="Check identity registry and private-key consistency",
@@ -719,10 +753,12 @@ def main():
             tc_identity_init(args.agent_id, args.role, args.capabilities)
         elif args.identity_command == "list":
             tc_identity_list()
+        elif args.identity_command == "revoke":
+            tc_identity_revoke(args.agent_id)
         elif args.identity_command == "check":
             tc_identity_check()
         else:
-            identity_parser.error("identity requires a subcommand: init, list, or check")
+            identity_parser.error("identity requires a subcommand: init, list, revoke, or check")
     elif args.command == "demo":
         if not args.dry_run:
             demo_parser.error("the demo command currently requires --dry-run")
