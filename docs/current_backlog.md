@@ -2,7 +2,7 @@
 
 ## Status
 
-This document summarizes the active TriageCore backlog after CR-021 through CR-024.
+This document summarizes the active TriageCore backlog after CR-034.
 
 ## Active GitHub Backlog
 
@@ -41,23 +41,22 @@ This document summarizes the active TriageCore backlog after CR-021 through CR-0
 - CR-031: Runtime Integrity and Model Provenance Policy
 - CR-032: Model Route Manifest Schema
 - CR-033: Model Manifest Check CLI
+- CR-034: Repository Consistency and Secrets Hygiene
 
 ## Current Recommendation
 
-Keep Issue #4 open and pause signing expansion beyond `route_audit`.
-Private-key permission and consistency checks plus metadata-only signed smoke
-evidence plus identity revocation are now implemented, and rotation/recovery
-policy is now documented. Runtime rotation behavior still needs a separate
-implementation slice before adding signed event types.
+Keep three work lanes distinct:
 
-Treat CR-031 as the policy baseline for any future `tc model check`, route
-manifest, or backend provenance work. Runtime integrity enforcement should stay
-separate from convenience-adapter support.
+- Identity lifecycle work remains under Issue #4. Pause signing expansion beyond
+  `route_audit`; runtime rotation behavior still needs a separate
+  implementation slice before adding signed event types.
+- Model and runtime integrity work should build on CR-031 through CR-033. Keep
+  policy baseline, route-manifest artifact shape, manifest validation, and live
+  enforcement as separate reviewable slices.
+- Repository consistency and secrets hygiene from CR-034 is complete. Future
+  hygiene work should be limited to stale documented claims or a separately
+  proposed repo-consistency checker.
 
-Treat CR-032 as the artifact contract for future runtime validation. `CR-033`
-should validate manifests against this schema instead of inventing provenance
-rules ad hoc in code.
-
-Future runtime-integrity work should build on CR-033 by adding richer
-manifests, route discovery, or backend-aware checks without collapsing policy,
-artifact shape, and live enforcement into one step.
+The next feature-sized slice can be a runtime model-manifest enforcement
+preview, but it should not collapse policy, artifact shape, manifest validation,
+and backend probing into one change.

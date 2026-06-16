@@ -33,7 +33,7 @@ TriageCore is an early research workbench for AI-assisted software work that kee
 - bounded Qwen Cloud escalation for external-safe packets only
 
 **Planned / future-facing**
-- public release polish such as release tagging and GitHub metadata
+- public release polish such as release metadata upkeep and GitHub metadata
 - deeper environmental-edge packaging around Clear Lake Watch style workflows
 
 **Research framing**
@@ -115,7 +115,7 @@ Current in-repo proof markers:
 
 Proof markers that still depend on GitHub/release state rather than repository files:
 
-- first release tag
+- release metadata upkeep
 - GitHub About description
 - GitHub topics
 
