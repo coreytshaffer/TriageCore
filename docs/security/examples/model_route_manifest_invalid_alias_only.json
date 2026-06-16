@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0.0",
+  "route_id": "alias-only-fast-route",
+  "display_name": "Fast Route Alias Only",
+  "boundary": {
+    "execution_class": "unknown",
+    "network_dependency": true,
+    "intended_privacy_class": "unknown"
+  },
+  "backend": {
+    "backend_type": "ollama",
+    "backend_label": "fast-default",
+    "wrapper_identity": "ollama"
+  },
+  "model": {
+    "exact_model_id": "latest",
+    "mutable_reference": true,
+    "source_channel": "unknown"
+  },
+  "artifact": {
+    "digest_required": true
+  },
+  "template_behavior": {
+    "template_source": "unknown"
+  },
+  "integrity": {
+    "provenance_complete": false,
+    "integrity_status": "invalid",
+    "operator_notes": "Alias-only route with unknown boundary and missing immutable artifact identity."
+  }
+}
