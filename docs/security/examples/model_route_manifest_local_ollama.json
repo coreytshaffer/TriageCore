@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0.0",
+  "route_id": "local-ollama-qwen2.5-7b-instruct-q4km",
+  "display_name": "Local Ollama Qwen 2.5 7B Instruct Q4_K_M",
+  "boundary": {
+    "execution_class": "local",
+    "network_dependency": false,
+    "intended_privacy_class": "local_only"
+  },
+  "backend": {
+    "backend_type": "ollama",
+    "backend_label": "ollama-local",
+    "runtime_endpoint": "http://127.0.0.1:11434",
+    "wrapper_identity": "ollama"
+  },
+  "model": {
+    "model_family": "qwen2.5",
+    "exact_model_id": "qwen2.5:7b-instruct-q4_K_M",
+    "mutable_reference": false,
+    "source_channel": "ollama_registry",
+    "source_uri": "ollama://qwen2.5:7b-instruct-q4_K_M",
+    "license": "apache-2.0"
+  },
+  "artifact": {
+    "artifact_format": "gguf",
+    "quantization": "Q4_K_M",
+    "parameter_scale": "7b",
+    "digest": "sha256:example-local-ollama-digest",
+    "digest_required": true
+  },
+  "template_behavior": {
+    "template_source": "backend_chat_template",
+    "template_id": "ollama-qwen2.5-chat",
+    "hidden_wrapper_prompt": false
+  },
+  "integrity": {
+    "provenance_complete": true,
+    "integrity_status": "complete",
+    "operator_notes": ""
+  }
+}

@@ -5,6 +5,7 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+- Implemented CR-032 (Model Route Manifest Schema): Define the canonical route-manifest artifact shape, required provenance fields, and example manifests before any runtime model-integrity enforcement work.
 - Implemented CR-031 (Runtime Integrity and Model Provenance Policy): Define the runtime integrity invariant, required model provenance fields, and future integrity-check expectations before any runtime enforcement work.
 - Implemented CR-030 (Identity Rotation and Recovery Policy): Define rotation semantics, recovery assumptions, historical verification policy, and future CLI expectations before any runtime rotation work.
 - Implemented CR-029 (Identity Revocation CLI): Add `tc identity revoke --agent-id <id>` to mark local identities revoked without deleting keys, and enforce revoked-agent signing and verification failure under current policy.

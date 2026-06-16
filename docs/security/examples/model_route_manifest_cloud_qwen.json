@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0.0",
+  "route_id": "cloud-qwen-qwen-plus-2026-06",
+  "display_name": "Qwen Cloud Qwen Plus",
+  "boundary": {
+    "execution_class": "cloud",
+    "network_dependency": true,
+    "intended_privacy_class": "external_safe_only"
+  },
+  "backend": {
+    "backend_type": "qwen_cloud",
+    "backend_label": "qwen-cloud-primary",
+    "runtime_endpoint": "https://api.qwen.example/v1",
+    "wrapper_identity": "qwen_cloud_adapter"
+  },
+  "model": {
+    "model_family": "qwen-plus",
+    "exact_model_id": "qwen-plus-2026-06",
+    "mutable_reference": false,
+    "source_channel": "cloud_vendor",
+    "source_uri": "vendor://qwen/qwen-plus-2026-06",
+    "license": "vendor-service-terms"
+  },
+  "artifact": {
+    "artifact_format": "managed_service",
+    "quantization": "unknown",
+    "parameter_scale": "vendor-managed",
+    "digest": "",
+    "digest_required": false
+  },
+  "template_behavior": {
+    "template_source": "adapter_request_contract",
+    "template_id": "qwen-cloud-chat-v1",
+    "hidden_wrapper_prompt": false
+  },
+  "integrity": {
+    "provenance_complete": true,
+    "integrity_status": "complete",
+    "operator_notes": "Cloud route requires explicit external-safe packet handling."
+  }
+}
