@@ -83,6 +83,11 @@ def _prefer_lmstudio_supervisor() -> bool:
     return _env_flag("TRIAGE_PREFER_LMSTUDIO_SUPERVISOR", True)
 
 
+def _backend_error_summary(response: requests.Response) -> str:
+    reason = response.reason or "HTTP error"
+    return f"status_code={response.status_code} reason={reason}"
+
+
 @dataclass
 class OpenAICompatibleBackend:
     name: str
@@ -192,7 +197,10 @@ class OpenAICompatibleBackend:
                 headers=self._request_headers(),
             )
             if not response.ok:
-                print(f"Backend Error Output: {response.text}")
+                print(
+                    "Backend Error: "
+                    f"backend={self.name} {_backend_error_summary(response)}"
+                )
             response.raise_for_status()
         except requests.exceptions.RequestException as e:
             raise BackendUnavailableError(f"OpenAI compatible backend unavailable at {url}: {e}")
@@ -327,7 +335,10 @@ class OllamaBackend:
         try:
             response = requests.post(url, json=payload, timeout=timeout)
             if not response.ok:
-                print(f"Backend Error Output: {response.text}")
+                print(
+                    "Backend Error: "
+                    f"backend={self.name} {_backend_error_summary(response)}"
+                )
             response.raise_for_status()
         except requests.exceptions.RequestException as e:
             raise BackendUnavailableError(f"Ollama backend unavailable at {url}: {e}")

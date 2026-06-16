@@ -1,6 +1,8 @@
 import pytest
 from unittest.mock import patch, Mock
-from triage_core.backends import create_backend, OllamaBackend
+import requests
+
+from triage_core.backends import BackendUnavailableError, create_backend, OllamaBackend
 
 
 def test_preset_urls():
@@ -152,3 +154,26 @@ def test_backend_generate_no_content(mock_post):
     backend = create_backend("llama.cpp", model="test-model")
     with pytest.raises(ValueError, match="Backend returned no message content."):
         backend.generate([{"role": "user", "content": "hi"}])
+
+
+@patch("triage_core.backends.requests.post")
+def test_backend_error_output_is_sanitized(mock_post, capsys):
+    mock_resp = Mock(spec=requests.Response)
+    mock_resp.ok = False
+    mock_resp.status_code = 500
+    mock_resp.reason = "Internal Server Error"
+    mock_resp.text = "secret request trace with api_key=leak"
+    mock_resp.raise_for_status.side_effect = requests.exceptions.HTTPError(
+        "500 Server Error"
+    )
+    mock_post.return_value = mock_resp
+
+    backend = create_backend("lmstudio", model="test-model")
+    with pytest.raises(BackendUnavailableError):
+        backend.generate([{"role": "user", "content": "hi"}])
+
+    captured = capsys.readouterr()
+    assert "status_code=500" in captured.out
+    assert "Internal Server Error" in captured.out
+    assert "secret request trace" not in captured.out
+    assert "api_key" not in captured.out
