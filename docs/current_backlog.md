@@ -15,6 +15,13 @@ This document summarizes the active TriageCore backlog after CR-021 through CR-0
 
 ## Candidate Future Work
 
+- Runtime integrity and model provenance enforcement
+  - Source: CR-031 policy baseline
+  - Status: candidate future CR, not yet active GitHub backlog
+  - Purpose: add operator-facing model or route integrity checks so convenience
+    wrappers, aliases, and mutable tags do not become implicit trust
+    boundaries.
+
 - Circuit breakers and degraded mode states
   - Source: older Drive performance backlog
   - Status: candidate future CR, not yet active GitHub backlog
@@ -31,6 +38,7 @@ This document summarizes the active TriageCore backlog after CR-021 through CR-0
 - CR-028: Signed Smoke-Path Evidence
 - CR-029: Identity Revocation CLI
 - CR-030: Identity Rotation and Recovery Policy
+- CR-031: Runtime Integrity and Model Provenance Policy
 
 ## Current Recommendation
 
@@ -39,3 +47,7 @@ Private-key permission and consistency checks plus metadata-only signed smoke
 evidence plus identity revocation are now implemented, and rotation/recovery
 policy is now documented. Runtime rotation behavior still needs a separate
 implementation slice before adding signed event types.
+
+Treat CR-031 as the policy baseline for any future `tc model check`, route
+manifest, or backend provenance work. Runtime integrity enforcement should stay
+separate from convenience-adapter support.
