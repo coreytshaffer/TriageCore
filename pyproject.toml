@@ -41,6 +41,10 @@ mobile = [
 triagecore = "triage_core.cli:main"
 tc = "triage_core.tc_cli:main"
 
+[tool.setuptools.packages.find]
+include = ["triage_core*"]
+exclude = ["tests*", "docs*", "scratch*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 norecursedirs = ["scratch"]
