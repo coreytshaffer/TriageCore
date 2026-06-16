@@ -104,8 +104,8 @@ class Config:
             return _env_bool("TRIAGE_QWEN_ENABLED", False)
         return bool(self.get_global("qwen", "enabled", False))
 
-    def get_qwen_api_key(self):
-        return self.get_global("qwen", "api_key", None)
+    def get_qwen_api_key(self) -> str | None:
+        return os.getenv("TRIAGE_QWEN_API_KEY")
 
     def get_qwen_base_url(self) -> str:
         return self.get_global(

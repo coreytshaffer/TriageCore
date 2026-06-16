@@ -9,7 +9,7 @@ description = "A lightweight, local-compute-first orchestration harness for toke
 authors = [
     {name = "Corey"}
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 dependencies = [
     "requests>=2.28.0",
     "python-dotenv>=1.0.0",

@@ -22,6 +22,14 @@ FORBIDDEN_PERSISTENT_KEYS = frozenset(
         "user_prompt",
         "system_prompt",
         "developer_prompt",
+        "api_key",
+        "access_token",
+        "authorization",
+        "bearer",
+        "client_secret",
+        "private_key",
+        "secret",
+        "token",
     }
 )
 

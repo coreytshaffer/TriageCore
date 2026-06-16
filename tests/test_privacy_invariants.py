@@ -61,6 +61,27 @@ def test_rejects_raw_content_inside_list():
     assert "$.events[1].content" in str(exc.value)
 
 
+@pytest.mark.parametrize(
+    "key",
+    [
+        "api_key",
+        "access_token",
+        "authorization",
+        "bearer",
+        "client_secret",
+        "private_key",
+        "secret",
+        "token",
+    ],
+)
+def test_rejects_secret_bearing_persistent_keys(key):
+    with pytest.raises(PersistentPrivacyInvariantError) as exc:
+        assert_persistent_privacy_safe({key: "do-not-persist"})
+
+    assert f"$.{key}" in str(exc.value)
+    assert "do-not-persist" not in str(exc.value)
+
+
 def test_task_ledger_rejects_forbidden_payload_before_write(tmp_path):
     ledger = TaskLedger(str(tmp_path / ".triagecore"))
 
