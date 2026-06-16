@@ -14,6 +14,11 @@ from triage_core.config import default_config
 from triage_core.backends import LocalBackend
 from triage_core.task_ledger import TaskLedger, verify_route_audit_signatures_in_ledger
 from triage_core.demo_dry_run import format_demo_dry_run, run_demo_dry_run
+from triage_core.model_manifest import (
+    load_model_manifest,
+    summarize_model_manifest_check,
+    validate_model_manifest,
+)
 from triage_core.privacy_invariants import find_forbidden_persistent_fields
 
 def _find_cr_file(cr_id: str) -> str:
@@ -370,6 +375,25 @@ def tc_demo_dry_run(decision: str = "pending") -> None:
     print(format_demo_dry_run(result))
 
 
+def tc_model_check(manifest_path: str) -> None:
+    try:
+        manifest = load_model_manifest(manifest_path)
+    except FileNotFoundError:
+        print(f"Error: {manifest_path} not found.")
+        sys.exit(1)
+    except json.JSONDecodeError as e:
+        print(f"Error: {manifest_path} is not valid JSON ({e.msg}).")
+        sys.exit(1)
+    except OSError as e:
+        print(f"Error reading {manifest_path}: {e}")
+        sys.exit(1)
+
+    result = validate_model_manifest(manifest)
+    print(summarize_model_manifest_check(manifest_path, manifest, result))
+    if not result.is_valid:
+        sys.exit(1)
+
+
 def tc_identity_init(agent_id: str, role: str, capabilities: List[str]) -> None:
     registry = _identity_registry()
     try:
@@ -660,6 +684,22 @@ def main():
     # doctor
     subparsers.add_parser("doctor", help="Print a TriageCore environment report")
 
+    # model
+    model_parser = subparsers.add_parser(
+        "model",
+        help="Inspect model route manifests safely",
+    )
+    model_subparsers = model_parser.add_subparsers(dest="model_command")
+    model_check_parser = model_subparsers.add_parser(
+        "check",
+        help="Validate a model route manifest against the documented schema",
+    )
+    model_check_parser.add_argument(
+        "--manifest",
+        required=True,
+        help="Path to a model route manifest JSON file",
+    )
+
     # identity
     identity_parser = subparsers.add_parser("identity", help="Manage local persistent agent identities")
     identity_subparsers = identity_parser.add_subparsers(dest="identity_command")
@@ -759,6 +799,11 @@ def main():
             tc_identity_check()
         else:
             identity_parser.error("identity requires a subcommand: init, list, revoke, or check")
+    elif args.command == "model":
+        if args.model_command == "check":
+            tc_model_check(args.manifest)
+        else:
+            model_parser.error("model requires a subcommand: check")
     elif args.command == "demo":
         if not args.dry_run:
             demo_parser.error("the demo command currently requires --dry-run")

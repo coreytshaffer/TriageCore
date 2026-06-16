@@ -40,6 +40,7 @@ This document summarizes the active TriageCore backlog after CR-021 through CR-0
 - CR-030: Identity Rotation and Recovery Policy
 - CR-031: Runtime Integrity and Model Provenance Policy
 - CR-032: Model Route Manifest Schema
+- CR-033: Model Manifest Check CLI
 
 ## Current Recommendation
 
@@ -56,3 +57,7 @@ separate from convenience-adapter support.
 Treat CR-032 as the artifact contract for future runtime validation. `CR-033`
 should validate manifests against this schema instead of inventing provenance
 rules ad hoc in code.
+
+Future runtime-integrity work should build on CR-033 by adding richer
+manifests, route discovery, or backend-aware checks without collapsing policy,
+artifact shape, and live enforcement into one step.
