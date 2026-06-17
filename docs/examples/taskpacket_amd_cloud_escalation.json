@@ -1,0 +1,17 @@
+{
+  "task_id": "amd-demo-001",
+  "title": "Summarize and restructure a large external-safe engineering packet",
+  "description": "Take a long, messy project packet and convert it into a concise implementation plan with a risk summary and clear approval handoff.",
+  "privacy_class": "external_safe",
+  "risk_level": "moderate",
+  "complexity": "high",
+  "requested_route": "amd_cloud",
+  "requested_backend": "amd_developer_cloud",
+  "recommended_route": "cloud_heavy",
+  "amd_cloud_requested": true,
+  "cloud_egress_allowed": true,
+  "approval_granted": false,
+  "escalation_reason": "Large context and synthesis workload exceeds preferred small local route.",
+  "requires_human_approval": true,
+  "requires_output_validation": true
+}
