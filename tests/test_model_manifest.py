@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from triage_core.model_manifest import (
+    compare_route_to_manifest,
     load_model_manifest,
     validate_model_manifest,
 )
@@ -58,3 +59,97 @@ def test_manifest_missing_required_field_fails():
 
     assert result.is_valid is False
     assert any(issue.reason == "missing_required_field" for issue in result.issues)
+
+
+def test_matching_route_manifest_metadata_has_no_warnings():
+    manifest = load_model_manifest(_example_path("model_route_manifest_local_ollama.json"))
+    route_payload = {
+        "selected_backend": "ollama",
+        "selected_model": "qwen2.5:7b-instruct-q4_K_M",
+        "selected_route": "local-ollama-qwen2.5-7b-instruct-q4km",
+    }
+
+    report = compare_route_to_manifest(route_payload, manifest)
+
+    assert report.has_warnings is False
+    assert report.warnings == []
+
+
+def test_backend_mismatch_produces_warning():
+    manifest = load_model_manifest(_example_path("model_route_manifest_local_ollama.json"))
+    route_payload = {
+        "selected_backend": "qwen_cloud",
+        "selected_model": "qwen2.5:7b-instruct-q4_K_M",
+        "selected_route": "local-ollama-qwen2.5-7b-instruct-q4km",
+    }
+
+    report = compare_route_to_manifest(route_payload, manifest)
+
+    assert {warning.reason for warning in report.warnings} == {"backend_mismatch"}
+
+
+def test_model_mismatch_produces_warning():
+    manifest = load_model_manifest(_example_path("model_route_manifest_local_ollama.json"))
+    route_payload = {
+        "selected_backend": "ollama",
+        "selected_model": "different-model",
+        "selected_route": "local-ollama-qwen2.5-7b-instruct-q4km",
+    }
+
+    report = compare_route_to_manifest(route_payload, manifest)
+
+    assert {warning.reason for warning in report.warnings} == {"model_mismatch"}
+
+
+def test_alias_only_identity_produces_warning():
+    manifest = load_model_manifest(
+        _example_path("model_route_manifest_invalid_alias_only.json")
+    )
+    route_payload = {
+        "selected_backend": "ollama",
+        "selected_model": "latest",
+        "selected_route": "alias-only-fast-route",
+    }
+
+    report = compare_route_to_manifest(route_payload, manifest)
+
+    reasons = {warning.reason for warning in report.warnings}
+    assert "alias_only_model_identity" in reasons
+
+
+def test_incomplete_manifest_integrity_produces_warning():
+    manifest = load_model_manifest(
+        _example_path("model_route_manifest_invalid_alias_only.json")
+    )
+    route_payload = {
+        "selected_backend": "ollama",
+        "selected_model": "latest",
+        "selected_route": "alias-only-fast-route",
+    }
+
+    report = compare_route_to_manifest(route_payload, manifest)
+
+    reasons = {warning.reason for warning in report.warnings}
+    assert "incomplete_integrity_status" in reasons
+
+
+def test_warning_report_contains_only_metadata_without_raw_payload_echo():
+    manifest = load_model_manifest(_example_path("model_route_manifest_local_ollama.json"))
+    route_payload = {
+        "selected_backend": "qwen_cloud",
+        "selected_model": "private-model-alias",
+        "selected_route": "private-route-alias",
+        "prompt": "raw private prompt",
+        "data": "raw private data",
+    }
+
+    report = compare_route_to_manifest(route_payload, manifest)
+    rendered = "\n".join(
+        f"{warning.reason} {warning.path} {warning.message}"
+        for warning in report.warnings
+    )
+
+    assert "raw private prompt" not in rendered
+    assert "raw private data" not in rendered
+    assert "private-model-alias" not in rendered
+    assert "private-route-alias" not in rendered

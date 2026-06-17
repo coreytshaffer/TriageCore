@@ -49,6 +49,27 @@ class ManifestCheckResult:
             self.issues.append(issue)
 
 
+@dataclass(frozen=True)
+class ManifestRouteWarning:
+    reason: str
+    path: str
+    message: str
+
+
+@dataclass
+class ManifestRouteWarningReport:
+    warnings: list[ManifestRouteWarning] = field(default_factory=list)
+
+    @property
+    def has_warnings(self) -> bool:
+        return bool(self.warnings)
+
+    def add_warning(self, reason: str, path: str, message: str) -> None:
+        warning = ManifestRouteWarning(reason=reason, path=path, message=message)
+        if warning not in self.warnings:
+            self.warnings.append(warning)
+
+
 def load_model_manifest(manifest_path: str | Path) -> dict[str, Any]:
     path = Path(manifest_path)
     return json.loads(path.read_text(encoding="utf-8"))
@@ -126,6 +147,84 @@ def validate_model_manifest(manifest: dict[str, Any]) -> ManifestCheckResult:
     return result
 
 
+def compare_route_to_manifest(
+    route_payload: dict[str, Any],
+    manifest: dict[str, Any],
+) -> ManifestRouteWarningReport:
+    report = ManifestRouteWarningReport()
+
+    selected_backend = _route_text(
+        route_payload,
+        "selected_backend",
+        "backend_type",
+        "backend",
+    )
+    selected_model = _route_text(
+        route_payload,
+        "selected_model",
+        "model",
+        "model_id",
+        "exact_model_id",
+    )
+    selected_route = _route_text(
+        route_payload,
+        "selected_route",
+        "recommended_route",
+        "route_id",
+        "requested_route",
+    )
+
+    manifest_backend = _string_at_path(manifest, "$.backend.backend_type")
+    manifest_model = _string_at_path(manifest, "$.model.exact_model_id")
+    manifest_route = _string_at_path(manifest, "$.route_id")
+    manifest_mutable_reference = _bool_at_path(manifest, "$.model.mutable_reference")
+    manifest_integrity_status = _string_at_path(
+        manifest,
+        "$.integrity.integrity_status",
+    )
+    manifest_provenance_complete = _bool_at_path(
+        manifest,
+        "$.integrity.provenance_complete",
+    )
+
+    if selected_backend and manifest_backend and selected_backend != manifest_backend:
+        report.add_warning(
+            "backend_mismatch",
+            "$.backend.backend_type",
+            "Route selected backend does not match manifest backend_type.",
+        )
+
+    if selected_model and manifest_model and selected_model != manifest_model:
+        report.add_warning(
+            "model_mismatch",
+            "$.model.exact_model_id",
+            "Route selected model does not match manifest exact_model_id.",
+        )
+
+    if manifest_mutable_reference and manifest_model.lower() in ALIASED_MODEL_IDENTITIES:
+        report.add_warning(
+            "alias_only_model_identity",
+            "$.model.exact_model_id",
+            "Manifest model identity is an alias-only mutable reference.",
+        )
+
+    if manifest_integrity_status != "complete" or not manifest_provenance_complete:
+        report.add_warning(
+            "incomplete_integrity_status",
+            "$.integrity.integrity_status",
+            "Manifest integrity status is not complete.",
+        )
+
+    if selected_route and manifest_route and selected_route != manifest_route:
+        report.add_warning(
+            "route_mismatch",
+            "$.route_id",
+            "Route id does not match manifest route_id.",
+        )
+
+    return report
+
+
 def summarize_model_manifest_check(
     manifest_path: str | Path,
     manifest: dict[str, Any],
@@ -174,3 +273,11 @@ def _bool_at_path(payload: dict[str, Any], path: str) -> bool:
     if not found:
         return False
     return bool(value)
+
+
+def _route_text(payload: dict[str, Any], *keys: str) -> str:
+    for key in keys:
+        value = payload.get(key)
+        if value is not None:
+            return str(value)
+    return ""
