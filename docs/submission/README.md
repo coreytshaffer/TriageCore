@@ -33,3 +33,8 @@ The operator-facing walkthrough is here:
 
 That document is the live demo script. This `docs/submission/` bundle is the judge packet.
 
+## Alternate Framing Draft
+
+- [amd_cloud_submission_overview.md](amd_cloud_submission_overview.md)
+
+This is a separate AMD-oriented framing draft. It does not replace the existing Qwen-centered judge path.
