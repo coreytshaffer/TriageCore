@@ -5,6 +5,7 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+- Implemented CR-036 (Model Manifest Runtime Warning Gate): Add a pure metadata-only route-to-manifest comparison report that warns on backend/model/route, alias-only identity, and incomplete integrity mismatches without blocking runtime execution.
 - Implemented CR-035 (Backlog and Status Alignment Pass): Update current backlog and README status markers after CR-034, keeping runtime integrity enforcement and identity signing expansion out of scope.
 - Implemented CR-034 (Repository Consistency and Secrets Hygiene): Align Python metadata with supported syntax, consolidate package metadata in `pyproject.toml`, expand CI's Python matrix, require environment-only Qwen API keys, reject secret-bearing persistent keys, sanitize backend HTTP errors, and add `SECURITY.md`.
 - Implemented CR-033 (Model Manifest Check CLI): Add `tc model check --manifest <path>` to validate documented route-manifest fields without probing live backends or enforcing routing yet.
