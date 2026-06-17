@@ -1,0 +1,14 @@
+{
+  "event_type": "route_audit",
+  "task_id": "amd-demo-001",
+  "privacy_class": "external_safe",
+  "risk_level": "moderate",
+  "route_decision": "allow_cloud_escalation",
+  "selected_backend": "amd_developer_cloud",
+  "selected_model": "amd-cloud/llama-70b-instruct",
+  "validation_status": "passed",
+  "approval_required": true,
+  "approval_status": "approved",
+  "approved_by": "operator",
+  "notes": "Example metadata-only audit record for AMD cloud GPU escalation."
+}
