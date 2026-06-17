@@ -15,7 +15,10 @@ from triage_core.backends import LocalBackend
 from triage_core.task_ledger import TaskLedger, verify_route_audit_signatures_in_ledger
 from triage_core.demo_dry_run import format_demo_dry_run, run_demo_dry_run
 from triage_core.model_manifest import (
+    compare_route_to_manifest,
+    load_json_payload,
     load_model_manifest,
+    summarize_route_manifest_warning_report,
     summarize_model_manifest_check,
     validate_model_manifest,
 )
@@ -394,6 +397,35 @@ def tc_model_check(manifest_path: str) -> None:
         sys.exit(1)
 
 
+def tc_model_warn(manifest_path: str, route_path: str) -> None:
+    try:
+        manifest = load_model_manifest(manifest_path)
+    except FileNotFoundError:
+        print(f"Error: {manifest_path} not found.")
+        sys.exit(1)
+    except json.JSONDecodeError as e:
+        print(f"Error: {manifest_path} is not valid JSON ({e.msg}).")
+        sys.exit(1)
+    except OSError as e:
+        print(f"Error reading {manifest_path}: {e}")
+        sys.exit(1)
+
+    try:
+        route_payload = load_json_payload(route_path)
+    except FileNotFoundError:
+        print(f"Error: {route_path} not found.")
+        sys.exit(1)
+    except json.JSONDecodeError as e:
+        print(f"Error: {route_path} is not valid JSON ({e.msg}).")
+        sys.exit(1)
+    except OSError as e:
+        print(f"Error reading {route_path}: {e}")
+        sys.exit(1)
+
+    report = compare_route_to_manifest(route_payload, manifest)
+    print(summarize_route_manifest_warning_report(manifest_path, route_path, report))
+
+
 def tc_identity_init(agent_id: str, role: str, capabilities: List[str]) -> None:
     registry = _identity_registry()
     try:
@@ -699,6 +731,20 @@ def main():
         required=True,
         help="Path to a model route manifest JSON file",
     )
+    model_warn_parser = model_subparsers.add_parser(
+        "warn",
+        help="Compare route metadata against a model route manifest without blocking runtime",
+    )
+    model_warn_parser.add_argument(
+        "--manifest",
+        required=True,
+        help="Path to a model route manifest JSON file",
+    )
+    model_warn_parser.add_argument(
+        "--route",
+        required=True,
+        help="Path to a route metadata JSON file",
+    )
 
     # identity
     identity_parser = subparsers.add_parser("identity", help="Manage local persistent agent identities")
@@ -802,8 +848,10 @@ def main():
     elif args.command == "model":
         if args.model_command == "check":
             tc_model_check(args.manifest)
+        elif args.model_command == "warn":
+            tc_model_warn(args.manifest, args.route)
         else:
-            model_parser.error("model requires a subcommand: check")
+            model_parser.error("model requires a subcommand: check or warn")
     elif args.command == "demo":
         if not args.dry_run:
             demo_parser.error("the demo command currently requires --dry-run")

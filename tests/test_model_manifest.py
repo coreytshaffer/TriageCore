@@ -3,6 +3,7 @@ from pathlib import Path
 from triage_core.model_manifest import (
     compare_route_to_manifest,
     load_model_manifest,
+    summarize_route_manifest_warning_report,
     validate_model_manifest,
 )
 
@@ -153,3 +154,41 @@ def test_warning_report_contains_only_metadata_without_raw_payload_echo():
     assert "raw private data" not in rendered
     assert "private-model-alias" not in rendered
     assert "private-route-alias" not in rendered
+
+
+def test_warning_summary_passes_when_route_matches_manifest():
+    manifest = load_model_manifest(_example_path("model_route_manifest_local_ollama.json"))
+    route_path = _example_path("route_payload_local_ollama.json")
+    route_payload = load_model_manifest(route_path)
+
+    report = compare_route_to_manifest(route_payload, manifest)
+    rendered = summarize_route_manifest_warning_report(
+        _example_path("model_route_manifest_local_ollama.json"),
+        route_path,
+        report,
+    )
+
+    assert "Model route warning check passed" in rendered
+    assert "warnings=0" in rendered
+
+
+def test_warning_summary_lists_warning_reasons():
+    manifest = load_model_manifest(_example_path("model_route_manifest_local_ollama.json"))
+    route_payload = {
+        "selected_backend": "qwen_cloud",
+        "selected_model": "different-model",
+        "selected_route": "wrong-route",
+    }
+
+    report = compare_route_to_manifest(route_payload, manifest)
+    rendered = summarize_route_manifest_warning_report(
+        _example_path("model_route_manifest_local_ollama.json"),
+        "route-payload.json",
+        report,
+    )
+
+    assert "Model route warning check warned" in rendered
+    assert "warnings=3" in rendered
+    assert "warning=backend_mismatch" in rendered
+    assert "warning=model_mismatch" in rendered
+    assert "warning=route_mismatch" in rendered
