@@ -78,9 +78,16 @@ tc audit --kind route_audit --last 10
 Optional deeper verification:
 
 ```powershell
+tc model check --manifest docs\security\examples\model_route_manifest_local_ollama.json
+tc model warn --manifest docs\security\examples\model_route_manifest_local_ollama.json --route docs\security\examples\route_payload_local_ollama.json
+tc model warn --manifest docs\security\examples\model_route_manifest_cloud_qwen.json --route docs\security\examples\route_payload_local_ollama.json
 python -m pytest -q
 git status
 ```
+
+The warning command remains non-blocking. Warnings are evidence that the route
+metadata and manifest can be compared visibly; they are not runtime
+enforcement.
 
 ## Expected Outputs
 
@@ -89,6 +96,9 @@ git status
 - `tc handoff latest --print` prints a reviewable handoff packet.
 - `tc audit --self-test` writes one privacy-safe `route_audit` event.
 - `tc audit --kind route_audit --last 10` shows routing metadata without raw payload fields.
+- `tc model check` validates the documented manifest example.
+- `tc model warn` shows matching metadata or warning-only mismatches without
+  failing the demo path.
 
 ## Related Docs
 

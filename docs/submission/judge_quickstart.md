@@ -86,9 +86,16 @@ You should see:
 If more time is available:
 
 ```powershell
+tc model check --manifest docs\security\examples\model_route_manifest_local_ollama.json
+tc model warn --manifest docs\security\examples\model_route_manifest_local_ollama.json --route docs\security\examples\route_payload_local_ollama.json
+tc model warn --manifest docs\security\examples\model_route_manifest_cloud_qwen.json --route docs\security\examples\route_payload_local_ollama.json
 python -m pytest -q
 git status
 ```
+
+These manifest commands are warning-oriented visibility checks. The warning
+command is non-blocking: warnings show route/manifest comparison evidence, not
+runtime enforcement.
 
 ## Troubleshooting
 
