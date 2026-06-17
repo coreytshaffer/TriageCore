@@ -48,3 +48,26 @@ Success: Wrote privacy-safe route_audit self-test event to ...\.triagecore\ledge
 
 For the full reviewer path, see [judge_quickstart.md](judge_quickstart.md).
 
+## Optional Manifest Warning Evidence
+
+For a stronger provenance-oriented proof marker, reviewers can also run:
+
+```powershell
+tc model check --manifest docs\security\examples\model_route_manifest_local_ollama.json
+tc model warn --manifest docs\security\examples\model_route_manifest_local_ollama.json --route docs\security\examples\route_payload_local_ollama.json
+tc model warn --manifest docs\security\examples\model_route_manifest_cloud_qwen.json --route docs\security\examples\route_payload_local_ollama.json
+```
+
+What this adds:
+
+- `tc model check` proves the documented manifest can be validated locally.
+- `tc model warn` proves route metadata can be compared against a manifest with
+  visible pass/warn output.
+- warning output is non-blocking and does not enforce runtime behavior.
+
+What this still does not prove:
+
+- live backend or model-artifact probing
+- production-grade route enforcement
+- certification of model provenance
+

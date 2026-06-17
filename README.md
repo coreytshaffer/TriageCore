@@ -63,6 +63,14 @@ tc audit --privacy-invariants
 triagecore benchmark --list-only
 ```
 
+Optional deeper verification:
+
+```powershell
+tc model check --manifest docs\security\examples\model_route_manifest_local_ollama.json
+tc model warn --manifest docs\security\examples\model_route_manifest_local_ollama.json --route docs\security\examples\route_payload_local_ollama.json
+tc model warn --manifest docs\security\examples\model_route_manifest_cloud_qwen.json --route docs\security\examples\route_payload_local_ollama.json
+```
+
 Expected outputs:
 
 - `tc doctor` confirms repo root, Python, CLI path, ledger path, and pytest visibility.
@@ -74,6 +82,9 @@ Expected outputs:
 - `tc audit --kind demo_dry_run --last 5` shows the deterministic demo evidence without raw request or proposed-output content.
 - `tc audit --privacy-invariants` scans the persistent ledger for forbidden raw-content keys and confirms the CR-021 invariant still holds.
 - `triagecore benchmark --list-only` shows the benchmark fixture set without contacting a backend.
+- `tc model check` validates the documented manifest example locally.
+- `tc model warn` provides warning-only route/manifest comparison visibility and
+  remains non-blocking when mismatches exist.
 
 Sample audit transcript:
 
@@ -91,6 +102,10 @@ Success: Wrote privacy-safe route_audit self-test event to ...\.triagecore\ledge
 The deterministic demo runs offline, calls no model backend, and changes no
 source files. It demonstrates the current workflow structure and review gates;
 it is not evidence of production safety certification.
+
+The manifest warning commands are optional deeper verification only. They
+demonstrate route/manifest comparison visibility, not runtime enforcement,
+backend probing, or production certification.
 
 Start here if you want the shortest guided path:
 

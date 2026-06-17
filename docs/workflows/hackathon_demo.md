@@ -59,6 +59,19 @@ python -m triage_core.cli import-learning-seeds --source-dir docs\learning\examp
 
 Use that last command only when you want to explain the learning/example layer. It is not required for the core 3-minute demo.
 
+Optional deeper verification commands if a reviewer asks about model
+provenance or route integrity awareness:
+
+```powershell
+tc model check --manifest docs\security\examples\model_route_manifest_local_ollama.json
+tc model warn --manifest docs\security\examples\model_route_manifest_local_ollama.json --route docs\security\examples\route_payload_local_ollama.json
+tc model warn --manifest docs\security\examples\model_route_manifest_cloud_qwen.json --route docs\security\examples\route_payload_local_ollama.json
+```
+
+Use these only as a secondary proof marker. The warning command is non-blocking.
+Warnings demonstrate route/manifest comparison visibility, not runtime
+enforcement.
+
 ## Expected Outputs
 
 ### 1. `tc doctor`
@@ -222,6 +235,20 @@ Point out what is missing:
 - no copied task content
 
 That is the evidence trail story: useful metadata without leaking payload contents.
+
+## Optional Manifest Verification Explanation
+
+If a judge asks how TriageCore makes model provenance and route integrity more
+visible without claiming enforcement, use the manifest commands above.
+
+What to point out:
+
+- `tc model check` validates the documented manifest shape.
+- `tc model warn` compares a route metadata fixture against a manifest and
+  reports warnings when metadata does not line up.
+- the warning path is deliberately non-blocking
+- the current implementation does not probe live backends or model artifacts
+- this is a prototype integrity-awareness step, not production certification
 
 ## What To Say In A 3-Minute Demo
 
