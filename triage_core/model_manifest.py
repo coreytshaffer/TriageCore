@@ -71,7 +71,11 @@ class ManifestRouteWarningReport:
 
 
 def load_model_manifest(manifest_path: str | Path) -> dict[str, Any]:
-    path = Path(manifest_path)
+    return load_json_payload(manifest_path)
+
+
+def load_json_payload(payload_path: str | Path) -> dict[str, Any]:
+    path = Path(payload_path)
     return json.loads(path.read_text(encoding="utf-8"))
 
 
@@ -223,6 +227,34 @@ def compare_route_to_manifest(
         )
 
     return report
+
+
+def summarize_route_manifest_warning_report(
+    manifest_path: str | Path,
+    route_path: str | Path,
+    report: ManifestRouteWarningReport,
+) -> str:
+    manifest_name = str(manifest_path)
+    route_name = str(route_path)
+    if not report.has_warnings:
+        return "\n".join(
+            [
+                "Model route warning check passed",
+                f"manifest={manifest_name}",
+                f"route={route_name}",
+                "warnings=0",
+            ]
+        )
+
+    lines = [
+        "Model route warning check warned",
+        f"manifest={manifest_name}",
+        f"route={route_name}",
+        f"warnings={len(report.warnings)}",
+    ]
+    for warning in report.warnings:
+        lines.append(f"warning={warning.reason} path={warning.path}")
+    return "\n".join(lines)
 
 
 def summarize_model_manifest_check(

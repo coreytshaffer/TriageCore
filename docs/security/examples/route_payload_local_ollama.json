@@ -1,0 +1,5 @@
+{
+  "selected_backend": "ollama",
+  "selected_model": "qwen2.5:7b-instruct-q4_K_M",
+  "selected_route": "local-ollama-qwen2.5-7b-instruct-q4km"
+}
