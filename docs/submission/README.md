@@ -33,3 +33,19 @@ The operator-facing walkthrough is here:
 
 That document is the live demo script. This `docs/submission/` bundle is the judge packet.
 
+## Alternate Framing Draft
+
+- [amd_cloud_submission_overview.md](amd_cloud_submission_overview.md)
+
+This is a separate AMD-oriented framing draft. It does not replace the existing Qwen-centered judge path.
+
+### AMD routing policy evidence
+
+TriageCore's AMD cloud path is not only documented. CR-040 adds executable
+routing-policy evidence showing when tasks remain local, use deterministic
+tools, require approval for AMD cloud escalation, or are blocked from cloud
+egress due to privacy policy.
+
+This keeps AMD cloud acceleration inside an inspectable governance layer: task
+metadata and route manifests drive the decision, while approval gates and audit
+expectations prevent cloud escalation from becoming an unbounded default.
