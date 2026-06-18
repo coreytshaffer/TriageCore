@@ -42,6 +42,7 @@ Thumbs.db
 *.sw?
 
 # TriageCore runtime data (do not commit)
+.triagecore/
 .triagecore/ledger.jsonl
 .triagecore/learning_proposals.jsonl
 .triagecore/learning_reviews.jsonl
