@@ -1,4 +1,6 @@
-﻿# Change Log
+- Implemented CR-040 (Executable AMD Routing Policy Evidence): Add a pure routing-policy module, focused tests for local/deterministic/AMD decision states, and AMD example-field updates that keep live cloud integration out of scope.
+- Implemented CR-039 (AMD Cloud Agent Routing Demo): Add an AMD-specific submission overview, governed cloud demo walkthrough, and example artifacts for route manifest, TaskPacket escalation, and route-audit evidence.
+# Change Log
 
 This file provides a chronological, human-readable record of applied codebase and architecture changes to TriageCore.
 

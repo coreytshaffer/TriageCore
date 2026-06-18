@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "model_id": "amd-cloud/llama-70b-instruct",
+  "display_name": "AMD Cloud 70B Instruct",
+  "provider": "amd_developer_cloud",
+  "route_target": "amd_cloud",
+  "endpoint": "https://api.amd.example/v1/chat/completions",
+  "route_class": "cloud_heavy",
+  "allowed_for": [
+    "external_safe",
+    "performance_escalation"
+  ],
+  "requires_human_approval": true,
+  "requires_output_validation": true,
+  "notes": "Example manifest for AMD cloud GPU escalation in a governed route demo."
+}
