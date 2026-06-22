@@ -15,6 +15,11 @@ This document summarizes the active TriageCore backlog after CR-034.
 
 ## Candidate Future Work
 
+- External runtime integration doctrine
+  - Source: CR-043 docs-only baseline
+  - Status: documentation-only slice complete; runtime integration work remains gated
+  - Purpose: define vendor-neutral integration rules for external runtimes without granting new authority or adding dependencies.
+
 - Runtime integrity and model provenance enforcement
   - Source: CR-031 policy baseline
   - Status: candidate future CR, not yet active GitHub backlog
@@ -59,4 +64,6 @@ Keep three work lanes distinct:
 
 The next feature-sized slice can be a runtime model-manifest enforcement
 preview, but it should not collapse policy, artifact shape, manifest validation,
-and backend probing into one change.
+and backend probing into one change. External runtime interoperability should
+remain docs-only until a separate approved slice introduces bounded contracts or
+policy tests.
