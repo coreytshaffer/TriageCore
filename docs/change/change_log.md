@@ -1,5 +1,3 @@
-- Implemented CR-040 (Executable AMD Routing Policy Evidence): Add a pure routing-policy module, focused tests for local/deterministic/AMD decision states, and AMD example-field updates that keep live cloud integration out of scope.
-- Implemented CR-039 (AMD Cloud Agent Routing Demo): Add an AMD-specific submission overview, governed cloud demo walkthrough, and example artifacts for route manifest, TaskPacket escalation, and route-audit evidence.
 # Change Log
 
 This file provides a chronological, human-readable record of applied codebase and architecture changes to TriageCore.
@@ -7,6 +5,8 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+- Implemented CR-044 (External Runtime Manifest Schema): Add a vendor-neutral external-runtime manifest contract that defines runtime identity, authority boundary, approval, provenance, and revocation fields before any example or adapter work.
+- Implemented CR-043 (External Runtime Integration Doctrine): Add a docs-only external-runtime doctrine and OpenClaw boundary note that define compatibility-without-capture and keep interoperability subordinate to TriageCore authority.
 - Implemented CR-039 (AMD Cloud Agent Routing Demo): Add an AMD-specific submission overview, governed cloud demo walkthrough, route-manifest and TaskPacket examples, route-audit example evidence, and a judge-facing note that references CR-040 executable routing-policy evidence without changing runtime behavior.
 - Implemented CR-038 (Submission Demo Refresh After Manifest Warning CLI): Update reviewer and submission docs so `tc model check` and `tc model warn` appear as optional deeper verification steps with explicit non-blocking claim boundaries.
 - Implemented CR-037 (Model Manifest Warning CLI Surface): Add `tc model warn --manifest <path> --route <path>` as a warning-only CLI demo path for manifest/route comparison without backend probing, routing enforcement, or ledger mutation.
@@ -49,4 +49,3 @@ This file provides a chronological, human-readable record of applied codebase an
 - Implemented CR-001 (TaskPacket Privacy Metadata): Added `TaskPacket` and `PrivacyMetadata` schemas and integrated them backward-compatibly into `TriageClient.run_task()`.
 - Initial creation of the change management documentation layer.
 - Added CR-004 (Local LLM Provenance and Smoke Tests) as proposed documentation only.
-
