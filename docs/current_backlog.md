@@ -15,6 +15,14 @@ This document summarizes the active TriageCore backlog after CR-034.
 
 ## Candidate Future Work
 
+- External runtime adapter stub
+  - Source: CR-046 bounded implementation slice
+  - Status: implementation slice complete; policy tests and execution-path
+    validation remain future work
+  - Purpose: normalize declared external runtime manifests into inert
+    TriageCore-native proposed records without granting authority or executing
+    anything.
+
 - External runtime manifest examples
   - Source: CR-045 docs-only example slice
   - Status: documentation-only slice complete; adapter and execution work remain
@@ -81,4 +89,4 @@ The next feature-sized slice can be a runtime model-manifest enforcement
 preview, but it should not collapse policy, artifact shape, manifest validation,
 and backend probing into one change.
 
-For external runtime interoperability, the next approved slice should be a bounded runtime adapter stub, followed by any policy tests or execution-path validation.
+For external runtime interoperability, the next approved slice should be policy tests or execution-path validation for the bounded adapter path.
