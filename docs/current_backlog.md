@@ -15,6 +15,14 @@ This document summarizes the active TriageCore backlog after CR-034.
 
 ## Candidate Future Work
 
+- External runtime manifest schema
+  - Source: CR-044 docs-only contract slice
+  - Status: documentation-only slice complete; example and adapter work remain
+    gated
+  - Purpose: define the vendor-neutral manifest contract external runtimes must
+    provide before TriageCore can classify authority, approval, provenance, and
+    revocation expectations.
+
 - External runtime integration doctrine
   - Source: CR-043 docs-only baseline
   - Status: documentation-only slice complete; runtime integration work remains gated
@@ -65,5 +73,8 @@ Keep three work lanes distinct:
 The next feature-sized slice can be a runtime model-manifest enforcement
 preview, but it should not collapse policy, artifact shape, manifest validation,
 and backend probing into one change. External runtime interoperability should
-remain docs-only until a separate approved slice introduces bounded contracts or
-policy tests.
+remain docs-only until separate approved slices introduce:
+
+- a vendor-neutral external runtime manifest example
+- then a bounded runtime adapter stub
+- then any policy tests or execution-path validation
