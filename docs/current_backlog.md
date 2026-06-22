@@ -15,6 +15,13 @@ This document summarizes the active TriageCore backlog after CR-034.
 
 ## Candidate Future Work
 
+- External runtime manifest examples
+  - Source: CR-045 docs-only example slice
+  - Status: documentation-only slice complete; adapter and execution work remain
+    gated
+  - Purpose: show what safe read-only, draft-only, and intentionally invalid
+    external runtime manifests look like under the CR-044 contract.
+
 - External runtime manifest schema
   - Source: CR-044 docs-only contract slice
   - Status: documentation-only slice complete; example and adapter work remain
@@ -72,9 +79,6 @@ Keep three work lanes distinct:
 
 The next feature-sized slice can be a runtime model-manifest enforcement
 preview, but it should not collapse policy, artifact shape, manifest validation,
-and backend probing into one change. External runtime interoperability should
-remain docs-only until separate approved slices introduce:
+and backend probing into one change.
 
-- a vendor-neutral external runtime manifest example
-- then a bounded runtime adapter stub
-- then any policy tests or execution-path validation
+For external runtime interoperability, the next approved slice should be a bounded runtime adapter stub, followed by any policy tests or execution-path validation.

@@ -1,0 +1,16 @@
+schema_version: "1.0.0"
+runtime_name: "example-invalid-runtime"
+runtime_version: "latest"
+runtime_kind: "unknown"
+adapter_version: ""
+capability_profile: "approved_mutation"
+tool_policy_hash: ""
+sandbox_mode: "unknown"
+network_access: "unknown"
+credential_access: "unknown"
+model_provider: "unknown"
+model_identity: "default"
+approval_required: false
+provenance_required: false
+revocation_supported: false
+notes: "Invalid example showing fields that should fail future authority-sensitive validation."
