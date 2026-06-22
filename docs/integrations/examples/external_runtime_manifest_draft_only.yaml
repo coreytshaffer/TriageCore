@@ -1,0 +1,16 @@
+schema_version: "1.0.0"
+runtime_name: "example-draft-runtime"
+runtime_version: "0.1.0"
+runtime_kind: "automation_gateway"
+adapter_version: "0.1.0"
+capability_profile: "draft_only"
+tool_policy_hash: "sha256:example-draft-policy"
+sandbox_mode: "workspace_write"
+network_access: "blocked"
+credential_access: "none"
+model_provider: "local_only"
+model_identity: "example-local-model@sha256:placeholder"
+approval_required: true
+provenance_required: true
+revocation_supported: true
+notes: "Example manifest for draft-only behavior; no mutation authority."

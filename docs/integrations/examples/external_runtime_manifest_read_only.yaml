@@ -1,0 +1,16 @@
+schema_version: "1.0.0"
+runtime_name: "example-read-only-runtime"
+runtime_version: "0.1.0"
+runtime_kind: "external_agent"
+adapter_version: "0.1.0"
+capability_profile: "read_only_summary"
+tool_policy_hash: "sha256:example-read-only-policy"
+sandbox_mode: "read_only"
+network_access: "blocked"
+credential_access: "none"
+model_provider: "none"
+model_identity: "none"
+approval_required: true
+provenance_required: true
+revocation_supported: true
+notes: "Example manifest for a read-only external runtime."

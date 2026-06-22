@@ -264,12 +264,21 @@ Future checks should not:
 - assume sandbox, network, or credential limits that are not declared
 - allow a runtime example to redefine the canonical contract
 
+## Example Files
+
+This schema now has companion examples:
+
+- `docs/integrations/examples/external_runtime_manifest_read_only.yaml`
+- `docs/integrations/examples/external_runtime_manifest_draft_only.yaml`
+- `docs/integrations/examples/external_runtime_manifest_invalid_unknowns.yaml`
+
+The invalid example is intentionally authority-incomplete so future validation work has a documented failure target.
+
 ## Non-Goals
 
 This schema document does not:
 
 - define a runtime adapter interface
 - add JSON Schema tooling yet
-- add example manifests yet
 - implement validation code
 - permit any external runtime execution
