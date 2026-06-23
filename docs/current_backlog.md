@@ -2,7 +2,7 @@
 
 ## Status
 
-This document summarizes the active TriageCore backlog after CR-051.
+This document summarizes the active TriageCore backlog after CR-052.
 
 ## Active GitHub Backlog
 
@@ -16,8 +16,8 @@ This document summarizes the active TriageCore backlog after CR-051.
 ## Candidate Future Work
 
 - Operator UX implementation path
-  - Source: CR-051 docs-only operator console slice
-  - Status: design complete; CLI, report-export, and TUI work remain future slices
+  - Source: CR-051 docs-only console design, CR-052 template contract
+  - Status: design and template complete; CLI, report-export, and TUI work remain future slices
   - Purpose: keep operator UX calm, legible, and evidence-first without jumping straight to a web dashboard or hidden automation surface.
 
 - External runtime execution admission evidence

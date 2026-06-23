@@ -5,6 +5,7 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+- Implemented CR-052 (Task Envelope Template Contract): Add a docs-only reusable template defining the minimal fields for future CLI/TUI/Markdown exporters to render task scope and risk.
 - Implemented CR-051 (Operator UX and Task Envelope Console Design): Add a docs-only operator console design note, visualizing the task envelope, admission states, and enforcing the "inert by default" display guarantee.
 - Implemented CR-050 (External Runtime Admission Evidence Record): Add `ExternalRuntimeAdmissionEvidence` to structure the inert execution stub's response, supporting explicit audit tracking without side-effects.
 - Implemented CR-049 (External Runtime Admission Caller Stub): Add `execute_external_runtime_stub` representing the first execution-path boundary that strictly enforces admission rules.
