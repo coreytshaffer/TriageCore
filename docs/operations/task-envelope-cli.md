@@ -44,7 +44,7 @@ Drafts a new Task Envelope from CLI flags or a JSON fixture. This command enforc
 If a required field is missing, the command will fail and exit nonzero.
 
 **Using a JSON Fixture:**
-You can provide a local JSON file using `--from-json <path>`. This is mutually exclusive with explicit field flags.
+You can provide a local JSON file using `--from-json <path>`. This is mutually exclusive with explicit field flags. See the [JSON Fixture Schema](task-envelope-json-fixture-schema.md) for the required structure.
 ```bash
 tc task-envelope draft --from-json docs/examples/task-envelope.example.json
 ```

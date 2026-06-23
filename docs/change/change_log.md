@@ -5,6 +5,7 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+- Implemented CR-059 (Task Envelope JSON Schema Documentation): Documented the JSON fixture schema for `--from-json` operations.
 - Implemented CR-058 (Task Envelope JSON Fixture Rendering): Added optional `--from-json` fixture loading to `tc task-envelope draft` (read-only, no persistence).
 - Implemented CR-057 (Interactive CLI Task Envelope Wizard): Add `tc task-envelope wizard` to interactively prompt users for Task Envelope boundaries.
 - Implemented CR-056 (Task Envelope CLI Documentation + Examples): Add a usage reference and examples for `tc task-envelope preview` and `draft` commands under `docs/operations/task-envelope-cli.md`.
