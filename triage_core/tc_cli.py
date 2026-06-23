@@ -853,6 +853,30 @@ def tc_admission_validate(args: argparse.Namespace) -> None:
         sys.stderr.write(f"Error reading JSON fixture: {e}\n")
         sys.exit(1)
 
+def tc_admission_render(args: argparse.Namespace) -> None:
+    from triage_core.admission import admission_evidence_from_mapping, render_admission_evidence_markdown
+    import json
+    
+    json_path = os.path.normpath(args.from_json)
+    if json_path.endswith(".triagecore/ledger.jsonl") or json_path.endswith(".triagecore\\ledger.jsonl"):
+        sys.stderr.write("Error: ledger.jsonl is not allowed as a --from-json fixture source.\n")
+        sys.exit(1)
+        
+    try:
+        with open(args.from_json, 'r', encoding='utf-8') as f:
+            payload = json.load(f)
+        evidence = admission_evidence_from_mapping(payload)
+        print(render_admission_evidence_markdown(evidence), end='')
+    except json.JSONDecodeError as e:
+        sys.stderr.write(f"Error parsing JSON: {e}\n")
+        sys.exit(1)
+    except ValueError as e:
+        sys.stderr.write(f"Error validating Admission Evidence JSON: {e}\n")
+        sys.exit(1)
+    except Exception as e:
+        sys.stderr.write(f"Error reading JSON fixture: {e}\n")
+        sys.exit(1)
+
 def tc_task_envelope_wizard() -> None:
     from triage_core.task_envelope import TaskEnvelope, render_task_envelope_markdown
 
@@ -1098,6 +1122,12 @@ def main():
     )
     admission_validate_parser.add_argument("--from-json", required=True, type=str, help="Load Admission Evidence from a JSON fixture file")
 
+    admission_render_parser = admission_subparsers.add_parser(
+        "render",
+        help="Render an Admission Evidence JSON fixture as Markdown",
+    )
+    admission_render_parser.add_argument("--from-json", required=True, type=str, help="Load Admission Evidence from a JSON fixture file")
+
     args = parser.parse_args()
 
     if args.command == "propose":
@@ -1175,8 +1205,10 @@ def main():
     elif args.command == "admission":
         if args.admission_command == "validate":
             tc_admission_validate(args)
+        elif args.admission_command == "render":
+            tc_admission_render(args)
         else:
-            admission_parser.error("admission requires a subcommand: validate")
+            admission_parser.error("admission requires a subcommand: validate or render")
     else:
         parser.print_help()
 
