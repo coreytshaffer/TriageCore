@@ -805,6 +805,30 @@ def tc_task_envelope_draft(args: argparse.Namespace) -> None:
         
     print(render_task_envelope_markdown(envelope), end='')
 
+def tc_task_envelope_validate(args: argparse.Namespace) -> None:
+    from triage_core.task_envelope import task_envelope_from_mapping
+    import json
+    
+    json_path = os.path.normpath(args.from_json)
+    if json_path.endswith(".triagecore/ledger.jsonl") or json_path.endswith(".triagecore\\ledger.jsonl"):
+        sys.stderr.write("Error: ledger.jsonl is not allowed as a --from-json fixture source.\n")
+        sys.exit(1)
+        
+    try:
+        with open(args.from_json, 'r', encoding='utf-8') as f:
+            payload = json.load(f)
+        task_envelope_from_mapping(payload)
+        print("Validation successful.")
+    except json.JSONDecodeError as e:
+        sys.stderr.write(f"Error parsing JSON: {e}\n")
+        sys.exit(1)
+    except ValueError as e:
+        sys.stderr.write(f"Error validating Task Envelope JSON: {e}\n")
+        sys.exit(1)
+    except Exception as e:
+        sys.stderr.write(f"Error reading JSON fixture: {e}\n")
+        sys.exit(1)
+
 def tc_task_envelope_wizard() -> None:
     from triage_core.task_envelope import TaskEnvelope, render_task_envelope_markdown
 
@@ -1031,8 +1055,14 @@ def main():
 
     task_envelope_wizard_parser = task_envelope_subparsers.add_parser(
         "wizard",
-        help="Interactively draft a TaskEnvelope and print Markdown to stdout",
+        help="Interactively prompt for boundaries to build and print a TaskEnvelope Markdown draft",
     )
+
+    task_envelope_validate_parser = task_envelope_subparsers.add_parser(
+        "validate",
+        help="Validate a TaskEnvelope JSON fixture without rendering",
+    )
+    task_envelope_validate_parser.add_argument("--from-json", required=True, type=str, help="Load TaskEnvelope from a JSON fixture file")
 
     args = parser.parse_args()
 
@@ -1104,8 +1134,10 @@ def main():
             tc_task_envelope_draft(args)
         elif args.task_envelope_command == "wizard":
             tc_task_envelope_wizard()
+        elif args.task_envelope_command == "validate":
+            tc_task_envelope_validate(args)
         else:
-            task_envelope_parser.error("task-envelope requires a subcommand: preview, draft, or wizard")
+            task_envelope_parser.error("task-envelope requires a subcommand: preview, draft, wizard, or validate")
     else:
         parser.print_help()
 

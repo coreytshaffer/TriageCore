@@ -254,3 +254,53 @@ def test_task_envelope_draft_from_json_missing_list(tmp_path):
     result = subprocess.run(cmd, capture_output=True, text=True)
     assert result.returncode != 0
     assert "Error validating Task Envelope JSON: Missing or empty required list field" in result.stderr
+
+def test_task_envelope_validate_success(tmp_path):
+    import json
+    fixture_path = tmp_path / "fixture.json"
+    payload = {
+        "task_id": "CR-060", "title": "Test JSON", "objective": "Obj", "repo": "TriageCore",
+        "operator_agent_lane": "cli-operator", "route": "local-cli", "risk_level": "Low",
+        "requested_capability": "read_only", "approval_gates": "gates", "validation_plan": "plan",
+        "current_status": "proposed", "operator_decision": "Pending", "next_allowed_action": "action",
+        "allowed_files": ["file1"], "forbidden_files_or_areas": ["file2"],
+        "explicit_non_scope": ["scope1"], "evidence_to_produce": ["evidence1"]
+    }
+    fixture_path.write_text(json.dumps(payload))
+    
+    cmd = [sys.executable, "-m", "triage_core.tc_cli", "task-envelope", "validate", "--from-json", str(fixture_path)]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    assert result.returncode == 0
+    assert "Validation successful." in result.stdout
+
+def test_task_envelope_validate_invalid_json(tmp_path):
+    fixture_path = tmp_path / "fixture.json"
+    fixture_path.write_text("{ invalid json")
+    
+    cmd = [sys.executable, "-m", "triage_core.tc_cli", "task-envelope", "validate", "--from-json", str(fixture_path)]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    assert result.returncode != 0
+    assert "Error parsing JSON" in result.stderr
+
+def test_task_envelope_validate_missing_field(tmp_path):
+    import json
+    fixture_path = tmp_path / "fixture.json"
+    payload = {"task_id": "CR-060"}
+    fixture_path.write_text(json.dumps(payload))
+    
+    cmd = [sys.executable, "-m", "triage_core.tc_cli", "task-envelope", "validate", "--from-json", str(fixture_path)]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    assert result.returncode != 0
+    assert "Error validating Task Envelope JSON" in result.stderr
+
+def test_task_envelope_validate_rejects_ledger():
+    cmd = [sys.executable, "-m", "triage_core.tc_cli", "task-envelope", "validate", "--from-json", ".triagecore/ledger.jsonl"]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    assert result.returncode != 0
+    assert "ledger.jsonl is not allowed" in result.stderr
+
+def test_task_envelope_validate_requires_from_json():
+    cmd = [sys.executable, "-m", "triage_core.tc_cli", "task-envelope", "validate"]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    assert result.returncode != 0
+    assert "the following arguments are required: --from-json" in result.stderr

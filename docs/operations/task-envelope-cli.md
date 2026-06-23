@@ -1,6 +1,16 @@
 # Task Envelope CLI Reference
 
-The `tc task-envelope` command provides operators with the ability to preview and draft deterministic Markdown representations of Task Envelopes without triggering runtime execution or ledger interactions.
+You can interact with Task Envelopes via the `tc task-envelope` command.
+
+### Validate a JSON Fixture
+You can validate a JSON fixture without rendering it using the `validate` command.
+```bash
+tc task-envelope validate --from-json docs/examples/task-envelope.example.json
+```
+If valid, it will exit 0 and print `Validation successful.` If invalid, it will exit non-zero and print the validation error to `stderr`.
+
+### Draft a Task Envelope
+You can generate a Markdown Task Envelope completely in-memory using the `draft` command. This uses flags to set boundaries, and prints the resulting markdown directly to `stdout` without saving to the ledger.
 
 ## Command Overview
 
