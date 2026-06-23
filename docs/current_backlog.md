@@ -2,7 +2,7 @@
 
 ## Status
 
-This document summarizes the active TriageCore backlog after CR-034.
+This document summarizes the active TriageCore backlog after CR-051.
 
 ## Active GitHub Backlog
 
@@ -15,10 +15,35 @@ This document summarizes the active TriageCore backlog after CR-034.
 
 ## Candidate Future Work
 
+- Operator UX implementation path
+  - Source: CR-051 docs-only operator console slice
+  - Status: design complete; CLI, report-export, and TUI work remain future slices
+  - Purpose: keep operator UX calm, legible, and evidence-first without jumping straight to a web dashboard or hidden automation surface.
+
 - External runtime execution admission evidence
   - Source: CR-050 admission evidence record
   - Status: evidence structure complete; ledger integration remains future work
   - Purpose: audit the admission of proposals separately from their execution.
+
+- CLI task-envelope wizard MVP
+  - Source: CR-051 follow-on sequence
+  - Status: candidate future CR, not yet active GitHub backlog
+  - Purpose: guide the operator through task scope, allowed files, risk, agent lanes, and approval gates without requiring memorized fields.
+
+- Markdown task report export
+  - Source: CR-051 follow-on sequence
+  - Status: candidate future CR, not yet active GitHub backlog
+  - Purpose: generate a human-readable task summary that can be consumed by repo docs, handoffs, and review surfaces.
+
+- Textual read-only operator dashboard
+  - Source: CR-051 follow-on sequence
+  - Status: candidate future CR, not yet active GitHub backlog
+  - Purpose: provide a calm terminal control panel for status, approvals, scope, and evidence after CLI/report fields stabilize.
+
+- External runtime execution boundary stub
+  - Source: CR-049 execution-path boundary stub
+  - Status: stub caller complete; routing policy and admission tokens remain future work
+  - Purpose: enforce structural and policy boundaries by ensuring proposals must pass `admit_external_runtime` before proceeding.
 
 - External runtime manifest examples
   - Source: CR-045 docs-only example slice
@@ -87,3 +112,5 @@ preview, but it should not collapse policy, artifact shape, manifest validation,
 and backend probing into one change.
 
 For external runtime interoperability, the next approved slice should be policy tests or execution-path validation for the bounded adapter path.
+
+For operator UX, keep the next slices boring and sequential: task-envelope wizard first, Markdown report export second, and any Textual dashboard only after the artifact shape is stable.
