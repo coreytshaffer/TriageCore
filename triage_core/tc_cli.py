@@ -683,6 +683,33 @@ def tc_task_envelope_preview() -> None:
     # The renderer appends a trailing newline, so print(..., end='') to avoid double blank line
     print(render_task_envelope_markdown(envelope), end='')
 
+def tc_task_envelope_draft(args: argparse.Namespace) -> None:
+    from triage_core.task_envelope import TaskEnvelope, render_task_envelope_markdown
+    
+    envelope = TaskEnvelope(
+        task_id=args.task_id,
+        title=args.title,
+        objective=args.objective,
+        repo=args.repo,
+        operator_agent_lane=args.operator_agent_lane,
+        route=args.route,
+        risk_level=args.risk_level,
+        requested_capability=args.requested_capability,
+        allowed_files=tuple(args.allowed_file),
+        forbidden_files_or_areas=tuple(args.forbidden_area),
+        explicit_non_scope=tuple(args.non_scope),
+        approval_gates=args.approval_gates,
+        validation_plan=args.validation_plan,
+        evidence_to_produce=tuple(args.evidence),
+        current_status=args.current_status,
+        operator_decision=args.operator_decision,
+        next_allowed_action=args.next_allowed_action,
+        failure_modes_or_blocked_reasons=args.blocked_reason,
+        approval_evidence=args.approval_evidence,
+        admission_evidence=args.admission_evidence,
+    )
+    print(render_task_envelope_markdown(envelope), end='')
+
 def main():
     parser = argparse.ArgumentParser(description="TriageCore Operator Workflow")
     subparsers = parser.add_subparsers(dest="command")
@@ -824,6 +851,31 @@ def main():
         "preview",
         help="Print a sample TaskEnvelope Markdown preview to stdout",
     )
+    
+    task_envelope_draft_parser = task_envelope_subparsers.add_parser(
+        "draft",
+        help="Draft a TaskEnvelope from CLI flags and print Markdown to stdout",
+    )
+    task_envelope_draft_parser.add_argument("--task-id", required=True)
+    task_envelope_draft_parser.add_argument("--title", required=True)
+    task_envelope_draft_parser.add_argument("--objective", required=True)
+    task_envelope_draft_parser.add_argument("--repo", required=True)
+    task_envelope_draft_parser.add_argument("--operator-agent-lane", required=True)
+    task_envelope_draft_parser.add_argument("--route", required=True)
+    task_envelope_draft_parser.add_argument("--risk-level", required=True)
+    task_envelope_draft_parser.add_argument("--requested-capability", required=True)
+    task_envelope_draft_parser.add_argument("--allowed-file", action="append", required=True)
+    task_envelope_draft_parser.add_argument("--forbidden-area", action="append", required=True)
+    task_envelope_draft_parser.add_argument("--non-scope", action="append", required=True)
+    task_envelope_draft_parser.add_argument("--approval-gates", required=True)
+    task_envelope_draft_parser.add_argument("--validation-plan", required=True)
+    task_envelope_draft_parser.add_argument("--evidence", action="append", required=True)
+    task_envelope_draft_parser.add_argument("--current-status", required=True)
+    task_envelope_draft_parser.add_argument("--operator-decision", required=True)
+    task_envelope_draft_parser.add_argument("--next-allowed-action", required=True)
+    task_envelope_draft_parser.add_argument("--blocked-reason", type=str)
+    task_envelope_draft_parser.add_argument("--approval-evidence", type=str)
+    task_envelope_draft_parser.add_argument("--admission-evidence", type=str)
 
     args = parser.parse_args()
 
@@ -891,8 +943,10 @@ def main():
     elif args.command == "task-envelope":
         if args.task_envelope_command == "preview":
             tc_task_envelope_preview()
+        elif args.task_envelope_command == "draft":
+            tc_task_envelope_draft(args)
         else:
-            task_envelope_parser.error("task-envelope requires a subcommand: preview")
+            task_envelope_parser.error("task-envelope requires a subcommand: preview or draft")
     else:
         parser.print_help()
 
