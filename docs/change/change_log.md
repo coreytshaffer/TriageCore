@@ -5,6 +5,7 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+- Implemented CR-075 (Admission Bundle Manifest Contract): Added a manifest contract doc and focused tests to keep the admission review bundle manifest review-only and non-authoritative.
 - Implemented CR-074 (Admission Review Bundle Dry Run): Added a review-only admission bundle command that writes rendered Markdown, evidence JSON, and a small no-authority manifest to an explicit output directory.
 - Implemented CR-073 (Admission Evidence Fixture Drift Check): Added a narrow drift-check test to keep the admission validator, public valid fixture, and admission evidence contract documentation aligned.
 - Implemented CR-072 (Admission Evidence Contract Linkage): Added a minimal operator-path link from the admission workflow doc to the admission evidence contract, improving discoverability without changing behavior.
