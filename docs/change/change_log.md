@@ -5,6 +5,7 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+- Implemented CR-056 (Task Envelope CLI Documentation + Examples): Add a usage reference and examples for `tc task-envelope preview` and `draft` commands under `docs/operations/task-envelope-cli.md`.
 - Implemented CR-055 (CLI Task Envelope Wizard Draft Mode): Add `tc task-envelope draft` CLI command to build and output a deterministic task envelope from CLI flags.
 - Implemented CR-054 (CLI Task Envelope Preview Command): Add `tc task-envelope preview` CLI command to output a deterministic task envelope to terminal stdout for operator preview.
 - Implemented CR-053 (Markdown Task Report Export): Add a pure renderer for converting TaskEnvelope objects to deterministic Markdown based on the CR-052 contract.
