@@ -1,4 +1,5 @@
 import pytest
+import json
 from triage_core.admission import ExternalRuntimeAdmissionEvidence, render_admission_evidence_markdown, admission_evidence_from_mapping
 
 def test_render_admitted_state():
@@ -183,4 +184,18 @@ def test_admission_evidence_from_mapping_allows_null_approval_evidence():
     }
     evidence = admission_evidence_from_mapping(payload)
     assert evidence.approval_evidence is None
+
+def test_admission_evidence_example_fixture_roundtrip():
+    with open("docs/examples/admission-evidence.example.json", "r") as f:
+        payload = json.load(f)
+
+    # 1. Validate mapping
+    evidence = admission_evidence_from_mapping(payload)
+    assert evidence.admitted is False
+
+    # 2. Render and verify trust anchors
+    markdown = render_admission_evidence_markdown(evidence)
+    assert "**Execution Performed:** false" in markdown
+    assert "## Blocked Reasons" in markdown
+    assert "## Manifest / Source Evidence" in markdown
 
