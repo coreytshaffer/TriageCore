@@ -1,0 +1,29 @@
+{
+  "task_id": "CR-058",
+  "title": "Task Envelope JSON Fixture Rendering",
+  "objective": "Render deterministic Markdown from a local JSON fixture.",
+  "repo": "TriageCore",
+  "operator_agent_lane": "cli-operator",
+  "route": "local-cli",
+  "risk_level": "Low",
+  "requested_capability": "read_only",
+  "allowed_files": [
+    "triage_core/tc_cli.py",
+    "tests/test_task_envelope_cli.py"
+  ],
+  "forbidden_files_or_areas": [
+    ".triagecore/ledger.jsonl"
+  ],
+  "explicit_non_scope": [
+    "file writes",
+    "ledger integration"
+  ],
+  "approval_gates": "human review",
+  "validation_plan": "pytest and manual run",
+  "evidence_to_produce": [
+    "stdout markdown"
+  ],
+  "current_status": "proposed",
+  "operator_decision": "Pending",
+  "next_allowed_action": "review markdown"
+}

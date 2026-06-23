@@ -30,6 +30,9 @@ def _render_list(items: tuple[str, ...]) -> str:
     return "\n".join(f"- {item}" for item in items)
 
 def render_task_envelope_markdown(envelope: TaskEnvelope) -> str:
+    """
+    Renders a TaskEnvelope deterministically into Markdown.
+    """
     lines = [
         f"# {envelope.task_id} Task Envelope",
         "",
@@ -60,12 +63,51 @@ def render_task_envelope_markdown(envelope: TaskEnvelope) -> str:
         f"**Operator Decision:** {envelope.operator_decision}",
         f"**Failure Modes / Blocked Reasons:** {envelope.failure_modes_or_blocked_reasons if envelope.failure_modes_or_blocked_reasons else 'None'}",
     ]
-    
+
     if envelope.approval_evidence is not None:
         lines.append(f"**Approval Evidence:** {envelope.approval_evidence}")
     if envelope.admission_evidence is not None:
         lines.append(f"**Admission Evidence:** {envelope.admission_evidence}")
-        
-    lines.append(f"**Next Allowed Action:** {envelope.next_allowed_action}")
 
-    return "\n".join(lines) + "\n"
+    lines.append(f"**Next Allowed Action:** {envelope.next_allowed_action}")
+    lines.append("")
+
+    return "\n".join(lines)
+
+def task_envelope_from_mapping(payload: dict) -> TaskEnvelope:
+    """
+    Constructs and validates a TaskEnvelope from a raw dictionary mapping (e.g. parsed JSON).
+    Raises ValueError if required fields are missing or if list fields are empty.
+    """
+    required_scalars = [
+        "task_id", "title", "objective", "repo", "operator_agent_lane",
+        "route", "risk_level", "requested_capability", "approval_gates",
+        "validation_plan", "current_status", "operator_decision", "next_allowed_action"
+    ]
+    for field in required_scalars:
+        if field not in payload or not isinstance(payload[field], str) or not payload[field].strip():
+            raise ValueError(f"Missing or invalid required scalar field: '{field}'")
+
+    required_lists = [
+        "allowed_files", "forbidden_files_or_areas", "explicit_non_scope", "evidence_to_produce"
+    ]
+    for field in required_lists:
+        if field not in payload or not isinstance(payload[field], list) or not payload[field]:
+            raise ValueError(f"Missing or empty required list field: '{field}'")
+        for item in payload[field]:
+            if not isinstance(item, str) or not item.strip():
+                raise ValueError(f"Invalid item in list field '{field}': must be non-empty string")
+
+    optional_fields = [
+        "failure_modes_or_blocked_reasons", "approval_evidence", "admission_evidence"
+    ]
+    kwargs = {}
+    for field in required_scalars:
+        kwargs[field] = payload[field]
+    for field in required_lists:
+        kwargs[field] = tuple(payload[field])
+    for field in optional_fields:
+        val = payload.get(field)
+        kwargs[field] = val if isinstance(val, str) and val.strip() else None
+
+    return TaskEnvelope(**kwargs)

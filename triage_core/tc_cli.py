@@ -728,30 +728,81 @@ def tc_task_envelope_preview() -> None:
     print(render_task_envelope_markdown(envelope), end='')
 
 def tc_task_envelope_draft(args: argparse.Namespace) -> None:
-    from triage_core.task_envelope import TaskEnvelope, render_task_envelope_markdown
-
-    envelope = TaskEnvelope(
-        task_id=args.task_id,
-        title=args.title,
-        objective=args.objective,
-        repo=args.repo,
-        operator_agent_lane=args.operator_agent_lane,
-        route=args.route,
-        risk_level=args.risk_level,
-        requested_capability=args.requested_capability,
-        allowed_files=tuple(args.allowed_file),
-        forbidden_files_or_areas=tuple(args.forbidden_area),
-        explicit_non_scope=tuple(args.non_scope),
-        approval_gates=args.approval_gates,
-        validation_plan=args.validation_plan,
-        evidence_to_produce=tuple(args.evidence),
-        current_status=args.current_status,
-        operator_decision=args.operator_decision,
-        next_allowed_action=args.next_allowed_action,
-        failure_modes_or_blocked_reasons=args.blocked_reason,
-        approval_evidence=args.approval_evidence,
-        admission_evidence=args.admission_evidence,
-    )
+    from triage_core.task_envelope import TaskEnvelope, render_task_envelope_markdown, task_envelope_from_mapping
+    import json
+    
+    # Validation
+    if args.from_json:
+        # Reject mixed usage
+        mixed_flags = [
+            args.task_id, args.title, args.objective, args.repo, args.operator_agent_lane,
+            args.route, args.risk_level, args.requested_capability, args.allowed_file,
+            args.forbidden_area, args.non_scope, args.approval_gates, args.validation_plan,
+            args.evidence, args.current_status, args.operator_decision, args.next_allowed_action,
+            args.blocked_reason, args.approval_evidence, args.admission_evidence
+        ]
+        if any(f is not None for f in mixed_flags):
+            sys.stderr.write("Error: --from-json cannot be mixed with explicit field flags.\n")
+            sys.exit(1)
+            
+        json_path = os.path.normpath(args.from_json)
+        if json_path.endswith(".triagecore/ledger.jsonl") or json_path.endswith(".triagecore\\ledger.jsonl"):
+            sys.stderr.write("Error: ledger.jsonl is not allowed as a --from-json fixture source.\n")
+            sys.exit(1)
+            
+        try:
+            with open(args.from_json, 'r', encoding='utf-8') as f:
+                payload = json.load(f)
+            envelope = task_envelope_from_mapping(payload)
+        except json.JSONDecodeError as e:
+            sys.stderr.write(f"Error parsing JSON: {e}\n")
+            sys.exit(1)
+        except ValueError as e:
+            sys.stderr.write(f"Error validating Task Envelope JSON: {e}\n")
+            sys.exit(1)
+        except Exception as e:
+            sys.stderr.write(f"Error reading JSON fixture: {e}\n")
+            sys.exit(1)
+    else:
+        # Enforce required flags
+        required_flags = {
+            "--task-id": args.task_id, "--title": args.title, "--objective": args.objective,
+            "--repo": args.repo, "--operator-agent-lane": args.operator_agent_lane,
+            "--route": args.route, "--risk-level": args.risk_level,
+            "--requested-capability": args.requested_capability, "--allowed-file": args.allowed_file,
+            "--forbidden-area": args.forbidden_area, "--non-scope": args.non_scope,
+            "--approval-gates": args.approval_gates, "--validation-plan": args.validation_plan,
+            "--evidence": args.evidence, "--current-status": args.current_status,
+            "--operator-decision": args.operator_decision, "--next-allowed-action": args.next_allowed_action
+        }
+        missing_flags = [name for name, val in required_flags.items() if val is None]
+        if missing_flags:
+            sys.stderr.write(f"Error: the following arguments are required: {', '.join(missing_flags)}\n")
+            sys.exit(1)
+            
+        envelope = TaskEnvelope(
+            task_id=args.task_id,
+            title=args.title,
+            objective=args.objective,
+            repo=args.repo,
+            operator_agent_lane=args.operator_agent_lane,
+            route=args.route,
+            risk_level=args.risk_level,
+            requested_capability=args.requested_capability,
+            allowed_files=tuple(args.allowed_file),
+            forbidden_files_or_areas=tuple(args.forbidden_area),
+            explicit_non_scope=tuple(args.non_scope),
+            approval_gates=args.approval_gates,
+            validation_plan=args.validation_plan,
+            evidence_to_produce=tuple(args.evidence),
+            current_status=args.current_status,
+            operator_decision=args.operator_decision,
+            next_allowed_action=args.next_allowed_action,
+            failure_modes_or_blocked_reasons=args.blocked_reason,
+            approval_evidence=args.approval_evidence,
+            admission_evidence=args.admission_evidence,
+        )
+        
     print(render_task_envelope_markdown(envelope), end='')
 
 def tc_task_envelope_wizard() -> None:
@@ -954,25 +1005,26 @@ def main():
     
     task_envelope_draft_parser = task_envelope_subparsers.add_parser(
         "draft",
-        help="Draft a TaskEnvelope from CLI flags and print Markdown to stdout",
+        help="Draft a TaskEnvelope from CLI flags or JSON fixture and print Markdown to stdout",
     )
-    task_envelope_draft_parser.add_argument("--task-id", required=True)
-    task_envelope_draft_parser.add_argument("--title", required=True)
-    task_envelope_draft_parser.add_argument("--objective", required=True)
-    task_envelope_draft_parser.add_argument("--repo", required=True)
-    task_envelope_draft_parser.add_argument("--operator-agent-lane", required=True)
-    task_envelope_draft_parser.add_argument("--route", required=True)
-    task_envelope_draft_parser.add_argument("--risk-level", required=True)
-    task_envelope_draft_parser.add_argument("--requested-capability", required=True)
-    task_envelope_draft_parser.add_argument("--allowed-file", action="append", required=True)
-    task_envelope_draft_parser.add_argument("--forbidden-area", action="append", required=True)
-    task_envelope_draft_parser.add_argument("--non-scope", action="append", required=True)
-    task_envelope_draft_parser.add_argument("--approval-gates", required=True)
-    task_envelope_draft_parser.add_argument("--validation-plan", required=True)
-    task_envelope_draft_parser.add_argument("--evidence", action="append", required=True)
-    task_envelope_draft_parser.add_argument("--current-status", required=True)
-    task_envelope_draft_parser.add_argument("--operator-decision", required=True)
-    task_envelope_draft_parser.add_argument("--next-allowed-action", required=True)
+    task_envelope_draft_parser.add_argument("--from-json", type=str, help="Load TaskEnvelope from a JSON fixture file")
+    task_envelope_draft_parser.add_argument("--task-id")
+    task_envelope_draft_parser.add_argument("--title")
+    task_envelope_draft_parser.add_argument("--objective")
+    task_envelope_draft_parser.add_argument("--repo")
+    task_envelope_draft_parser.add_argument("--operator-agent-lane")
+    task_envelope_draft_parser.add_argument("--route")
+    task_envelope_draft_parser.add_argument("--risk-level")
+    task_envelope_draft_parser.add_argument("--requested-capability")
+    task_envelope_draft_parser.add_argument("--allowed-file", action="append")
+    task_envelope_draft_parser.add_argument("--forbidden-area", action="append")
+    task_envelope_draft_parser.add_argument("--non-scope", action="append")
+    task_envelope_draft_parser.add_argument("--approval-gates")
+    task_envelope_draft_parser.add_argument("--validation-plan")
+    task_envelope_draft_parser.add_argument("--evidence", action="append")
+    task_envelope_draft_parser.add_argument("--current-status")
+    task_envelope_draft_parser.add_argument("--operator-decision")
+    task_envelope_draft_parser.add_argument("--next-allowed-action")
     task_envelope_draft_parser.add_argument("--blocked-reason", type=str)
     task_envelope_draft_parser.add_argument("--approval-evidence", type=str)
     task_envelope_draft_parser.add_argument("--admission-evidence", type=str)
