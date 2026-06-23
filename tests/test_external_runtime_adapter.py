@@ -1,4 +1,10 @@
-from triage_core.external_runtime_adapter import normalize_external_runtime_manifest
+import pytest
+
+from triage_core.external_runtime_adapter import (
+    RuntimeAdmissionError,
+    admit_external_runtime,
+    normalize_external_runtime_manifest,
+)
 
 
 def _read_only_manifest(**overrides: object) -> dict[str, object]:
@@ -135,3 +141,45 @@ def test_non_dict_manifest_root_blocks_immediately():
     assert proposal.authority_granted is False
     assert proposal.execution_allowed is False
     assert proposal.blocked_reasons == ("invalid_manifest_root",)
+
+
+def test_proposed_status_passes_admission():
+    proposal = normalize_external_runtime_manifest(_read_only_manifest())
+    admitted = admit_external_runtime(proposal)
+    assert admitted is proposal
+
+
+def test_blocked_proposal_raises_admission_error():
+    manifest = _read_only_manifest()
+    manifest.pop("schema_version")
+    proposal = normalize_external_runtime_manifest(manifest)
+
+    with pytest.raises(RuntimeAdmissionError, match="External runtime proposal blocked: missing_or_blank:schema_version"):
+        admit_external_runtime(proposal)
+
+
+def test_approval_required_blocks_without_explicit_approval():
+    proposal = normalize_external_runtime_manifest(
+        _draft_only_manifest(capability_profile="approved_mutation")
+    )
+
+    with pytest.raises(RuntimeAdmissionError, match="External runtime proposal requires explicit approval before admission"):
+        admit_external_runtime(proposal, explicit_approval=False)
+
+
+def test_approval_required_passes_with_explicit_approval():
+    proposal = normalize_external_runtime_manifest(
+        _draft_only_manifest(capability_profile="approved_mutation")
+    )
+
+    admitted = admit_external_runtime(proposal, explicit_approval=True)
+    assert admitted is proposal
+
+
+def test_blocked_proposal_cannot_be_admitted_with_explicit_approval():
+    manifest = _read_only_manifest()
+    manifest.pop("schema_version")
+    proposal = normalize_external_runtime_manifest(manifest)
+
+    with pytest.raises(RuntimeAdmissionError, match="External runtime proposal blocked: missing_or_blank:schema_version"):
+        admit_external_runtime(proposal, explicit_approval=True)

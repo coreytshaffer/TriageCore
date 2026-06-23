@@ -2,6 +2,10 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 
+class RuntimeAdmissionError(RuntimeError):
+    """Raised when an external runtime proposal is not admitted for execution."""
+
+
 ProposalStatus = Literal["proposed", "approval_required", "blocked"]
 
 ALLOWED_CAPABILITY_PROFILES = {
@@ -139,6 +143,23 @@ def normalize_external_runtime_manifest(
         model_provider=model_provider,
         model_identity=model_identity,
     )
+
+
+def admit_external_runtime(
+    proposal: ExternalRuntimeAdapterProposal,
+    *,
+    explicit_approval: bool = False,
+) -> ExternalRuntimeAdapterProposal:
+    if proposal.status == "blocked":
+        reasons = "; ".join(proposal.blocked_reasons)
+        raise RuntimeAdmissionError(f"External runtime proposal blocked: {reasons}")
+
+    if proposal.status == "approval_required" and not explicit_approval:
+        raise RuntimeAdmissionError(
+            "External runtime proposal requires explicit approval before admission."
+        )
+
+    return proposal
 
 
 def _build_proposal(
