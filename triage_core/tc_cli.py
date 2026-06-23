@@ -829,6 +829,30 @@ def tc_task_envelope_validate(args: argparse.Namespace) -> None:
         sys.stderr.write(f"Error reading JSON fixture: {e}\n")
         sys.exit(1)
 
+def tc_admission_validate(args: argparse.Namespace) -> None:
+    from triage_core.admission import admission_evidence_from_mapping
+    import json
+    
+    json_path = os.path.normpath(args.from_json)
+    if json_path.endswith(".triagecore/ledger.jsonl") or json_path.endswith(".triagecore\\ledger.jsonl"):
+        sys.stderr.write("Error: ledger.jsonl is not allowed as a --from-json fixture source.\n")
+        sys.exit(1)
+        
+    try:
+        with open(args.from_json, 'r', encoding='utf-8') as f:
+            payload = json.load(f)
+        admission_evidence_from_mapping(payload)
+        print("Validation successful.")
+    except json.JSONDecodeError as e:
+        sys.stderr.write(f"Error parsing JSON: {e}\n")
+        sys.exit(1)
+    except ValueError as e:
+        sys.stderr.write(f"Error validating Admission Evidence JSON: {e}\n")
+        sys.exit(1)
+    except Exception as e:
+        sys.stderr.write(f"Error reading JSON fixture: {e}\n")
+        sys.exit(1)
+
 def tc_task_envelope_wizard() -> None:
     from triage_core.task_envelope import TaskEnvelope, render_task_envelope_markdown
 
@@ -1064,6 +1088,16 @@ def main():
     )
     task_envelope_validate_parser.add_argument("--from-json", required=True, type=str, help="Load TaskEnvelope from a JSON fixture file")
 
+    # admission
+    admission_parser = subparsers.add_parser("admission", help="Manage admission evidence")
+    admission_subparsers = admission_parser.add_subparsers(dest="admission_command")
+
+    admission_validate_parser = admission_subparsers.add_parser(
+        "validate",
+        help="Validate an Admission Evidence JSON fixture without rendering",
+    )
+    admission_validate_parser.add_argument("--from-json", required=True, type=str, help="Load Admission Evidence from a JSON fixture file")
+
     args = parser.parse_args()
 
     if args.command == "propose":
@@ -1138,6 +1172,11 @@ def main():
             tc_task_envelope_validate(args)
         else:
             task_envelope_parser.error("task-envelope requires a subcommand: preview, draft, wizard, or validate")
+    elif args.command == "admission":
+        if args.admission_command == "validate":
+            tc_admission_validate(args)
+        else:
+            admission_parser.error("admission requires a subcommand: validate")
     else:
         parser.print_help()
 
