@@ -829,6 +829,20 @@ def tc_task_envelope_validate(args: argparse.Namespace) -> None:
         sys.stderr.write(f"Error reading JSON fixture: {e}\n")
         sys.exit(1)
 
+def _load_admission_evidence_fixture(from_json: str):
+    from triage_core.admission import admission_evidence_from_mapping
+    import json
+
+    json_path = os.path.normpath(from_json)
+    if json_path.endswith(".triagecore/ledger.jsonl") or json_path.endswith(".triagecore\\ledger.jsonl"):
+        raise ValueError("ledger.jsonl is not allowed as a --from-json fixture source.")
+
+    with open(from_json, 'r', encoding='utf-8') as f:
+        payload = json.load(f)
+    evidence = admission_evidence_from_mapping(payload)
+    return payload, evidence
+
+
 def tc_admission_validate(args: argparse.Namespace) -> None:
     from triage_core.admission import admission_evidence_from_mapping
     import json
@@ -875,6 +889,45 @@ def tc_admission_render(args: argparse.Namespace) -> None:
         sys.exit(1)
     except Exception as e:
         sys.stderr.write(f"Error reading JSON fixture: {e}\n")
+        sys.exit(1)
+
+def tc_admission_bundle(args: argparse.Namespace) -> None:
+    from triage_core.admission import render_admission_evidence_markdown
+    import json
+
+    try:
+        payload, evidence = _load_admission_evidence_fixture(args.from_json)
+        out_dir = Path(args.out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        review_path = out_dir / "admission_review.md"
+        evidence_path = out_dir / "admission_evidence.json"
+        manifest_path = out_dir / "bundle_manifest.json"
+
+        review_markdown = (
+            render_admission_evidence_markdown(evidence)
+            + "\n\n> This review bundle is an operator review artifact. It does not grant execution authority.\n"
+        )
+        manifest = {
+            "bundle_type": "admission_review",
+            "execution_authority": False,
+            "source_evidence": "admission_evidence.json",
+            "rendered_review": "admission_review.md",
+        }
+
+        review_path.write_text(review_markdown, encoding='utf-8')
+        evidence_path.write_text(json.dumps(payload, indent=2) + "\n", encoding='utf-8')
+        manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding='utf-8')
+
+        print(f"Success: Wrote admission review bundle to {out_dir}.")
+    except json.JSONDecodeError as e:
+        sys.stderr.write(f"Error parsing JSON: {e}\n")
+        sys.exit(1)
+    except ValueError as e:
+        sys.stderr.write(f"Error validating Admission Evidence JSON: {e}\n")
+        sys.exit(1)
+    except Exception as e:
+        sys.stderr.write(f"Error writing admission review bundle: {e}\n")
         sys.exit(1)
 
 def tc_task_envelope_wizard() -> None:
@@ -1128,6 +1181,13 @@ def main():
     )
     admission_render_parser.add_argument("--from-json", required=True, type=str, help="Load Admission Evidence from a JSON fixture file")
 
+    admission_bundle_parser = admission_subparsers.add_parser(
+        "bundle",
+        help="Write a review-only Admission Evidence bundle to an explicit output directory",
+    )
+    admission_bundle_parser.add_argument("--from-json", required=True, type=str, help="Load Admission Evidence from a JSON fixture file")
+    admission_bundle_parser.add_argument("--out-dir", required=True, type=str, help="Directory where the review bundle should be written")
+
     args = parser.parse_args()
 
     if args.command == "propose":
@@ -1207,8 +1267,10 @@ def main():
             tc_admission_validate(args)
         elif args.admission_command == "render":
             tc_admission_render(args)
+        elif args.admission_command == "bundle":
+            tc_admission_bundle(args)
         else:
-            admission_parser.error("admission requires a subcommand: validate or render")
+            admission_parser.error("admission requires a subcommand: validate, render, or bundle")
     else:
         parser.print_help()
 

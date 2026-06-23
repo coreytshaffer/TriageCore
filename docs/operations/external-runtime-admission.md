@@ -51,9 +51,12 @@ tc admission validate --from-json admission.json
 
 # Read the human-legible trust anchors
 tc admission render --from-json admission.json
+
+# Write a review-only bundle for operator handoff
+tc admission bundle --from-json admission.json --out-dir review_bundle
 ```
 
-The rendered output provides trust anchors (such as `**Execution Performed:** false`), highlighting whether the payload requires manual approval or is blocked by policy violations.
+The rendered output provides trust anchors (such as `**Execution Performed:** false`), highlighting whether the payload requires manual approval or is blocked by policy violations. The review bundle command packages that same evidence into a deterministic operator artifact without granting execution authority.
 
 For the current JSON evidence contract, see [Admission evidence contract](../admission/admission_evidence_contract.md). It documents the supported fields, forbidden assumptions, trust boundaries, and the validate/render CLI relationship.
 
