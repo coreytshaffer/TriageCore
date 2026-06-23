@@ -304,3 +304,21 @@ def test_task_envelope_validate_requires_from_json():
     result = subprocess.run(cmd, capture_output=True, text=True)
     assert result.returncode != 0
     assert "the following arguments are required: --from-json" in result.stderr
+
+def test_task_envelope_example_fixture_roundtrip():
+    fixture_path = "docs/examples/task-envelope.example.json"
+    
+    # 1. Validate
+    validate_cmd = [sys.executable, "-m", "triage_core.tc_cli", "task-envelope", "validate", "--from-json", fixture_path]
+    validate_result = subprocess.run(validate_cmd, capture_output=True, text=True)
+    assert validate_result.returncode == 0
+    assert "Validation successful." in validate_result.stdout
+
+    # 2. Draft
+    draft_cmd = [sys.executable, "-m", "triage_core.tc_cli", "task-envelope", "draft", "--from-json", fixture_path]
+    draft_result = subprocess.run(draft_cmd, capture_output=True, text=True)
+    assert draft_result.returncode == 0
+    assert "# CR-058 Task Envelope" in draft_result.stdout
+    assert "## Scope & Risk" in draft_result.stdout
+    assert "## Governance" in draft_result.stdout
+    assert "## Admission State" in draft_result.stdout
