@@ -15,13 +15,10 @@ This document summarizes the active TriageCore backlog after CR-034.
 
 ## Candidate Future Work
 
-- External runtime adapter stub
-  - Source: CR-046 bounded implementation slice
-  - Status: implementation slice complete; policy tests and execution-path
-    validation remain future work
-  - Purpose: normalize declared external runtime manifests into inert
-    TriageCore-native proposed records without granting authority or executing
-    anything.
+- External runtime adapter admission execution path
+  - Source: CR-048 execution-path blocking test
+  - Status: execution-path slice complete; routing policy integration remains future work
+  - Purpose: enforce structural and policy boundaries by raising `RuntimeAdmissionError` for blocked proposals before execution.
 
 - External runtime manifest examples
   - Source: CR-045 docs-only example slice
