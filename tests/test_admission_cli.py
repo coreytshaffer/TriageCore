@@ -410,3 +410,55 @@ def test_admission_bundle_from_invalid_json_fails_closed_without_bundle(tmp_path
     assert result.returncode == 1
     assert "Error parsing JSON" in result.stderr
     assert not out_dir.exists()
+
+def test_admission_bundle_manifest_preserves_review_only_contract(tmp_path):
+    repo_root = Path(__file__).resolve().parents[1]
+    fixture_path = repo_root / "docs" / "examples" / "admission-evidence.example.json"
+    contract_doc_path = repo_root / "docs" / "admission" / "admission_bundle_manifest_contract.md"
+    workspace = tmp_path / "isolated-workspace"
+    workspace.mkdir()
+    out_dir = workspace / "review-bundle"
+
+    env = os.environ.copy()
+    existing_pythonpath = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = (
+        str(repo_root)
+        if not existing_pythonpath
+        else str(repo_root) + os.pathsep + existing_pythonpath
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "triage_core.tc_cli",
+            "admission",
+            "bundle",
+            "--from-json",
+            str(fixture_path),
+            "--out-dir",
+            str(out_dir),
+        ],
+        capture_output=True,
+        text=True,
+        cwd=workspace,
+        env=env,
+    )
+    assert result.returncode == 0
+
+    manifest_path = out_dir / "bundle_manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["bundle_type"] == "admission_review"
+    assert manifest["execution_authority"] is False
+    assert manifest["source_evidence"] == "admission_evidence.json"
+    assert manifest["rendered_review"] == "admission_review.md"
+    assert "approved" not in manifest
+    assert "execution_granted" not in manifest
+    assert "admission_approved" not in manifest
+
+    contract_doc = contract_doc_path.read_text(encoding="utf-8").lower()
+    assert "bundle_manifest.json" in contract_doc
+    assert "execution_authority" in contract_doc
+    assert "false" in contract_doc
+    assert "review-only" in contract_doc
+    assert "does not grant execution authority" in contract_doc
