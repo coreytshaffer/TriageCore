@@ -16,8 +16,8 @@ This document summarizes the active TriageCore backlog after CR-053.
 ## Candidate Future Work
 
 - Operator UX implementation path
-  - Source: CR-051, CR-052, and CR-053
-  - Status: design, template, and markdown renderer complete; CLI and TUI work remain future slices
+  - Source: CR-051, CR-052, CR-053, and CR-054
+  - Status: design, template, markdown renderer, and CLI preview command complete; CLI wizard and TUI work remain future slices
   - Purpose: keep operator UX calm, legible, and evidence-first without jumping straight to a web dashboard or hidden automation surface.
 
 - External runtime execution admission evidence
