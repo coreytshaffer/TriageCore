@@ -4,11 +4,25 @@ The `tc task-envelope` command provides operators with the ability to preview an
 
 ## Command Overview
 
-The CLI provides two deterministic commands:
+The CLI provides three deterministic commands:
 - `tc task-envelope preview`: Prints a hardcoded example Task Envelope.
 - `tc task-envelope draft`: Builds a Task Envelope purely from explicit CLI flags.
+- `tc task-envelope wizard`: Interactively prompts the user for all required envelope fields.
 
-Neither command reads from or writes to the ledger (`.triagecore/ledger.jsonl`), nor do they execute any side-effects. They are strictly local Markdown rendering utilities.
+None of these commands read from or write to the ledger (`.triagecore/ledger.jsonl`), nor do they execute any side-effects. They are strictly local Markdown rendering utilities.
+
+---
+
+## `tc task-envelope wizard`
+
+An interactive command that guides the operator through creating a Task Envelope. It prompts for each required field sequentially and ensures that contract requirements (like having at least one allowed file) are met before rendering.
+
+**Usage:**
+```bash
+tc task-envelope wizard
+```
+
+It will prompt for all the required fields listed in the `draft` command below, then output the final Markdown.
 
 ---
 

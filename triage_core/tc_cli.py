@@ -5,7 +5,7 @@ import glob
 import subprocess
 import json
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from triage_core.agent_identity import AgentIdentityError, AgentIdentityRegistry
 from triage_core.task_packet import TaskPacket, PrivacyMetadata
@@ -659,6 +659,50 @@ def tc_doctor():
         print("pytest config: unavailable")
         print("Scratch Excluded: unavailable")
 
+def _prompt_required(prompt_text: str) -> str:
+    while True:
+        try:
+            val = input(prompt_text).strip()
+            if val:
+                return val
+            print("This field is required.")
+        except EOFError:
+            print("\nError: EOF received during input.")
+            sys.exit(1)
+        except KeyboardInterrupt:
+            print("\nAborted.")
+            sys.exit(1)
+
+def _prompt_optional(prompt_text: str) -> Optional[str]:
+    try:
+        val = input(prompt_text).strip()
+        return val if val else None
+    except EOFError:
+        print("\nError: EOF received during input.")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print("\nAborted.")
+        sys.exit(1)
+
+def _prompt_required_list(prompt_text: str) -> List[str]:
+    print(f"{prompt_text} (Enter empty string or 'done' to finish)")
+    items = []
+    while True:
+        try:
+            val = input("  > ").strip()
+            if val.lower() == "done" or not val:
+                if items:
+                    return items
+                print("At least one entry is required.")
+            else:
+                items.append(val)
+        except EOFError:
+            print("\nError: EOF received during input.")
+            sys.exit(1)
+        except KeyboardInterrupt:
+            print("\nAborted.")
+            sys.exit(1)
+
 def tc_task_envelope_preview() -> None:
     from triage_core.task_envelope import TaskEnvelope, render_task_envelope_markdown
     envelope = TaskEnvelope(
@@ -685,7 +729,7 @@ def tc_task_envelope_preview() -> None:
 
 def tc_task_envelope_draft(args: argparse.Namespace) -> None:
     from triage_core.task_envelope import TaskEnvelope, render_task_envelope_markdown
-    
+
     envelope = TaskEnvelope(
         task_id=args.task_id,
         title=args.title,
@@ -709,6 +753,62 @@ def tc_task_envelope_draft(args: argparse.Namespace) -> None:
         admission_evidence=args.admission_evidence,
     )
     print(render_task_envelope_markdown(envelope), end='')
+
+def tc_task_envelope_wizard() -> None:
+    from triage_core.task_envelope import TaskEnvelope, render_task_envelope_markdown
+
+    print("=== Task Envelope Wizard ===")
+
+    task_id = _prompt_required("Task ID (e.g., CR-057): ")
+    title = _prompt_required("Title: ")
+    objective = _prompt_required("Objective: ")
+    repo = _prompt_required("Repository: ")
+    operator_agent_lane = _prompt_required("Operator/Agent Lane: ")
+    route = _prompt_required("Route: ")
+    risk_level = _prompt_required("Risk Level: ")
+    requested_capability = _prompt_required("Requested Capability: ")
+
+    allowed_files = _prompt_required_list("Allowed Files")
+    forbidden_files_or_areas = _prompt_required_list("Forbidden Files or Areas")
+    explicit_non_scope = _prompt_required_list("Explicit Non-Scope")
+
+    approval_gates = _prompt_required("Approval Gates: ")
+    validation_plan = _prompt_required("Validation Plan: ")
+
+    evidence_to_produce = _prompt_required_list("Evidence to Produce")
+
+    current_status = _prompt_required("Current Status: ")
+    operator_decision = _prompt_required("Operator Decision: ")
+    next_allowed_action = _prompt_required("Next Allowed Action: ")
+
+    failure_modes_or_blocked_reasons = _prompt_optional("Failure Modes / Blocked Reasons (optional): ")
+    approval_evidence = _prompt_optional("Approval Evidence (optional): ")
+    admission_evidence = _prompt_optional("Admission Evidence (optional): ")
+
+    envelope = TaskEnvelope(
+        task_id=task_id,
+        title=title,
+        objective=objective,
+        repo=repo,
+        operator_agent_lane=operator_agent_lane,
+        route=route,
+        risk_level=risk_level,
+        requested_capability=requested_capability,
+        allowed_files=tuple(allowed_files),
+        forbidden_files_or_areas=tuple(forbidden_files_or_areas),
+        explicit_non_scope=tuple(explicit_non_scope),
+        approval_gates=approval_gates,
+        validation_plan=validation_plan,
+        evidence_to_produce=tuple(evidence_to_produce),
+        current_status=current_status,
+        operator_decision=operator_decision,
+        next_allowed_action=next_allowed_action,
+        failure_modes_or_blocked_reasons=failure_modes_or_blocked_reasons,
+        approval_evidence=approval_evidence,
+        admission_evidence=admission_evidence,
+    )
+
+    print("\n" + render_task_envelope_markdown(envelope), end='')
 
 def main():
     parser = argparse.ArgumentParser(description="TriageCore Operator Workflow")
@@ -877,6 +977,11 @@ def main():
     task_envelope_draft_parser.add_argument("--approval-evidence", type=str)
     task_envelope_draft_parser.add_argument("--admission-evidence", type=str)
 
+    task_envelope_wizard_parser = task_envelope_subparsers.add_parser(
+        "wizard",
+        help="Interactively draft a TaskEnvelope and print Markdown to stdout",
+    )
+
     args = parser.parse_args()
 
     if args.command == "propose":
@@ -945,8 +1050,10 @@ def main():
             tc_task_envelope_preview()
         elif args.task_envelope_command == "draft":
             tc_task_envelope_draft(args)
+        elif args.task_envelope_command == "wizard":
+            tc_task_envelope_wizard()
         else:
-            task_envelope_parser.error("task-envelope requires a subcommand: preview or draft")
+            task_envelope_parser.error("task-envelope requires a subcommand: preview, draft, or wizard")
     else:
         parser.print_help()
 

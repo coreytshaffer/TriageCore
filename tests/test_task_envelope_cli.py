@@ -69,6 +69,7 @@ def test_task_envelope_draft_command_missing_required_returns_nonzero():
     ]
     result = subprocess.run(cmd, capture_output=True, text=True)
     assert result.returncode != 0
+    assert "the following arguments are required" in result.stderr
 
 def test_task_envelope_draft_command_missing_list_field_returns_nonzero():
     cmd = [
@@ -93,3 +94,60 @@ def test_task_envelope_draft_command_missing_list_field_returns_nonzero():
     ]
     result = subprocess.run(cmd, capture_output=True, text=True)
     assert result.returncode != 0
+    assert "the following arguments are required" in result.stderr
+
+def test_task_envelope_wizard_command_success():
+    cmd = [sys.executable, "-m", "triage_core.tc_cli", "task-envelope", "wizard"]
+
+    wizard_input = "\n".join([
+        "CR-057",                  # Task ID
+        "Wizard Test",             # Title
+        "Test wizard",             # Objective
+        "TriageCore",              # Repository
+        "cli-operator",            # Operator/Agent Lane
+        "local-cli",               # Route
+        "Low",                     # Risk Level
+        "read_only",               # Requested Capability
+        "file1", "done",           # Allowed Files
+        "file2", "done",           # Forbidden Files or Areas
+        "scope1", "done",          # Explicit Non-Scope
+        "gate1",                   # Approval Gates
+        "plan1",                   # Validation Plan
+        "evidence1", "done",       # Evidence to Produce
+        "status1",                 # Current Status
+        "decision1",               # Operator Decision
+        "action1",                 # Next Allowed Action
+        "",                        # Failure Modes / Blocked Reasons
+        "",                        # Approval Evidence
+        ""                         # Admission Evidence
+    ]) + "\n"
+
+    result = subprocess.run(cmd, input=wizard_input, capture_output=True, text=True, timeout=5)
+
+    assert result.returncode == 0
+    assert "# CR-057 Task Envelope" in result.stdout
+    assert "Wizard Test" in result.stdout
+    assert "- file1" in result.stdout
+    assert "- file2" in result.stdout
+    assert "- scope1" in result.stdout
+    assert "- evidence1" in result.stdout
+
+def test_task_envelope_wizard_requires_list_entry():
+    cmd = [sys.executable, "-m", "triage_core.tc_cli", "task-envelope", "wizard"]
+
+    wizard_input = "\n".join([
+        "CR-057", "Title", "Objective", "Repo", "Lane", "Route", "Risk", "Cap",
+        "", "done", "file1", "done", # Allowed Files fails then succeeds
+        "file2", "done",
+        "scope1", "done",
+        "gate1", "plan1",
+        "evidence1", "done",
+        "status1", "decision1", "action1",
+        "", "", ""
+    ]) + "\n"
+
+    result = subprocess.run(cmd, input=wizard_input, capture_output=True, text=True, timeout=5)
+
+    assert result.returncode == 0
+    assert "At least one entry is required." in result.stdout
+    assert "- file1" in result.stdout
