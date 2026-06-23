@@ -1,6 +1,6 @@
 # Task Envelope CLI Reference
 
-The `tc task-envelope` command provides operators with the ability to preview and draft deterministic Markdown representations of Task Envelopes without triggering runtime execution or ledger interactions. 
+The `tc task-envelope` command provides operators with the ability to preview and draft deterministic Markdown representations of Task Envelopes without triggering runtime execution or ledger interactions.
 
 ## Command Overview
 
@@ -39,11 +39,18 @@ tc task-envelope preview
 
 ## `tc task-envelope draft`
 
-Drafts a new Task Envelope from CLI flags. This command enforces the required boundaries of the Task Envelope contract. All list-based flags (`--allowed-file`, `--forbidden-area`, `--non-scope`, `--evidence`) must be provided explicitly to prevent accidental scope bleed. 
+Drafts a new Task Envelope from CLI flags or a JSON fixture. This command enforces the required boundaries of the Task Envelope contract. All list-based flags (`--allowed-file`, `--forbidden-area`, `--non-scope`, `--evidence`) must be provided explicitly to prevent accidental scope bleed.
 
 If a required field is missing, the command will fail and exit nonzero.
 
-**Required Flags:**
+**Using a JSON Fixture:**
+You can provide a local JSON file using `--from-json <path>`. This is mutually exclusive with explicit field flags.
+```bash
+tc task-envelope draft --from-json docs/examples/task-envelope.example.json
+```
+*(Note: `.triagecore/ledger.jsonl` is not an allowed fixture source).*
+
+**Required Flags (if not using `--from-json`):**
 - `--task-id`: Unique identifier (e.g., `CR-010`)
 - `--title`: Title of the task
 - `--objective`: Detailed goal of the task
