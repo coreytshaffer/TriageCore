@@ -5,6 +5,7 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+- Implemented CR-049 (External Runtime Admission Caller Stub): Add `execute_external_runtime_stub` representing the first execution-path boundary that strictly enforces admission rules.
 - Implemented CR-048 (External Runtime Adapter Execution-Path Blocking Test): Add `admit_external_runtime` and `RuntimeAdmissionError` to explicitly block unapproved or structurally invalid external runtime proposals at the execution boundary.
 - Implemented CR-047 (External Runtime Manifest Contract Clarification): Clarify the external runtime manifest contract now that `schema_version` is enforced, detailing explicit examples, trust boundaries, and runtime integrity linkages.
 - Implemented CR-046 (Bounded External Runtime Adapter Stub): Add a pure external runtime adapter stub that normalizes declared runtime manifests into inert proposed records without granting authority or allowing execution.
