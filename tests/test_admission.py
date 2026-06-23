@@ -199,3 +199,34 @@ def test_admission_evidence_example_fixture_roundtrip():
     assert "## Blocked Reasons" in markdown
     assert "## Manifest / Source Evidence" in markdown
 
+def test_admission_contract_doc_tracks_public_fixture_and_required_fields():
+    fixture_path = "docs/examples/admission-evidence.example.json"
+    contract_doc_path = "docs/admission/admission_evidence_contract.md"
+
+    with open(fixture_path, "r", encoding="utf-8") as f:
+        payload = json.load(f)
+
+    # This mirrors the current admission evidence contract and intentionally fails
+    # if the validator, public fixture, and contract doc drift apart.
+    required_fields = {
+        "admitted",
+        "execution_performed",
+        "requested_runtime",
+        "requested_capability",
+        "approval_required",
+        "approval_used",
+        "blocked_reasons",
+        "manifest_or_source_evidence",
+    }
+
+    evidence = admission_evidence_from_mapping(payload)
+    assert isinstance(evidence, ExternalRuntimeAdmissionEvidence)
+
+    with open(contract_doc_path, "r", encoding="utf-8") as f:
+        contract_doc = f.read()
+
+    assert fixture_path in contract_doc
+    for field_name in required_fields:
+        assert f"`{field_name}`" in contract_doc
+    assert "`approval_evidence`" in contract_doc
+
