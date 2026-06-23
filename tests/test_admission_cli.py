@@ -1,8 +1,22 @@
+import hashlib
 import json
 import os
+from pathlib import Path
 import subprocess
+import sys
 
 import pytest
+
+
+def _snapshot_workspace_state(root: Path) -> dict[str, str]:
+    snapshot: dict[str, str] = {}
+    for path in sorted(root.rglob("*")):
+        relative_path = path.relative_to(root).as_posix()
+        if path.is_dir():
+            snapshot[f"{relative_path}/"] = "<dir>"
+        else:
+            snapshot[relative_path] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return snapshot
 
 
 def test_admission_cli_example_fixture_smoke():
@@ -28,6 +42,73 @@ def test_admission_cli_example_fixture_smoke():
     assert "## Blocked Reasons" in render_result.stdout
     assert "explicit approval required before write-capable runtime use" in render_result.stdout
     assert "## Manifest / Source Evidence" in render_result.stdout
+
+
+
+def test_admission_validate_and_render_from_json_do_not_mutate_runtime_state(tmp_path):
+    repo_root = Path(__file__).resolve().parents[1]
+    fixture_path = repo_root / "docs" / "examples" / "admission-evidence.example.json"
+    workspace = tmp_path / "isolated-workspace"
+    workspace.mkdir()
+
+    triagecore_dir = workspace / ".triagecore"
+    triagecore_dir.mkdir()
+    ledger_path = triagecore_dir / "ledger.jsonl"
+    ledger_text = '{"seed": true}\n'
+    ledger_path.write_text(ledger_text, encoding="utf-8")
+    sentinel_path = triagecore_dir / "sentinel.txt"
+    sentinel_path.write_text("preserve-me\n", encoding="utf-8")
+
+    before_state = _snapshot_workspace_state(workspace)
+
+    env = os.environ.copy()
+    existing_pythonpath = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = (
+        str(repo_root)
+        if not existing_pythonpath
+        else str(repo_root) + os.pathsep + existing_pythonpath
+    )
+
+    validate_result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "triage_core.tc_cli",
+            "admission",
+            "validate",
+            "--from-json",
+            str(fixture_path),
+        ],
+        capture_output=True,
+        text=True,
+        cwd=workspace,
+        env=env,
+    )
+    assert validate_result.returncode == 0
+    assert "Validation successful." in validate_result.stdout
+
+    render_result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "triage_core.tc_cli",
+            "admission",
+            "render",
+            "--from-json",
+            str(fixture_path),
+        ],
+        capture_output=True,
+        text=True,
+        cwd=workspace,
+        env=env,
+    )
+    assert render_result.returncode == 0
+    assert "# External Runtime Admission Readout" in render_result.stdout
+
+    after_state = _snapshot_workspace_state(workspace)
+    assert after_state == before_state
+    assert ledger_path.read_text(encoding="utf-8") == ledger_text
+    assert sentinel_path.read_text(encoding="utf-8") == "preserve-me\n"
 
 def test_admission_validate_success(tmp_path):
     fixture_path = tmp_path / "valid.json"
