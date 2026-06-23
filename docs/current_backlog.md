@@ -2,7 +2,7 @@
 
 ## Status
 
-This document summarizes the active TriageCore backlog after CR-071.
+This document summarizes the active TriageCore backlog after CR-072.
 
 ## Active GitHub Backlog
 
@@ -16,8 +16,8 @@ This document summarizes the active TriageCore backlog after CR-071.
 ## Candidate Future Work
 
 - Operator UX implementation path
-  - Source: CR-051, CR-052, CR-053, CR-054, CR-055, CR-056, CR-057, CR-058, CR-059, CR-060, CR-061, CR-062, CR-063, CR-064, CR-065, CR-066, CR-067, CR-068, CR-069, CR-070, and CR-071
-  - Status: design, template, markdown renderer, CLI preview/draft/wizard commands, CLI documentation, admission CLI smoke coverage, no-mutation invariant coverage, and contract documentation complete; TUI and dashboard work remain future slices
+  - Source: CR-051, CR-052, CR-053, CR-054, CR-055, CR-056, CR-057, CR-058, CR-059, CR-060, CR-061, CR-062, CR-063, CR-064, CR-065, CR-066, CR-067, CR-068, CR-069, CR-070, CR-071, and CR-072
+  - Status: design, template, markdown renderer, CLI preview/draft/wizard commands, CLI documentation, admission CLI smoke coverage, no-mutation invariant coverage, contract documentation, and contract linkage complete; TUI and dashboard work remain future slices
   - Purpose: keep operator UX calm, legible, and evidence-first without jumping straight to a web dashboard or hidden automation surface.
 
 - External runtime execution admission evidence

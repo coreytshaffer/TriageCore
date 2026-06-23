@@ -55,6 +55,8 @@ tc admission render --from-json admission.json
 
 The rendered output provides trust anchors (such as `**Execution Performed:** false`), highlighting whether the payload requires manual approval or is blocked by policy violations.
 
+For the current JSON evidence contract, see [Admission evidence contract](../admission/admission_evidence_contract.md). It documents the supported fields, forbidden assumptions, trust boundaries, and the validate/render CLI relationship.
+
 ### Step 3: External Runtime Sidecar Execution
 
 If the admission is `admitted: true` (or manually approved if gated), the payload can be passed to the external runtime sidecar.
