@@ -274,6 +274,64 @@ This schema now has companion examples:
 
 The invalid example is intentionally authority-incomplete so future validation work has a documented failure target.
 
+## Relation to Runtime Integrity and Model Provenance
+
+This manifest contract directly implements the requirements set forth in the [Runtime Integrity and Model Provenance Policy](../security/runtime_integrity_model_provenance_policy.md).
+
+By requiring explicit identity, exact tool policy boundaries, and mandatory provenance tracking fields (`provenance_required`), the adapter ensures that TriageCore never grants authority to an anonymous or opaque executor. The manifest forces the external runtime to declare its surface area in advance, allowing TriageCore to enforce the policy boundary before any action occurs.
+
+### Why Aliases Are Not Trust Boundaries
+
+Convenience names like `default`, `latest`, `fast`, or blank strings do not provide cryptographic or stable identity. If an operator authorizes a capability profile for `model_identity: "latest"`, a silent downstream change could swap a safe model for an unsafe one without changing the alias.
+
+Therefore, aliases and wrappers **are not trust boundaries**. The TriageCore adapter will actively reject alias-only identities (e.g. `runtime_version: "latest"` or `model_identity: "default"`) to prevent policy circumvention. Trust requires an explicit version string, a digest, or a fully qualified identifier.
+
+## Minimal Examples
+
+### Minimal Valid Manifest
+
+This manifest contains all required fields and uses explicit versions, which the adapter will successfully parse as a valid proposal.
+
+```yaml
+schema_version: "1.0.0"
+runtime_name: "example-runtime"
+runtime_version: "0.1.0"
+runtime_kind: "external_agent"
+adapter_version: "0.1.0"
+capability_profile: "read_only_summary"
+tool_policy_hash: "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+sandbox_mode: "read_only"
+network_access: "blocked"
+credential_access: "none"
+model_provider: "none"
+model_identity: "none"
+approval_required: true
+provenance_required: true
+revocation_supported: true
+```
+
+### Minimal Invalid Manifest (Missing `schema_version`)
+
+This manifest is invalid because it omits `schema_version`. The adapter will reject it with a `missing_or_blank:schema_version` block reason.
+
+```yaml
+# Missing 'schema_version'
+runtime_name: "example-runtime"
+runtime_version: "0.1.0"
+runtime_kind: "external_agent"
+adapter_version: "0.1.0"
+capability_profile: "read_only_summary"
+tool_policy_hash: "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+sandbox_mode: "read_only"
+network_access: "blocked"
+credential_access: "none"
+model_provider: "none"
+model_identity: "none"
+approval_required: true
+provenance_required: true
+revocation_supported: true
+```
+
 ## Non-Goals
 
 This schema document does not:
