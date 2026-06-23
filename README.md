@@ -14,6 +14,7 @@ TriageCore is an early research workbench for AI-assisted software work that kee
 - Verifies operator environment and local repo state with `tc doctor`.
 - Generates reviewable preflight and handoff artifacts with `tc preflight` and `tc handoff`.
 - Records and inspects privacy-safe route audit events with `tc audit`.
+- Validates and renders offline Task Envelope and Admission Evidence contracts via the `tc task-envelope` and `tc admission` CLI tools.
 - Supports local benchmark fixtures and benchmark reports without hiding the evidence trail.
 - Enforces local-only privacy boundaries before any optional external-safe Qwen Cloud path is considered.
 
@@ -113,8 +114,38 @@ Start here if you want the shortest guided path:
 - [Judge Submission Bundle](docs/submission/README.md)
 - [Verification Guide](docs/verification_guide.md)
 - [Evidence Schema](docs/evidence_schema.md)
+- [External Runtime Admission Governance](docs/operations/external-runtime-admission.md)
 - [Benchmark Fixtures](benchmarks/tasks.jsonl)
 - [Public Evidence Example](docs/submission/public_evidence_example.md)
+
+## External Runtime Admission Governance
+
+TriageCore models external agent actions using a tri-part governance model:
+1. **Task Envelope** (The Contract)
+2. **Admission Evidence** (The Proof)
+3. **Execution Sidecar** (The Enforcer)
+
+The execution sidecar is the future/runtime integration boundary; the current CLI tools provide deterministic preflight governance evidence.
+
+These commands validate and render operator-facing governance artifacts. They do not execute external runtimes, write to the ledger, or mutate approval state.
+
+```bash
+# Draft or preview envelopes
+tc task-envelope wizard
+tc task-envelope draft --from-json docs/examples/task-envelope.example.json
+
+# Validate strict schemas
+tc task-envelope validate --from-json docs/examples/task-envelope.example.json
+tc admission validate --from-json docs/examples/admission-evidence.example.json
+
+# Render for operator review
+tc admission render --from-json docs/examples/admission-evidence.example.json
+```
+
+For more details, refer to:
+- [Operator Admission Workflow](docs/operations/external-runtime-admission.md)
+- [Task Envelope CLI](docs/operations/task-envelope-cli.md)
+- [Admission Evidence CLI](docs/operations/admission-cli.md)
 
 ## Proof Markers
 
