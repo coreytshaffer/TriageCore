@@ -5,6 +5,7 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+- Implemented CR-067 (Operator Admission Workflow Documentation): Added overarching documentation connecting task envelopes, admission evidence, and external runtime governance.
 - Implemented CR-066 (`tc admission render --from-json`): Added CLI command to render admission evidence JSON fixtures as Markdown.
 - Implemented CR-065 (`tc admission validate --from-json`): Added CLI command to validate admission evidence JSON fixtures.
 - Implemented CR-064 (Admission Evidence Example Fixture Smoke Test): Added tests ensuring the public JSON example fixture remains valid for admission evidence.
