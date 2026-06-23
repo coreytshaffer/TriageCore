@@ -659,6 +659,30 @@ def tc_doctor():
         print("pytest config: unavailable")
         print("Scratch Excluded: unavailable")
 
+def tc_task_envelope_preview() -> None:
+    from triage_core.task_envelope import TaskEnvelope, render_task_envelope_markdown
+    envelope = TaskEnvelope(
+        task_id="EXAMPLE-CR-001",
+        title="Example CLI Preview Task",
+        objective="Demonstrate the CLI preview rendering of a deterministic Task Envelope.",
+        repo="TriageCore",
+        operator_agent_lane="cli-operator",
+        route="local-preview",
+        risk_level="Low",
+        requested_capability="read_only",
+        allowed_files=("docs/", "tests/"),
+        forbidden_files_or_areas=(".triagecore/ledger.jsonl",),
+        explicit_non_scope=("Runtime execution", "Network requests"),
+        approval_gates="None",
+        validation_plan="Read stdout",
+        evidence_to_produce=(),
+        current_status="preview",
+        operator_decision="Pending",
+        next_allowed_action="Close preview",
+    )
+    # The renderer appends a trailing newline, so print(..., end='') to avoid double blank line
+    print(render_task_envelope_markdown(envelope), end='')
+
 def main():
     parser = argparse.ArgumentParser(description="TriageCore Operator Workflow")
     subparsers = parser.add_subparsers(dest="command")
@@ -793,6 +817,14 @@ def main():
         help="Simulate the human review decision (default: pending)",
     )
 
+    # task-envelope
+    task_envelope_parser = subparsers.add_parser("task-envelope", help="Manage task envelopes")
+    task_envelope_subparsers = task_envelope_parser.add_subparsers(dest="task_envelope_command")
+    task_envelope_preview_parser = task_envelope_subparsers.add_parser(
+        "preview",
+        help="Print a sample TaskEnvelope Markdown preview to stdout",
+    )
+
     args = parser.parse_args()
 
     if args.command == "propose":
@@ -856,6 +888,11 @@ def main():
         if not args.dry_run:
             demo_parser.error("the demo command currently requires --dry-run")
         tc_demo_dry_run(args.decision)
+    elif args.command == "task-envelope":
+        if args.task_envelope_command == "preview":
+            tc_task_envelope_preview()
+        else:
+            task_envelope_parser.error("task-envelope requires a subcommand: preview")
     else:
         parser.print_help()
 
