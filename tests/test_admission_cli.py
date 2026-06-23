@@ -295,3 +295,118 @@ def test_admission_render_example_fixture_missing_required_field(tmp_path):
     )
     assert result.returncode == 1
     assert "Error validating Admission Evidence JSON" in result.stderr
+
+def test_admission_bundle_from_json_writes_review_only_bundle(tmp_path):
+    repo_root = Path(__file__).resolve().parents[1]
+    fixture_path = repo_root / "docs" / "examples" / "admission-evidence.example.json"
+    workspace = tmp_path / "isolated-workspace"
+    workspace.mkdir()
+
+    triagecore_dir = workspace / ".triagecore"
+    triagecore_dir.mkdir()
+    ledger_path = triagecore_dir / "ledger.jsonl"
+    ledger_text = '{"seed": true}\n'
+    ledger_path.write_text(ledger_text, encoding="utf-8")
+
+    out_dir = workspace / "review-bundle"
+    before_state = _snapshot_workspace_state(workspace)
+
+    env = os.environ.copy()
+    existing_pythonpath = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = (
+        str(repo_root)
+        if not existing_pythonpath
+        else str(repo_root) + os.pathsep + existing_pythonpath
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "triage_core.tc_cli",
+            "admission",
+            "bundle",
+            "--from-json",
+            str(fixture_path),
+            "--out-dir",
+            str(out_dir),
+        ],
+        capture_output=True,
+        text=True,
+        cwd=workspace,
+        env=env,
+    )
+    assert result.returncode == 0
+    assert "Success: Wrote admission review bundle" in result.stdout
+
+    review_path = out_dir / "admission_review.md"
+    evidence_path = out_dir / "admission_evidence.json"
+    manifest_path = out_dir / "bundle_manifest.json"
+    assert review_path.exists()
+    assert evidence_path.exists()
+    assert manifest_path.exists()
+
+    review_text = review_path.read_text(encoding="utf-8")
+    assert "# External Runtime Admission Readout" in review_text
+    assert "This review bundle is an operator review artifact. It does not grant execution authority." in review_text
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest == {
+        "bundle_type": "admission_review",
+        "execution_authority": False,
+        "source_evidence": "admission_evidence.json",
+        "rendered_review": "admission_review.md",
+    }
+
+    with open(fixture_path, "r", encoding="utf-8") as f:
+        expected_payload = json.load(f)
+    actual_payload = json.loads(evidence_path.read_text(encoding="utf-8"))
+    assert actual_payload == expected_payload
+
+    after_state = _snapshot_workspace_state(workspace)
+    non_bundle_after_state = {
+        path: fingerprint
+        for path, fingerprint in after_state.items()
+        if not path.startswith("review-bundle/")
+    }
+    assert non_bundle_after_state == before_state
+    assert ledger_path.read_text(encoding="utf-8") == ledger_text
+
+
+def test_admission_bundle_from_invalid_json_fails_closed_without_bundle(tmp_path):
+    repo_root = Path(__file__).resolve().parents[1]
+    workspace = tmp_path / "isolated-workspace"
+    workspace.mkdir()
+
+    fixture_path = workspace / "invalid.json"
+    fixture_path.write_text("{ unquoted_key: true }", encoding="utf-8")
+    out_dir = workspace / "review-bundle"
+
+    env = os.environ.copy()
+    existing_pythonpath = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = (
+        str(repo_root)
+        if not existing_pythonpath
+        else str(repo_root) + os.pathsep + existing_pythonpath
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "triage_core.tc_cli",
+            "admission",
+            "bundle",
+            "--from-json",
+            str(fixture_path),
+            "--out-dir",
+            str(out_dir),
+        ],
+        capture_output=True,
+        text=True,
+        cwd=workspace,
+        env=env,
+    )
+    assert result.returncode == 1
+    assert "Error parsing JSON" in result.stderr
+    assert not out_dir.exists()
