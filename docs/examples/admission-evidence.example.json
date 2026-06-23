@@ -1,0 +1,13 @@
+{
+  "admitted": false,
+  "execution_performed": false,
+  "requested_runtime": "python-local",
+  "requested_capability": "read_write",
+  "approval_required": true,
+  "approval_used": false,
+  "blocked_reasons": [
+    "explicit approval required before write-capable runtime use"
+  ],
+  "manifest_or_source_evidence": "{\n  \"script\": \"run.py\",\n  \"args\": [\n    \"--force\"\n  ]\n}",
+  "approval_evidence": null
+}
