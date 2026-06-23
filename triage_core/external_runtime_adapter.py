@@ -221,3 +221,21 @@ def _normalize(value: Any) -> str:
     if value is None:
         return ""
     return str(value).strip().lower()
+
+
+def execute_external_runtime_stub(
+    proposal: ExternalRuntimeAdapterProposal,
+    *,
+    explicit_approval: bool = False,
+) -> dict[str, Any]:
+    """
+    A minimal caller stub representing the first execution-path boundary.
+    All external runtime execution must first pass admission.
+    """
+    admitted = admit_external_runtime(proposal, explicit_approval=explicit_approval)
+
+    return {
+        "status": "stubbed",
+        "runtime_name": admitted.runtime_name,
+        "execution_performed": False,
+    }

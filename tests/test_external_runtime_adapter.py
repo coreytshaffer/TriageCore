@@ -3,6 +3,7 @@ import pytest
 from triage_core.external_runtime_adapter import (
     RuntimeAdmissionError,
     admit_external_runtime,
+    execute_external_runtime_stub,
     normalize_external_runtime_manifest,
 )
 
@@ -183,3 +184,21 @@ def test_blocked_proposal_cannot_be_admitted_with_explicit_approval():
 
     with pytest.raises(RuntimeAdmissionError, match="External runtime proposal blocked: missing_or_blank:schema_version"):
         admit_external_runtime(proposal, explicit_approval=True)
+
+
+def test_execute_stub_blocks_inadmissible_proposals():
+    manifest = _read_only_manifest()
+    manifest.pop("schema_version")
+    proposal = normalize_external_runtime_manifest(manifest)
+
+    with pytest.raises(RuntimeAdmissionError, match="External runtime proposal blocked: missing_or_blank:schema_version"):
+        execute_external_runtime_stub(proposal)
+
+
+def test_execute_stub_succeeds_for_admitted_proposals():
+    proposal = normalize_external_runtime_manifest(_read_only_manifest())
+    result = execute_external_runtime_stub(proposal)
+
+    assert result["status"] == "stubbed"
+    assert result["runtime_name"] == "example-read-only-runtime"
+    assert result["execution_performed"] is False
