@@ -15,10 +15,10 @@ This document summarizes the active TriageCore backlog after CR-034.
 
 ## Candidate Future Work
 
-- External runtime adapter admission execution path
-  - Source: CR-048 execution-path blocking test
-  - Status: execution-path slice complete; routing policy integration remains future work
-  - Purpose: enforce structural and policy boundaries by raising `RuntimeAdmissionError` for blocked proposals before execution.
+- External runtime execution boundary stub
+  - Source: CR-049 execution-path boundary stub
+  - Status: stub caller complete; routing policy and admission tokens remain future work
+  - Purpose: enforce structural and policy boundaries by ensuring proposals must pass `admit_external_runtime` before proceeding.
 
 - External runtime manifest examples
   - Source: CR-045 docs-only example slice

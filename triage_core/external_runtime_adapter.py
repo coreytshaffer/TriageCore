@@ -72,6 +72,30 @@ class ExternalRuntimeAdapterProposal:
         }
 
 
+@dataclass(frozen=True)
+class ExternalRuntimeAdmissionEvidence:
+    evidence_kind: str
+    status: str
+    execution_performed: bool
+    admitted: bool
+    runtime_name: str
+    proposal_status: ProposalStatus
+    approval_used: bool
+    blocked_reasons: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "evidence_kind": self.evidence_kind,
+            "status": self.status,
+            "execution_performed": self.execution_performed,
+            "admitted": self.admitted,
+            "runtime_name": self.runtime_name,
+            "proposal_status": self.proposal_status,
+            "approval_used": self.approval_used,
+            "blocked_reasons": list(self.blocked_reasons),
+        }
+
+
 def normalize_external_runtime_manifest(
     manifest: dict[str, Any] | Any,
 ) -> ExternalRuntimeAdapterProposal:
@@ -221,3 +245,26 @@ def _normalize(value: Any) -> str:
     if value is None:
         return ""
     return str(value).strip().lower()
+
+
+def execute_external_runtime_stub(
+    proposal: ExternalRuntimeAdapterProposal,
+    *,
+    explicit_approval: bool = False,
+) -> ExternalRuntimeAdmissionEvidence:
+    """
+    A minimal caller stub representing the first execution-path boundary.
+    All external runtime execution must first pass admission.
+    """
+    admitted = admit_external_runtime(proposal, explicit_approval=explicit_approval)
+
+    return ExternalRuntimeAdmissionEvidence(
+        evidence_kind="external_runtime_admission_stub",
+        status="stubbed",
+        execution_performed=False,
+        admitted=True,
+        runtime_name=admitted.runtime_name,
+        proposal_status=admitted.status,
+        approval_used=explicit_approval,
+        blocked_reasons=admitted.blocked_reasons,
+    )
