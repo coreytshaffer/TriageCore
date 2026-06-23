@@ -5,6 +5,7 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+- Implemented CR-070 (Admission CLI No-Mutation Invariant): Added a read-only CLI invariant test proving admission JSON validation and rendering do not mutate `.triagecore/`, create ledger records, or alter local runtime state.
 - Implemented CR-069 (Admission CLI Golden Fixture Smoke Test): Added fixture-backed CLI smoke coverage for `tc admission validate --from-json` and `tc admission render --from-json`, plus a fail-closed negative CLI check.
 - Implemented CR-068 (Operator Documentation Consolidation / README Discoverability): Added external runtime admission governance and CLI discoverability to the main README.
 - Implemented CR-067 (Operator Admission Workflow Documentation): Added overarching documentation connecting task envelopes, admission evidence, and external runtime governance.
