@@ -15,10 +15,10 @@ This document summarizes the active TriageCore backlog after CR-034.
 
 ## Candidate Future Work
 
-- External runtime execution boundary stub
-  - Source: CR-049 execution-path boundary stub
-  - Status: stub caller complete; routing policy and admission tokens remain future work
-  - Purpose: enforce structural and policy boundaries by ensuring proposals must pass `admit_external_runtime` before proceeding.
+- External runtime execution admission evidence
+  - Source: CR-050 admission evidence record
+  - Status: evidence structure complete; ledger integration remains future work
+  - Purpose: audit the admission of proposals separately from their execution.
 
 - External runtime manifest examples
   - Source: CR-045 docs-only example slice

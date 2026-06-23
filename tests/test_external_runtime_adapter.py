@@ -1,6 +1,7 @@
 import pytest
 
 from triage_core.external_runtime_adapter import (
+    ExternalRuntimeAdmissionEvidence,
     RuntimeAdmissionError,
     admit_external_runtime,
     execute_external_runtime_stub,
@@ -186,7 +187,7 @@ def test_blocked_proposal_cannot_be_admitted_with_explicit_approval():
         admit_external_runtime(proposal, explicit_approval=True)
 
 
-def test_execute_stub_blocks_inadmissible_proposals():
+def test_execute_stub_does_not_emit_success_for_blocked_proposal():
     manifest = _read_only_manifest()
     manifest.pop("schema_version")
     proposal = normalize_external_runtime_manifest(manifest)
@@ -195,10 +196,27 @@ def test_execute_stub_blocks_inadmissible_proposals():
         execute_external_runtime_stub(proposal)
 
 
-def test_execute_stub_succeeds_for_admitted_proposals():
+def test_execute_stub_returns_admission_evidence():
     proposal = normalize_external_runtime_manifest(_read_only_manifest())
-    result = execute_external_runtime_stub(proposal)
+    evidence = execute_external_runtime_stub(proposal)
 
-    assert result["status"] == "stubbed"
-    assert result["runtime_name"] == "example-read-only-runtime"
-    assert result["execution_performed"] is False
+    assert isinstance(evidence, ExternalRuntimeAdmissionEvidence)
+    assert evidence.evidence_kind == "external_runtime_admission_stub"
+    assert evidence.status == "stubbed"
+    assert evidence.execution_performed is False
+    assert evidence.admitted is True
+    assert evidence.runtime_name == "example-read-only-runtime"
+    assert evidence.proposal_status == "proposed"
+    assert evidence.approval_used is False
+    assert evidence.blocked_reasons == ()
+
+
+def test_execute_stub_records_explicit_approval_when_used():
+    proposal = normalize_external_runtime_manifest(
+        _draft_only_manifest(capability_profile="approved_mutation")
+    )
+    evidence = execute_external_runtime_stub(proposal, explicit_approval=True)
+
+    assert evidence.admitted is True
+    assert evidence.proposal_status == "approval_required"
+    assert evidence.approval_used is True
