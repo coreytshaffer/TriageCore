@@ -5,6 +5,7 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+- Implemented CR-046 (Bounded External Runtime Adapter Stub): Add a pure external runtime adapter stub that normalizes declared runtime manifests into inert proposed records without granting authority or allowing execution.
 - Implemented CR-045 (External Runtime Manifest Examples): Add vendor-neutral read-only, draft-only, and intentionally invalid manifest examples so external runtime interoperability can stay example-first before any adapter work.
 - Implemented CR-044 (External Runtime Manifest Schema): Add a vendor-neutral external-runtime manifest contract that defines runtime identity, authority boundary, approval, provenance, and revocation fields before any example or adapter work.
 - Implemented CR-043 (External Runtime Integration Doctrine): Add a docs-only external-runtime doctrine and OpenClaw boundary note that define compatibility-without-capture and keep interoperability subordinate to TriageCore authority.
