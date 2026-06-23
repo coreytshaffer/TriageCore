@@ -41,3 +41,45 @@ def render_admission_evidence_markdown(evidence: ExternalRuntimeAdmissionEvidenc
         "```",
     ]
     return "\n".join(lines)
+
+def admission_evidence_from_mapping(payload: dict) -> ExternalRuntimeAdmissionEvidence:
+    """
+    Constructs and validates an ExternalRuntimeAdmissionEvidence from a raw dictionary mapping.
+    Raises ValueError if validation rules are violated.
+    """
+    required_booleans = [
+        "admitted", "execution_performed", "approval_required", "approval_used"
+    ]
+    for field in required_booleans:
+        if field not in payload or not isinstance(payload[field], bool):
+            raise ValueError(f"Missing or invalid boolean field: '{field}'")
+
+    required_strings = [
+        "requested_runtime", "requested_capability", "manifest_or_source_evidence"
+    ]
+    for field in required_strings:
+        if field not in payload or not isinstance(payload[field], str) or not payload[field].strip():
+            raise ValueError(f"Missing or empty string field: '{field}'")
+
+    if "blocked_reasons" not in payload or not isinstance(payload["blocked_reasons"], list):
+        raise ValueError("Missing or invalid list field: 'blocked_reasons'")
+    
+    for item in payload["blocked_reasons"]:
+        if not isinstance(item, str) or not item.strip():
+            raise ValueError("Invalid item in list field 'blocked_reasons': must be non-empty string")
+
+    approval_evidence = payload.get("approval_evidence")
+    if approval_evidence is not None and (not isinstance(approval_evidence, str) or not approval_evidence.strip()):
+        raise ValueError("Invalid 'approval_evidence': must be null or non-empty string")
+
+    return ExternalRuntimeAdmissionEvidence(
+        admitted=payload["admitted"],
+        execution_performed=payload["execution_performed"],
+        requested_runtime=payload["requested_runtime"],
+        requested_capability=payload["requested_capability"],
+        approval_required=payload["approval_required"],
+        approval_used=payload["approval_used"],
+        blocked_reasons=tuple(payload["blocked_reasons"]),
+        manifest_or_source_evidence=payload["manifest_or_source_evidence"],
+        approval_evidence=approval_evidence
+    )

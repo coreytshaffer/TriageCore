@@ -5,6 +5,7 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+- Implemented CR-063 (Admission Evidence JSON Fixture Validation): Added JSON mapping and validation helper for external runtime admission evidence.
 - Implemented CR-062 (External Runtime Admission Evidence Readout): Added dataclass and markdown renderer to represent external runtime admission states.
 - Implemented CR-061 (Task Envelope Fixture Roundtrip Smoke Test): Added tests ensuring the public JSON example fixture remains valid.
 - Implemented CR-060 (Task Envelope Validate Command): Added `tc task-envelope validate --from-json` to validate JSON fixtures without rendering.
