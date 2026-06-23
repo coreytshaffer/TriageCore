@@ -1,7 +1,33 @@
-import pytest
-import subprocess
 import json
 import os
+import subprocess
+
+import pytest
+
+
+def test_admission_cli_example_fixture_smoke():
+    fixture_path = os.path.join("docs", "examples", "admission-evidence.example.json")
+
+    validate_result = subprocess.run(
+        ["python", "-m", "triage_core.tc_cli", "admission", "validate", "--from-json", fixture_path],
+        capture_output=True,
+        text=True,
+    )
+    assert validate_result.returncode == 0
+    assert "Validation successful." in validate_result.stdout
+
+    render_result = subprocess.run(
+        ["python", "-m", "triage_core.tc_cli", "admission", "render", "--from-json", fixture_path],
+        capture_output=True,
+        text=True,
+    )
+    assert render_result.returncode == 0
+    assert "# External Runtime Admission Readout" in render_result.stdout
+    assert "**Requested Runtime:** python-local" in render_result.stdout
+    assert "**Approval Required:** true" in render_result.stdout
+    assert "## Blocked Reasons" in render_result.stdout
+    assert "explicit approval required before write-capable runtime use" in render_result.stdout
+    assert "## Manifest / Source Evidence" in render_result.stdout
 
 def test_admission_validate_success(tmp_path):
     fixture_path = tmp_path / "valid.json"
@@ -172,3 +198,19 @@ def test_admission_render_requires_from_json():
     )
     assert result.returncode == 2
     assert "the following arguments are required: --from-json" in result.stderr
+
+
+def test_admission_render_example_fixture_missing_required_field(tmp_path):
+    fixture_path = tmp_path / "missing_field.json"
+    with open(os.path.join("docs", "examples", "admission-evidence.example.json"), "r", encoding="utf-8") as f:
+        payload = json.load(f)
+    payload.pop("requested_runtime")
+    fixture_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    result = subprocess.run(
+        ["python", "-m", "triage_core.tc_cli", "admission", "render", "--from-json", str(fixture_path)],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 1
+    assert "Error validating Admission Evidence JSON" in result.stderr
