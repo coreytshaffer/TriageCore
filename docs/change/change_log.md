@@ -5,6 +5,7 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+- Implemented CR-076 (TriageCore Research Framing Doc): Added a docs-only research question, threat model, claims/non-claims, and empirical eval backlog framing for TriageCore as a local-first AI control-plane evaluation harness.
 - Implemented CR-075 (Admission Bundle Manifest Contract): Added a manifest contract doc and focused tests to keep the admission review bundle manifest review-only and non-authoritative.
 - Implemented CR-074 (Admission Review Bundle Dry Run): Added a review-only admission bundle command that writes rendered Markdown, evidence JSON, and a small no-authority manifest to an explicit output directory.
 - Implemented CR-073 (Admission Evidence Fixture Drift Check): Added a narrow drift-check test to keep the admission validator, public valid fixture, and admission evidence contract documentation aligned.
