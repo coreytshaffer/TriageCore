@@ -250,5 +250,20 @@ class TestPrivacyReportProjection(unittest.TestCase):
             "Unknown violation A"
         ])
 
+    def test_project_failed_report_with_finding_codes(self):
+        report = PrivacyReport(
+            passed=False,
+            violations=["Some raw violation text", "Another violation"],
+            detections=[],
+            finding_codes=["z_code", "a_code", "z_code"]
+        )
+        outcome = project_privacy_report_to_actual_outcome(
+            case_id="test_fail_004",
+            report=report
+        )
+        self.assertEqual(outcome["decision"], "block")
+        self.assertEqual(outcome["reasons"], ["a_code", "z_code"])
+        self.assertEqual(outcome["diagnostic_details"], ["Some raw violation text", "Another violation"])
+
 if __name__ == '__main__':
     unittest.main()
