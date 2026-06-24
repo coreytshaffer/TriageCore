@@ -39,7 +39,7 @@ Extra fields may be present for diagnostics but are not required for scoring.
 * diagnostic details are not scored as primary oracle reasons.
 * scoring remains external to TriageCore.
 
-Note: Privacy reason normalization currently maps scanner diagnostics to stable eval-facing reason codes using exact-string matching. The raw diagnostics are preserved under `diagnostic_details`. If structured privacy scanner fields are added later, normalization should move from raw-string matching to structured signals.
+Note: Privacy reason normalization now prefers structured finding codes exposed directly by the `PrivacyReport`. The raw diagnostic messages are preserved under `diagnostic_details`. Raw-string normalization remains only as a backward-compatible fallback for older reports.
 ## Where Files Are Exported
 
 When running evaluation smoke tests or full evaluations, the generated files should be written to a dedicated directory. Examples:

@@ -142,7 +142,10 @@ def project_privacy_report_to_actual_outcome(
     diagnostic_details = []
     if not report.passed:
         diagnostic_details = list(report.violations)
-        reasons = normalize_privacy_reasons(report.violations)
+        if report.finding_codes:
+            reasons = sorted(list(set(report.finding_codes)))
+        else:
+            reasons = normalize_privacy_reasons(report.violations)
 
     return build_actual_outcome(
         case_id=case_id,

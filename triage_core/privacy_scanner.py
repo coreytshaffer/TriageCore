@@ -1,6 +1,6 @@
 import re
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Optional
 
 from triage_core.task_packet import TaskPacket
 
@@ -10,6 +10,7 @@ class PrivacyReport:
     violations: List[str]
     detections: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
+    finding_codes: Optional[List[str]] = None
 
 class PrivacyViolationError(Exception):
     pass
@@ -49,6 +50,7 @@ def scan_task_packet(packet: TaskPacket) -> PrivacyReport:
     
     violations = []
     detections = []
+    finding_codes = []
     
     # 1. PII Checks (SSN, Phone, Email, CC)
     has_pii = False
@@ -58,6 +60,7 @@ def scan_task_packet(packet: TaskPacket) -> PrivacyReport:
         detections.append("SSN pattern")
         if not meta.contains_pii:
             violations.append("Detected possible SSN pattern in packet content; metadata contains_pii=False.")
+            finding_codes.extend(["ssn_pattern_detected", "metadata_privacy_conflict"])
             
     if EMAIL_REGEX.search(content):
         has_pii = True
@@ -101,4 +104,9 @@ def scan_task_packet(packet: TaskPacket) -> PrivacyReport:
     # CR-002 only validates metadata/content consistency. Routing enforcement for acknowledged sensitive content is deferred to CR-004B.
     
     passed = len(violations) == 0
-    return PrivacyReport(passed=passed, violations=violations, detections=detections)
+    return PrivacyReport(
+        passed=passed,
+        violations=violations,
+        detections=detections,
+        finding_codes=finding_codes if finding_codes else None
+    )
