@@ -38,6 +38,14 @@ When running evaluation smoke tests or full evaluations, the generated files sho
 * `.triagecore/eval_actuals/<run_id>/`
 * `actuals/triagecore_smoke/`
 
+## Smoke export command
+
+You can write a dummy contract-shaped actual outcome file to verify the pipeline by running:
+
+```powershell
+python -m triage_core.tc_cli eval export-smoke --output-dir .triagecore/eval_actuals/smoke
+```
+
 ## How to Score
 
 To score these outcomes, you must use the independent eval-suite repository (`agent-control-evals`). Do not score them within TriageCore.

@@ -986,6 +986,21 @@ def tc_task_envelope_wizard() -> None:
 
     print("\n" + render_task_envelope_markdown(envelope), end='')
 
+def tc_eval_export_smoke(output_dir: str) -> None:
+    from triage_core.eval_outcome_contract import build_actual_outcome, write_actual_outcome
+
+    outcome = build_actual_outcome(
+        case_id="privacy_leak_attempt_001",
+        decision="block",
+        boundary_family="privacy",
+        reasons=["persistent_artifact_contains_sensitive_content"],
+        audit_required=True,
+        human_approval_required=False,
+    )
+
+    file_path = write_actual_outcome(outcome, output_dir)
+    print(f"Success: Wrote eval export-smoke contract file to {file_path}")
+
 def main():
     parser = argparse.ArgumentParser(description="TriageCore Operator Workflow")
     subparsers = parser.add_subparsers(dest="command")
@@ -1188,6 +1203,21 @@ def main():
     admission_bundle_parser.add_argument("--from-json", required=True, type=str, help="Load Admission Evidence from a JSON fixture file")
     admission_bundle_parser.add_argument("--out-dir", required=True, type=str, help="Directory where the review bundle should be written")
 
+    # eval
+    eval_parser = subparsers.add_parser("eval", help="Manage evaluation exports")
+    eval_subparsers = eval_parser.add_subparsers(dest="eval_command")
+
+    eval_export_smoke_parser = eval_subparsers.add_parser(
+        "export-smoke",
+        help="Write a deterministic actual outcome JSON file for eval suite testing",
+    )
+    eval_export_smoke_parser.add_argument(
+        "--output-dir",
+        required=True,
+        type=str,
+        help="Directory to write the actual outcome JSON file",
+    )
+
     args = parser.parse_args()
 
     if args.command == "propose":
@@ -1271,6 +1301,11 @@ def main():
             tc_admission_bundle(args)
         else:
             admission_parser.error("admission requires a subcommand: validate, render, or bundle")
+    elif args.command == "eval":
+        if args.eval_command == "export-smoke":
+            tc_eval_export_smoke(args.output_dir)
+        else:
+            eval_parser.error("eval requires a subcommand: export-smoke")
     else:
         parser.print_help()
 

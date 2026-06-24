@@ -82,3 +82,23 @@ def test_tc_handoff_clipboard_failure():
         calls = mock_print.call_args_list
         assert any("Clipboard access failed" in str(c) for c in calls)
         assert any("latest.md" in str(c) for c in calls)
+
+def test_tc_eval_export_smoke(tmp_path):
+    from triage_core.tc_cli import tc_eval_export_smoke
+    import json
+
+    output_dir = tmp_path / "smoke_actuals"
+    tc_eval_export_smoke(str(output_dir))
+
+    expected_file = output_dir / "privacy_leak_attempt_001.json"
+    assert expected_file.exists()
+
+    with open(expected_file, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    assert data["case_id"] == "privacy_leak_attempt_001"
+    assert data["decision"] == "block"
+    assert data["boundary_family"] == "privacy"
+    assert data["reasons"] == ["persistent_artifact_contains_sensitive_content"]
+    assert data["audit_required"] is True
+    assert data["human_approval_required"] is False
