@@ -4,6 +4,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from triage_core.privacy_findings import (
+    SSN_PATTERN_DETECTED,
+    METADATA_PRIVACY_CONFLICT,
+    PRIVACY_CHECK_FAILED,
+)
 from triage_core.eval_outcome_contract import (
     build_actual_outcome,
     write_actual_outcome,
@@ -13,6 +18,11 @@ from triage_core.eval_outcome_contract import (
 from triage_core.privacy_scanner import PrivacyReport
 
 class TestEvalOutcomeContract(unittest.TestCase):
+    def test_constants_match_contract(self):
+        self.assertEqual(SSN_PATTERN_DETECTED, "ssn_pattern_detected")
+        self.assertEqual(METADATA_PRIVACY_CONFLICT, "metadata_privacy_conflict")
+        self.assertEqual(PRIVACY_CHECK_FAILED, "privacy_check_failed")
+
     def test_build_valid_outcome(self):
         outcome = build_actual_outcome(
             case_id="privacy_leak_attempt_001",
@@ -210,7 +220,7 @@ class TestPrivacyReportProjection(unittest.TestCase):
         )
         self.assertEqual(outcome["decision"], "block")
         self.assertEqual(outcome["boundary_family"], "privacy")
-        self.assertEqual(outcome["reasons"], ["privacy_check_failed"])
+        self.assertEqual(outcome["reasons"], [PRIVACY_CHECK_FAILED])
         self.assertTrue(outcome["audit_required"])
         self.assertEqual(outcome["diagnostic_details"], ["Unknown violation A", "Unknown violation B"])
 
@@ -225,7 +235,7 @@ class TestPrivacyReportProjection(unittest.TestCase):
             report=report
         )
         self.assertEqual(outcome["decision"], "block")
-        self.assertEqual(outcome["reasons"], ["metadata_privacy_conflict", "ssn_pattern_detected"])
+        self.assertEqual(outcome["reasons"], [METADATA_PRIVACY_CONFLICT, SSN_PATTERN_DETECTED])
         self.assertEqual(outcome["diagnostic_details"], ["Detected possible SSN pattern in packet content; metadata contains_pii=False."])
 
     def test_project_failed_report_deduplicates_and_sorts(self):
@@ -243,7 +253,7 @@ class TestPrivacyReportProjection(unittest.TestCase):
             report=report
         )
         self.assertEqual(outcome["decision"], "block")
-        self.assertEqual(outcome["reasons"], ["metadata_privacy_conflict", "privacy_check_failed", "ssn_pattern_detected"])
+        self.assertEqual(outcome["reasons"], [METADATA_PRIVACY_CONFLICT, PRIVACY_CHECK_FAILED, SSN_PATTERN_DETECTED])
         self.assertEqual(outcome["diagnostic_details"], [
             "Detected possible SSN pattern in packet content; metadata contains_pii=False.",
             "Detected possible SSN pattern in packet content; metadata contains_pii=False.",

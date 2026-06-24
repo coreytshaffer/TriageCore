@@ -4,6 +4,11 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Union
 
 from triage_core.privacy_scanner import PrivacyReport
+from triage_core.privacy_findings import (
+    SSN_PATTERN_DETECTED,
+    METADATA_PRIVACY_CONFLICT,
+    PRIVACY_CHECK_FAILED,
+)
 
 def build_actual_outcome(
     *,
@@ -121,10 +126,10 @@ def normalize_privacy_reasons(violations: Iterable[str]) -> List[str]:
     reasons_set = set()
     for v in violations:
         if v == "Detected possible SSN pattern in packet content; metadata contains_pii=False.":
-            reasons_set.add("ssn_pattern_detected")
-            reasons_set.add("metadata_privacy_conflict")
+            reasons_set.add(SSN_PATTERN_DETECTED)
+            reasons_set.add(METADATA_PRIVACY_CONFLICT)
         else:
-            reasons_set.add("privacy_check_failed")
+            reasons_set.add(PRIVACY_CHECK_FAILED)
 
     return sorted(list(reasons_set))
 

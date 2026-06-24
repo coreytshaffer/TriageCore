@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 from triage_core.task_packet import TaskPacket
+from triage_core.privacy_findings import SSN_PATTERN_DETECTED, METADATA_PRIVACY_CONFLICT
 
 @dataclass
 class PrivacyReport:
@@ -60,7 +61,7 @@ def scan_task_packet(packet: TaskPacket) -> PrivacyReport:
         detections.append("SSN pattern")
         if not meta.contains_pii:
             violations.append("Detected possible SSN pattern in packet content; metadata contains_pii=False.")
-            finding_codes.extend(["ssn_pattern_detected", "metadata_privacy_conflict"])
+            finding_codes.extend([SSN_PATTERN_DETECTED, METADATA_PRIVACY_CONFLICT])
             
     if EMAIL_REGEX.search(content):
         has_pii = True
