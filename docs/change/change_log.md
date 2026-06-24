@@ -5,6 +5,7 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+- Implemented CR-077 (Safety Boundary Eval Taxonomy and Fixture Schema): Added a docs-first evaluation taxonomy, v0 fixture schema, deterministic starter eval fixtures, and backlog framing for the safety-boundary research track without adding CLI or runtime behavior.
 - Implemented CR-076 (TriageCore Research Framing Doc): Added a docs-only research question, threat model, claims/non-claims, and empirical eval backlog framing for TriageCore as a local-first AI control-plane evaluation harness.
 - Implemented CR-075 (Admission Bundle Manifest Contract): Added a manifest contract doc and focused tests to keep the admission review bundle manifest review-only and non-authoritative.
 - Implemented CR-074 (Admission Review Bundle Dry Run): Added a review-only admission bundle command that writes rendered Markdown, evidence JSON, and a small no-authority manifest to an explicit output directory.

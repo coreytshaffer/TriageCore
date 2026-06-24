@@ -1,0 +1,151 @@
+import os
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+from triage_core.eval_outcome_contract import (
+    build_actual_outcome,
+    write_actual_outcome,
+    write_actual_outcomes
+)
+
+class TestEvalOutcomeContract(unittest.TestCase):
+    def test_build_valid_outcome(self):
+        outcome = build_actual_outcome(
+            case_id="privacy_leak_attempt_001",
+            decision="block",
+            boundary_family="privacy",
+            reasons=["persistent_artifact_contains_sensitive_content"],
+            audit_required=True,
+            human_approval_required=False
+        )
+        self.assertEqual(outcome["case_id"], "privacy_leak_attempt_001")
+        self.assertEqual(outcome["decision"], "block")
+        self.assertEqual(outcome["boundary_family"], "privacy")
+        self.assertEqual(outcome["reasons"], ["persistent_artifact_contains_sensitive_content"])
+        self.assertTrue(outcome["audit_required"])
+        self.assertFalse(outcome["human_approval_required"])
+
+    def test_missing_or_invalid_fields(self):
+        with self.assertRaises(ValueError):
+            build_actual_outcome(
+                case_id="", # Empty string
+                decision="block",
+                boundary_family="privacy",
+                reasons=[],
+                audit_required=True,
+                human_approval_required=False
+            )
+            
+        with self.assertRaises(ValueError):
+            build_actual_outcome(
+                case_id="test_001",
+                decision=None, # Invalid type
+                boundary_family="privacy",
+                reasons=[],
+                audit_required=True,
+                human_approval_required=False
+            )
+            
+        with self.assertRaises(ValueError):
+            build_actual_outcome(
+                case_id="test_001",
+                decision="block",
+                boundary_family="privacy",
+                reasons="not_a_list", # String instead of list
+                audit_required=True,
+                human_approval_required=False
+            )
+
+        with self.assertRaises(ValueError):
+            build_actual_outcome(
+                case_id="test_001",
+                decision="block",
+                boundary_family="privacy",
+                reasons=[123], # Non-string in reasons
+                audit_required=True,
+                human_approval_required=False
+            )
+
+    def test_path_unsafe_case_id(self):
+        with self.assertRaises(ValueError):
+            build_actual_outcome(
+                case_id="../etc/passwd",
+                decision="block",
+                boundary_family="privacy",
+                reasons=[],
+                audit_required=True,
+                human_approval_required=False
+            )
+
+    def test_write_actual_outcome(self):
+        outcome = build_actual_outcome(
+            case_id="write_test_001",
+            decision="allow",
+            boundary_family="none",
+            reasons=[],
+            audit_required=False,
+            human_approval_required=False
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            file_path = write_actual_outcome(outcome, tmpdir)
+            self.assertTrue(file_path.exists())
+            self.assertEqual(file_path.name, "write_test_001.json")
+            
+            with open(file_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                self.assertEqual(data["case_id"], "write_test_001")
+
+    def test_write_multiple_outcomes(self):
+        outcomes = [
+            build_actual_outcome(
+                case_id="test_mult_001",
+                decision="allow",
+                boundary_family="none",
+                reasons=[],
+                audit_required=False,
+                human_approval_required=False
+            ),
+            build_actual_outcome(
+                case_id="test_mult_002",
+                decision="block",
+                boundary_family="privacy",
+                reasons=["leak"],
+                audit_required=True,
+                human_approval_required=False
+            )
+        ]
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            paths = write_actual_outcomes(outcomes, tmpdir)
+            self.assertEqual(len(paths), 2)
+            self.assertTrue((Path(tmpdir) / "test_mult_001.json").exists())
+            self.assertTrue((Path(tmpdir) / "test_mult_002.json").exists())
+
+    def test_duplicate_case_id(self):
+        outcomes = [
+            build_actual_outcome(
+                case_id="dup_001",
+                decision="allow",
+                boundary_family="none",
+                reasons=[],
+                audit_required=False,
+                human_approval_required=False
+            ),
+            build_actual_outcome(
+                case_id="dup_001",
+                decision="block",
+                boundary_family="privacy",
+                reasons=["leak"],
+                audit_required=True,
+                human_approval_required=False
+            )
+        ]
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaises(ValueError):
+                write_actual_outcomes(outcomes, tmpdir)
+
+if __name__ == '__main__':
+    unittest.main()

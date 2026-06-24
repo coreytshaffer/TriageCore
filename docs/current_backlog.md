@@ -2,7 +2,7 @@
 
 ## Status
 
-This document summarizes the active TriageCore backlog after CR-076.
+This document summarizes the active TriageCore backlog after CR-077.
 
 ## Active GitHub Backlog
 
@@ -16,8 +16,8 @@ This document summarizes the active TriageCore backlog after CR-076.
 ## Candidate Future Work
 
 - Empirical AI safety evaluation track
-  - Source: CR-076 research framing doc
-  - Status: research question and threat model documented; fixture dataset, evaluator CLI, adversarial tests, toy audit tampering eval, behavioral route diffing, and technical report remain future slices
+  - Source: CR-076 and CR-077 research framing/eval taxonomy docs
+  - Status: research question, threat model, eval taxonomy, fixture schema, toy boundary fixtures, and **TC-EVAL-001 (Export Actual Outcome Contract Files)** documented; fixture validator tests, evaluator CLI, adversarial tests, toy audit tampering eval, behavioral route diffing, and technical report remain future slices
   - Purpose: make TriageCore legible as a reproducible local-first AI control and evaluation harness for testing privacy, routing, identity, provenance, audit, and human-approval boundaries under controlled adversarial pressure.
 
 - Operator UX implementation path
@@ -112,6 +112,8 @@ Keep three work lanes distinct:
 The next feature-sized slice can be a runtime model-manifest enforcement
 preview, but it should not collapse policy, artifact shape, manifest validation,
 and backend probing into one change.
+
+For the empirical AI safety evaluation track, keep the next slices sequential: fixture validation first, evaluator CLI second, and broader adversarial/tampering studies only after the fixture contract is stable.
 
 For external runtime interoperability, the next approved slice should be policy tests or execution-path validation for the bounded adapter path.
 
