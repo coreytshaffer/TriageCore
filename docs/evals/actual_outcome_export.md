@@ -32,6 +32,14 @@ Required fields:
 
 Extra fields may be present for diagnostics but are not required for scoring.
 
+## Diagnostic details
+
+* `reasons` are stable eval-facing reason codes.
+* `diagnostic_details` are optional raw explanatory details.
+* diagnostic details are not scored as primary oracle reasons.
+* scoring remains external to TriageCore.
+
+The privacy smoke currently performs narrow normalization from scanner diagnostics to stable reason codes.
 ## Where Files Are Exported
 
 When running evaluation smoke tests or full evaluations, the generated files should be written to a dedicated directory. Examples:

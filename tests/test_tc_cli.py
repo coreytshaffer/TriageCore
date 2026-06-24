@@ -135,3 +135,4 @@ def test_tc_eval_export_privacy_smoke(tmp_path):
     assert data["reasons"] == ["ssn_pattern_detected", "metadata_privacy_conflict"]
     assert data["audit_required"] is True
     assert data["human_approval_required"] is False
+    assert data["diagnostic_details"] == ["Detected possible SSN pattern in packet content; metadata contains_pii=False."]
