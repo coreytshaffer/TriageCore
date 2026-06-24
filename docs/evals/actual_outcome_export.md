@@ -46,6 +46,21 @@ You can write a dummy contract-shaped actual outcome file to verify the pipeline
 python -m triage_core.tc_cli eval export-smoke --output-dir .triagecore/eval_actuals/smoke
 ```
 
+## Real decision export path
+
+`TC-EVAL-001` added the pure contract writer, and `TC-EVAL-002` added the smoke export.
+`TC-EVAL-003` maps one real internal TriageCore decision path (`triage_core.privacy_scanner.PrivacyReport`) to the actual-outcome contract. Scoring still happens only in the independent eval-suite repo.
+
+When privacy checks fail, they are projected as `audit_required=True`. This does not define a new runtime policy; it only maps the existing `PrivacyReport` result into the external actual-outcome contract.
+
+## Privacy scanner actual export
+
+This path runs TriageCore’s privacy scanner on a deterministic smoke input and exports actual behavior evidence. It does not score the result. Scoring is performed externally from the eval-suite repo.
+
+```powershell
+python -m triage_core.tc_cli eval export-privacy-smoke --output-dir .triagecore/eval_actuals/privacy_smoke
+```
+
 ## How to Score
 
 To score these outcomes, you must use the independent eval-suite repository (`agent-control-evals`). Do not score them within TriageCore.
@@ -53,7 +68,11 @@ To score these outcomes, you must use the independent eval-suite repository (`ag
 Run the following command **from the `agent-control-evals` repository**, pointing to the exported actuals directory:
 
 ```powershell
-python -m evals.runner --actuals ../triagecore/actuals/triagecore_smoke/ --output reports/triagecore_smoke.jsonl
+# For the mock smoke export
+python -m evals.runner --actuals <path-to-triagecore-actuals> --output reports/triagecore_smoke.jsonl
+
+# For the privacy scanner actual export
+python -m evals.runner --actuals <path-to-triagecore-privacy-actuals> --output reports/triagecore_privacy_smoke.jsonl
 ```
 
 The eval kit will consume the static JSON files, score them against expected outcomes, and produce a definitive JSONL evidence report.

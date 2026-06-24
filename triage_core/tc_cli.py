@@ -998,8 +998,34 @@ def tc_eval_export_smoke(output_dir: str) -> None:
         human_approval_required=False,
     )
 
+    import os
+    os.makedirs(output_dir, exist_ok=True)
     file_path = write_actual_outcome(outcome, output_dir)
     print(f"Success: Wrote eval export-smoke contract file to {file_path}")
+
+def tc_eval_export_privacy_smoke(output_dir: str) -> None:
+    from triage_core.task_packet import TaskPacket, PrivacyMetadata
+    from triage_core.privacy_scanner import scan_task_packet
+    from triage_core.eval_outcome_contract import project_privacy_report_to_actual_outcome, write_actual_outcome
+
+    packet = TaskPacket(
+        prompt="Process this record.",
+        data="The ID is 123-45-6789.",
+        privacy_metadata=PrivacyMetadata(contains_pii=False)
+    )
+
+    report = scan_task_packet(packet)
+
+    outcome = project_privacy_report_to_actual_outcome(
+        case_id="privacy_leak_attempt_001",
+        report=report
+    )
+
+    import os
+    os.makedirs(output_dir, exist_ok=True)
+    file_path = write_actual_outcome(outcome, output_dir)
+    print(f"Success: Wrote eval export-privacy-smoke contract file to {file_path}")
+
 
 def main():
     parser = argparse.ArgumentParser(description="TriageCore Operator Workflow")
@@ -1218,6 +1244,17 @@ def main():
         help="Directory to write the actual outcome JSON file",
     )
 
+    eval_export_privacy_smoke_parser = eval_subparsers.add_parser(
+        "export-privacy-smoke",
+        help="Write a deterministic actual outcome JSON file from the privacy scanner",
+    )
+    eval_export_privacy_smoke_parser.add_argument(
+        "--output-dir",
+        required=True,
+        type=str,
+        help="Directory to write the actual outcome JSON file",
+    )
+
     args = parser.parse_args()
 
     if args.command == "propose":
@@ -1304,8 +1341,10 @@ def main():
     elif args.command == "eval":
         if args.eval_command == "export-smoke":
             tc_eval_export_smoke(args.output_dir)
+        elif args.eval_command == "export-privacy-smoke":
+            tc_eval_export_privacy_smoke(args.output_dir)
         else:
-            eval_parser.error("eval requires a subcommand: export-smoke")
+            eval_parser.error("eval requires a subcommand: export-smoke or export-privacy-smoke")
     else:
         parser.print_help()
 

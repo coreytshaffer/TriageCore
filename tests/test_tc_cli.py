@@ -102,3 +102,36 @@ def test_tc_eval_export_smoke(tmp_path):
     assert data["reasons"] == ["persistent_artifact_contains_sensitive_content"]
     assert data["audit_required"] is True
     assert data["human_approval_required"] is False
+
+def test_tc_eval_export_privacy_smoke(tmp_path):
+    from triage_core.tc_cli import tc_eval_export_privacy_smoke
+    from triage_core.task_packet import TaskPacket, PrivacyMetadata
+    from triage_core.privacy_scanner import scan_task_packet
+    import json
+
+    # 1. Verify the scanner actually fails on the exact deterministic input
+    packet = TaskPacket(
+        prompt="Process this record.",
+        data="The ID is 123-45-6789.",
+        privacy_metadata=PrivacyMetadata(contains_pii=False)
+    )
+    report = scan_task_packet(packet)
+    assert report.passed is False
+
+    # 2. Run the export command
+    output_dir = tmp_path / "privacy_smoke_actuals"
+    tc_eval_export_privacy_smoke(str(output_dir))
+
+    # 3. Verify the generated JSON output
+    expected_file = output_dir / "privacy_leak_attempt_001.json"
+    assert expected_file.exists()
+
+    with open(expected_file, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    assert data["case_id"] == "privacy_leak_attempt_001"
+    assert data["decision"] == "block"
+    assert data["boundary_family"] == "privacy"
+    assert "SSN pattern" in data["reasons"][0]
+    assert data["audit_required"] is True
+    assert data["human_approval_required"] is False

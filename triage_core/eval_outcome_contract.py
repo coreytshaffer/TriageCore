@@ -3,6 +3,8 @@ import re
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Union
 
+from triage_core.privacy_scanner import PrivacyReport
+
 def build_actual_outcome(
     *,
     case_id: str,
@@ -97,3 +99,22 @@ def write_actual_outcomes(
         paths.append(write_actual_outcome(outcome, output_dir))
         
     return paths
+
+def project_privacy_report_to_actual_outcome(
+    case_id: str,
+    report: PrivacyReport,
+) -> Dict[str, Any]:
+    """
+    Projects a TriageCore PrivacyReport into the standard actual outcome contract.
+    For privacy report export, failed privacy checks are projected as audit_required=True.
+    This does not define a new runtime policy; it only maps the existing PrivacyReport
+    result into the external actual-outcome contract.
+    """
+    return build_actual_outcome(
+        case_id=case_id,
+        decision="allow" if report.passed else "block",
+        boundary_family="privacy",
+        reasons=report.violations if not report.passed else [],
+        audit_required=not report.passed,
+        human_approval_required=False,
+    )

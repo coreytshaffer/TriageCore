@@ -7,8 +7,10 @@ from pathlib import Path
 from triage_core.eval_outcome_contract import (
     build_actual_outcome,
     write_actual_outcome,
-    write_actual_outcomes
+    write_actual_outcomes,
+    project_privacy_report_to_actual_outcome
 )
+from triage_core.privacy_scanner import PrivacyReport
 
 class TestEvalOutcomeContract(unittest.TestCase):
     def test_build_valid_outcome(self):
@@ -146,6 +148,33 @@ class TestEvalOutcomeContract(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             with self.assertRaises(ValueError):
                 write_actual_outcomes(outcomes, tmpdir)
+
+class TestPrivacyReportProjection(unittest.TestCase):
+    def test_project_passed_report(self):
+        report = PrivacyReport(passed=True, violations=[], detections=["Some detection"])
+        outcome = project_privacy_report_to_actual_outcome(
+            case_id="test_pass_001",
+            report=report
+        )
+        self.assertEqual(outcome["decision"], "allow")
+        self.assertEqual(outcome["boundary_family"], "privacy")
+        self.assertEqual(outcome["reasons"], [])
+        self.assertFalse(outcome["audit_required"])
+
+    def test_project_failed_report(self):
+        report = PrivacyReport(
+            passed=False,
+            violations=["SSN detected", "Email detected"],
+            detections=[]
+        )
+        outcome = project_privacy_report_to_actual_outcome(
+            case_id="test_fail_001",
+            report=report
+        )
+        self.assertEqual(outcome["decision"], "block")
+        self.assertEqual(outcome["boundary_family"], "privacy")
+        self.assertEqual(outcome["reasons"], ["SSN detected", "Email detected"])
+        self.assertTrue(outcome["audit_required"])
 
 if __name__ == '__main__':
     unittest.main()
