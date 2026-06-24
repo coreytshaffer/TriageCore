@@ -17,7 +17,7 @@ This document summarizes the active TriageCore backlog after CR-077.
 
 - Empirical AI safety evaluation track
   - Source: CR-076 and CR-077 research framing/eval taxonomy docs
-  - Status: research question, threat model, eval taxonomy, fixture schema, toy boundary fixtures, **TC-EVAL-001 (Export Actual Outcome Contract Files)**, **TC-EVAL-002 (Actual Outcome Export CLI Smoke)**, **[x] TC-EVAL-003 (Map One Real Internal Decision Path Into the Export Contract)**, and **[x] TC-EVAL-004 (Export One Real Privacy Scanner Actual)** documented; fixture validator tests, evaluator CLI, adversarial tests, toy audit tampering eval, behavioral route diffing, and technical report remain future slices
+  - Status: research question, threat model, eval taxonomy, fixture schema, toy boundary fixtures, **TC-EVAL-001 (Export Actual Outcome Contract Files)**, **TC-EVAL-002 (Actual Outcome Export CLI Smoke)**, **[x] TC-EVAL-003 (Map One Real Internal Decision Path Into the Export Contract)**, **[x] TC-EVAL-004 (Export One Real Privacy Scanner Actual)**, **[x] TC-EVAL-005 / 006 / 007 (Privacy Reason Normalization)** documented; fixture validator tests, evaluator CLI, adversarial tests, toy audit tampering eval, behavioral route diffing, **TC-EVAL-008 (Structured Privacy Scanner Finding Codes)** and technical report remain future slices
   - Purpose: make TriageCore legible as a reproducible local-first AI control and evaluation harness for testing privacy, routing, identity, provenance, audit, and human-approval boundaries under controlled adversarial pressure.
 
 - Operator UX implementation path
