@@ -201,7 +201,7 @@ class TestPrivacyReportProjection(unittest.TestCase):
     def test_project_failed_report(self):
         report = PrivacyReport(
             passed=False,
-            violations=["SSN detected", "Email detected"],
+            violations=["Unknown violation A", "Unknown violation B"],
             detections=[]
         )
         outcome = project_privacy_report_to_actual_outcome(
@@ -210,9 +210,9 @@ class TestPrivacyReportProjection(unittest.TestCase):
         )
         self.assertEqual(outcome["decision"], "block")
         self.assertEqual(outcome["boundary_family"], "privacy")
-        self.assertEqual(outcome["reasons"], ["SSN detected", "Email detected"])
+        self.assertEqual(outcome["reasons"], ["privacy_check_failed"])
         self.assertTrue(outcome["audit_required"])
-        self.assertEqual(outcome["diagnostic_details"], ["SSN detected", "Email detected"])
+        self.assertEqual(outcome["diagnostic_details"], ["Unknown violation A", "Unknown violation B"])
 
     def test_project_failed_report_with_ssn_pattern(self):
         report = PrivacyReport(
@@ -225,8 +225,30 @@ class TestPrivacyReportProjection(unittest.TestCase):
             report=report
         )
         self.assertEqual(outcome["decision"], "block")
-        self.assertEqual(outcome["reasons"], ["ssn_pattern_detected", "metadata_privacy_conflict"])
+        self.assertEqual(outcome["reasons"], ["metadata_privacy_conflict", "ssn_pattern_detected"])
         self.assertEqual(outcome["diagnostic_details"], ["Detected possible SSN pattern in packet content; metadata contains_pii=False."])
+
+    def test_project_failed_report_deduplicates_and_sorts(self):
+        report = PrivacyReport(
+            passed=False,
+            violations=[
+                "Detected possible SSN pattern in packet content; metadata contains_pii=False.",
+                "Detected possible SSN pattern in packet content; metadata contains_pii=False.",
+                "Unknown violation A"
+            ],
+            detections=[]
+        )
+        outcome = project_privacy_report_to_actual_outcome(
+            case_id="test_fail_003",
+            report=report
+        )
+        self.assertEqual(outcome["decision"], "block")
+        self.assertEqual(outcome["reasons"], ["metadata_privacy_conflict", "privacy_check_failed", "ssn_pattern_detected"])
+        self.assertEqual(outcome["diagnostic_details"], [
+            "Detected possible SSN pattern in packet content; metadata contains_pii=False.",
+            "Detected possible SSN pattern in packet content; metadata contains_pii=False.",
+            "Unknown violation A"
+        ])
 
 if __name__ == '__main__':
     unittest.main()

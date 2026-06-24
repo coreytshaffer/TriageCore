@@ -113,6 +113,21 @@ def write_actual_outcomes(
         
     return paths
 
+def normalize_privacy_reasons(violations: Iterable[str]) -> List[str]:
+    """
+    Normalizes raw privacy scanner violations into stable eval-facing reason codes.
+    This exact-string mapping is transitional until PrivacyReport exposes structured signals.
+    """
+    reasons_set = set()
+    for v in violations:
+        if v == "Detected possible SSN pattern in packet content; metadata contains_pii=False.":
+            reasons_set.add("ssn_pattern_detected")
+            reasons_set.add("metadata_privacy_conflict")
+        else:
+            reasons_set.add("privacy_check_failed")
+
+    return sorted(list(reasons_set))
+
 def project_privacy_report_to_actual_outcome(
     case_id: str,
     report: PrivacyReport,
@@ -126,12 +141,8 @@ def project_privacy_report_to_actual_outcome(
     reasons = []
     diagnostic_details = []
     if not report.passed:
-        for v in report.violations:
-            diagnostic_details.append(v)
-            if v == "Detected possible SSN pattern in packet content; metadata contains_pii=False.":
-                reasons.extend(["ssn_pattern_detected", "metadata_privacy_conflict"])
-            else:
-                reasons.append(v)
+        diagnostic_details = list(report.violations)
+        reasons = normalize_privacy_reasons(report.violations)
 
     return build_actual_outcome(
         case_id=case_id,
