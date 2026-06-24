@@ -1,7 +1,7 @@
 import json
 import re
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Union
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Union
 
 from triage_core.privacy_scanner import PrivacyReport
 
@@ -13,6 +13,7 @@ def build_actual_outcome(
     reasons: Iterable[str],
     audit_required: bool,
     human_approval_required: bool,
+    diagnostic_details: Optional[Iterable[str]] = None,
 ) -> Dict[str, Any]:
     """
     Builds a dictionary representing an actual evaluation outcome that conforms
@@ -44,7 +45,7 @@ def build_actual_outcome(
     if not isinstance(human_approval_required, bool):
         raise ValueError("human_approval_required must be a boolean.")
 
-    return {
+    outcome = {
         "case_id": case_id,
         "decision": decision,
         "boundary_family": boundary_family,
@@ -52,6 +53,18 @@ def build_actual_outcome(
         "audit_required": audit_required,
         "human_approval_required": human_approval_required
     }
+
+    if diagnostic_details is not None:
+        if not isinstance(diagnostic_details, Iterable) or isinstance(diagnostic_details, str):
+            raise ValueError("diagnostic_details must be a non-string iterable of strings.")
+        dd_list = list(diagnostic_details)
+        for dd in dd_list:
+            if not isinstance(dd, str):
+                raise ValueError("All diagnostic_details must be strings.")
+        if dd_list:
+            outcome["diagnostic_details"] = dd_list
+
+    return outcome
 
 def write_actual_outcome(
     outcome: Mapping[str, Any],
@@ -111,8 +124,10 @@ def project_privacy_report_to_actual_outcome(
     result into the external actual-outcome contract.
     """
     reasons = []
+    diagnostic_details = []
     if not report.passed:
         for v in report.violations:
+            diagnostic_details.append(v)
             if v == "Detected possible SSN pattern in packet content; metadata contains_pii=False.":
                 reasons.extend(["ssn_pattern_detected", "metadata_privacy_conflict"])
             else:
@@ -125,4 +140,5 @@ def project_privacy_report_to_actual_outcome(
         reasons=reasons,
         audit_required=not report.passed,
         human_approval_required=False,
+        diagnostic_details=diagnostic_details if diagnostic_details else None,
     )
