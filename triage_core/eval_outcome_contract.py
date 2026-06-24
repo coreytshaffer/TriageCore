@@ -110,11 +110,19 @@ def project_privacy_report_to_actual_outcome(
     This does not define a new runtime policy; it only maps the existing PrivacyReport
     result into the external actual-outcome contract.
     """
+    reasons = []
+    if not report.passed:
+        for v in report.violations:
+            if v == "Detected possible SSN pattern in packet content; metadata contains_pii=False.":
+                reasons.extend(["ssn_pattern_detected", "metadata_privacy_conflict"])
+            else:
+                reasons.append(v)
+
     return build_actual_outcome(
         case_id=case_id,
         decision="allow" if report.passed else "block",
         boundary_family="privacy",
-        reasons=report.violations if not report.passed else [],
+        reasons=reasons,
         audit_required=not report.passed,
         human_approval_required=False,
     )

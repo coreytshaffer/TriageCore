@@ -1003,7 +1003,7 @@ def tc_eval_export_smoke(output_dir: str) -> None:
     file_path = write_actual_outcome(outcome, output_dir)
     print(f"Success: Wrote eval export-smoke contract file to {file_path}")
 
-def tc_eval_export_privacy_smoke(output_dir: str) -> None:
+def tc_eval_export_privacy_smoke(output_dir: str, case_id: str) -> None:
     from triage_core.task_packet import TaskPacket, PrivacyMetadata
     from triage_core.privacy_scanner import scan_task_packet
     from triage_core.eval_outcome_contract import project_privacy_report_to_actual_outcome, write_actual_outcome
@@ -1017,7 +1017,7 @@ def tc_eval_export_privacy_smoke(output_dir: str) -> None:
     report = scan_task_packet(packet)
 
     outcome = project_privacy_report_to_actual_outcome(
-        case_id="privacy_leak_attempt_001",
+        case_id=case_id,
         report=report
     )
 
@@ -1254,6 +1254,12 @@ def main():
         type=str,
         help="Directory to write the actual outcome JSON file",
     )
+    eval_export_privacy_smoke_parser.add_argument(
+        "--case-id",
+        required=True,
+        type=str,
+        help="The case_id to use in the actual outcome JSON file",
+    )
 
     args = parser.parse_args()
 
@@ -1342,7 +1348,7 @@ def main():
         if args.eval_command == "export-smoke":
             tc_eval_export_smoke(args.output_dir)
         elif args.eval_command == "export-privacy-smoke":
-            tc_eval_export_privacy_smoke(args.output_dir)
+            tc_eval_export_privacy_smoke(args.output_dir, args.case_id)
         else:
             eval_parser.error("eval requires a subcommand: export-smoke or export-privacy-smoke")
     else:
