@@ -1,0 +1,9 @@
+SSN_PATTERN_DETECTED = "ssn_pattern_detected"
+METADATA_PRIVACY_CONFLICT = "metadata_privacy_conflict"
+PRIVACY_CHECK_FAILED = "privacy_check_failed"
+
+KNOWN_PRIVACY_FINDING_CODES = frozenset({
+    SSN_PATTERN_DETECTED,
+    METADATA_PRIVACY_CONFLICT,
+    PRIVACY_CHECK_FAILED,
+})
