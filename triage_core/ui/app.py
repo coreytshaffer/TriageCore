@@ -2539,9 +2539,18 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         _SectionLabel(card, "Review Queue").grid(
             row=0, column=0, padx=16, pady=(12, 4), sticky="w"
         )
+
+        self._review_queue_summary_lbl = ctk.CTkLabel(
+            card,
+            text="Status: checking…",
+            text_color="gray",
+            font=ctk.CTkFont(size=12),
+            anchor="w",
+        )
+        self._review_queue_summary_lbl.grid(row=1, column=0, padx=16, pady=(0, 6), sticky="w")
         
         self._review_list_frame = ctk.CTkFrame(card, fg_color="transparent")
-        self._review_list_frame.grid(row=1, column=0, padx=16, pady=(0, 12), sticky="ew")
+        self._review_list_frame.grid(row=2, column=0, padx=16, pady=(0, 12), sticky="ew")
         self._review_list_frame.grid_columnconfigure(0, weight=1)
 
     def _refresh_review_queue_panel(self):
@@ -2551,6 +2560,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             w.destroy()
 
         if not _TD_ADAPTER_AVAILABLE or _td_adapter is None:
+            self._review_queue_summary_lbl.configure(text="Status: unavailable")
             ctk.CTkLabel(
                 self._review_list_frame, text="Adapter unavailable. Cannot fetch reviews.",
                 text_color="gray", font=ctk.CTkFont(size=12)
@@ -2561,6 +2571,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             rq = _td_adapter.get_review_queue_snapshot()
             pending = rq.pending_tasks
         except Exception as e:
+            self._review_queue_summary_lbl.configure(text="Status: error")
             ctk.CTkLabel(
                 self._review_list_frame, text=f"Error fetching reviews: {e}",
                 text_color="#ef4444", font=ctk.CTkFont(size=12)
@@ -2568,13 +2579,20 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             return
 
         if not pending:
+            self._review_queue_summary_lbl.configure(
+                text="Status: available · 0 pending reviews detected"
+            )
             ctk.CTkLabel(
                 self._review_list_frame, text="Queue empty. No pending reviews.",
                 text_color="gray", font=ctk.CTkFont(size=12)
             ).pack(anchor="w", pady=4)
             return
 
-        for idx, task in enumerate(pending):
+        self._review_queue_summary_lbl.configure(
+            text=f"Status: available · {len(pending)} pending review(s) detected"
+        )
+
+        for idx, task in enumerate(pending[:100]):
             row = ctk.CTkFrame(self._review_list_frame, corner_radius=6, fg_color=("gray85", "gray22"))
             row.pack(fill="x", pady=2)
             
