@@ -191,11 +191,11 @@ That demo is designed to support:
 - Clear Lake Watch or other environmental edge workflows as a future extension
 
 ### 1. The TriageDesk GUI
-Launch the local control plane GUI to actively manage tasks, monitor telemetry, and interact with the local LLM engine:
+Launch the local control plane GUI to actively review tasks, monitor telemetry, and perform context planning:
 ```bash
 triagecore desk
 ```
-- **Live Local Engine:** Hooks directly into Ollama or LM Studio to stream generated code right into the UI.
+- **Read-Only Operator Console (Baseline Tag: `triagedesk-daily-driver-baseline-2026-06-25`):** The GUI acts strictly as a read-only telemetry and context-planning tool. To ensure the UI does not become a hidden execution surface, it relies exclusively on `triagedesk_adapter.py` and performs zero LLM calls, file writes, or ledger mutations directly.
 - **Energy-Aware Routing:** `psutil` integration actively monitors your battery life. If your battery dips below 20% while unplugged, TriageCore refuses to run heavy LLM tasks and prompts you to plug in (Permacomputing in action).
 - **Telemetry & Resource Accounting:** Tracks measured or heuristic resource estimates for energy consumption (kWh/Joules) and carbon emissions (gCO2e) in a local append-only ledger (`.triagecore/ledger.jsonl`).
 - **Local-First Benefit Signals:** The dashboard foregrounds accepted yield, local-first routing share, accepted local work, and review-light tasks so the bench encourages continued evidence collection while formal reports remain baseline-bound.
