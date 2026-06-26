@@ -22,6 +22,7 @@ except ImportError:
         CTkButton = MockBase
         CTkTextbox = MockBase
         CTkEntry = MockBase
+        CTkOptionMenu = MockBase
         CTkScrollableFrame = MockBase
         CTkCanvas = MockBase
         CTkFont = MockBase
@@ -51,6 +52,7 @@ from ..task_ledger import TaskLedger
 from ..classifier import DangerDetector, TaskClassifier
 from ..sustainability import SustainabilityEstimator, PowerMonitor
 from ..context_budget import create_context_pack_artifact
+from .. import token_budget
 
 try:
     from .. import triagedesk_adapter as _td_adapter
@@ -1050,6 +1052,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
 
         self._build_sidebar()
         self._build_dispatch_frame()
+        self._build_planner_frame()
         self._build_ledger_frame()
         self._build_telemetry_frame()
         self._build_status_panel()
@@ -1101,6 +1104,19 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         btn_dash.grid(row=2, column=0, padx=12, pady=4, sticky="ew")
         self._nav_btns["dashboard"] = btn_dash
 
+        # Context Planner
+        btn_planner = ctk.CTkButton(
+            sb,
+            text="Context Planner",
+            anchor="w",
+            command=lambda: self.select_frame("planner"),
+            fg_color="transparent",
+            text_color=("gray10", "gray90"),
+            hover_color=("gray70", "gray30"),
+        )
+        btn_planner.grid(row=3, column=0, padx=12, pady=4, sticky="ew")
+        self._nav_btns["planner"] = btn_planner
+
         # Task Ledger
         btn_ledger = ctk.CTkButton(
             sb,
@@ -1111,7 +1127,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             text_color=("gray10", "gray90"),
             hover_color=("gray70", "gray30"),
         )
-        btn_ledger.grid(row=3, column=0, padx=12, pady=4, sticky="ew")
+        btn_ledger.grid(row=4, column=0, padx=12, pady=4, sticky="ew")
         self._nav_btns["ledger"] = btn_ledger
 
         # Link to Log Repository under the Task Ledger button
@@ -1125,7 +1141,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             hover_color=("gray70", "gray30"),
             font=ctk.CTkFont(size=11, underline=True),
         )
-        self.link_log.grid(row=4, column=0, padx=12, pady=(0, 4), sticky="ew")
+        self.link_log.grid(row=5, column=0, padx=12, pady=(0, 4), sticky="ew")
 
         # System Logs
         btn_logs = ctk.CTkButton(
@@ -1137,7 +1153,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             text_color=("gray10", "gray90"),
             hover_color=("gray70", "gray30"),
         )
-        btn_logs.grid(row=5, column=0, padx=12, pady=4, sticky="ew")
+        btn_logs.grid(row=6, column=0, padx=12, pady=4, sticky="ew")
         self._nav_btns["logs"] = btn_logs
 
         # Council Rules
@@ -1150,7 +1166,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             text_color=("gray10", "gray90"),
             hover_color=("gray70", "gray30"),
         )
-        btn_rules.grid(row=6, column=0, padx=12, pady=4, sticky="ew")
+        btn_rules.grid(row=7, column=0, padx=12, pady=4, sticky="ew")
         self._nav_btns["rules"] = btn_rules
 
         for btn in [btn_dash, btn_ledger, self.link_log, btn_logs, btn_rules]:
@@ -1517,6 +1533,104 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         self._result_metrics.grid()
 
     # ─── Ledger Frame ─────────────────────────────────────────────────────────
+    def _build_planner_frame(self):
+        f = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
+        f.grid_columnconfigure(0, weight=1)
+        f.grid_rowconfigure(6, weight=1)
+        self.planner_frame = f
+
+        ctk.CTkLabel(
+            f, text="Context Planner", font=ctk.CTkFont(size=22, weight="bold")
+        ).grid(row=0, column=0, padx=24, pady=(20, 4), sticky="w")
+
+        ctk.CTkLabel(
+            f, text="Dry-run resource planning for target files.", text_color="gray", font=ctk.CTkFont(size=12)
+        ).grid(row=1, column=0, padx=24, pady=(0, 16), sticky="w")
+
+        # Input file
+        ctk.CTkLabel(f, text="Input file:", font=ctk.CTkFont(size=12, weight="bold")).grid(row=2, column=0, padx=24, sticky="w")
+        self._planner_file_entry = ctk.CTkEntry(f, placeholder_text="e.g. triage_core/tc_cli.py")
+        self._planner_file_entry.grid(row=3, column=0, padx=24, pady=(4, 16), sticky="ew")
+
+        # Model profile
+        ctk.CTkLabel(f, text="Model profile:", font=ctk.CTkFont(size=12, weight="bold")).grid(row=4, column=0, padx=24, sticky="w")
+
+        # Read available profiles
+        profiles = list(token_budget.MODEL_PROFILES.keys()) if hasattr(token_budget, 'MODEL_PROFILES') else ["generic-8k", "generic-32k"]
+        self._planner_model_var = ctk.StringVar(value=profiles[0])
+        self._planner_model_menu = ctk.CTkOptionMenu(f, values=profiles, variable=self._planner_model_var)
+        self._planner_model_menu.grid(row=5, column=0, padx=24, pady=(4, 24), sticky="w")
+
+        # Button
+        self._planner_btn = ctk.CTkButton(
+            f, text="Run Dry-Run Plan", font=ctk.CTkFont(size=13, weight="bold"),
+            command=self._run_context_plan, fg_color="#1e3a8a", hover_color="#1e40af"
+        )
+        self._planner_btn.grid(row=6, column=0, padx=24, pady=(0, 24), sticky="w")
+
+        # Results area
+        res_card = ctk.CTkFrame(f, corner_radius=8, fg_color=("gray85", "gray17"))
+        res_card.grid(row=7, column=0, padx=24, pady=(0, 24), sticky="nsew")
+        res_card.grid_columnconfigure(1, weight=1)
+
+        _SectionLabel(res_card, "Results").grid(row=0, column=0, columnspan=2, padx=16, pady=(12, 12), sticky="w")
+
+        self._planner_res_tokens = ctk.CTkLabel(res_card, text="—", font=ctk.CTkFont(size=13, weight="bold"))
+        self._planner_res_budget = ctk.CTkLabel(res_card, text="—", font=ctk.CTkFont(size=13, weight="bold"))
+        self._planner_res_status = ctk.CTkLabel(res_card, text="—", font=ctk.CTkFont(size=13, weight="bold"))
+        self._planner_res_action = ctk.CTkLabel(res_card, text="—", font=ctk.CTkFont(size=13, weight="bold"))
+
+        labels = ["Estimated input tokens:", "Usable budget:", "Status:", "Recommended action:"]
+        vals = [self._planner_res_tokens, self._planner_res_budget, self._planner_res_status, self._planner_res_action]
+        for i, (lbl, val_widget) in enumerate(zip(labels, vals)):
+            ctk.CTkLabel(res_card, text=lbl, text_color="gray", font=ctk.CTkFont(size=12)).grid(row=i+1, column=0, padx=16, pady=4, sticky="w")
+            val_widget.grid(row=i+1, column=1, padx=16, pady=4, sticky="w")
+
+    def _run_context_plan(self):
+        input_file = self._planner_file_entry.get().strip()
+        model_profile = self._planner_model_var.get()
+
+        if not input_file:
+            self._planner_res_status.configure(text="Error: Missing file path", text_color="#ef4444")
+            return
+
+        if not _TD_ADAPTER_AVAILABLE or _td_adapter is None:
+            self._planner_res_status.configure(text="Error: Adapter unavailable", text_color="#ef4444")
+            return
+
+        self._planner_res_status.configure(text="Planning...", text_color="gray")
+        self.update_idletasks()
+
+        try:
+            snapshot = _td_adapter.plan_context_file(input_file, model_profile)
+            self._planner_res_tokens.configure(text=str(snapshot.estimated_input_tokens), text_color=("gray10", "gray90"))
+            self._planner_res_budget.configure(text=str(snapshot.usable_input_budget), text_color=("gray10", "gray90"))
+
+            # Status colors
+            status_text = snapshot.status
+            status_color = ("gray10", "gray90")
+            if "fits" in status_text.lower():
+                status_color = "#22c55e" # green
+            elif "over budget" in status_text.lower():
+                status_color = "#ef4444" # red
+
+            self._planner_res_status.configure(text=status_text, text_color=status_color)
+
+            # Action (handling if it's a list)
+            action = snapshot.recommended_action
+            if isinstance(action, list):
+                action = " · ".join(action)
+            self._planner_res_action.configure(text=str(action), text_color=("gray10", "gray90"))
+        except FileNotFoundError:
+            self._planner_res_status.configure(text="Error: File not found", text_color="#ef4444")
+            self._planner_res_tokens.configure(text="—")
+            self._planner_res_budget.configure(text="—")
+            self._planner_res_action.configure(text="—")
+        except KeyError:
+            self._planner_res_status.configure(text="Error: Unknown model profile", text_color="#ef4444")
+        except Exception as e:
+            self._planner_res_status.configure(text=f"Error: {e}", text_color="#ef4444")
+
     def _build_ledger_frame(self):
         f = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
         f.grid_columnconfigure(0, weight=1, minsize=350)
@@ -2808,6 +2922,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         if not UI_AVAILABLE:
             return
         self.dispatch_frame.grid_forget()
+        self.planner_frame.grid_forget()
         self.ledger_frame.grid_forget()
         self.telemetry_frame.grid_forget()
         self.logs_frame.grid_forget()
@@ -2830,6 +2945,8 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         elif name == "ledger":
             self.ledger_frame.grid(row=0, column=1, rowspan=2, sticky="nsew")
             self._refresh_ledger()
+        elif name == "planner":
+            self.planner_frame.grid(row=0, column=1, rowspan=2, sticky="nsew")
         elif name == "logs":
             self.logs_frame.grid(row=0, column=1, rowspan=2, sticky="nsew")
             self._refresh_logs()
