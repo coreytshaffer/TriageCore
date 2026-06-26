@@ -23,7 +23,7 @@ from triage_core.model_manifest import (
     validate_model_manifest,
 )
 from triage_core.privacy_invariants import find_forbidden_persistent_fields
-
+import triage_core.diagnostics as diagnostics
 def _find_cr_file(cr_id: str) -> str:
     # search in docs/change/requests/
     pattern = f"docs/change/requests/{cr_id}-*.md"
@@ -86,7 +86,7 @@ def tc_preflight(cr_id: str, files: List[str]):
             # Attempt to instantiate a naive backend or use TriageClient logic
             # For simplicity, we just won't instantiate one here if we don't have a reliable factory,
             # but we can try basic initialization.
-            # However, since testing usually relies on mocking or the environment, we'll try to 
+            # However, since testing usually relies on mocking or the environment, we'll try to
             # instantiate LocalBackend if available.
             from triage_core.client import TriageClient
             client = TriageClient()
@@ -99,7 +99,7 @@ def tc_preflight(cr_id: str, files: List[str]):
 
     # Build markdown
     md = f"# Handoff for {cr_id}\n\n"
-    
+
     if any("Backend unavailable" in w for w in bundle.warnings) or not backend:
         md += "> [!WARNING]\n> [DETERMINISTIC FALLBACK USED] Local LLM compression unavailable.\n\n"
 
@@ -126,7 +126,7 @@ def tc_preflight(cr_id: str, files: List[str]):
 
     handoffs_dir = os.path.join(".triagecore", "handoffs")
     os.makedirs(handoffs_dir, exist_ok=True)
-    
+
     specific_path = os.path.join(handoffs_dir, f"{cr_id}-preflight.md")
     latest_path = os.path.join(handoffs_dir, "latest.md")
 
@@ -140,7 +140,7 @@ def tc_handoff(latest: bool, print_only: bool):
     if not latest:
         print("Only 'tc handoff latest' is currently supported.")
         sys.exit(1)
-        
+
     latest_path = os.path.join(".triagecore", "handoffs", "latest.md")
     if not os.path.exists(latest_path):
         print(f"Error: {latest_path} not found.")
@@ -189,7 +189,7 @@ def tc_audit(kind: str, last: int):
     if not ledger_path.exists():
         print(f"Error: {ledger_path} not found.")
         sys.exit(1)
-        
+
     records = []
     try:
         with ledger_path.open("r", encoding="utf-8") as f:
@@ -207,14 +207,14 @@ def tc_audit(kind: str, last: int):
     except Exception as e:
         print(f"Error reading {ledger_path}: {e}")
         sys.exit(1)
-        
+
     if last > 0:
         records = records[-last:]
-        
+
     if not records:
         print(f"No records found" + (f" for kind '{kind}'" if kind else "") + ".")
         return
-        
+
     for r in records:
         print(f"[{r.get('timestamp', 'unknown')}] Task: {r.get('task_id', 'unknown')} | Type: {r.get('event_type')}")
         payload = r.get("payload", {})
@@ -539,21 +539,21 @@ def tc_propose(cr_id: str, title: str, add_to_changelog: bool):
     if not re.match(r"^CR-\d{3}[A-Z]?$", cr_id):
         print(f"Error: Invalid CR ID format '{cr_id}'. Expected format like CR-003 or CR-004B.")
         sys.exit(1)
-        
+
     slug = _slugify(title)
     if not slug:
         print("Error: Invalid title for slugification.")
         sys.exit(1)
-        
+
     filename = f"docs/change/requests/{cr_id}-{slug}.md"
     if os.path.exists(filename):
         print(f"Error: File '{filename}' already exists. Refusing to overwrite.")
         sys.exit(1)
-        
+
     os.makedirs(os.path.dirname(filename), exist_ok=True)
-    
+
     content = f"# {cr_id}: {title.replace('-', ' ').title()}\n\n## Status\nProposed\n\n## Scope\n\n\n## Implementation Authority\nNot authorized for implementation. This CR must be approved prior to any code changes.\n\n## Description\n\n\n## Acceptance Criteria\n- [ ] \n"
-    
+
     try:
         with open(filename, "w", encoding="utf-8") as f:
             f.write(content)
@@ -561,14 +561,14 @@ def tc_propose(cr_id: str, title: str, add_to_changelog: bool):
     except Exception as e:
         print(f"Error writing to '{filename}': {e}")
         sys.exit(1)
-        
+
     if add_to_changelog:
         cl_path = "docs/change/change_log.md"
         if os.path.exists(cl_path):
             try:
                 with open(cl_path, "r", encoding="utf-8") as f:
                     cl_content = f.read()
-                    
+
                 entry = f"- Proposed {cr_id} ({title.replace('-', ' ').title()}): \n"
                 if cr_id in cl_content:
                     print(f"Notice: Changelog entry for {cr_id} already exists.")
@@ -583,81 +583,138 @@ def tc_propose(cr_id: str, title: str, add_to_changelog: bool):
             except Exception as e:
                 print(f"Error modifying changelog: {e}")
 
+def tc_status():
+    print("TriageCore Status\n")
+
+    # 1. Repo cleanliness
+    git_status = diagnostics.get_git_status()
+    print(f"Repo: {git_status}")
+
+    # 2. Ledger path and writability
+    ledger_path = _ledger_path()
+    try:
+        rel_path = ledger_path.relative_to(Path.cwd())
+    except ValueError:
+        rel_path = ledger_path
+
+    exists, readable, writable = diagnostics.get_ledger_status(str(ledger_path))
+    ledger_str = f"{rel_path}"
+    if not exists:
+        ledger_str += " (does not exist)"
+    elif not writable:
+        ledger_str += " (read-only)"
+
+    ledger_str = ledger_str.replace("\\", "/")
+    print(f"Ledger: {ledger_str}")
+
+    # 3. Last event
+    last_event = diagnostics.get_ledger_last_event_timestamp(str(ledger_path))
+    print(f"Last event: {last_event}")
+
+    # 4. Pending reviews
+    print("Pending reviews: not implemented")
+
+    # 5. Failed validations
+    print("Failed validations: not implemented")
+
+    # 6. Configured backend
+    backend = "unavailable"
+    try:
+        backend = default_config.get_backend_type()
+    except Exception:
+        pass
+    print(f"Configured backend: {backend}")
+
+    # 7. Default policy
+    print("Default policy: human-review-required")
+
 def tc_doctor():
     print("TriageCore Doctor")
-    print("-" * 30)
-    
+    print("=" * 30)
+
+    warnings = 0
+    failures = 0
+
     cwd = os.getcwd()
-    print(f"CWD: {cwd}")
-    
-    repo_root = ""
-    try:
-        repo_root = subprocess.check_output(["git", "rev-parse", "--show-toplevel"], stderr=subprocess.DEVNULL).decode('utf-8').strip()
-        print(f"Git Repo Root: {repo_root}")
-    except Exception:
-        print("Git Repo Root: unavailable")
-        
-    print(f"Python Executable: {sys.executable}")
-    print(f"Python Version: {sys.version.split()[0]}")
-    
+    repo_root = diagnostics.get_git_repo_root()
+    base_dir = diagnostics.get_base_dir()
+
+    print("\nEnvironment")
+    print(f"- CWD: {cwd}")
+    if repo_root:
+        print(f"- Git repo root: {repo_root}")
+    else:
+        print("- Git repo root: unavailable")
+        warnings += 1
+
+    print(f"- Python executable: {sys.executable}")
+    print(f"- Python version: {sys.version.split()[0]}")
+
     try:
         import triage_core
-        print(f"triage_core path: {triage_core.__file__}")
+        print(f"- triage_core import path: {triage_core.__file__}")
     except ImportError:
-        print("triage_core path: unavailable")
-        
-    try:
-        cmd = "where" if sys.platform == "win32" else "which"
-        tc_path = subprocess.check_output([cmd, "tc"], stderr=subprocess.DEVNULL).decode('utf-8').strip().split('\n')[0]
-        if tc_path:
-            print(f"tc path: {tc_path}")
-        else:
-            print("tc path: unavailable")
-    except Exception:
-        print("tc path: unavailable")
-        
-    try:
-        branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], stderr=subprocess.DEVNULL).decode('utf-8').strip()
-        print(f"Git Branch: {branch}")
-    except Exception:
-        print("Git Branch: unavailable")
-        
-    try:
-        status_out = subprocess.check_output(["git", "status", "--porcelain"], stderr=subprocess.DEVNULL).decode('utf-8')
-        status = "dirty" if status_out.strip() else "clean"
-        print(f"Git Status: {status}")
-    except Exception:
-        print("Git Status: unavailable")
-        
-    base_dir = repo_root if repo_root else cwd
-    
+        print("- triage_core import path: unavailable")
+        failures += 1
+
+    tc_path = diagnostics.get_tc_executable_path()
+    print(f"- tc executable path: {tc_path}")
+
+    print("\nRepository")
+    branch = diagnostics.get_git_branch()
+    print(f"- Git branch: {branch}")
+
+    status = diagnostics.get_git_status()
+    print(f"- Git status: {status}")
+    if status == "dirty":
+        warnings += 1
+
+    print("\nLedger")
     ledger_path = os.path.join(base_dir, ".triagecore", "ledger.jsonl")
-    if os.path.exists(ledger_path):
-        print(f"Ledger Path: {ledger_path}")
+    print(f"- Ledger path: {ledger_path}")
+
+    exists, readable, writable = diagnostics.get_ledger_status(ledger_path)
+    if exists:
+        r_str = "yes" if readable else "no"
+        w_str = "yes" if writable else "no"
+        print(f"- Exists/readable/writable: exists (readable: {r_str}, writable: {w_str})")
+        if not readable or not writable:
+            failures += 1
     else:
-        print("Ledger Path: unavailable")
-        
+        print("- Exists/readable/writable: unavailable (does not exist)")
+        warnings += 1
+
+    last_event = diagnostics.get_ledger_last_event_timestamp(ledger_path)
+    print(f"- Last event timestamp: {last_event}")
+
+    print("\nHandoff")
     handoff_path = os.path.join(base_dir, ".triagecore", "handoffs", "latest.md")
     if os.path.exists(handoff_path):
-        print(f"Handoff Latest: {handoff_path}")
+        print(f"- Latest handoff path: {handoff_path}")
     else:
-        print("Handoff Latest: unavailable")
-        
+        print("- Latest handoff path: unavailable")
+
+    print("\nConfig/Test")
     pyproject_path = os.path.join(base_dir, "pyproject.toml")
     if os.path.exists(pyproject_path):
-        print(f"pytest config: {pyproject_path}")
-        try:
-            with open(pyproject_path, "r", encoding="utf-8") as f:
-                content = f.read()
-                if 'norecursedirs = ["scratch"]' in content or "norecursedirs = ['scratch']" in content:
-                    print("Scratch Excluded: yes")
-                else:
-                    print("Scratch Excluded: no")
-        except Exception:
-            print("Scratch Excluded: unavailable")
+        print(f"- pyproject/pytest config path: {pyproject_path}")
     else:
-        print("pytest config: unavailable")
-        print("Scratch Excluded: unavailable")
+        print("- pyproject/pytest config path: unavailable")
+        warnings += 1
+
+    print("\nRuntime Safety")
+    print("- External execution posture: blocked")
+    print("- Human approval posture: human-review-required")
+    print("- Network/tool execution posture: unavailable")
+
+    print("\nResult")
+    if failures > 0:
+        overall = "FAIL"
+    elif warnings > 0:
+        overall = "WARN"
+    else:
+        overall = "OK"
+    print(f"- Overall: {overall}")
 
 def _prompt_required(prompt_text: str) -> str:
     while True:
@@ -730,7 +787,7 @@ def tc_task_envelope_preview() -> None:
 def tc_task_envelope_draft(args: argparse.Namespace) -> None:
     from triage_core.task_envelope import TaskEnvelope, render_task_envelope_markdown, task_envelope_from_mapping
     import json
-    
+
     # Validation
     if args.from_json:
         # Reject mixed usage
@@ -744,12 +801,12 @@ def tc_task_envelope_draft(args: argparse.Namespace) -> None:
         if any(f is not None for f in mixed_flags):
             sys.stderr.write("Error: --from-json cannot be mixed with explicit field flags.\n")
             sys.exit(1)
-            
+
         json_path = os.path.normpath(args.from_json)
         if json_path.endswith(".triagecore/ledger.jsonl") or json_path.endswith(".triagecore\\ledger.jsonl"):
             sys.stderr.write("Error: ledger.jsonl is not allowed as a --from-json fixture source.\n")
             sys.exit(1)
-            
+
         try:
             with open(args.from_json, 'r', encoding='utf-8') as f:
                 payload = json.load(f)
@@ -779,7 +836,7 @@ def tc_task_envelope_draft(args: argparse.Namespace) -> None:
         if missing_flags:
             sys.stderr.write(f"Error: the following arguments are required: {', '.join(missing_flags)}\n")
             sys.exit(1)
-            
+
         envelope = TaskEnvelope(
             task_id=args.task_id,
             title=args.title,
@@ -802,18 +859,18 @@ def tc_task_envelope_draft(args: argparse.Namespace) -> None:
             approval_evidence=args.approval_evidence,
             admission_evidence=args.admission_evidence,
         )
-        
+
     print(render_task_envelope_markdown(envelope), end='')
 
 def tc_task_envelope_validate(args: argparse.Namespace) -> None:
     from triage_core.task_envelope import task_envelope_from_mapping
     import json
-    
+
     json_path = os.path.normpath(args.from_json)
     if json_path.endswith(".triagecore/ledger.jsonl") or json_path.endswith(".triagecore\\ledger.jsonl"):
         sys.stderr.write("Error: ledger.jsonl is not allowed as a --from-json fixture source.\n")
         sys.exit(1)
-        
+
     try:
         with open(args.from_json, 'r', encoding='utf-8') as f:
             payload = json.load(f)
@@ -846,12 +903,12 @@ def _load_admission_evidence_fixture(from_json: str):
 def tc_admission_validate(args: argparse.Namespace) -> None:
     from triage_core.admission import admission_evidence_from_mapping
     import json
-    
+
     json_path = os.path.normpath(args.from_json)
     if json_path.endswith(".triagecore/ledger.jsonl") or json_path.endswith(".triagecore\\ledger.jsonl"):
         sys.stderr.write("Error: ledger.jsonl is not allowed as a --from-json fixture source.\n")
         sys.exit(1)
-        
+
     try:
         with open(args.from_json, 'r', encoding='utf-8') as f:
             payload = json.load(f)
@@ -870,12 +927,12 @@ def tc_admission_validate(args: argparse.Namespace) -> None:
 def tc_admission_render(args: argparse.Namespace) -> None:
     from triage_core.admission import admission_evidence_from_mapping, render_admission_evidence_markdown
     import json
-    
+
     json_path = os.path.normpath(args.from_json)
     if json_path.endswith(".triagecore/ledger.jsonl") or json_path.endswith(".triagecore\\ledger.jsonl"):
         sys.stderr.write("Error: ledger.jsonl is not allowed as a --from-json fixture source.\n")
         sys.exit(1)
-        
+
     try:
         with open(args.from_json, 'r', encoding='utf-8') as f:
             payload = json.load(f)
@@ -1027,6 +1084,78 @@ def tc_eval_export_privacy_smoke(output_dir: str, case_id: str) -> None:
     print(f"Success: Wrote eval export-privacy-smoke contract file to {file_path}")
 
 
+def tc_context_plan(input_path: str, model_profile: str) -> None:
+    import os
+    import sys
+    from triage_core.token_budget import get_token_budget
+    from triage_core.context_planner import plan_context_for_text
+
+    if not os.path.exists(input_path):
+        print(f"Error: Input file not found: {input_path}")
+        sys.exit(1)
+
+    try:
+        budget = get_token_budget(model_profile)
+    except KeyError:
+        print(f"Error: Unknown model profile: {model_profile}")
+        sys.exit(1)
+
+    try:
+        with open(input_path, "r", encoding="utf-8") as f:
+            text = f.read()
+    except UnicodeDecodeError:
+        print(f"Error: Input file appears to be binary or unreadable: {input_path}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error reading {input_path}: {e}")
+        sys.exit(1)
+
+    plan = plan_context_for_text(input_path, text, budget)
+
+    print("Context Plan\n")
+    print(f"Input: {plan.input_path}")
+    print(f"Model: {plan.model_profile}")
+    print(f"Estimated input tokens: {plan.estimated_input_tokens}")
+    print(f"Usable input budget: {plan.usable_input_budget}")
+    print(f"Status: {plan.status}")
+    print("\nRecommended action:")
+    for action in plan.recommended_action.split('\n'):
+        print(f"* {action}")
+
+
+def tc_packet_render(task_path: str, model_profile: str, includes: list[str], output_path: str = None, force: bool = False) -> None:
+    import os
+    import sys
+    from triage_core.token_budget import get_token_budget
+    from triage_core.packet_renderer import render_packet
+
+    try:
+        budget = get_token_budget(model_profile)
+    except KeyError:
+        print(f"Error: Unknown model profile: {model_profile}")
+        sys.exit(1)
+
+    try:
+        res = render_packet(task_path, budget, includes)
+    except Exception as e:
+        print(f"Error rendering packet: {e}")
+        sys.exit(1)
+
+    if output_path:
+        if os.path.exists(output_path) and not force:
+            print(f"Error: Output file '{output_path}' already exists. Use --force to overwrite.")
+            sys.exit(1)
+        try:
+            with open(output_path, "w", encoding="utf-8") as f:
+                f.write(res.content)
+            print(f"Success: Wrote rendered packet to {output_path}")
+        except Exception as e:
+            print(f"Error writing to {output_path}: {e}")
+            sys.exit(1)
+    else:
+        print(res.content)
+
+
 def main():
     parser = argparse.ArgumentParser(description="TriageCore Operator Workflow")
     subparsers = parser.add_subparsers(dest="command")
@@ -1168,7 +1297,7 @@ def main():
         "preview",
         help="Print a sample TaskEnvelope Markdown preview to stdout",
     )
-    
+
     task_envelope_draft_parser = task_envelope_subparsers.add_parser(
         "draft",
         help="Draft a TaskEnvelope from CLI flags or JSON fixture and print Markdown to stdout",
@@ -1261,6 +1390,25 @@ def main():
         help="The case_id to use in the actual outcome JSON file",
     )
 
+    # context
+    context_parser = subparsers.add_parser("context", help="Manage and plan token context")
+    context_subparsers = context_parser.add_subparsers(dest="context_command")
+
+    context_plan_parser = context_subparsers.add_parser("plan", help="Dry-run context planning for an input file")
+    context_plan_parser.add_argument("--input", required=True, help="Path to the input file")
+    context_plan_parser.add_argument("--model", required=True, help="Token budget model profile")
+
+    # packet
+    packet_parser = subparsers.add_parser("packet", help="Manage bounded handoff packets")
+    packet_subparsers = packet_parser.add_subparsers(dest="packet_command")
+
+    packet_render_parser = packet_subparsers.add_parser("render", help="Render a bounded handoff packet for a task")
+    packet_render_parser.add_argument("--task", required=True, help="Path to the task or CR file")
+    packet_render_parser.add_argument("--model", required=True, help="Token budget model profile")
+    packet_render_parser.add_argument("--include", action="append", default=[], help="Path to include in the packet (can be specified multiple times)")
+    packet_render_parser.add_argument("--output", help="Optional path to write the rendered packet")
+    packet_render_parser.add_argument("--force", action="store_true", help="Overwrite the output file if it already exists")
+
     args = parser.parse_args()
 
     if args.command == "propose":
@@ -1299,7 +1447,7 @@ def main():
         else:
             tc_audit(args.kind, args.last)
     elif args.command == "status":
-        print("TriageCore Operator Workflow active.")
+        tc_status()
     elif args.command == "doctor":
         tc_doctor()
     elif args.command == "identity":
@@ -1351,6 +1499,16 @@ def main():
             tc_eval_export_privacy_smoke(args.output_dir, args.case_id)
         else:
             eval_parser.error("eval requires a subcommand: export-smoke or export-privacy-smoke")
+    elif args.command == "context":
+        if args.context_command == "plan":
+            tc_context_plan(args.input, args.model)
+        else:
+            context_parser.error("context requires a subcommand: plan")
+    elif args.command == "packet":
+        if args.packet_command == "render":
+            tc_packet_render(args.task, args.model, args.include, args.output, args.force)
+        else:
+            packet_parser.error("packet requires a subcommand: render")
     else:
         parser.print_help()
 

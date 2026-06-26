@@ -5,6 +5,12 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+- Implemented CR-DD-006 (token-aware packet render dry-run): Added `tc packet render` and `packet_renderer.py` to create bounded, reviewable Markdown handoff packets with integrated TokenBudget planning.
+- Implemented CR-DD-005 (context plan dry-run command): Added `tc context plan` command and `context_planner.py` to conservatively estimate if an input file fits within a TokenBudget.
+- Implemented CR-DD-004 (token budget model): Added `triage_core/token_budget.py` providing deterministic calculations for usable input tokens based on conservative model profiles, reserved output space, and safety margins.
+- Implemented CR-DD-003 (extract diagnostics helpers): Extracted pure diagnostic helper functions into `triage_core/diagnostics.py` to keep `tc_cli.py` focused on routing and command dispatch, paving the way for clean token budget feature slices.
+- Implemented CR-DD-002 (tc doctor polish): Polished the output format of `tc doctor` into grouped sections for better operator readability without altering any core behavior or authority limits.
+- Implemented CR-DD-001 (tc status command): Added a compact daily operator snapshot command to TriageCore.
 - Implemented CR-077 (Safety Boundary Eval Taxonomy and Fixture Schema): Added a docs-first evaluation taxonomy, v0 fixture schema, deterministic starter eval fixtures, and backlog framing for the safety-boundary research track without adding CLI or runtime behavior.
 - Implemented CR-076 (TriageCore Research Framing Doc): Added a docs-only research question, threat model, claims/non-claims, and empirical eval backlog framing for TriageCore as a local-first AI control-plane evaluation harness.
 - Implemented CR-075 (Admission Bundle Manifest Contract): Added a manifest contract doc and focused tests to keep the admission review bundle manifest review-only and non-authoritative.
