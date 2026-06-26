@@ -1,3 +1,16 @@
+"""
+TriageDesk GUI Application
+
+This module provides the read-only operator console for TriageCore.
+To ensure safety and prevent the GUI from becoming a hidden automation surface,
+all data flow follows this strict pattern:
+
+TriageCore modules -> triagedesk_adapter.py -> TriageDesk UI
+
+The GUI relies on `triagedesk_adapter.py` to fetch state and perform dry-runs.
+It does not execute tasks, call LLMs directly, write files, or mutate ledgers.
+"""
+
 try:
     import customtkinter as ctk
 
@@ -1533,7 +1546,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
 
         self._result_metrics.grid()
 
-    # ─── Ledger Frame ─────────────────────────────────────────────────────────
+    # ─── Context Planner Frame ──────────────────────────────────────────────────
     def _build_planner_frame(self):
         f = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
         f.grid_columnconfigure(0, weight=1)
@@ -1745,6 +1758,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         except Exception as e:
             _clear_preview(f"Error: {e}")
 
+    # ─── Ledger Frame ─────────────────────────────────────────────────────────
     def _build_ledger_frame(self):
         f = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
         f.grid_columnconfigure(0, weight=1, minsize=350)

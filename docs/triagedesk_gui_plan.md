@@ -51,3 +51,5 @@ TriageDesk will present five core views, mapped directly to the existing CLI bas
    - Added a dedicated sidebar tab for Context Planner dry-runs. Evaluates token budgets, estimates inputs, and provides recommendations without writing packets. (Completed)
 6. **[x] TD-006: Packet Preview UI integration**
    - Wired up the UI for `packet render` dry-runs within the Context Planner tab, producing safely bounded deterministic outputs visually in a read-only textbox without executing or mutating. (Completed)
+7. **[x] TD-007: TriageDesk GUI consolidation pass**
+   - Performed a clean-up pass to ensure documentation matches the code and UI remains clearly bounded as a read-only console without bloat. (Completed)
