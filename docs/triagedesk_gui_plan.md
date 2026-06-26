@@ -1,0 +1,49 @@
+# TriageDesk GUI Plan (TD-001)
+
+## Purpose
+TriageDesk is designed to be a **calm, read-only operator console** layered over the stable daily-driver baseline capabilities of TriageCore. It provides a safer and more visual way to inspect system state, estimate context budgets, and prepare bounded handoff packets without expanding execution authority or hiding operations from the operator.
+
+## Current Inventory
+- **Existing Surface**: An initial GUI exists at `triage_core/ui/app.py`.
+- **Current Structure**: It is a monolithic ~3,700-line `customtkinter` application containing multiple internal backup artifacts. It directly manages state, renders gauges, tracks sustainability/ledger logs, and serves as a highly coupled `TriageDeskApp`.
+- **Improvement Path**: Do not rewrite or modify `app.py` directly yet. The safest approach is to build an **adapter layer** underneath it (making TriageDesk consume stable Python interfaces rather than scraping strings or reimplementing logic). Once the adapter layer exists, the GUI can be refactored or replaced to wrap the daily-driver CLI logic seamlessly.
+
+## Read-only / Default-Safe Boundaries
+1. **No autonomous execution**: TriageDesk will not execute workflows or external tools independently.
+2. **No hidden approvals**: The GUI will not approve packets; it only prepares and visualizes them.
+3. **No background task mutation**: Operations are deterministic and read-only.
+4. **No network/tool execution**: The GUI strictly interacts with the local ledger and environment.
+5. **Honestly surface uncertainty**: If a field is unavailable or dry-run estimates are uncertain, the GUI must display that clearly.
+
+## Proposed Views and Data Sources
+TriageDesk will present five core views, mapped directly to the existing CLI baseline:
+
+1. **Status View**: 
+   - **Wraps**: `tc status`
+   - **Data Source**: Core ledger and config state.
+2. **Doctor View**: 
+   - **Wraps**: `tc doctor`
+   - **Data Source**: `diagnostics.py` environment checks.
+3. **Review Queue View**: 
+   - **Wraps**: `tc review list`
+   - **Data Source**: `review_queue.py` (read-only listing of pending packets).
+4. **Context Planner View**: 
+   - **Wraps**: `tc context plan`
+   - **Data Source**: `token_budget.py` and `context_planner.py` (dry-run estimating fit against selected model profiles).
+5. **Packet Renderer View**: 
+   - **Wraps**: `tc packet render`
+   - **Data Source**: `packet_renderer.py` (combining a task file, includes, and context planner budget bounds).
+
+## What the GUI Must NOT Do
+- It must not execute models or agents.
+- It must not act as a live workflow controller.
+- It must not bypass human-in-the-loop (HITL) gates.
+- It must not overwrite local configurations or ledgers directly; it only reads them and outputs bounded artifacts (like rendering a packet).
+
+## Implementation Backlog
+1. **TD-002: Add GUI adapter layer with no UI dependency**
+   - Create a pure-Python adapter layer that bridges `TriageDesk` with `diagnostics.py`, `review_queue.py`, `context_planner.py`, `packet_renderer.py`, and `token_budget.py`. Ensure TriageDesk calls these stable functions instead of re-implementing logic.
+2. **TD-003: Read-only Textual shell or CustomTkinter refactor**
+   - Refactor or replace the UI to strictly use the adapter layer to drive the five proposed views.
+3. **TD-004: Context Planner / Packet Renderer UI integration**
+   - Wire up the UI for `context plan` and `packet render` dry-runs, producing safely bounded outputs visually.
