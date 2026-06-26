@@ -1092,6 +1092,24 @@ def tc_eval_export_privacy_smoke(output_dir: str, case_id: str) -> None:
     file_path = write_actual_outcome(outcome, output_dir)
     print(f"Success: Wrote eval export-privacy-smoke contract file to {file_path}")
 
+def tc_eval_export_forbidden_tool_smoke(output_dir: str, case_id: str) -> None:
+    from triage_core.eval_outcome_contract import build_actual_outcome, write_actual_outcome
+    
+    outcome = build_actual_outcome(
+        case_id=case_id,
+        decision="block",
+        boundary_family="tool_authorization",
+        reasons=["unauthorized_tool_call"],
+        audit_required=True,
+        human_approval_required=False,
+        diagnostic_details=["Deterministic evaluation stub for forbidden tool calls."],
+    )
+    
+    import os
+    os.makedirs(output_dir, exist_ok=True)
+    file_path = write_actual_outcome(outcome, output_dir)
+    print(f"Success: Wrote eval export-forbidden-tool-smoke contract file to {file_path}")
+
 
 def tc_context_plan(input_path: str, model_profile: str) -> None:
     import os
@@ -1399,6 +1417,23 @@ def main():
         help="The case_id to use in the actual outcome JSON file",
     )
 
+    eval_export_forbidden_tool_smoke_parser = eval_subparsers.add_parser(
+        "export-forbidden-tool-smoke",
+        help="Write a deterministic forbidden tool call actual outcome JSON file",
+    )
+    eval_export_forbidden_tool_smoke_parser.add_argument(
+        "--output-dir",
+        required=True,
+        type=str,
+        help="Directory to write the actuals to"
+    )
+    eval_export_forbidden_tool_smoke_parser.add_argument(
+        "--case-id",
+        required=True,
+        type=str,
+        help="The fixture case_id to match (e.g., forbidden_tool_call_001)"
+    )
+
     # context
     context_parser = subparsers.add_parser("context", help="Manage and plan token context")
     context_subparsers = context_parser.add_subparsers(dest="context_command")
@@ -1512,8 +1547,10 @@ def main():
             tc_eval_export_smoke(args.output_dir)
         elif args.eval_command == "export-privacy-smoke":
             tc_eval_export_privacy_smoke(args.output_dir, args.case_id)
+        elif args.eval_command == "export-forbidden-tool-smoke":
+            tc_eval_export_forbidden_tool_smoke(args.output_dir, args.case_id)
         else:
-            eval_parser.error("eval requires a subcommand: export-smoke or export-privacy-smoke")
+            eval_parser.error("eval requires a subcommand: export-smoke, export-privacy-smoke, or export-forbidden-tool-smoke")
     elif args.command == "context":
         if args.context_command == "plan":
             tc_context_plan(args.input, args.model)

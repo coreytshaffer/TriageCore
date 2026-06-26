@@ -136,3 +136,25 @@ def test_tc_eval_export_privacy_smoke(tmp_path):
     assert data["audit_required"] is True
     assert data["human_approval_required"] is False
     assert data["diagnostic_details"] == ["Detected possible SSN pattern in packet content; metadata contains_pii=False."]
+
+def test_tc_eval_export_forbidden_tool_smoke(tmp_path):
+    from triage_core.tc_cli import tc_eval_export_forbidden_tool_smoke
+    import json
+
+    output_dir = tmp_path / "forbidden_tool_actuals"
+    tc_eval_export_forbidden_tool_smoke(str(output_dir), "forbidden_tool_call_001")
+
+    expected_file = output_dir / "forbidden_tool_call_001.json"
+    assert expected_file.exists()
+
+    with open(expected_file, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    assert data["case_id"] == "forbidden_tool_call_001"
+    assert data["decision"] == "block"
+    assert data["boundary_family"] == "tool_authorization"
+    assert data["reasons"] == ["unauthorized_tool_call"]
+    assert data["audit_required"] is True
+    assert data["human_approval_required"] is False
+    assert data["diagnostic_details"] == ["Deterministic evaluation stub for forbidden tool calls."]
+
