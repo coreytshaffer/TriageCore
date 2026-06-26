@@ -23,7 +23,7 @@ from triage_core.model_manifest import (
     validate_model_manifest,
 )
 from triage_core.privacy_invariants import find_forbidden_persistent_fields
-
+import triage_core.diagnostics as diagnostics
 def _find_cr_file(cr_id: str) -> str:
     # search in docs/change/requests/
     pattern = f"docs/change/requests/{cr_id}-*.md"
@@ -587,11 +587,7 @@ def tc_status():
     print("TriageCore Status\n")
 
     # 1. Repo cleanliness
-    try:
-        status_out = subprocess.check_output(["git", "status", "--porcelain"], stderr=subprocess.DEVNULL).decode('utf-8')
-        git_status = "dirty" if status_out.strip() else "clean"
-    except Exception:
-        git_status = "unavailable"
+    git_status = diagnostics.get_git_status()
     print(f"Repo: {git_status}")
 
     # 2. Ledger path and writability
@@ -601,10 +597,9 @@ def tc_status():
     except ValueError:
         rel_path = ledger_path
 
-    # check if writable / exists
-    writable = os.access(ledger_path, os.W_OK) if ledger_path.exists() else os.access(ledger_path.parent, os.W_OK)
+    exists, readable, writable = diagnostics.get_ledger_status(str(ledger_path))
     ledger_str = f"{rel_path}"
-    if not ledger_path.exists():
+    if not exists:
         ledger_str += " (does not exist)"
     elif not writable:
         ledger_str += " (read-only)"
@@ -613,22 +608,7 @@ def tc_status():
     print(f"Ledger: {ledger_str}")
 
     # 3. Last event
-    last_event = "none"
-    if ledger_path.exists():
-        try:
-            with open(ledger_path, 'r', encoding='utf-8') as f:
-                last_line = None
-                for line in f:
-                    if line.strip():
-                        last_line = line
-                if last_line:
-                    last_record = json.loads(last_line)
-                    if "timestamp" in last_record:
-                        ts = last_record["timestamp"]
-                        last_event = ts[:16].replace('T', ' ')
-        except Exception:
-            last_event = "error reading ledger"
-
+    last_event = diagnostics.get_ledger_last_event_timestamp(str(ledger_path))
     print(f"Last event: {last_event}")
 
     # 4. Pending reviews
@@ -656,12 +636,8 @@ def tc_doctor():
     failures = 0
 
     cwd = os.getcwd()
-    repo_root = ""
-    try:
-        repo_root = subprocess.check_output(["git", "rev-parse", "--show-toplevel"], stderr=subprocess.DEVNULL).decode('utf-8').strip()
-    except Exception:
-        pass
-    base_dir = repo_root if repo_root else cwd
+    repo_root = diagnostics.get_git_repo_root()
+    base_dir = diagnostics.get_base_dir()
 
     print("\nEnvironment")
     print(f"- CWD: {cwd}")
@@ -681,39 +657,24 @@ def tc_doctor():
         print("- triage_core import path: unavailable")
         failures += 1
 
-    try:
-        cmd = "where" if sys.platform == "win32" else "which"
-        tc_path = subprocess.check_output([cmd, "tc"], stderr=subprocess.DEVNULL).decode('utf-8').strip().split('\n')[0]
-        if tc_path:
-            print(f"- tc executable path: {tc_path}")
-        else:
-            print("- tc executable path: unavailable")
-    except Exception:
-        print("- tc executable path: unavailable")
+    tc_path = diagnostics.get_tc_executable_path()
+    print(f"- tc executable path: {tc_path}")
 
     print("\nRepository")
-    try:
-        branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], stderr=subprocess.DEVNULL).decode('utf-8').strip()
-        print(f"- Git branch: {branch}")
-    except Exception:
-        print("- Git branch: unavailable")
+    branch = diagnostics.get_git_branch()
+    print(f"- Git branch: {branch}")
 
-    try:
-        status_out = subprocess.check_output(["git", "status", "--porcelain"], stderr=subprocess.DEVNULL).decode('utf-8')
-        status = "dirty" if status_out.strip() else "clean"
-        print(f"- Git status: {status}")
-        if status == "dirty":
-            warnings += 1
-    except Exception:
-        print("- Git status: unavailable")
+    status = diagnostics.get_git_status()
+    print(f"- Git status: {status}")
+    if status == "dirty":
+        warnings += 1
 
     print("\nLedger")
     ledger_path = os.path.join(base_dir, ".triagecore", "ledger.jsonl")
-    ledger_exists = os.path.exists(ledger_path)
     print(f"- Ledger path: {ledger_path}")
-    if ledger_exists:
-        readable = os.access(ledger_path, os.R_OK)
-        writable = os.access(ledger_path, os.W_OK)
+
+    exists, readable, writable = diagnostics.get_ledger_status(ledger_path)
+    if exists:
         r_str = "yes" if readable else "no"
         w_str = "yes" if writable else "no"
         print(f"- Exists/readable/writable: exists (readable: {r_str}, writable: {w_str})")
@@ -723,21 +684,7 @@ def tc_doctor():
         print("- Exists/readable/writable: unavailable (does not exist)")
         warnings += 1
 
-    last_event = "unavailable"
-    if ledger_exists:
-        try:
-            with open(ledger_path, 'r', encoding='utf-8') as f:
-                last_line = None
-                for line in f:
-                    if line.strip():
-                        last_line = line
-                if last_line:
-                    last_record = json.loads(last_line)
-                    if "timestamp" in last_record:
-                        ts = last_record["timestamp"]
-                        last_event = ts[:16].replace('T', ' ')
-        except Exception:
-            last_event = "error reading ledger"
+    last_event = diagnostics.get_ledger_last_event_timestamp(ledger_path)
     print(f"- Last event timestamp: {last_event}")
 
     print("\nHandoff")
