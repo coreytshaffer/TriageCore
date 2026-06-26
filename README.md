@@ -110,6 +110,7 @@ backend probing, or production certification.
 
 Start here if you want the shortest guided path:
 
+- [Daily-Driver Quickstart](docs/daily_driver_quickstart.md)
 - [Hackathon Demo](docs/workflows/hackathon_demo.md)
 - [Judge Submission Bundle](docs/submission/README.md)
 - [Verification Guide](docs/verification_guide.md)
