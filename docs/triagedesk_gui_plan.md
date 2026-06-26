@@ -47,5 +47,7 @@ TriageDesk will present five core views, mapped directly to the existing CLI bas
    - Added an Operator Status panel to the TriageDesk dashboard powered by the adapter layer. Displays repo status, ledger state, last event, pending reviews, and adapter connectivity. (Completed)
 4. **[x] TD-004: TriageDesk review queue panel**
    - Added a read-only review queue panel to the TriageDesk dashboard powered by the adapter layer. (Completed)
-5. **TD-005: Context Planner / Packet Renderer UI integration**
-   - Wire up the UI for `context plan` and `packet render` dry-runs, producing safely bounded outputs visually.
+5. **[x] TD-005: Read-only Context Planner panel**
+   - Added a dedicated sidebar tab for Context Planner dry-runs. Evaluates token budgets, estimates inputs, and provides recommendations without writing packets. (Completed)
+6. **TD-006: Packet Preview UI integration**
+   - Wire up the UI for `packet render` dry-runs, producing safely bounded outputs visually.
