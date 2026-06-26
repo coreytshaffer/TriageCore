@@ -24,6 +24,7 @@ from triage_core.model_manifest import (
 )
 from triage_core.privacy_invariants import find_forbidden_persistent_fields
 import triage_core.diagnostics as diagnostics
+import triage_core.review_queue as review_queue
 def _find_cr_file(cr_id: str) -> str:
     # search in docs/change/requests/
     pattern = f"docs/change/requests/{cr_id}-*.md"
@@ -583,6 +584,12 @@ def tc_propose(cr_id: str, title: str, add_to_changelog: bool):
             except Exception as e:
                 print(f"Error modifying changelog: {e}")
 
+def tc_review_list():
+    ledger_path = _ledger_path()
+    ledger = TaskLedger(str(ledger_path.parent))
+    pending = review_queue.get_pending_reviews(ledger)
+    print(review_queue.format_review_queue(pending))
+
 def tc_status():
     print("TriageCore Status\n")
 
@@ -612,7 +619,9 @@ def tc_status():
     print(f"Last event: {last_event}")
 
     # 4. Pending reviews
-    print("Pending reviews: not implemented")
+    ledger = TaskLedger(str(ledger_path.parent))
+    pending = review_queue.get_pending_reviews(ledger)
+    print(f"Pending reviews: {len(pending)} detected")
 
     # 5. Failed validations
     print("Failed validations: not implemented")
@@ -1398,6 +1407,12 @@ def main():
     context_plan_parser.add_argument("--input", required=True, help="Path to the input file")
     context_plan_parser.add_argument("--model", required=True, help="Token budget model profile")
 
+    # review
+    review_parser = subparsers.add_parser("review", help="Manage review queue")
+    review_subparsers = review_parser.add_subparsers(dest="review_command")
+
+    review_list_parser = review_subparsers.add_parser("list", help="List reviewable/pending items")
+
     # packet
     packet_parser = subparsers.add_parser("packet", help="Manage bounded handoff packets")
     packet_subparsers = packet_parser.add_subparsers(dest="packet_command")
@@ -1509,6 +1524,11 @@ def main():
             tc_packet_render(args.task, args.model, args.include, args.output, args.force)
         else:
             packet_parser.error("packet requires a subcommand: render")
+    elif args.command == "review":
+        if args.review_command == "list":
+            tc_review_list()
+        else:
+            review_parser.error("review requires a subcommand: list")
     else:
         parser.print_help()
 
