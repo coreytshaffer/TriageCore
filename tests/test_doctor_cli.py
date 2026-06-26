@@ -10,9 +10,9 @@ def test_doctor_command_runs_and_prints_header():
         tc_doctor()
     output = mock_stdout.getvalue()
     assert "TriageCore Doctor" in output
-    assert "Python Executable:" in output
-    assert "triage_core path:" in output
-    assert "Git Status:" in output
+    assert "- Python executable:" in output
+    assert "- triage_core import path:" in output
+    assert "- Git status:" in output
 
 @patch("subprocess.check_output")
 def test_missing_git_repo_handled_gracefully(mock_subprocess):
@@ -21,9 +21,9 @@ def test_missing_git_repo_handled_gracefully(mock_subprocess):
     with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
         tc_doctor()
     output = mock_stdout.getvalue()
-    assert "Git Repo Root: unavailable" in output
-    assert "Git Branch: unavailable" in output
-    assert "Git Status: unavailable" in output
+    assert "- Git repo root: unavailable" in output
+    assert "- Git branch: unavailable" in output
+    assert "- Git status: unavailable" in output
 
 def test_scratch_exclusion_detection(tmp_path):
     # Create a dummy pyproject.toml
@@ -34,5 +34,4 @@ def test_scratch_exclusion_detection(tmp_path):
         with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
             tc_doctor()
         output = mock_stdout.getvalue()
-        assert "Scratch Excluded: yes" in output
-        assert "pytest config:" in output
+        assert "- pyproject/pytest config path: " in output

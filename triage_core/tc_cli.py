@@ -650,79 +650,124 @@ def tc_status():
 
 def tc_doctor():
     print("TriageCore Doctor")
-    print("-" * 30)
+    print("=" * 30)
+
+    warnings = 0
+    failures = 0
 
     cwd = os.getcwd()
-    print(f"CWD: {cwd}")
-
     repo_root = ""
     try:
         repo_root = subprocess.check_output(["git", "rev-parse", "--show-toplevel"], stderr=subprocess.DEVNULL).decode('utf-8').strip()
-        print(f"Git Repo Root: {repo_root}")
     except Exception:
-        print("Git Repo Root: unavailable")
+        pass
+    base_dir = repo_root if repo_root else cwd
 
-    print(f"Python Executable: {sys.executable}")
-    print(f"Python Version: {sys.version.split()[0]}")
+    print("\nEnvironment")
+    print(f"- CWD: {cwd}")
+    if repo_root:
+        print(f"- Git repo root: {repo_root}")
+    else:
+        print("- Git repo root: unavailable")
+        warnings += 1
+
+    print(f"- Python executable: {sys.executable}")
+    print(f"- Python version: {sys.version.split()[0]}")
 
     try:
         import triage_core
-        print(f"triage_core path: {triage_core.__file__}")
+        print(f"- triage_core import path: {triage_core.__file__}")
     except ImportError:
-        print("triage_core path: unavailable")
+        print("- triage_core import path: unavailable")
+        failures += 1
 
     try:
         cmd = "where" if sys.platform == "win32" else "which"
         tc_path = subprocess.check_output([cmd, "tc"], stderr=subprocess.DEVNULL).decode('utf-8').strip().split('\n')[0]
         if tc_path:
-            print(f"tc path: {tc_path}")
+            print(f"- tc executable path: {tc_path}")
         else:
-            print("tc path: unavailable")
+            print("- tc executable path: unavailable")
     except Exception:
-        print("tc path: unavailable")
+        print("- tc executable path: unavailable")
 
+    print("\nRepository")
     try:
         branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], stderr=subprocess.DEVNULL).decode('utf-8').strip()
-        print(f"Git Branch: {branch}")
+        print(f"- Git branch: {branch}")
     except Exception:
-        print("Git Branch: unavailable")
+        print("- Git branch: unavailable")
 
     try:
         status_out = subprocess.check_output(["git", "status", "--porcelain"], stderr=subprocess.DEVNULL).decode('utf-8')
         status = "dirty" if status_out.strip() else "clean"
-        print(f"Git Status: {status}")
+        print(f"- Git status: {status}")
+        if status == "dirty":
+            warnings += 1
     except Exception:
-        print("Git Status: unavailable")
+        print("- Git status: unavailable")
 
-    base_dir = repo_root if repo_root else cwd
-
+    print("\nLedger")
     ledger_path = os.path.join(base_dir, ".triagecore", "ledger.jsonl")
-    if os.path.exists(ledger_path):
-        print(f"Ledger Path: {ledger_path}")
+    ledger_exists = os.path.exists(ledger_path)
+    print(f"- Ledger path: {ledger_path}")
+    if ledger_exists:
+        readable = os.access(ledger_path, os.R_OK)
+        writable = os.access(ledger_path, os.W_OK)
+        r_str = "yes" if readable else "no"
+        w_str = "yes" if writable else "no"
+        print(f"- Exists/readable/writable: exists (readable: {r_str}, writable: {w_str})")
+        if not readable or not writable:
+            failures += 1
     else:
-        print("Ledger Path: unavailable")
+        print("- Exists/readable/writable: unavailable (does not exist)")
+        warnings += 1
 
+    last_event = "unavailable"
+    if ledger_exists:
+        try:
+            with open(ledger_path, 'r', encoding='utf-8') as f:
+                last_line = None
+                for line in f:
+                    if line.strip():
+                        last_line = line
+                if last_line:
+                    last_record = json.loads(last_line)
+                    if "timestamp" in last_record:
+                        ts = last_record["timestamp"]
+                        last_event = ts[:16].replace('T', ' ')
+        except Exception:
+            last_event = "error reading ledger"
+    print(f"- Last event timestamp: {last_event}")
+
+    print("\nHandoff")
     handoff_path = os.path.join(base_dir, ".triagecore", "handoffs", "latest.md")
     if os.path.exists(handoff_path):
-        print(f"Handoff Latest: {handoff_path}")
+        print(f"- Latest handoff path: {handoff_path}")
     else:
-        print("Handoff Latest: unavailable")
+        print("- Latest handoff path: unavailable")
 
+    print("\nConfig/Test")
     pyproject_path = os.path.join(base_dir, "pyproject.toml")
     if os.path.exists(pyproject_path):
-        print(f"pytest config: {pyproject_path}")
-        try:
-            with open(pyproject_path, "r", encoding="utf-8") as f:
-                content = f.read()
-                if 'norecursedirs = ["scratch"]' in content or "norecursedirs = ['scratch']" in content:
-                    print("Scratch Excluded: yes")
-                else:
-                    print("Scratch Excluded: no")
-        except Exception:
-            print("Scratch Excluded: unavailable")
+        print(f"- pyproject/pytest config path: {pyproject_path}")
     else:
-        print("pytest config: unavailable")
-        print("Scratch Excluded: unavailable")
+        print("- pyproject/pytest config path: unavailable")
+        warnings += 1
+
+    print("\nRuntime Safety")
+    print("- External execution posture: blocked")
+    print("- Human approval posture: human-review-required")
+    print("- Network/tool execution posture: unavailable")
+
+    print("\nResult")
+    if failures > 0:
+        overall = "FAIL"
+    elif warnings > 0:
+        overall = "WARN"
+    else:
+        overall = "OK"
+    print(f"- Overall: {overall}")
 
 def _prompt_required(prompt_text: str) -> str:
     while True:

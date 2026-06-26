@@ -5,6 +5,7 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+- Implemented CR-DD-002 (tc doctor polish): Polished the output format of `tc doctor` into grouped sections for better operator readability without altering any core behavior or authority limits.
 - Implemented CR-DD-001 (tc status command): Added a compact daily operator snapshot command to TriageCore.
 - Implemented CR-077 (Safety Boundary Eval Taxonomy and Fixture Schema): Added a docs-first evaluation taxonomy, v0 fixture schema, deterministic starter eval fixtures, and backlog framing for the safety-boundary research track without adding CLI or runtime behavior.
 - Implemented CR-076 (TriageCore Research Framing Doc): Added a docs-only research question, threat model, claims/non-claims, and empirical eval backlog framing for TriageCore as a local-first AI control-plane evaluation harness.
