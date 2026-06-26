@@ -1169,12 +1169,12 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         btn_rules.grid(row=7, column=0, padx=12, pady=4, sticky="ew")
         self._nav_btns["rules"] = btn_rules
 
-        for btn in [btn_dash, btn_ledger, self.link_log, btn_logs, btn_rules]:
+        for btn in [btn_dash, btn_planner, btn_ledger, self.link_log, btn_logs, btn_rules]:
             self._add_focus_ring(btn)
 
         # ── Agent Status Panel ─────────────────────────
         self.agent_panel = ctk.CTkFrame(sb, corner_radius=10, fg_color="transparent")
-        self.agent_panel.grid(row=7, column=0, padx=12, pady=(10, 0), sticky="sew")
+        self.agent_panel.grid(row=8, column=0, padx=12, pady=(10, 0), sticky="sew")
 
         _SectionLabel(self.agent_panel, "Agent Status").pack(
             anchor="w", padx=10, pady=(0, 8)
@@ -1231,8 +1231,9 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
 
         # ── Live Resource Ticker (bottom of sidebar) ──────────────────────────
         ticker = ctk.CTkFrame(sb, corner_radius=10, fg_color=("gray85", "gray20"))
-        ticker.grid(row=8, column=0, padx=12, pady=12, sticky="sew")
-        sb.grid_rowconfigure(8, weight=0)
+        ticker.grid(row=9, column=0, padx=12, pady=12, sticky="sew")
+        sb.grid_rowconfigure(9, weight=0)
+        sb.grid_rowconfigure(8, weight=1)
 
         _SectionLabel(ticker, "Live Session").pack(anchor="w", padx=10, pady=(8, 2))
 

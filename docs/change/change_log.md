@@ -5,6 +5,7 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+- Implemented TD-005 (Read-only Context Planner panel): Added a dedicated sidebar tab in TriageDesk for context planner dry-runs, allowing evaluation of token budgets without writing packets.
 - Implemented TD-004 (TriageDesk review queue panel): Added a read-only Review Queue panel to the TriageDesk dashboard powered by the adapter layer, cleanly displaying pending ledger accountability without execution authority.
 - Implemented TD-003 (TriageDesk status panel wiring): Added a read-only Operator Status panel to the TriageDesk dashboard, powered by the `triagedesk_adapter` seam. Displays repo status, ledger state, last event, pending reviews, and adapter connectivity without mutation.
 - Implemented TD-002 (TriageDesk read-only adapter layer): Added `triagedesk_adapter.py` providing a safe, GUI-neutral seam for UI layers to fetch deterministic status, budget estimates, and review queues without directly managing internal ledger state or scraping CLI strings.

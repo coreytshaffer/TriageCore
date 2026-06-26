@@ -26,8 +26,8 @@ This document summarizes the active TriageCore backlog after CR-077.
   - Purpose: keep operator UX calm, legible, and evidence-first without jumping straight to a web dashboard or hidden automation surface.
 
 - TriageDesk GUI implementation path
-  - Source: TD-001, TD-002, TD-003, TD-004
-  - Status: **[x] TD-001 (TriageDesk GUI inventory and read-only shell plan)**, **[x] TD-002 (TriageDesk read-only adapter layer)**, **[x] TD-003 (TriageDesk status panel wiring)**, **[x] TD-004 (TriageDesk review queue panel)** complete. TD-005 (Context Planner / Packet Renderer UI integration) is next.
+  - Source: TD-001, TD-002, TD-003, TD-004, TD-005
+  - Status: **[x] TD-001 (TriageDesk GUI inventory and read-only shell plan)**, **[x] TD-002 (TriageDesk read-only adapter layer)**, **[x] TD-003 (TriageDesk status panel wiring)**, **[x] TD-004 (TriageDesk review queue panel)**, **[x] TD-005 (Read-only Context Planner panel)** complete. TD-006 (Packet Preview UI integration) is next.
   - Purpose: Provide a calm, read-only operator console wrapping the daily-driver baseline capabilities without expanding execution authority.
 
 - External runtime execution admission evidence
