@@ -7,6 +7,8 @@ By exporting evidence as files:
 - TriageCore does not need to self-score.
 - There are no cross-repository Python imports, preventing tight coupling.
 
+> **Reviewer Note:** For the conceptual explanation of how these actual outcome exports can be scored by an independent harness without importing TriageCore, see [Eval Integration Bridge](file:///c:/Users/corey/Documents/Science/AI/triagecore/docs/evals/eval_integration_bridge.md).
+
 ## JSON Contract Shape
 
 TriageCore generates one JSON file per evaluation scenario. The exported file must match the following shape:
