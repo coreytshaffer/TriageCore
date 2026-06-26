@@ -45,5 +45,7 @@ TriageDesk will present five core views, mapped directly to the existing CLI bas
    - Create a pure-Python adapter layer that bridges `TriageDesk` with `diagnostics.py`, `review_queue.py`, `context_planner.py`, `packet_renderer.py`, and `token_budget.py`. Ensure TriageDesk calls these stable functions instead of re-implementing logic. (Completed)
 2. **[x] TD-003: Read-only status panel wiring**
    - Added an Operator Status panel to the TriageDesk dashboard powered by the adapter layer. Displays repo status, ledger state, last event, pending reviews, and adapter connectivity. (Completed)
-3. **TD-004: Context Planner / Packet Renderer UI integration**
+4. **[x] TD-004: TriageDesk review queue panel**
+   - Added a read-only review queue panel to the TriageDesk dashboard powered by the adapter layer. (Completed)
+5. **TD-005: Context Planner / Packet Renderer UI integration**
    - Wire up the UI for `context plan` and `packet render` dry-runs, producing safely bounded outputs visually.

@@ -1053,6 +1053,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         self._build_ledger_frame()
         self._build_telemetry_frame()
         self._build_status_panel()
+        self._build_review_queue_panel()
         self._build_logs_frame()
         self._build_rules_frame()
 
@@ -2380,21 +2381,22 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         self.telemetry_frame = f
 
         # Row 0 is reserved for the Operator Status panel (built separately)
+        # Row 1 is reserved for the Review Queue panel (built separately)
 
         ctk.CTkLabel(
             f,
             text="Savings & Telemetry Dashboard",
             font=ctk.CTkFont(size=22, weight="bold"),
-        ).grid(row=1, column=0, padx=24, pady=(20, 4), sticky="w")
+        ).grid(row=2, column=0, padx=24, pady=(20, 4), sticky="w")
 
         # Row 1: Savings / avoidance signals from existing ledger evidence.
         self._savings_card = ctk.CTkFrame(f, corner_radius=12)
-        self._savings_card.grid(row=2, column=0, padx=24, pady=8, sticky="ew")
+        self._savings_card.grid(row=3, column=0, padx=24, pady=8, sticky="ew")
         self._savings_card.grid_columnconfigure((0, 1, 2, 3), weight=1)
 
         # Row 2: Sustainability Vector Gauges (Session Totals)
         self._gauges_card = ctk.CTkFrame(f, corner_radius=12)
-        self._gauges_card.grid(row=3, column=0, padx=24, pady=8, sticky="ew")
+        self._gauges_card.grid(row=4, column=0, padx=24, pady=8, sticky="ew")
         self._gauges_card.grid_columnconfigure((0, 1, 2, 3), weight=1)
 
         _SectionLabel(self._gauges_card, "Tracked Resource Context").grid(
@@ -2423,7 +2425,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
 
         # Row 3: Status & Shares
         self._status_row = ctk.CTkFrame(f, fg_color="transparent")
-        self._status_row.grid(row=4, column=0, padx=24, pady=8, sticky="ew")
+        self._status_row.grid(row=5, column=0, padx=24, pady=8, sticky="ew")
         self._status_row.grid_columnconfigure((0, 1), weight=1)
 
         self._power_card = ctk.CTkFrame(self._status_row, corner_radius=12)
@@ -2442,17 +2444,17 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
 
         # Row 4: Session Summary Text Details
         self._telem_card = ctk.CTkFrame(f, corner_radius=12)
-        self._telem_card.grid(row=5, column=0, padx=24, pady=8, sticky="ew")
+        self._telem_card.grid(row=6, column=0, padx=24, pady=8, sticky="ew")
         self._telem_card.grid_columnconfigure((0, 1), weight=1)
 
         # Row 5: Per Accepted Task ratio KPIs
         self._controls_card = ctk.CTkFrame(f, corner_radius=12)
-        self._controls_card.grid(row=6, column=0, padx=24, pady=8, sticky="ew")
+        self._controls_card.grid(row=7, column=0, padx=24, pady=8, sticky="ew")
         self._controls_card.grid_columnconfigure((0, 1, 2, 3), weight=1)
 
         # Row 6: Per Accepted Task ratio KPIs
         self._per_task_card = ctk.CTkFrame(f, corner_radius=12)
-        self._per_task_card.grid(row=7, column=0, padx=24, pady=(8, 24), sticky="ew")
+        self._per_task_card.grid(row=8, column=0, padx=24, pady=(8, 24), sticky="ew")
         self._per_task_card.grid_columnconfigure((0, 1, 2), weight=1)
 
     # ─── Operator Status Panel (TD-003) ────────────────────────────────────────
@@ -2524,8 +2526,87 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
 
         self._op_adapter_lbl.configure(text="connected")
 
+    # ─── Review Queue Panel (TD-004) ───────────────────────────────────────────
+    def _build_review_queue_panel(self):
+        """Build a read-only review queue panel at row 1 of the telemetry frame."""
+        f = self.telemetry_frame
+
+        card = ctk.CTkFrame(f, corner_radius=12)
+        card.grid(row=1, column=0, padx=24, pady=8, sticky="ew")
+        card.grid_columnconfigure(0, weight=1)
+        self._review_queue_card = card
+
+        _SectionLabel(card, "Review Queue").grid(
+            row=0, column=0, padx=16, pady=(12, 4), sticky="w"
+        )
+
+        self._review_queue_summary_lbl = ctk.CTkLabel(
+            card,
+            text="Status: checking…",
+            text_color="gray",
+            font=ctk.CTkFont(size=12),
+            anchor="w",
+        )
+        self._review_queue_summary_lbl.grid(row=1, column=0, padx=16, pady=(0, 6), sticky="w")
+        
+        self._review_list_frame = ctk.CTkFrame(card, fg_color="transparent")
+        self._review_list_frame.grid(row=2, column=0, padx=16, pady=(0, 12), sticky="ew")
+        self._review_list_frame.grid_columnconfigure(0, weight=1)
+
+    def _refresh_review_queue_panel(self):
+        """Update the review queue panel from the adapter."""
+        # Clear existing items
+        for w in self._review_list_frame.winfo_children():
+            w.destroy()
+
+        if not _TD_ADAPTER_AVAILABLE or _td_adapter is None:
+            self._review_queue_summary_lbl.configure(text="Status: unavailable")
+            ctk.CTkLabel(
+                self._review_list_frame, text="Adapter unavailable. Cannot fetch reviews.",
+                text_color="gray", font=ctk.CTkFont(size=12)
+            ).pack(anchor="w", pady=4)
+            return
+
+        try:
+            rq = _td_adapter.get_review_queue_snapshot()
+            pending = rq.pending_tasks
+        except Exception as e:
+            self._review_queue_summary_lbl.configure(text="Status: error")
+            ctk.CTkLabel(
+                self._review_list_frame, text=f"Error fetching reviews: {e}",
+                text_color="#ef4444", font=ctk.CTkFont(size=12)
+            ).pack(anchor="w", pady=4)
+            return
+
+        if not pending:
+            self._review_queue_summary_lbl.configure(
+                text="Status: available · 0 pending reviews detected"
+            )
+            ctk.CTkLabel(
+                self._review_list_frame, text="Queue empty. No pending reviews.",
+                text_color="gray", font=ctk.CTkFont(size=12)
+            ).pack(anchor="w", pady=4)
+            return
+
+        self._review_queue_summary_lbl.configure(
+            text=f"Status: available · {len(pending)} pending review(s) detected"
+        )
+
+        for idx, task in enumerate(pending[:100]):
+            row = ctk.CTkFrame(self._review_list_frame, corner_radius=6, fg_color=("gray85", "gray22"))
+            row.pack(fill="x", pady=2)
+            
+            info = f"[{task.task_id[:8]}] {task.title}  ·  Source: {task.runner}  ·  Status: {task.status}"
+            if getattr(task, "updated_at", None):
+                info += f"  ·  {task.updated_at}"
+                
+            ctk.CTkLabel(
+                row, text=info, font=ctk.CTkFont(size=11), anchor="w"
+            ).pack(side="left", padx=10, pady=6)
+
     def _refresh_telemetry(self):
         self._refresh_status_panel()
+        self._refresh_review_queue_panel()
         tasks = self.ledger.get_all_tasks()
         accepted = [t for t in tasks if t.accepted]
         n_local = sum(1 for t in tasks if t.runner == "local_llm")
