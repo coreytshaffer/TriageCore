@@ -49,5 +49,5 @@ TriageDesk will present five core views, mapped directly to the existing CLI bas
    - Added a read-only review queue panel to the TriageDesk dashboard powered by the adapter layer. (Completed)
 5. **[x] TD-005: Read-only Context Planner panel**
    - Added a dedicated sidebar tab for Context Planner dry-runs. Evaluates token budgets, estimates inputs, and provides recommendations without writing packets. (Completed)
-6. **TD-006: Packet Preview UI integration**
-   - Wire up the UI for `packet render` dry-runs, producing safely bounded outputs visually.
+6. **[x] TD-006: Packet Preview UI integration**
+   - Wired up the UI for `packet render` dry-runs within the Context Planner tab, producing safely bounded deterministic outputs visually in a read-only textbox without executing or mutating. (Completed)

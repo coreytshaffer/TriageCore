@@ -1537,7 +1537,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
     def _build_planner_frame(self):
         f = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
         f.grid_columnconfigure(0, weight=1)
-        f.grid_rowconfigure(6, weight=1)
+        f.grid_rowconfigure(2, weight=1)
         self.planner_frame = f
 
         ctk.CTkLabel(
@@ -1545,33 +1545,46 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         ).grid(row=0, column=0, padx=24, pady=(20, 4), sticky="w")
 
         ctk.CTkLabel(
-            f, text="Dry-run resource planning for target files.", text_color="gray", font=ctk.CTkFont(size=12)
+            f, text="Dry-run resource planning and packet previews.", text_color="gray", font=ctk.CTkFont(size=12)
         ).grid(row=1, column=0, padx=24, pady=(0, 16), sticky="w")
 
+        self.planner_tabview = ctk.CTkTabview(f)
+        self.planner_tabview.grid(row=2, column=0, padx=24, pady=(0, 24), sticky="nsew")
+
+        self.planner_tabview.add("Context Planner")
+        self.planner_tabview.add("Packet Preview")
+
+        self._build_context_planner_tab(self.planner_tabview.tab("Context Planner"))
+        self._build_packet_preview_tab(self.planner_tabview.tab("Packet Preview"))
+
+    def _build_context_planner_tab(self, parent):
+        parent.grid_columnconfigure(0, weight=1)
+        parent.grid_rowconfigure(5, weight=1)
+
         # Input file
-        ctk.CTkLabel(f, text="Input file:", font=ctk.CTkFont(size=12, weight="bold")).grid(row=2, column=0, padx=24, sticky="w")
-        self._planner_file_entry = ctk.CTkEntry(f, placeholder_text="e.g. triage_core/tc_cli.py")
-        self._planner_file_entry.grid(row=3, column=0, padx=24, pady=(4, 16), sticky="ew")
+        ctk.CTkLabel(parent, text="Input file:", font=ctk.CTkFont(size=12, weight="bold")).grid(row=0, column=0, padx=12, pady=(12, 0), sticky="w")
+        self._planner_file_entry = ctk.CTkEntry(parent, placeholder_text="e.g. triage_core/tc_cli.py")
+        self._planner_file_entry.grid(row=1, column=0, padx=12, pady=(4, 16), sticky="ew")
 
         # Model profile
-        ctk.CTkLabel(f, text="Model profile:", font=ctk.CTkFont(size=12, weight="bold")).grid(row=4, column=0, padx=24, sticky="w")
+        ctk.CTkLabel(parent, text="Model profile:", font=ctk.CTkFont(size=12, weight="bold")).grid(row=2, column=0, padx=12, sticky="w")
 
         # Read available profiles
         profiles = list(token_budget.MODEL_PROFILES.keys()) if hasattr(token_budget, 'MODEL_PROFILES') else ["generic-8k", "generic-32k"]
         self._planner_model_var = ctk.StringVar(value=profiles[0])
-        self._planner_model_menu = ctk.CTkOptionMenu(f, values=profiles, variable=self._planner_model_var)
-        self._planner_model_menu.grid(row=5, column=0, padx=24, pady=(4, 24), sticky="w")
+        self._planner_model_menu = ctk.CTkOptionMenu(parent, values=profiles, variable=self._planner_model_var)
+        self._planner_model_menu.grid(row=3, column=0, padx=12, pady=(4, 24), sticky="w")
 
         # Button
         self._planner_btn = ctk.CTkButton(
-            f, text="Run Dry-Run Plan", font=ctk.CTkFont(size=13, weight="bold"),
+            parent, text="Run Dry-Run Plan", font=ctk.CTkFont(size=13, weight="bold"),
             command=self._run_context_plan, fg_color="#1e3a8a", hover_color="#1e40af"
         )
-        self._planner_btn.grid(row=6, column=0, padx=24, pady=(0, 24), sticky="w")
+        self._planner_btn.grid(row=4, column=0, padx=12, pady=(0, 24), sticky="w")
 
         # Results area
-        res_card = ctk.CTkFrame(f, corner_radius=8, fg_color=("gray85", "gray17"))
-        res_card.grid(row=7, column=0, padx=24, pady=(0, 24), sticky="nsew")
+        res_card = ctk.CTkFrame(parent, corner_radius=8, fg_color=("gray85", "gray17"))
+        res_card.grid(row=5, column=0, padx=12, pady=(0, 12), sticky="nsew")
         res_card.grid_columnconfigure(1, weight=1)
 
         _SectionLabel(res_card, "Results").grid(row=0, column=0, columnspan=2, padx=16, pady=(12, 12), sticky="w")
@@ -1586,6 +1599,54 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         for i, (lbl, val_widget) in enumerate(zip(labels, vals)):
             ctk.CTkLabel(res_card, text=lbl, text_color="gray", font=ctk.CTkFont(size=12)).grid(row=i+1, column=0, padx=16, pady=4, sticky="w")
             val_widget.grid(row=i+1, column=1, padx=16, pady=4, sticky="w")
+
+    def _build_packet_preview_tab(self, parent):
+        parent.grid_columnconfigure(0, weight=1)
+        parent.grid_rowconfigure(7, weight=1)
+
+        # Task file
+        ctk.CTkLabel(parent, text="Task file:", font=ctk.CTkFont(size=12, weight="bold")).grid(row=0, column=0, padx=12, pady=(12, 0), sticky="w")
+        self._preview_task_entry = ctk.CTkEntry(parent, placeholder_text="e.g. docs/triagedesk_gui_plan.md")
+        self._preview_task_entry.grid(row=1, column=0, padx=12, pady=(4, 16), sticky="ew")
+
+        # Include files
+        ctk.CTkLabel(parent, text="Include files (comma or newline separated):", font=ctk.CTkFont(size=12, weight="bold")).grid(row=2, column=0, padx=12, sticky="w")
+        self._preview_includes_text = ctk.CTkTextbox(parent, height=60)
+        self._preview_includes_text.grid(row=3, column=0, padx=12, pady=(4, 16), sticky="ew")
+
+        # Model profile
+        ctk.CTkLabel(parent, text="Model profile:", font=ctk.CTkFont(size=12, weight="bold")).grid(row=4, column=0, padx=12, sticky="w")
+        profiles = list(token_budget.MODEL_PROFILES.keys()) if hasattr(token_budget, 'MODEL_PROFILES') else ["generic-8k", "generic-32k"]
+        self._preview_model_var = ctk.StringVar(value=profiles[0])
+        self._preview_model_menu = ctk.CTkOptionMenu(parent, values=profiles, variable=self._preview_model_var)
+        self._preview_model_menu.grid(row=5, column=0, padx=12, pady=(4, 24), sticky="w")
+
+        # Button
+        self._preview_btn = ctk.CTkButton(
+            parent, text="Preview Packet", font=ctk.CTkFont(size=13, weight="bold"),
+            command=self._run_packet_preview, fg_color="#1e3a8a", hover_color="#1e40af"
+        )
+        self._preview_btn.grid(row=6, column=0, padx=12, pady=(0, 24), sticky="w")
+
+        # Results area
+        res_card = ctk.CTkFrame(parent, corner_radius=8, fg_color=("gray85", "gray17"))
+        res_card.grid(row=7, column=0, padx=12, pady=(0, 12), sticky="nsew")
+        res_card.grid_columnconfigure(0, weight=1)
+        res_card.grid_rowconfigure(2, weight=1)
+
+        hdr_frame = ctk.CTkFrame(res_card, fg_color="transparent")
+        hdr_frame.grid(row=0, column=0, sticky="ew", padx=16, pady=(12, 8))
+        self._preview_res_status = ctk.CTkLabel(hdr_frame, text="—", font=ctk.CTkFont(size=13, weight="bold"))
+        self._preview_res_status.pack(side="left")
+
+        self._preview_res_budget = ctk.CTkLabel(hdr_frame, text="—", font=ctk.CTkFont(size=12), text_color="gray")
+        self._preview_res_budget.pack(side="right")
+
+        self._preview_res_tokens = ctk.CTkLabel(hdr_frame, text="—", font=ctk.CTkFont(size=12), text_color="gray")
+        self._preview_res_tokens.pack(side="right", padx=10)
+
+        self._preview_textbox = ctk.CTkTextbox(res_card, state="disabled", wrap="word", font=ctk.CTkFont(family="Consolas", size=11))
+        self._preview_textbox.grid(row=2, column=0, padx=16, pady=(0, 16), sticky="nsew")
 
     def _run_context_plan(self):
         input_file = self._planner_file_entry.get().strip()
@@ -1632,6 +1693,58 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         except Exception as e:
             self._planner_res_status.configure(text=f"Error: {e}", text_color="#ef4444")
 
+    def _run_packet_preview(self):
+        task_file = self._preview_task_entry.get().strip()
+
+        raw_includes = self._preview_includes_text.get("0.0", "end").strip()
+        include_paths = []
+        if raw_includes:
+            import re
+            parts = re.split(r'[,\n]+', raw_includes)
+            include_paths = [p.strip() for p in parts if p.strip()]
+
+        model_profile = self._preview_model_var.get()
+
+        def _clear_preview(error_msg):
+            self._preview_res_status.configure(text=error_msg, text_color="#ef4444")
+            self._preview_res_tokens.configure(text="—")
+            self._preview_res_budget.configure(text="—")
+            self._preview_textbox.configure(state="normal")
+            self._preview_textbox.delete("0.0", "end")
+            self._preview_textbox.configure(state="disabled")
+
+        if not task_file:
+            _clear_preview("Error: Missing task file path")
+            return
+
+        if not _TD_ADAPTER_AVAILABLE or _td_adapter is None:
+            _clear_preview("Error: Adapter unavailable")
+            return
+
+        self._preview_res_status.configure(text="Previewing...", text_color="gray")
+        self.update_idletasks()
+
+        try:
+            snapshot = _td_adapter.preview_packet(task_file, model_profile, include_paths)
+            self._preview_res_tokens.configure(text=f"Tokens: {snapshot.estimated_tokens}")
+            self._preview_res_budget.configure(text=f"Budget: {snapshot.budget.usable_input_tokens}")
+
+            status_text = "Fits Budget" if snapshot.fits_budget else "Over Budget"
+            status_color = "#22c55e" if snapshot.fits_budget else "#ef4444"
+            self._preview_res_status.configure(text=status_text, text_color=status_color)
+
+            self._preview_textbox.configure(state="normal")
+            self._preview_textbox.delete("0.0", "end")
+            self._preview_textbox.insert("0.0", snapshot.content)
+            self._preview_textbox.configure(state="disabled")
+
+        except FileNotFoundError as e:
+            _clear_preview(f"Error: {e}")
+        except KeyError:
+            _clear_preview("Error: Unknown model profile")
+        except Exception as e:
+            _clear_preview(f"Error: {e}")
+
     def _build_ledger_frame(self):
         f = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
         f.grid_columnconfigure(0, weight=1, minsize=350)
@@ -1668,17 +1781,17 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         self.context_inspector.grid(row=1, column=1, padx=(6, 12), pady=(0, 12), sticky="nsew")
         self.context_inspector.grid_columnconfigure(0, weight=1)
         self.context_inspector.grid_rowconfigure(1, weight=1)
-        
+
         # Tabs for inspector
         self.inspector_tabs = ctk.CTkSegmentedButton(
-            self.context_inspector, 
+            self.context_inspector,
             values=["Summary", "Artifacts", "Telemetry", "Timeline", "Review"],
             command=self._on_inspector_tab_change
         )
         self.inspector_tabs.grid(row=0, column=0, padx=10, pady=10, sticky="ew")
         self.inspector_tabs.set("Summary")
         self.current_inspector_tab = "Summary"
-        
+
         self.inspector_content = ctk.CTkScrollableFrame(
             self.context_inspector, fg_color="transparent", corner_radius=0
         )
@@ -1697,7 +1810,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
     def _render_context_inspector(self, task_id):
         for w in self.inspector_content.winfo_children():
             w.destroy()
-            
+
         ctx = self.ledger.get_task_context(task_id)
         if not ctx:
             ctk.CTkLabel(self.inspector_content, text="Task not found.", text_color="gray").pack(pady=40)
@@ -1718,7 +1831,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         t = ctx.record
         _SectionLabel(self.inspector_content, "Task Details").pack(anchor="w", pady=(0, 4))
         ctk.CTkLabel(self.inspector_content, text=t.title or t.task_id[:12], font=ctk.CTkFont(size=16, weight="bold")).pack(anchor="w", pady=(0, 10))
-        
+
         ctk.CTkLabel(self.inspector_content, text=f"ID: {t.task_id}").pack(anchor="w")
         ctk.CTkLabel(self.inspector_content, text=f"Status: {t.status}").pack(anchor="w")
         ctk.CTkLabel(self.inspector_content, text=f"Runner: {t.runner or 'None'}").pack(anchor="w")
@@ -1736,10 +1849,10 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         if not ctx.artifact_paths:
             ctk.CTkLabel(self.inspector_content, text="No artifacts generated yet.", text_color="gray").pack(anchor="w", pady=10)
             return
-            
+
         for path in ctx.artifact_paths:
             ctk.CTkLabel(self.inspector_content, text=path, font=ctk.CTkFont(size=11, family="Courier")).pack(anchor="w", pady=2)
-            
+
         if ctx.latest_artifact_text:
             ctk.CTkLabel(self.inspector_content, text="Latest Artifact Preview:", font=ctk.CTkFont(weight="bold")).pack(anchor="w", pady=(10, 4))
             box = ctk.CTkTextbox(self.inspector_content, height=300, font=ctk.CTkFont(size=11, family="Courier"))
@@ -1753,7 +1866,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         grid = ctk.CTkFrame(self.inspector_content, fg_color="transparent")
         grid.pack(fill="x", pady=10)
         grid.grid_columnconfigure((0,1), weight=1)
-        
+
         ctk.CTkLabel(grid, text=f"⏱ Duration: {tel.get('duration_seconds', 0):.2f}s", font=ctk.CTkFont(size=13)).grid(row=0, column=0, sticky="w", pady=4)
         ctk.CTkLabel(grid, text=f"🎫 Tokens: {tel.get('total_tokens', 0)}", font=ctk.CTkFont(size=13)).grid(row=0, column=1, sticky="w", pady=4)
         ctk.CTkLabel(grid, text=f"⚡ Energy: {tel.get('energy_kwh', 0):.6f} kWh", font=ctk.CTkFont(size=13)).grid(row=1, column=0, sticky="w", pady=4)
@@ -1777,7 +1890,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         if not ctx.events:
             ctk.CTkLabel(self.inspector_content, text="No events recorded.", text_color="gray").pack(anchor="w", pady=10)
             return
-            
+
         for ev in ctx.events:
             frame = ctk.CTkFrame(self.inspector_content, fg_color=("gray90", "gray10"), corner_radius=4)
             frame.pack(fill="x", pady=2)
@@ -1789,7 +1902,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         _SectionLabel(self.inspector_content, "Review & Action").pack(anchor="w", pady=(0, 4))
         rev = ctx.review_summary
         t = ctx.record
-        
+
         ctk.CTkLabel(self.inspector_content, text=f"Human Review Required: {rev.get('human_review_required', False)}").pack(anchor="w", pady=2)
         ctk.CTkLabel(self.inspector_content, text=f"Accepted: {rev.get('accepted', False)}").pack(anchor="w", pady=2)
         if rev.get("supervisor_decision"):
@@ -1798,10 +1911,10 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         if t.status in ["local_draft_generated", "handoff_generated", "council_completed", "pending"]:
             actions = ctk.CTkFrame(self.inspector_content, fg_color="transparent")
             actions.pack(fill="x", pady=20)
-            
+
             accept_btn = ctk.CTkButton(actions, text="Approve & Load", fg_color="#166534", hover_color="#15803d", command=lambda: self._execute_context_review(t.task_id, True))
             accept_btn.pack(side="left", padx=(0, 10))
-            
+
             reject_btn = ctk.CTkButton(actions, text="Deny", fg_color="#7f1d1d", hover_color="#991b1b", command=lambda: self._execute_context_review(t.task_id, False))
             reject_btn.pack(side="left", padx=(0, 10))
 
@@ -1816,9 +1929,9 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         }
         if decision_override:
             payload["decision"] = decision_override
-            
+
         self.ledger.append_event(task_id, "review_completed", payload)
-        
+
         if accepted:
             task = self.ledger.get_task(task_id)
             if task:
@@ -1861,11 +1974,11 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             card = ctk.CTkFrame(self.ledger_scroll, corner_radius=6, fg_color=fg, cursor="hand2")
             card.grid(row=i, column=0, padx=4, pady=4, sticky="ew")
             card.grid_columnconfigure(1, weight=1)
-            
+
             # Make card elements clickable
             def make_handler(tid=t.task_id):
                 return lambda e, task_id=tid: self._select_ledger_task(task_id)
-                
+
             handler = make_handler()
             card.bind("<Button-1>", handler)
 
@@ -1901,11 +2014,11 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             )
             id_lbl.grid(row=0, column=2, padx=(8, 6), pady=(6, 2), sticky="e")
             id_lbl.bind("<Button-1>", handler)
-            
+
             meta_parts = []
             if t.risk_level: meta_parts.append(f"Risk: {t.risk_level}")
             if t.runner: meta_parts.append(f"Runner: {t.runner}")
-            
+
             meta_lbl = ctk.CTkLabel(
                 card,
                 text=" · ".join(meta_parts),
@@ -2663,7 +2776,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             anchor="w",
         )
         self._review_queue_summary_lbl.grid(row=1, column=0, padx=16, pady=(0, 6), sticky="w")
-        
+
         self._review_list_frame = ctk.CTkFrame(card, fg_color="transparent")
         self._review_list_frame.grid(row=2, column=0, padx=16, pady=(0, 12), sticky="ew")
         self._review_list_frame.grid_columnconfigure(0, weight=1)
@@ -2710,11 +2823,11 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         for idx, task in enumerate(pending[:100]):
             row = ctk.CTkFrame(self._review_list_frame, corner_radius=6, fg_color=("gray85", "gray22"))
             row.pack(fill="x", pady=2)
-            
+
             info = f"[{task.task_id[:8]}] {task.title}  ·  Source: {task.runner}  ·  Status: {task.status}"
             if getattr(task, "updated_at", None):
                 info += f"  ·  {task.updated_at}"
-                
+
             ctk.CTkLabel(
                 row, text=info, font=ctk.CTkFont(size=11), anchor="w"
             ).pack(side="left", padx=10, pady=6)
@@ -3526,13 +3639,13 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
                         duration_seconds = ru.get("duration_seconds", 0.0)
                         total_in += input_tokens
                         total_out += output_tokens
-                        
+
                         val_run = order.result.get("validation_run") or {}
                         failed_val = (val_run and not val_run.get("passed", True))
                         has_error = bool(order.result.get("error")) or order.status == "failed"
                         if failed_val or has_error:
                             wasted_tokens += input_tokens + output_tokens
-                            
+
                         agent_updates.append(
                             {
                                 "role": order.assigned_role,
@@ -3770,7 +3883,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
                 tokens_out = resp.usage.get("completion_tokens", 0)
 
                 # Need to simulate validation failure if it's complex or has risk level > low
-                # to trigger the council pipeline handoff. For this prototype, if it's 
+                # to trigger the council pipeline handoff. For this prototype, if it's
                 # medium or high risk, we fail it to test the pipeline.
                 validator_passed = danger.risk_level == "low"
 
@@ -3931,51 +4044,51 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
     def _get_glow_target(self, task) -> Optional[str]:
         if not task:
             return "local"
-        
+
         if task.status == "pending":
             return "local"
-        
+
         if task.status == "local_draft_generated":
             if task.validator_passed is False:
                 return "council"
             return None
-            
+
         if task.status == "handoff_generated":
             if task.runner == "local_llm":
                 return "council"
             return "codex"
-            
+
         if task.status == "council_completed":
             if getattr(task, "observed_status", "") != "sufficient":
                 return "codex"
             return None
-            
+
         if task.status == "reviewed" and not task.accepted:
             return "council"
-            
+
         return None
 
     def _update_workflow_glow(self):
         if not UI_AVAILABLE:
             return
-        
+
         task_id = getattr(self, "current_loaded_task_id", None)
         task = self.ledger.get_task(task_id) if task_id else None
-        
+
         if not task:
             tasks = self.ledger.get_all_tasks()
             if tasks:
                 task = tasks[0]
                 self.current_loaded_task_id = task.task_id
-        
+
         target = self._get_glow_target(task)
-        
+
         # Reset all glows
         self.glow_local.configure(border_width=0)
         self.glow_council.configure(border_width=0)
         self.glow_codex.configure(border_width=0)
         self.glow_anti.configure(border_width=0)
-        
+
         if target == "local":
             self.glow_local.configure(border_width=2, border_color="#22c55e")
         elif target == "council":
