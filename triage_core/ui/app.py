@@ -1078,7 +1078,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
     def _build_sidebar(self):
         sb = ctk.CTkFrame(self, width=220, corner_radius=0)
         sb.grid(row=0, column=0, rowspan=2, sticky="nsew")
-        sb.grid_rowconfigure(7, weight=1)
+        sb.grid_rowconfigure(8, weight=1)
         self.sidebar = sb
 
         ctk.CTkLabel(
