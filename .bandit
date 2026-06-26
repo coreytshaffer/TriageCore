@@ -1,0 +1,3 @@
+# Bandit config to exclude standard library noise for CLI sidecar
+skips: ['B404', 'B607', 'B104', 'B303']
+exclude_dirs: ['tests', 'scratch', 'docs']
