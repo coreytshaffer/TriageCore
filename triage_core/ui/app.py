@@ -52,6 +52,13 @@ from ..classifier import DangerDetector, TaskClassifier
 from ..sustainability import SustainabilityEstimator, PowerMonitor
 from ..context_budget import create_context_pack_artifact
 
+try:
+    from .. import triagedesk_adapter as _td_adapter
+    _TD_ADAPTER_AVAILABLE = True
+except ImportError:
+    _td_adapter = None
+    _TD_ADAPTER_AVAILABLE = False
+
 # ─── Status color map ────────────────────────────────────────────────────────
 _STATUS_FG = {
     "accepted": "#166534",  # dark green
@@ -1045,6 +1052,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         self._build_dispatch_frame()
         self._build_ledger_frame()
         self._build_telemetry_frame()
+        self._build_status_panel()
         self._build_logs_frame()
         self._build_rules_frame()
 
@@ -2371,20 +2379,22 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         f.grid_columnconfigure(0, weight=1)
         self.telemetry_frame = f
 
+        # Row 0 is reserved for the Operator Status panel (built separately)
+
         ctk.CTkLabel(
             f,
             text="Savings & Telemetry Dashboard",
             font=ctk.CTkFont(size=22, weight="bold"),
-        ).grid(row=0, column=0, padx=24, pady=(20, 4), sticky="w")
+        ).grid(row=1, column=0, padx=24, pady=(20, 4), sticky="w")
 
         # Row 1: Savings / avoidance signals from existing ledger evidence.
         self._savings_card = ctk.CTkFrame(f, corner_radius=12)
-        self._savings_card.grid(row=1, column=0, padx=24, pady=8, sticky="ew")
+        self._savings_card.grid(row=2, column=0, padx=24, pady=8, sticky="ew")
         self._savings_card.grid_columnconfigure((0, 1, 2, 3), weight=1)
 
         # Row 2: Sustainability Vector Gauges (Session Totals)
         self._gauges_card = ctk.CTkFrame(f, corner_radius=12)
-        self._gauges_card.grid(row=2, column=0, padx=24, pady=8, sticky="ew")
+        self._gauges_card.grid(row=3, column=0, padx=24, pady=8, sticky="ew")
         self._gauges_card.grid_columnconfigure((0, 1, 2, 3), weight=1)
 
         _SectionLabel(self._gauges_card, "Tracked Resource Context").grid(
@@ -2413,7 +2423,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
 
         # Row 3: Status & Shares
         self._status_row = ctk.CTkFrame(f, fg_color="transparent")
-        self._status_row.grid(row=3, column=0, padx=24, pady=8, sticky="ew")
+        self._status_row.grid(row=4, column=0, padx=24, pady=8, sticky="ew")
         self._status_row.grid_columnconfigure((0, 1), weight=1)
 
         self._power_card = ctk.CTkFrame(self._status_row, corner_radius=12)
@@ -2432,20 +2442,90 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
 
         # Row 4: Session Summary Text Details
         self._telem_card = ctk.CTkFrame(f, corner_radius=12)
-        self._telem_card.grid(row=4, column=0, padx=24, pady=8, sticky="ew")
+        self._telem_card.grid(row=5, column=0, padx=24, pady=8, sticky="ew")
         self._telem_card.grid_columnconfigure((0, 1), weight=1)
 
         # Row 5: Per Accepted Task ratio KPIs
         self._controls_card = ctk.CTkFrame(f, corner_radius=12)
-        self._controls_card.grid(row=5, column=0, padx=24, pady=8, sticky="ew")
+        self._controls_card.grid(row=6, column=0, padx=24, pady=8, sticky="ew")
         self._controls_card.grid_columnconfigure((0, 1, 2, 3), weight=1)
 
         # Row 6: Per Accepted Task ratio KPIs
         self._per_task_card = ctk.CTkFrame(f, corner_radius=12)
-        self._per_task_card.grid(row=6, column=0, padx=24, pady=(8, 24), sticky="ew")
+        self._per_task_card.grid(row=7, column=0, padx=24, pady=(8, 24), sticky="ew")
         self._per_task_card.grid_columnconfigure((0, 1, 2), weight=1)
 
+    # ─── Operator Status Panel (TD-003) ────────────────────────────────────────
+    def _build_status_panel(self):
+        """Build a read-only operator status card at the top of the telemetry frame.
+        Powered by the triagedesk_adapter — no direct ledger mutation."""
+        f = self.telemetry_frame
+
+        card = ctk.CTkFrame(f, corner_radius=12)
+        card.grid(row=0, column=0, padx=24, pady=(12, 4), sticky="ew")
+        card.grid_columnconfigure((0, 1, 2, 3, 4), weight=1)
+        self._op_status_card = card
+
+        _SectionLabel(card, "Operator Status").grid(
+            row=0, column=0, columnspan=5, padx=16, pady=(12, 8), sticky="w"
+        )
+
+        # Create label pairs: (header, value)
+        self._op_repo_lbl = self._op_status_chip(card, "Repo", "…", 0)
+        self._op_ledger_lbl = self._op_status_chip(card, "Ledger", "…", 1)
+        self._op_last_event_lbl = self._op_status_chip(card, "Last Event", "…", 2)
+        self._op_reviews_lbl = self._op_status_chip(card, "Pending Reviews", "…", 3)
+        self._op_adapter_lbl = self._op_status_chip(card, "Adapter", "…", 4)
+
+    def _op_status_chip(self, parent, header, initial_value, col):
+        """Create a small header+value chip in the status card. Returns the value label."""
+        chip = ctk.CTkFrame(parent, corner_radius=8, fg_color=("gray85", "gray22"))
+        chip.grid(row=1, column=col, padx=6, pady=(0, 12), sticky="nsew")
+
+        ctk.CTkLabel(
+            chip, text=header,
+            font=ctk.CTkFont(size=10, weight="bold"),
+            text_color="#9ca3af", anchor="w",
+        ).pack(anchor="w", padx=10, pady=(8, 0))
+
+        val_lbl = ctk.CTkLabel(
+            chip, text=initial_value,
+            font=ctk.CTkFont(size=12),
+            anchor="w",
+        )
+        val_lbl.pack(anchor="w", padx=10, pady=(2, 8))
+        return val_lbl
+
+    def _refresh_status_panel(self):
+        """Update the operator status panel from the adapter. Read-only, no mutation."""
+        if not _TD_ADAPTER_AVAILABLE or _td_adapter is None:
+            self._op_adapter_lbl.configure(text="unavailable")
+            return
+
+        try:
+            snap = _td_adapter.get_status_snapshot()
+            self._op_repo_lbl.configure(text=snap.git_status)
+            ledger_text = "exists" if snap.ledger_exists else "missing"
+            if snap.ledger_exists and not snap.ledger_writable:
+                ledger_text = "read-only"
+            self._op_ledger_lbl.configure(text=ledger_text)
+            self._op_last_event_lbl.configure(text=snap.last_event_timestamp)
+        except Exception:
+            self._op_repo_lbl.configure(text="error")
+            self._op_ledger_lbl.configure(text="error")
+            self._op_last_event_lbl.configure(text="error")
+
+        try:
+            rq = _td_adapter.get_review_queue_snapshot()
+            count = len(rq.pending_tasks)
+            self._op_reviews_lbl.configure(text=str(count) if count > 0 else "none")
+        except Exception:
+            self._op_reviews_lbl.configure(text="error")
+
+        self._op_adapter_lbl.configure(text="connected")
+
     def _refresh_telemetry(self):
+        self._refresh_status_panel()
         tasks = self.ledger.get_all_tasks()
         accepted = [t for t in tasks if t.accepted]
         n_local = sum(1 for t in tasks if t.runner == "local_llm")
