@@ -1123,6 +1123,39 @@ def tc_context_plan(input_path: str, model_profile: str) -> None:
         print(f"* {action}")
 
 
+def tc_packet_render(task_path: str, model_profile: str, includes: list[str], output_path: str = None, force: bool = False) -> None:
+    import os
+    import sys
+    from triage_core.token_budget import get_token_budget
+    from triage_core.packet_renderer import render_packet
+
+    try:
+        budget = get_token_budget(model_profile)
+    except KeyError:
+        print(f"Error: Unknown model profile: {model_profile}")
+        sys.exit(1)
+
+    try:
+        res = render_packet(task_path, budget, includes)
+    except Exception as e:
+        print(f"Error rendering packet: {e}")
+        sys.exit(1)
+
+    if output_path:
+        if os.path.exists(output_path) and not force:
+            print(f"Error: Output file '{output_path}' already exists. Use --force to overwrite.")
+            sys.exit(1)
+        try:
+            with open(output_path, "w", encoding="utf-8") as f:
+                f.write(res.content)
+            print(f"Success: Wrote rendered packet to {output_path}")
+        except Exception as e:
+            print(f"Error writing to {output_path}: {e}")
+            sys.exit(1)
+    else:
+        print(res.content)
+
+
 def main():
     parser = argparse.ArgumentParser(description="TriageCore Operator Workflow")
     subparsers = parser.add_subparsers(dest="command")
@@ -1365,6 +1398,17 @@ def main():
     context_plan_parser.add_argument("--input", required=True, help="Path to the input file")
     context_plan_parser.add_argument("--model", required=True, help="Token budget model profile")
 
+    # packet
+    packet_parser = subparsers.add_parser("packet", help="Manage bounded handoff packets")
+    packet_subparsers = packet_parser.add_subparsers(dest="packet_command")
+
+    packet_render_parser = packet_subparsers.add_parser("render", help="Render a bounded handoff packet for a task")
+    packet_render_parser.add_argument("--task", required=True, help="Path to the task or CR file")
+    packet_render_parser.add_argument("--model", required=True, help="Token budget model profile")
+    packet_render_parser.add_argument("--include", action="append", default=[], help="Path to include in the packet (can be specified multiple times)")
+    packet_render_parser.add_argument("--output", help="Optional path to write the rendered packet")
+    packet_render_parser.add_argument("--force", action="store_true", help="Overwrite the output file if it already exists")
+
     args = parser.parse_args()
 
     if args.command == "propose":
@@ -1460,6 +1504,11 @@ def main():
             tc_context_plan(args.input, args.model)
         else:
             context_parser.error("context requires a subcommand: plan")
+    elif args.command == "packet":
+        if args.packet_command == "render":
+            tc_packet_render(args.task, args.model, args.include, args.output, args.force)
+        else:
+            packet_parser.error("packet requires a subcommand: render")
     else:
         parser.print_help()
 
