@@ -41,8 +41,8 @@ TriageDesk will present five core views, mapped directly to the existing CLI bas
 - It must not overwrite local configurations or ledgers directly; it only reads them and outputs bounded artifacts (like rendering a packet).
 
 ## Implementation Backlog
-1. **TD-002: Add GUI adapter layer with no UI dependency**
-   - Create a pure-Python adapter layer that bridges `TriageDesk` with `diagnostics.py`, `review_queue.py`, `context_planner.py`, `packet_renderer.py`, and `token_budget.py`. Ensure TriageDesk calls these stable functions instead of re-implementing logic.
+1. **[x] TD-002: Add GUI adapter layer with no UI dependency**
+   - Create a pure-Python adapter layer that bridges `TriageDesk` with `diagnostics.py`, `review_queue.py`, `context_planner.py`, `packet_renderer.py`, and `token_budget.py`. Ensure TriageDesk calls these stable functions instead of re-implementing logic. (Completed)
 2. **TD-003: Read-only Textual shell or CustomTkinter refactor**
    - Refactor or replace the UI to strictly use the adapter layer to drive the five proposed views.
 3. **TD-004: Context Planner / Packet Renderer UI integration**

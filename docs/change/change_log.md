@@ -5,6 +5,7 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+- Implemented TD-002 (TriageDesk read-only adapter layer): Added `triagedesk_adapter.py` providing a safe, GUI-neutral seam for UI layers to fetch deterministic status, budget estimates, and review queues without directly managing internal ledger state or scraping CLI strings.
 - Implemented TD-001 (TriageDesk GUI inventory and read-only shell plan): Added `docs/triagedesk_gui_plan.md` outlining the architecture, boundaries, and backlog for the TriageDesk read-only operator console.
 - Implemented CR-DD-008 (daily-driver quickstart): Added `docs/daily_driver_quickstart.md` to document the new local-first operator workflow commands.
 - Implemented CR-DD-007 (review queue listing dry-run): Added `tc review list` command and `review_queue.py` to deterministically surface pending items from local records without mutation.
