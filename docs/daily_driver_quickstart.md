@@ -18,7 +18,7 @@ Start your work sessions by inspecting the state of your workspace and routing p
    ```powershell
    python -m triage_core.tc_cli doctor
    ```
-   Provides a deeper diagnostic breakdown of your Git environment, directory structure, and cryptographic registry readiness.
+   Provides a deeper diagnostic breakdown of your Git environment, ledger, handoff paths, config/test visibility, and runtime-safety posture.
 
 3. **Check the review queue**
    ```powershell
