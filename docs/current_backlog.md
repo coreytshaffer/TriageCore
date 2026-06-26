@@ -26,8 +26,8 @@ This document summarizes the active TriageCore backlog after CR-077.
   - Purpose: keep operator UX calm, legible, and evidence-first without jumping straight to a web dashboard or hidden automation surface.
 
 - TriageDesk GUI implementation path
-  - Source: TD-001
-  - Status: **[x] TD-001 (TriageDesk GUI inventory and read-only shell plan)** complete. TD-002 (GUI adapter layer) is next.
+  - Source: TD-001, TD-002
+  - Status: **[x] TD-001 (TriageDesk GUI inventory and read-only shell plan)**, **[x] TD-002 (TriageDesk read-only adapter layer)** complete. TD-003 (Read-only Textual shell or CustomTkinter refactor) is next.
   - Purpose: Provide a calm, read-only operator console wrapping the daily-driver baseline capabilities without expanding execution authority.
 
 - External runtime execution admission evidence
