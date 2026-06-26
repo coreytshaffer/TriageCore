@@ -1,7 +1,6 @@
 import os
 from typing import List, Optional
 from dataclasses import dataclass
-from pathlib import Path
 
 from triage_core import diagnostics
 from triage_core import review_queue
@@ -130,10 +129,12 @@ def get_doctor_snapshot() -> TriageDeskDoctorSnapshot:
 
 def get_review_queue_snapshot() -> TriageDeskReviewQueueSnapshot:
     ledger_path = _get_ledger_path()
-    ledger = TaskLedger(Path(ledger_path))
     if not os.path.exists(ledger_path):
         return TriageDeskReviewQueueSnapshot(pending_tasks=[])
-    
+
+    # TaskLedger expects a directory, not the file path
+    ledger_dir = os.path.dirname(ledger_path)
+    ledger = TaskLedger(ledger_dir=ledger_dir)
     pending = review_queue.get_pending_reviews(ledger)
     return TriageDeskReviewQueueSnapshot(pending_tasks=pending)
 
