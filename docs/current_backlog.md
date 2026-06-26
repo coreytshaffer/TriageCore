@@ -6,12 +6,13 @@ This document summarizes the active TriageCore backlog after CR-077.
 
 ## Active GitHub Backlog
 
-- Issue #4: Persistent cryptographic agent identities
+- Issue #72: Expand signed ledger event coverage beyond `route_audit`
   - Status: open
-  - Related CR: CR-020
-  - Purpose: add persistent local agent identities, signed ledger-event metadata, revocation, capability checks, and crypto-agile algorithm metadata.
-  - Current phase: identity foundation, signing helpers, signed `route_audit`, verification CLI, identity init/list/check/revoke, CR-027 key hardening, CR-028 signed smoke-path evidence, and CR-030 rotation/recovery policy complete
-  - Next gate: runtime rotation design and any decision about expanding signing beyond `route_audit`
+  - Purpose: selectively enforce identity checks and signatures for core ledger events beyond `route_audit` (e.g., decisions, validation results) without treating signatures as approval.
+
+- Issue #73: Implement runtime key rotation behavior
+  - Status: open
+  - Purpose: implement safe key rotation logic separate from the identity MVP, ensuring superseded keys are rejected while old signatures remain verifiable.
 
 ## Candidate Future Work
 
@@ -104,9 +105,7 @@ This document summarizes the active TriageCore backlog after CR-077.
 
 Keep three work lanes distinct:
 
-- Identity lifecycle work remains under Issue #4. Pause signing expansion beyond
-  `route_audit`; runtime rotation behavior still needs a separate
-  implementation slice before adding signed event types.
+- Identity lifecycle work #4 is closed. The active follow-ups are Issue #72 (signing expansion) and Issue #73 (runtime rotation behavior), which remain separate implementation slices.
 - Model and runtime integrity work should build on CR-031 through CR-033. Keep
   policy baseline, route-manifest artifact shape, manifest validation, and live
   enforcement as separate reviewable slices.

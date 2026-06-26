@@ -115,6 +115,7 @@ Start here if you want the shortest guided path:
 - [Judge Submission Bundle](docs/submission/README.md)
 - [Verification Guide](docs/verification_guide.md)
 - [Evidence Schema](docs/evidence_schema.md)
+- [Agent Identity Provenance Boundary](docs/security/agent_identity_provenance.md)
 - [External Runtime Admission Governance](docs/operations/external-runtime-admission.md)
 - [Benchmark Fixtures](benchmarks/tasks.jsonl)
 - [Public Evidence Example](docs/submission/public_evidence_example.md)
