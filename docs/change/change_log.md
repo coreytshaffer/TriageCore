@@ -5,6 +5,7 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+- Implemented CR-DD-007 (review queue listing dry-run): Added `tc review list` command and `review_queue.py` to deterministically surface pending items from local records without mutation.
 - Implemented CR-DD-006 (token-aware packet render dry-run): Added `tc packet render` and `packet_renderer.py` to create bounded, reviewable Markdown handoff packets with integrated TokenBudget planning.
 - Implemented CR-DD-005 (context plan dry-run command): Added `tc context plan` command and `context_planner.py` to conservatively estimate if an input file fits within a TokenBudget.
 - Implemented CR-DD-004 (token budget model): Added `triage_core/token_budget.py` providing deterministic calculations for usable input tokens based on conservative model profiles, reserved output space, and safety margins.
