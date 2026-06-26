@@ -1084,6 +1084,45 @@ def tc_eval_export_privacy_smoke(output_dir: str, case_id: str) -> None:
     print(f"Success: Wrote eval export-privacy-smoke contract file to {file_path}")
 
 
+def tc_context_plan(input_path: str, model_profile: str) -> None:
+    import os
+    import sys
+    from triage_core.token_budget import get_token_budget
+    from triage_core.context_planner import plan_context_for_text
+
+    if not os.path.exists(input_path):
+        print(f"Error: Input file not found: {input_path}")
+        sys.exit(1)
+
+    try:
+        budget = get_token_budget(model_profile)
+    except KeyError:
+        print(f"Error: Unknown model profile: {model_profile}")
+        sys.exit(1)
+
+    try:
+        with open(input_path, "r", encoding="utf-8") as f:
+            text = f.read()
+    except UnicodeDecodeError:
+        print(f"Error: Input file appears to be binary or unreadable: {input_path}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error reading {input_path}: {e}")
+        sys.exit(1)
+
+    plan = plan_context_for_text(input_path, text, budget)
+
+    print("Context Plan\n")
+    print(f"Input: {plan.input_path}")
+    print(f"Model: {plan.model_profile}")
+    print(f"Estimated input tokens: {plan.estimated_input_tokens}")
+    print(f"Usable input budget: {plan.usable_input_budget}")
+    print(f"Status: {plan.status}")
+    print("\nRecommended action:")
+    for action in plan.recommended_action.split('\n'):
+        print(f"* {action}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="TriageCore Operator Workflow")
     subparsers = parser.add_subparsers(dest="command")
@@ -1318,6 +1357,14 @@ def main():
         help="The case_id to use in the actual outcome JSON file",
     )
 
+    # context
+    context_parser = subparsers.add_parser("context", help="Manage and plan token context")
+    context_subparsers = context_parser.add_subparsers(dest="context_command")
+
+    context_plan_parser = context_subparsers.add_parser("plan", help="Dry-run context planning for an input file")
+    context_plan_parser.add_argument("--input", required=True, help="Path to the input file")
+    context_plan_parser.add_argument("--model", required=True, help="Token budget model profile")
+
     args = parser.parse_args()
 
     if args.command == "propose":
@@ -1408,6 +1455,11 @@ def main():
             tc_eval_export_privacy_smoke(args.output_dir, args.case_id)
         else:
             eval_parser.error("eval requires a subcommand: export-smoke or export-privacy-smoke")
+    elif args.command == "context":
+        if args.context_command == "plan":
+            tc_context_plan(args.input, args.model)
+        else:
+            context_parser.error("context requires a subcommand: plan")
     else:
         parser.print_help()
 
