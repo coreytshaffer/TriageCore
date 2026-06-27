@@ -1668,6 +1668,27 @@ def main():
         help="Path to write the HTML output file",
     )
 
+    workspace_handoff_parser = workspace_subparsers.add_parser(
+        "handoff",
+        help="Generate a copyable handoff packet for a specific tool",
+    )
+    workspace_handoff_parser.add_argument(
+        "--items", required=True, type=str,
+        help="Path to the work items YAML or JSON file",
+    )
+    workspace_handoff_parser.add_argument(
+        "--id", required=True, type=str,
+        help="The ID of the work item to hand off",
+    )
+    workspace_handoff_parser.add_argument(
+        "--tool", required=True, type=str, choices=["codex", "chatgpt", "status", "closing"],
+        help="The target tool profile for the handoff",
+    )
+    workspace_handoff_parser.add_argument(
+        "--format", type=str, choices=["text", "markdown", "json"], default="text",
+        help="The output format (default: text)",
+    )
+
     args = parser.parse_args()
 
     if args.command == "propose":
@@ -1822,8 +1843,28 @@ def main():
             except (FileNotFoundError, ValueError, ImportError) as e:
                 print(f"Error: {e}")
                 sys.exit(1)
+        elif args.workspace_command == "handoff":
+            from triage_core.workspace_handoff import generate_handoff
+            try:
+                items = load_work_items(args.items)
+                
+                # Resolve exactly one work item by ID
+                target_item = None
+                for it in items:
+                    if it.id == args.id:
+                        target_item = it
+                        break
+                
+                if not target_item:
+                    raise ValueError(f"Work item {args.id} not found in {args.items}")
+                    
+                output = generate_handoff(target_item, args.tool, args.format)
+                print(output)
+            except (FileNotFoundError, ValueError, ImportError) as e:
+                print(f"Error: {e}")
+                sys.exit(1)
         else:
-            workspace_parser.error("workspace requires a subcommand: board, wbs, now, or dashboard")
+            workspace_parser.error("workspace requires a subcommand: board, wbs, now, dashboard, or handoff")
     else:
         parser.print_help()
 
