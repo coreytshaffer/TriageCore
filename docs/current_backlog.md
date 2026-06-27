@@ -2,13 +2,13 @@
 
 ## Status
 
-This document summarizes the active TriageCore backlog after CR-077.
+This document summarizes the active TriageCore backlog after CR-078.
 
 ## Active GitHub Backlog
 
 - Issue #72: Expand signed ledger event coverage beyond `route_audit`
-  - Status: open
-  - Purpose: selectively enforce identity checks and signatures for core ledger events beyond `route_audit` (e.g., decisions, validation results) without treating signatures as approval.
+  - Status: partially implemented by CR-078
+  - Purpose: selectively enforce identity checks and signatures for core ledger events beyond `route_audit` without treating signatures as approval. CR-078 adds the first additional signed path for `validation_result`; broader event coverage remains future work.
 
 - Issue #73: Implement runtime key rotation behavior
   - Status: open
@@ -35,13 +35,6 @@ This document summarizes the active TriageCore backlog after CR-077.
   - Source: CR-050 admission evidence record
   - Status: evidence structure complete; ledger integration remains future work
   - Purpose: audit the admission of proposals separately from their execution.
-
-- CLI task-envelope wizard MVP
-  - Source: CR-051 follow-on sequence
-  - Status: candidate future CR, not yet active GitHub backlog
-  - Purpose: guide the operator through task scope, allowed files, risk, agent lanes, and approval gates without requiring memorized fields.
-
-
 
 - Textual read-only operator dashboard
   - Source: CR-051 follow-on sequence
@@ -105,7 +98,7 @@ This document summarizes the active TriageCore backlog after CR-077.
 
 Keep three work lanes distinct:
 
-- Identity lifecycle work #4 is closed. The active follow-ups are Issue #72 (signing expansion) and Issue #73 (runtime rotation behavior), which remain separate implementation slices.
+- Identity lifecycle work #4 is closed. CR-078 partially implements Issue #72 by adding signed `validation_result` ledger events; remaining signed-event expansion and Issue #73 runtime rotation behavior should stay separate implementation slices.
 - Model and runtime integrity work should build on CR-031 through CR-033. Keep
   policy baseline, route-manifest artifact shape, manifest validation, and live
   enforcement as separate reviewable slices.
@@ -113,12 +106,10 @@ Keep three work lanes distinct:
   hygiene work should be limited to stale documented claims or a separately
   proposed repo-consistency checker.
 
-The next feature-sized slice can be a runtime model-manifest enforcement
-preview, but it should not collapse policy, artifact shape, manifest validation,
-and backend probing into one change.
+For signed ledger coverage, the next slice should either add operator-facing verification for signed `validation_result` records or deliberately choose one more event type. Do not treat a valid signature as approval, safety, or correctness.
 
 For the empirical AI safety evaluation track, keep the next slices sequential: fixture validation first, evaluator CLI second, and broader adversarial/tampering studies only after the fixture contract is stable.
 
 For external runtime interoperability, the next approved slice should be policy tests or execution-path validation for the bounded adapter path.
 
-For operator UX, keep the next slices boring and sequential: task-envelope wizard first, Markdown report export second, and any Textual dashboard only after the artifact shape is stable.
+For operator UX, future slices should focus on reviewability, export polish, and dashboard/TUI surfaces only after artifact contracts remain stable. Avoid re-opening completed wizard or Markdown renderer work unless there is a concrete regression or usability gap.

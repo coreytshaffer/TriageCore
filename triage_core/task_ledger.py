@@ -14,6 +14,7 @@ from triage_core.privacy_invariants import assert_persistent_privacy_safe
 LEDGER_SCHEMA_VERSION = "0.2.0"
 ROLE_TAXONOMY_VERSION = "2026-06-worker-council-v2"
 ROUTE_AUDIT_SIGN_CAPABILITY = "route_audit:sign"
+VALIDATION_RESULT_SIGN_CAPABILITY = "validation_result:sign"
 
 
 @dataclass
@@ -195,6 +196,30 @@ class TaskLedger:
             signing_agent_id,
             ROUTE_AUDIT_SIGN_CAPABILITY,
             route_audit_signature_payload(event),
+            signature_algorithm=signature_algorithm,
+        )
+        with open(self.ledger_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(event) + "\n")
+        return event
+
+    def append_signed_validation_result_event(
+        self,
+        task_id: str,
+        payload: Dict[str, Any],
+        *,
+        signing_registry: AgentIdentityRegistry,
+        signing_agent_id: str,
+        signature_algorithm: str = "ed25519",
+    ) -> Dict[str, Any]:
+        assert_persistent_privacy_safe(
+            payload,
+            artifact_name="TaskLedger payload for event_type=validation_result",
+        )
+        event = self._build_event(task_id, "validation_result", payload)
+        event["signature_metadata"] = signing_registry.sign_payload(
+            signing_agent_id,
+            VALIDATION_RESULT_SIGN_CAPABILITY,
+            validation_result_signature_payload(event),
             signature_algorithm=signature_algorithm,
         )
         with open(self.ledger_path, "a", encoding="utf-8") as f:
@@ -648,6 +673,18 @@ class TaskLedger:
 def route_audit_signature_payload(event: Dict[str, Any]) -> Dict[str, Any]:
     if event.get("event_type") != "route_audit":
         raise ValueError("route_audit_signature_payload only supports route_audit events.")
+    return ledger_event_signature_payload(event)
+
+
+def validation_result_signature_payload(event: Dict[str, Any]) -> Dict[str, Any]:
+    if event.get("event_type") != "validation_result":
+        raise ValueError(
+            "validation_result_signature_payload only supports validation_result events."
+        )
+    return ledger_event_signature_payload(event)
+
+
+def ledger_event_signature_payload(event: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "event_id": event["event_id"],
         "task_id": event["task_id"],
@@ -668,6 +705,19 @@ def verify_route_audit_event_signature(
         return False
     return signing_registry.verify_signed_payload(
         route_audit_signature_payload(event),
+        signature_metadata,
+    )
+
+
+def verify_validation_result_event_signature(
+    event: Dict[str, Any],
+    signing_registry: AgentIdentityRegistry,
+) -> bool:
+    signature_metadata = event.get("signature_metadata")
+    if not signature_metadata:
+        return False
+    return signing_registry.verify_signed_payload(
+        validation_result_signature_payload(event),
         signature_metadata,
     )
 
