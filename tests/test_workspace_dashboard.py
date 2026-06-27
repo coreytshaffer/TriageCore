@@ -32,6 +32,7 @@ def test_dashboard_escapes_html(work_items):
     
     # Inject malicious title into the first item
     work_items[0].title = malicious_title
+    work_items[0].ux = None
     
     today_focus = TodayFocus(focus=[work_items[0].id])
     html_out = render_html(work_items, today_focus)
@@ -54,13 +55,30 @@ def test_dashboard_preserves_focus_order(work_items):
     assert -1 < pos3 < pos1 < pos2, "Cards must be rendered in the order of today.focus"
 
 
-def test_dashboard_contains_disabled_handoff_placeholders(work_items, today):
-    """Placeholders must be disabled so the UI does not imply functionality."""
+def test_dashboard_contains_active_handoff_buttons_and_fallbacks(work_items, today):
+    """Buttons should call the JS function and textareas should be present."""
     html_out = render_html(work_items, today)
     
-    assert "<button disabled" in html_out
-    assert "Coming in CR-WU-006" in html_out
+    assert "onclick=\"copyHandoff(" in html_out
     assert "Copy Codex Handoff" in html_out
+    assert "<textarea id=\"handoff-DEMO-001-codex\" hidden readonly class=\"handoff-textarea\">" in html_out
+    assert "<script>" in html_out
+    assert "navigator.clipboard.writeText" in html_out
+
+
+def test_dashboard_handoff_payloads_match_generator(work_items, today):
+    """The generated payloads should match the shared generator output."""
+    from triage_core.workspace_handoff import generate_handoff
+    from triage_core.workspace_dashboard import h
+    
+    html_out = render_html(work_items, today)
+    
+    # Check that the exact escaped text from the generator is in the HTML
+    codex_text = generate_handoff(work_items[0], "codex", "text")
+    chatgpt_text = generate_handoff(work_items[0], "chatgpt", "text")
+    
+    assert h(codex_text) in html_out
+    assert h(chatgpt_text) in html_out
 
 
 def test_dashboard_has_no_external_resources(work_items, today):

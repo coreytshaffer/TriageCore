@@ -9,7 +9,7 @@ The Workspace Dashboard provides a visually pleasing, browser-based "launchpad" 
 ## Features
 
 - **Static HTML output:** Zero dependencies (no external CSS, JS, React, or Tailwind).
-- **Copyable affordances:** Focus cards prioritize the next action, the reason it matters, and the stop rule. Buttons for copying handoff packets are present (currently disabled as placeholders until CR-WU-006).
+- **Copyable affordances:** Focus cards prioritize the next action, the reason it matters, and the stop rule. Buttons for copying handoff packets are fully functional. They use progressive enhancement: if clipboard access is available, they copy directly. If not (due to secure context constraints for local files), a text box appears so you can copy manually.
 - **Security:** All dynamic YAML fields are aggressively HTML-escaped to prevent script injection.
 - **Read-only execution:** The CLI command never mutates the repo, executes commands, or calls models. The *only* write effect is creating the explicitly requested output file.
 

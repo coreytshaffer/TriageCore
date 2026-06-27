@@ -81,12 +81,29 @@
     }
     button {
         background: #444;
-        color: #888;
+        color: #ddd;
         border: 1px solid #555;
         border-radius: 3px;
         padding: 6px;
-        cursor: not-allowed;
+        cursor: pointer;
         text-align: left;
+    }
+    button:hover {
+        background: #555;
+    }
+    .handoff-textarea {
+        width: 100%;
+        height: 100px;
+        background: #1e1e1e;
+        color: #d4d4d4;
+        border: 1px solid #555;
+        border-radius: 3px;
+        padding: 6px;
+        margin-top: 4px;
+        font-family: monospace;
+        font-size: 0.85em;
+        resize: vertical;
+        box-sizing: border-box;
     }
     .list-section {
         margin-bottom: 30px;
@@ -100,6 +117,28 @@
     .blocked-li { border-left-color: var(--error); }
     .warning-li { border-left-color: var(--warn); }
     </style>
+
+        <script>
+        async function copyHandoff(targetId, button) {
+            const el = document.getElementById(targetId);
+            const text = el.value || el.textContent;
+
+            try {
+                await navigator.clipboard.writeText(text);
+                const oldText = button.textContent;
+                button.textContent = "Copied!";
+                setTimeout(() => { button.textContent = oldText; }, 2000);
+            } catch (err) {
+                el.hidden = false;
+                el.focus();
+                if (el.select) el.select();
+                button.textContent = "Clipboard unavailable. Select text below and press Ctrl+C/Cmd+C";
+                button.disabled = true;
+                button.style.cursor = "default";
+            }
+        }
+        </script>
+        
 </head>
 <body>
 
@@ -142,9 +181,76 @@
         </div>
         
         <div class="card-buttons">
-            <button disabled title="Coming in CR-WU-006">Copy Codex Handoff</button>
-            <button disabled title="Coming in CR-WU-006">Copy ChatGPT Prompt</button>
-            <button disabled title="Coming in CR-WU-006">Copy Status Summary</button>
+    
+            <button onclick="copyHandoff('handoff-DEMO-001-codex', this)" type="button">Copy Codex Handoff</button>
+            <textarea id="handoff-DEMO-001-codex" hidden readonly class="handoff-textarea">HANDOFF: DEMO-001
+=================
+
+Target tool: Codex
+Project: example-control-plane
+Work item: Workspace Schema
+Risk: medium
+
+Objective:
+Reduce orientation cost when switching between projects
+
+Next action:
+Implement schema loader and brief renderer
+
+Stop rule:
+- Stop after schema loader works; do not add dashboard UI.
+
+Acceptance criteria:
+- Schema validates registry files
+- CLI prints deterministic project brief
+- No commands are executed
+
+Required checks:
+- python -m pytest tests/test_workspace_board.py
+- git diff --check
+
+Return format:
+- changed_files
+- tests_run
+- unresolved_risks</textarea>
+        
+            <button onclick="copyHandoff('handoff-DEMO-001-chatgpt', this)" type="button">Copy ChatGPT Review</button>
+            <textarea id="handoff-DEMO-001-chatgpt" hidden readonly class="handoff-textarea">REVIEW HANDOFF: DEMO-001
+
+Project: example-control-plane
+Feature: Workspace Schema
+
+Context / Objective:
+Reduce orientation cost when switching between projects
+
+Please assess:
+- scope creep
+- privacy boundary
+- test adequacy
+- UX clarity
+- next best slice</textarea>
+        
+            <button onclick="copyHandoff('handoff-DEMO-001-status', this)" type="button">Copy Status Summary</button>
+            <textarea id="handoff-DEMO-001-status" hidden readonly class="handoff-textarea">STATUS UPDATE: DEMO-001
+example-control-plane - Workspace Schema
+Current focus: Implement schema loader and brief renderer</textarea>
+        
+            <button onclick="copyHandoff('handoff-DEMO-001-closing', this)" type="button">Copy Closing Packet</button>
+            <textarea id="handoff-DEMO-001-closing" hidden readonly class="handoff-textarea">CLOSING PACKET: DEMO-001
+example-control-plane - Workspace Schema
+
+Verified criteria:
+[ ] Schema validates registry files
+[ ] CLI prints deterministic project brief
+[ ] No commands are executed
+
+Checks passed:
+[ ] python -m pytest tests/test_workspace_board.py
+[ ] git diff --check
+
+Evidence:
+- &lt;insert PR/commit links here&gt;</textarea>
+        
         </div>
     </div>
     
@@ -170,9 +276,50 @@
         </div>
         
         <div class="card-buttons">
-            <button disabled title="Coming in CR-WU-006">Copy Codex Handoff</button>
-            <button disabled title="Coming in CR-WU-006">Copy ChatGPT Prompt</button>
-            <button disabled title="Coming in CR-WU-006">Copy Status Summary</button>
+    
+            <button onclick="copyHandoff('handoff-DEMO-002-codex', this)" type="button">Copy Codex Handoff</button>
+            <textarea id="handoff-DEMO-002-codex" hidden readonly class="handoff-textarea">HANDOFF: DEMO-002
+=================
+
+Target tool: Codex
+Project: example-commons
+Work item: Draft consent and key custody flow
+Risk: medium
+
+Objective:
+Define a recall-rights model that preserves consent and auditability
+
+Next action:
+Draft recall state machine with owner-held decryption key flow</textarea>
+        
+            <button onclick="copyHandoff('handoff-DEMO-002-chatgpt', this)" type="button">Copy ChatGPT Review</button>
+            <textarea id="handoff-DEMO-002-chatgpt" hidden readonly class="handoff-textarea">REVIEW HANDOFF: DEMO-002
+
+Project: example-commons
+Feature: Draft consent and key custody flow
+
+Context / Objective:
+Define a recall-rights model that preserves consent and auditability
+
+Please assess:
+- scope creep
+- privacy boundary
+- test adequacy
+- UX clarity
+- next best slice</textarea>
+        
+            <button onclick="copyHandoff('handoff-DEMO-002-status', this)" type="button">Copy Status Summary</button>
+            <textarea id="handoff-DEMO-002-status" hidden readonly class="handoff-textarea">STATUS UPDATE: DEMO-002
+example-commons - Draft consent and key custody flow
+Current focus: Draft recall state machine with owner-held decryption key flow</textarea>
+        
+            <button onclick="copyHandoff('handoff-DEMO-002-closing', this)" type="button">Copy Closing Packet</button>
+            <textarea id="handoff-DEMO-002-closing" hidden readonly class="handoff-textarea">CLOSING PACKET: DEMO-002
+example-commons - Draft consent and key custody flow
+
+Evidence:
+- &lt;insert PR/commit links here&gt;</textarea>
+        
         </div>
     </div>
     
@@ -198,9 +345,44 @@
         </div>
         
         <div class="card-buttons">
-            <button disabled title="Coming in CR-WU-006">Copy Codex Handoff</button>
-            <button disabled title="Coming in CR-WU-006">Copy ChatGPT Prompt</button>
-            <button disabled title="Coming in CR-WU-006">Copy Status Summary</button>
+    
+            <button onclick="copyHandoff('handoff-DEMO-003-codex', this)" type="button">Copy Codex Handoff</button>
+            <textarea id="handoff-DEMO-003-codex" hidden readonly class="handoff-textarea">HANDOFF: DEMO-003
+=================
+
+Target tool: Codex
+Project: example-monitoring
+Work item: Clarify resource freshness vs observation freshness
+Risk: low
+
+Next action:
+Review public claims language for accuracy</textarea>
+        
+            <button onclick="copyHandoff('handoff-DEMO-003-chatgpt', this)" type="button">Copy ChatGPT Review</button>
+            <textarea id="handoff-DEMO-003-chatgpt" hidden readonly class="handoff-textarea">REVIEW HANDOFF: DEMO-003
+
+Project: example-monitoring
+Feature: Clarify resource freshness vs observation freshness
+
+Please assess:
+- scope creep
+- privacy boundary
+- test adequacy
+- UX clarity
+- next best slice</textarea>
+        
+            <button onclick="copyHandoff('handoff-DEMO-003-status', this)" type="button">Copy Status Summary</button>
+            <textarea id="handoff-DEMO-003-status" hidden readonly class="handoff-textarea">STATUS UPDATE: DEMO-003
+example-monitoring - Clarify resource freshness vs observation freshness
+Current focus: Review public claims language for accuracy</textarea>
+        
+            <button onclick="copyHandoff('handoff-DEMO-003-closing', this)" type="button">Copy Closing Packet</button>
+            <textarea id="handoff-DEMO-003-closing" hidden readonly class="handoff-textarea">CLOSING PACKET: DEMO-003
+example-monitoring - Clarify resource freshness vs observation freshness
+
+Evidence:
+- &lt;insert PR/commit links here&gt;</textarea>
+        
         </div>
     </div>
     
@@ -208,5 +390,5 @@
 <div class="list-section"><h2>Blocked</h2><ul>
 <li class="blocked-li"><strong>DEMO-004</strong> — example-safety — Waiting on: Privacy/NAS boundary plan not ready</li>
 </ul></div>
-<div style="margin-top: 50px; font-size: 0.8em; color: #666;">Generated at: 2026-06-27 14:14:12</div>
+<div style="margin-top: 50px; font-size: 0.8em; color: #666;">Generated at: 2026-06-27 14:20:42</div>
 </body></html>

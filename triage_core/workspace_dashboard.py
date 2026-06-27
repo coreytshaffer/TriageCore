@@ -18,6 +18,7 @@ from typing import Any
 
 from triage_core.workspace_board import WorkItem, Status, RiskLevel
 from triage_core.workspace_now import TodayFocus
+from triage_core.workspace_handoff import generate_handoff
 
 
 def h(value: Any) -> str:
@@ -89,9 +90,22 @@ def _render_focus_card(item: WorkItem) -> str:
         </div>
         
         <div class="card-buttons">
-            <button disabled title="Coming in CR-WU-006">Copy Codex Handoff</button>
-            <button disabled title="Coming in CR-WU-006">Copy ChatGPT Prompt</button>
-            <button disabled title="Coming in CR-WU-006">Copy Status Summary</button>
+    """
+    
+    for profile_id, label in [
+        ("codex", "Copy Codex Handoff"),
+        ("chatgpt", "Copy ChatGPT Review"),
+        ("status", "Copy Status Summary"),
+        ("closing", "Copy Closing Packet"),
+    ]:
+        handoff_text = generate_handoff(item, profile_id, "text")
+        textarea_id = f"handoff-{item.id}-{profile_id}"
+        card_html += f"""
+            <button onclick="copyHandoff('{textarea_id}', this)" type="button">{label}</button>
+            <textarea id="{textarea_id}" hidden readonly class="handoff-textarea">{h(handoff_text)}</textarea>
+        """
+
+    card_html += """
         </div>
     </div>
     """
@@ -210,12 +224,29 @@ def render_html(work_items: list[WorkItem], today: TodayFocus, generated_at: str
     }
     button {
         background: #444;
-        color: #888;
+        color: #ddd;
         border: 1px solid #555;
         border-radius: 3px;
         padding: 6px;
-        cursor: not-allowed;
+        cursor: pointer;
         text-align: left;
+    }
+    button:hover {
+        background: #555;
+    }
+    .handoff-textarea {
+        width: 100%;
+        height: 100px;
+        background: #1e1e1e;
+        color: #d4d4d4;
+        border: 1px solid #555;
+        border-radius: 3px;
+        padding: 6px;
+        margin-top: 4px;
+        font-family: monospace;
+        font-size: 0.85em;
+        resize: vertical;
+        box-sizing: border-box;
     }
     .list-section {
         margin-bottom: 30px;
@@ -237,6 +268,28 @@ def render_html(work_items: list[WorkItem], today: TodayFocus, generated_at: str
         "<meta charset='utf-8'>",
         "<title>TriageCore Workspace</title>",
         f"<style>{css}</style>",
+        """
+        <script>
+        async function copyHandoff(targetId, button) {
+            const el = document.getElementById(targetId);
+            const text = el.value || el.textContent;
+
+            try {
+                await navigator.clipboard.writeText(text);
+                const oldText = button.textContent;
+                button.textContent = "Copied!";
+                setTimeout(() => { button.textContent = oldText; }, 2000);
+            } catch (err) {
+                el.hidden = false;
+                el.focus();
+                if (el.select) el.select();
+                button.textContent = "Clipboard unavailable. Select text below and press Ctrl+C/Cmd+C";
+                button.disabled = true;
+                button.style.cursor = "default";
+            }
+        }
+        </script>
+        """,
         "</head>",
         "<body>"
     ]
