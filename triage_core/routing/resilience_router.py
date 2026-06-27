@@ -95,116 +95,78 @@ def choose_resilience_route(route_input: ResilienceRouteInput) -> ResilienceRout
     privacy_level = _normalize(route_input.privacy_level)
     cloud_credit_state = _normalize(route_input.cloud_credit_state)
     review_required = route_input.human_review_required or sensitivity in {"medium", "high"}
-
-    if sensitivity in HIGH_SENSITIVITY_VALUES:
-        return _decision(
-            ROUTE_HUMAN_HANDOFF,
-            "sensitivity_requires_human_review",
-            fallback_depth=5,
-            human_review_required=True,
-            route_input=route_input,
-        )
-
-    if _should_use_deterministic_first(route_input, task_class):
-        return _decision(
-            ROUTE_DETERMINISTIC,
-            "deterministic_tool_available_for_task_class",
-            fallback_depth=4,
-            human_review_required=review_required,
-            route_input=route_input,
-        )
-
-    cloud_primary_ok = _cloud_primary_ok(route_input, cloud_credit_state)
-    cloud_secondary_ok = _cloud_secondary_ok(route_input, cloud_credit_state)
-    local_heavy_ok = _local_heavy_ok(route_input)
-    local_fast_ok = _local_fast_ok(route_input)
     local_only = privacy_level in LOCAL_ONLY_VALUES
 
-    if not local_only and task_class in CLOUD_PRIMARY_TASK_CLASSES:
-        if cloud_primary_ok:
+    candidates = []
+
+    if sensitivity in HIGH_SENSITIVITY_VALUES:
+        candidates.append((ROUTE_HUMAN_HANDOFF, "sensitivity_requires_human_review"))
+    elif _should_use_deterministic_first(route_input, task_class):
+        candidates.append((ROUTE_DETERMINISTIC, "deterministic_tool_available_for_task_class"))
+    else:
+        if not local_only and task_class in CLOUD_PRIMARY_TASK_CLASSES:
+            candidates.append((ROUTE_CLOUD_PRIMARY, "cloud_primary_healthy_for_high_complexity_task"))
+            candidates.append((ROUTE_CLOUD_SECONDARY, "cloud_primary_degraded_using_secondary"))
+
+        if _prefers_local_heavy(task_class, complexity):
+            candidates.append((ROUTE_LOCAL_HEAVY, "local_heavy_available_for_medium_or_complex_task"))
+
+        if _prefers_local_fast(task_class, complexity):
+            candidates.append((ROUTE_LOCAL_FAST, "local_fast_available_for_small_or_repetitive_task"))
+
+        candidates.append((ROUTE_LOCAL_HEAVY, "local_heavy_available_after_preferred_route_unavailable"))
+        candidates.append((ROUTE_LOCAL_FAST, "local_fast_available_after_preferred_route_unavailable"))
+
+        if not local_only:
+            candidates.append((ROUTE_CLOUD_PRIMARY, "cloud_primary_available_after_local_routes_unavailable"))
+            candidates.append((ROUTE_CLOUD_SECONDARY, "cloud_secondary_available_after_local_routes_unavailable"))
+
+        if route_input.deterministic_tool_available:
+            candidates.append((ROUTE_DETERMINISTIC, "deterministic_tool_available_as_last_automated_route"))
+
+        candidates.append((ROUTE_HUMAN_HANDOFF, "no_reliable_automated_route_available"))
+
+    unique_candidates = []
+    seen = set()
+    for route, reason in candidates:
+        if route not in seen:
+            seen.add(route)
+            unique_candidates.append((route, reason))
+
+    for depth, (route, reason) in enumerate(unique_candidates):
+        is_available = False
+        requires_review = review_required
+
+        if route == ROUTE_HUMAN_HANDOFF:
+            is_available = True
+            requires_review = True
+        elif route == ROUTE_DETERMINISTIC:
+            is_available = route_input.deterministic_tool_available
+            if not _should_use_deterministic_first(route_input, task_class):
+                requires_review = True
+        elif route == ROUTE_CLOUD_PRIMARY:
+            is_available = _cloud_primary_ok(route_input, cloud_credit_state)
+        elif route == ROUTE_CLOUD_SECONDARY:
+            is_available = _cloud_secondary_ok(route_input, cloud_credit_state)
+        elif route == ROUTE_LOCAL_HEAVY:
+            is_available = _local_heavy_ok(route_input)
+        elif route == ROUTE_LOCAL_FAST:
+            is_available = _local_fast_ok(route_input)
+
+        if is_available:
             return _decision(
-                ROUTE_CLOUD_PRIMARY,
-                "cloud_primary_healthy_for_high_complexity_task",
-                fallback_depth=0,
-                human_review_required=review_required,
+                selected_route=route,
+                reason=reason,
+                fallback_depth=depth,
+                human_review_required=requires_review,
                 route_input=route_input,
             )
-        if cloud_secondary_ok:
-            return _decision(
-                ROUTE_CLOUD_SECONDARY,
-                "cloud_primary_degraded_using_secondary",
-                fallback_depth=1,
-                human_review_required=review_required,
-                route_input=route_input,
-            )
 
-    if _prefers_local_heavy(task_class, complexity) and local_heavy_ok:
-        return _decision(
-            ROUTE_LOCAL_HEAVY,
-            "local_heavy_available_for_medium_or_complex_task",
-            fallback_depth=2,
-            human_review_required=review_required,
-            route_input=route_input,
-        )
-
-    if _prefers_local_fast(task_class, complexity) and local_fast_ok:
-        return _decision(
-            ROUTE_LOCAL_FAST,
-            "local_fast_available_for_small_or_repetitive_task",
-            fallback_depth=3,
-            human_review_required=review_required,
-            route_input=route_input,
-        )
-
-    if local_heavy_ok:
-        return _decision(
-            ROUTE_LOCAL_HEAVY,
-            "local_heavy_available_after_preferred_route_unavailable",
-            fallback_depth=2,
-            human_review_required=review_required,
-            route_input=route_input,
-        )
-
-    if local_fast_ok:
-        return _decision(
-            ROUTE_LOCAL_FAST,
-            "local_fast_available_after_preferred_route_unavailable",
-            fallback_depth=3,
-            human_review_required=review_required,
-            route_input=route_input,
-        )
-
-    if not local_only and cloud_primary_ok:
-        return _decision(
-            ROUTE_CLOUD_PRIMARY,
-            "cloud_primary_available_after_local_routes_unavailable",
-            fallback_depth=0,
-            human_review_required=review_required,
-            route_input=route_input,
-        )
-
-    if not local_only and cloud_secondary_ok:
-        return _decision(
-            ROUTE_CLOUD_SECONDARY,
-            "cloud_secondary_available_after_local_routes_unavailable",
-            fallback_depth=1,
-            human_review_required=review_required,
-            route_input=route_input,
-        )
-
-    if route_input.deterministic_tool_available:
-        return _decision(
-            ROUTE_DETERMINISTIC,
-            "deterministic_tool_available_as_last_automated_route",
-            fallback_depth=4,
-            human_review_required=True,
-            route_input=route_input,
-        )
-
+    # Fallback to human handoff if all else fails
     return _decision(
-        ROUTE_HUMAN_HANDOFF,
-        "no_reliable_automated_route_available",
-        fallback_depth=5,
+        selected_route=ROUTE_HUMAN_HANDOFF,
+        reason="no_reliable_automated_route_available",
+        fallback_depth=len(unique_candidates),
         human_review_required=True,
         route_input=route_input,
     )

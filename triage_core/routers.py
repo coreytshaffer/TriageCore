@@ -6,21 +6,24 @@ from .classifier import DangerDetector, TaskClassifier
 def is_internet_available(host="8.8.8.8", port=53, timeout=1.0) -> bool:
     """Fast check to see if an internet connection is available."""
     try:
-        socket.setdefaulttimeout(timeout)
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.connect((host, port))
-        s.close()
-        return True
-    except socket.error:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(timeout)
+            s.connect((host, port))
+            return True
+    except OSError:
         return False
 
-def strip_code_fences(text: str) -> str:
-    """Post-processor that strips markdown code fences (e.g. ```python ... ```)."""
+def extract_first_code_block(text: str) -> str:
+    """Post-processor that extracts the content of the first markdown code fence (e.g. ```python ... ```)."""
     text = text.strip()
     match = re.search(r'```(?:python|json|markdown|txt|text)?\s*([\s\S]*?)```', text, re.IGNORECASE)
     if match:
         return match.group(1).strip()
     return text
+
+def strip_code_fences(text: str) -> str:
+    """Post-processor that strips markdown code fences while keeping surrounding text."""
+    return re.sub(r'```(?:[a-zA-Z0-9_]+)?\n?|\n?```', '', text).strip()
 
 class SpecialistRouter:
     """Routes tasks based on classified category to the appropriate model, timeout, and post-processor."""
@@ -56,10 +59,17 @@ class SpecialistRouter:
                     "reason": f"Risk level medium detected. Category: {category}. {'; '.join(danger_info.reasons)}",
                     "offline_fallback": False
                 }
-            else:
-                # Fallback locally but warn
-                import logging
-                logging.getLogger(__name__).warning("Internet offline. Falling back to local execution for medium risk task.")
+            
+            import logging
+            logging.getLogger(__name__).warning("Internet offline. Falling back to local execution for medium risk task.")
+            return {
+                "offload_recommended": False,
+                "reason": f"Risk level medium offline fallback. Category: {category}. {'; '.join(danger_info.reasons)}",
+                "timeout": 45,
+                "post_processor": None,
+                "model": "qwen2.5-coder-7b-instruct",
+                "offline_fallback": True
+            }
         
         # Large context: offload if online, fall back to local if offline
         if len(data) > 30000:
@@ -86,7 +96,7 @@ class SpecialistRouter:
             return {
                 "offload_recommended": False,
                 "timeout": 120,
-                "post_processor": strip_code_fences,
+                "post_processor": extract_first_code_block,
                 "model": "deepseek/deepseek-r1-0528-qwen3-8b",
                 "offline_fallback": not internet_up
             }
