@@ -1836,7 +1836,7 @@ def main():
             try:
                 items = load_work_items(args.items)
                 today = load_today_file(args.today)
-                html_out = render_html(items, today)
+                html_out = render_html(items, today, items_path=args.items, today_path=args.today)
                 with open(args.output, "w", encoding="utf-8") as f:
                     f.write(html_out)
                 print(f"Dashboard generated at {args.output}")

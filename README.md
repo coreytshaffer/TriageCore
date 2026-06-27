@@ -25,6 +25,31 @@ TriageCore is an early research workbench for AI-assisted software work that kee
 - It produces inspectable artifacts and route evidence instead of relying on vague autonomy claims.
 - It is useful today as safer AI-assisted SDLC framing and useful later as a control pattern for environmental edge workflows.
 
+## The Daily Loop (Workspace)
+
+TriageCore includes a zero-dependency static HTML dashboard to organize your work items and generate tool handoff packets. It reads local YAML files and generates a `dashboard.html` that you can leave open in your browser.
+
+**1. Create your private configuration:**
+```bash
+mkdir ~/.triagecore
+# Create ~/.triagecore/work_items.yaml (your full registry)
+# Create ~/.triagecore/today.yaml (your daily focus list)
+```
+
+**2. Generate the dashboard:**
+```bash
+tc workspace dashboard --items ~/.triagecore/work_items.yaml --today ~/.triagecore/today.yaml --output ~/.triagecore/dashboard.html
+```
+
+**3. Open it (Windows/PowerShell):**
+```powershell
+Invoke-Item ~/.triagecore/dashboard.html
+# Or just: ii ~/.triagecore/dashboard.html
+```
+
+**The Loop:**
+Open dashboard → Choose a focus card → Click "Copy Codex Handoff" → Paste into agent → Work → Update YAML → Regenerate dashboard.
+
 ## Current, Planned, And Research Framing
 
 **Current capabilities**

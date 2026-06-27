@@ -112,7 +112,13 @@ def _render_focus_card(item: WorkItem) -> str:
     return card_html
 
 
-def render_html(work_items: list[WorkItem], today: TodayFocus, generated_at: str | None = None) -> str:
+def render_html(
+    work_items: list[WorkItem], 
+    today: TodayFocus, 
+    generated_at: str | None = None,
+    items_path: str = "Unknown",
+    today_path: str = "Unknown"
+) -> str:
     """Render the full HTML dashboard."""
     if generated_at is None:
         generated_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -129,6 +135,15 @@ def render_html(work_items: list[WorkItem], today: TodayFocus, generated_at: str
         if item.risk and item.risk.level == RiskLevel.HIGH:
             high_risk_count += 1
             
+    warnings = []
+    
+    if not focus_items:
+        warnings.append("Focus list is empty. Add items to today.yaml to see them here.")
+        
+    for item in focus_items:
+        if not item.gtd or not item.gtd.next_action:
+            warnings.append(f"Focus item {item.id} has no GTD next_action defined.")
+            
     blocked_items = []
     review_items = []
     for item in work_items:
@@ -139,7 +154,6 @@ def render_html(work_items: list[WorkItem], today: TodayFocus, generated_at: str
         elif item.kanban.status == Status.REVIEW:
             review_items.append(item)
             
-    warnings = []
     if today.limits:
         if today.limits.max_active_items is not None and len(focus_items) > today.limits.max_active_items:
             warnings.append(f"Focus list contains {len(focus_items)} items; limit is {today.limits.max_active_items}.")
@@ -335,7 +349,8 @@ def render_html(work_items: list[WorkItem], today: TodayFocus, generated_at: str
             html_parts.append(f'<li><strong>{h(item.id)}</strong> — {h(item.project)} — {next_act}</li>')
         html_parts.append('</ul></div>')
         
-    html_parts.append(f'<div style="margin-top: 50px; font-size: 0.8em; color: #666;">Generated at: {h(generated_at)}</div>')
+    footer_text = f"Generated at: {h(generated_at)} | Work Items: {h(items_path)} | Today: {h(today_path)}"
+    html_parts.append(f'<div style="margin-top: 50px; font-size: 0.8em; color: #666;">{footer_text}</div>')
     
     html_parts.append("</body></html>")
     
