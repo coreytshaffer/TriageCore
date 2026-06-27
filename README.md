@@ -25,9 +25,11 @@ TriageCore is an early research workbench for AI-assisted software work that kee
 - It produces inspectable artifacts and route evidence instead of relying on vague autonomy claims.
 - It is useful today as safer AI-assisted SDLC framing and useful later as a control pattern for environmental edge workflows.
 
-## The Daily Loop (Workspace)
+## Workspace Unifier
 
-TriageCore includes a zero-dependency static HTML dashboard to organize your work items and generate tool handoff packets. It reads local YAML files and generates a `dashboard.html` that you can leave open in your browser.
+TriageCore includes a local-first Workspace Unifier for orientation, focus selection, review artifacts, and bounded handoffs. It works from local YAML files, keeps previews reviewable, and does not turn agent coordination into an approval surface.
+
+### Quick Start
 
 **1. Create your private configuration:**
 ```bash
@@ -47,8 +49,60 @@ Invoke-Item ~/.triagecore/dashboard.html
 # Or just: ii ~/.triagecore/dashboard.html
 ```
 
-**The Loop:**
-Open dashboard → Choose a focus card → Click "Copy Codex Handoff" → Paste into agent → Work → Update YAML → Regenerate dashboard.
+### Command Surface
+
+| Command | Purpose |
+|---|---|
+| `tc workspace board --items <path>` | Read-only board view grouped by status. |
+| `tc workspace wbs --items <path>` | Read-only work breakdown view by area, project, and component. |
+| `tc workspace now --items <path> --today <path>` | Read-only daily focus view combining the registry and today list. |
+| `tc workspace dashboard --items <path> --today <path> --output <path>` | Writes a static HTML dashboard with no external dependencies. |
+| `tc workspace handoff --items <path> --id <id> --tool <tool>` | Exports a bounded handoff packet for a selected item. |
+| `tc workspace import-github --repo <owner/repo> --output <path>` | Imports open GitHub issues into a preview file for review. |
+| `tc workspace review-import --preview <path>` | Reviews imported preview items before promotion. |
+| `tc workspace promote --items <path> --preview <path> --id <id> --output <path>` | Explicitly promotes selected preview items into a live board file. |
+| `tc workspace close --items <path> --id <id>` | Generates a closing packet and can persist closure metadata only when explicitly directed. |
+| `tc workspace review --items <path>` | Shows a weekly review view of stale, active, and blocked work. |
+| `tc workspace touch --items <path> --id <id>` | Updates review metadata for an item with explicit write intent. |
+
+> **Note on GitHub imports:**
+> You can import open GitHub issues via `tc workspace import-github --repo owner/repo --output preview.yaml`.
+> **Generated previews are review artifacts, not the live board.** Use `tc workspace promote` to select which items to pull into your real `work_items.yaml`.
+
+### Architecture Boundary
+
+- **TriageCore** = policy, contracts, state, and CLI engine.
+- **TriageDesk** = human control cockpit.
+- **Meta-harness** = agent coordination layer.
+- **Independent evaluator** = external assessment layer.
+
+### Safety Invariants
+
+- Local-first.
+- Read-only by default.
+- Explicit mutation only.
+- Backup support for in-place writes.
+- Generated previews are review artifacts, not the live board.
+- Dashboard has no external dependencies.
+- Handoffs omit private notes by default.
+- Evaluator must not become approval authority.
+
+### Daily Workflow
+
+Capture → Clarify → Promote → Focus → Handoff → Execute → Close → Weekly Review
+
+### What This Does Not Do
+
+- Does not replace TriageDesk.
+- Does not approve actions automatically.
+- Does not execute agent work.
+- Does not mutate GitHub.
+- Does not import everything into the live board.
+- Does not make the meta-harness the source of truth.
+
+### Next Architecture Direction
+
+TriageDesk should become the human-facing cockpit for approvals, evidence, review, and dashboard operation. Meta-harness should coordinate agents and sessions. Independent evaluator should assess whether observed behavior matched expected control boundaries. TriageCore remains the stable contract/evidence substrate.
 
 ## Current, Planned, And Research Framing
 
