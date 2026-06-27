@@ -501,7 +501,7 @@ def test_audit_verify_signatures_passes_with_signed_and_unsigned_route_audit(
     assert "invalid_signed=0" in out
     assert "unsigned=1" in out
     assert "malformed=0" in out
-    assert "skipped_non_route_audit=1" in out
+    assert "skipped_non_target=1" in out
     assert "safe_signed_route" not in out
     assert "legacy_unsigned_route" not in out
 
@@ -595,3 +595,170 @@ def test_audit_verify_signatures_missing_ledger_fails(capsys):
     assert exc.value.code == 1
     out = capsys.readouterr().out
     assert "Error: missing-signatures-ledger.jsonl not found." in out
+
+
+def test_audit_verify_signatures_validation_result_passes_with_signed_and_unsigned_records(
+    tmp_path, capsys
+):
+    ledger_dir = tmp_path / ".triagecore"
+    ledger = TaskLedger(str(ledger_dir))
+    registry = AgentIdentityRegistry(ledger_dir=ledger_dir)
+    registry.generate_identity(
+        "validator-tools",
+        "validator_tools",
+        ["validation_result:sign"],
+    )
+
+    ledger.append_signed_validation_result_event(
+        "validation-task",
+        {
+            "validator_name": "deterministic_demo_validator",
+            "validation_status": "passed",
+            "checked_files": ["triage_core/task_ledger.py"],
+        },
+        signing_registry=registry,
+        signing_agent_id="validator-tools",
+    )
+    ledger.append_event(
+        "validation-unsigned",
+        "validation_result",
+        {
+            "validator_name": "legacy_validator",
+            "validation_status": "passed",
+        },
+    )
+    ledger.append_event(
+        "other-task",
+        "route_audit",
+        {
+            "decision": "allowed",
+            "reason_code": "ignored_route_event",
+        },
+    )
+
+    with patch("triage_core.tc_cli._ledger_path", return_value=ledger_dir / "ledger.jsonl"):
+        tc_audit_verify_signatures(kind="validation_result")
+
+    out = capsys.readouterr().out
+    assert "Validation result signature verification passed" in out
+    assert "event_type=validation_result" in out
+    assert "valid_signed=1" in out
+    assert "unsigned=1" in out
+    assert "skipped_non_target=1" in out
+    assert "PASS event_type=validation_result task_id=validation-task agent_id=validator-tools" in out
+    assert "deterministic_demo_validator" not in out
+    assert "ignored_route_event" not in out
+
+
+def test_audit_verify_signatures_validation_result_fails_for_tampered_event(
+    tmp_path, capsys
+):
+    ledger_dir = tmp_path / ".triagecore"
+    ledger = TaskLedger(str(ledger_dir))
+    registry = AgentIdentityRegistry(ledger_dir=ledger_dir)
+    registry.generate_identity(
+        "validator-tools",
+        "validator_tools",
+        ["validation_result:sign"],
+    )
+
+    event = ledger.append_signed_validation_result_event(
+        "validation-task",
+        {
+            "validator_name": "deterministic_demo_validator",
+            "validation_status": "passed",
+        },
+        signing_registry=registry,
+        signing_agent_id="validator-tools",
+    )
+    tampered = dict(event)
+    tampered["payload"] = dict(event["payload"])
+    tampered["payload"]["validation_status"] = "failed"
+    (ledger_dir / "ledger.jsonl").write_text(json.dumps(tampered) + "\n", encoding="utf-8")
+
+    with patch("triage_core.tc_cli._ledger_path", return_value=ledger_dir / "ledger.jsonl"):
+        with pytest.raises(SystemExit) as exc:
+            tc_audit_verify_signatures(kind="validation_result")
+
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "Validation result signature verification failed" in out
+    assert "FAIL event_type=validation_result task_id=validation-task agent_id=validator-tools reason=signature_mismatch" in out
+    assert "deterministic_demo_validator" not in out
+
+
+def test_audit_verify_signatures_validation_result_fails_for_unknown_agent(
+    tmp_path, capsys
+):
+    ledger_dir = tmp_path / ".triagecore"
+    ledger = TaskLedger(str(ledger_dir))
+    ledger.append_event(
+        "validation-task",
+        "validation_result",
+        {
+            "validator_name": "deterministic_demo_validator",
+            "validation_status": "passed",
+        },
+    )
+    ledger_path = ledger_dir / "ledger.jsonl"
+    event = json.loads(ledger_path.read_text(encoding="utf-8").splitlines()[0])
+    event["signature_metadata"] = {
+        "agent_id": "missing-validator",
+        "capability": "validation_result:sign",
+        "payload_hash": "abc",
+        "signature_algorithm": "ed25519",
+        "signed_at": "2026-06-27T00:00:00+00:00",
+        "signature": "ZmFrZQ==",
+    }
+    ledger_path.write_text(json.dumps(event) + "\n", encoding="utf-8")
+
+    with patch("triage_core.tc_cli._ledger_path", return_value=ledger_path):
+        with pytest.raises(SystemExit) as exc:
+            tc_audit_verify_signatures(kind="validation_result")
+
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "Validation result signature verification failed" in out
+    assert "reason=unknown_agent" in out
+
+
+def test_audit_verify_signatures_validation_result_fails_for_revoked_identity(
+    tmp_path, capsys
+):
+    ledger_dir = tmp_path / ".triagecore"
+    ledger = TaskLedger(str(ledger_dir))
+    registry = AgentIdentityRegistry(ledger_dir=ledger_dir)
+    registry.generate_identity(
+        "revoked-validator",
+        "validator_tools",
+        ["validation_result:sign"],
+    )
+    ledger.append_signed_validation_result_event(
+        "validation-task",
+        {
+            "validator_name": "deterministic_demo_validator",
+            "validation_status": "passed",
+        },
+        signing_registry=registry,
+        signing_agent_id="revoked-validator",
+    )
+    registry.revoke_identity("revoked-validator")
+
+    with patch("triage_core.tc_cli._ledger_path", return_value=ledger_dir / "ledger.jsonl"):
+        with pytest.raises(SystemExit) as exc:
+            tc_audit_verify_signatures(kind="validation_result")
+
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "Validation result signature verification failed" in out
+    assert "reason=revoked_agent" in out
+
+
+def test_audit_verify_signatures_rejects_unsupported_kind(capsys):
+    with patch("triage_core.tc_cli._ledger_path", return_value=Path("ignored.jsonl")):
+        with pytest.raises(SystemExit) as exc:
+            tc_audit_verify_signatures(kind="other_event")
+
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "supports only 'route_audit' or 'validation_result'" in out

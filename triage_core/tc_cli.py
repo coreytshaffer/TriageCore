@@ -12,7 +12,10 @@ from triage_core.task_packet import TaskPacket, PrivacyMetadata
 from triage_core.compression import compress_context
 from triage_core.config import default_config
 from triage_core.backends import LocalBackend
-from triage_core.task_ledger import TaskLedger, verify_route_audit_signatures_in_ledger
+from triage_core.task_ledger import (
+    TaskLedger,
+    verify_ledger_event_signatures_in_ledger,
+)
 from triage_core.demo_dry_run import format_demo_dry_run, run_demo_dry_run
 from triage_core.model_manifest import (
     compare_route_to_manifest,
@@ -347,25 +350,46 @@ def tc_audit_privacy_invariants() -> None:
     )
 
 
-def tc_audit_verify_signatures(strict: bool = False) -> None:
+def tc_audit_verify_signatures(kind: str = "route_audit", strict: bool = False) -> None:
+    supported_event_types = {
+        "route_audit": "Route audit",
+        "validation_result": "Validation result",
+    }
+    if kind not in supported_event_types:
+        print(
+            "Error: --verify-signatures supports only "
+            "'route_audit' or 'validation_result'."
+        )
+        sys.exit(1)
+
     ledger_path = _ledger_path()
     if not ledger_path.exists():
         print(f"Error: {ledger_path} not found.")
         sys.exit(1)
 
-    summary = verify_route_audit_signatures_in_ledger(ledger_path)
+    summary = verify_ledger_event_signatures_in_ledger(ledger_path, event_type=kind)
     status = "failed" if summary.should_fail(strict=strict) else "passed"
     strict_mode = "on" if strict else "off"
+    label = supported_event_types[kind]
     print(
-        "Route audit signature verification "
+        f"{label} signature verification "
         f"{status}: "
+        f"event_type={kind} "
         f"valid_signed={summary.valid_signed} "
         f"invalid_signed={summary.invalid_signed} "
         f"unsigned={summary.unsigned} "
         f"malformed={summary.malformed} "
-        f"skipped_non_route_audit={summary.skipped_non_route_audit} "
+        f"skipped_non_target={summary.skipped_non_target} "
         f"strict={strict_mode}"
     )
+    for finding in summary.findings:
+        line = (
+            f"{finding.status} event_type={finding.event_type} "
+            f"task_id={finding.task_id} agent_id={finding.agent_id or 'unknown'}"
+        )
+        if finding.failure_reason:
+            line += f" reason={finding.failure_reason}"
+        print(line)
     if summary.should_fail(strict=strict):
         sys.exit(1)
 
@@ -1223,7 +1247,7 @@ def main():
     audit_parser.add_argument(
         "--verify-signatures",
         action="store_true",
-        help="Verify signed route_audit ledger events using registered public identities",
+        help="Verify signed route_audit or validation_result ledger events using registered public identities",
     )
     audit_parser.add_argument(
         "--strict",
@@ -1489,7 +1513,7 @@ def main():
         if args.privacy_invariants:
             tc_audit_privacy_invariants()
         elif args.verify_signatures:
-            tc_audit_verify_signatures(strict=args.strict)
+            tc_audit_verify_signatures(kind=args.kind, strict=args.strict)
         elif args.signed_smoke_test:
             tc_audit_signed_smoke_test(args.agent_id)
         elif args.self_test:

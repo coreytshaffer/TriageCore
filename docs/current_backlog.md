@@ -2,13 +2,13 @@
 
 ## Status
 
-This document summarizes the active TriageCore backlog after CR-078.
+This document summarizes the active TriageCore backlog after CR-079.
 
 ## Active GitHub Backlog
 
 - Issue #72: Expand signed ledger event coverage beyond `route_audit`
-  - Status: partially implemented by CR-078
-  - Purpose: selectively enforce identity checks and signatures for core ledger events beyond `route_audit` without treating signatures as approval. CR-078 adds the first additional signed path for `validation_result`; broader event coverage remains future work.
+  - Status: partially implemented by CR-078 and CR-079
+  - Purpose: selectively enforce identity checks and signatures for core ledger events beyond `route_audit` without treating signatures as approval. CR-078 adds the first additional signed path for `validation_result`, and CR-079 adds operator-facing verification for that signed event; broader event coverage remains future work.
 
 - Issue #73: Implement runtime key rotation behavior
   - Status: open
@@ -106,7 +106,7 @@ Keep three work lanes distinct:
   hygiene work should be limited to stale documented claims or a separately
   proposed repo-consistency checker.
 
-For signed ledger coverage, the next slice should either add operator-facing verification for signed `validation_result` records or deliberately choose one more event type. Do not treat a valid signature as approval, safety, or correctness.
+For signed ledger coverage, the next slice should deliberately choose one more event type or move into key lifecycle behavior. Do not treat a valid signature as approval, safety, or correctness.
 
 For the empirical AI safety evaluation track, keep the next slices sequential: fixture validation first, evaluator CLI second, and broader adversarial/tampering studies only after the fixture contract is stable.
 
