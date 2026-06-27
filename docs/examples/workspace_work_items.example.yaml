@@ -1,0 +1,208 @@
+# Workspace Work Items — Example File
+#
+# This file demonstrates the TriageCore workspace work-item schema.
+# All projects, paths, and identifiers are fictional examples.
+# Real work-item files should be kept outside the public repository
+# in a private, local-only directory.
+
+version: 1
+
+items:
+  - id: DEMO-001
+    project: example-control-plane
+    title: Implement workspace registry schema
+    type: feature
+    owner: demo-user
+    primary_tool: codex
+    reviewer_tool: chatgpt
+    data_sensitivity: low
+    notes: "Read-only context feature. No model calls or command execution."
+
+    kanban:
+      status: active
+      priority: high
+
+    pmi:
+      process_group: executing
+      lifecycle_model: hybrid
+      deliverable: "Validated workspace registry with project brief CLI"
+      objective: "Reduce orientation cost when switching between projects"
+      acceptance_criteria:
+        - "Schema validates registry files"
+        - "CLI prints deterministic project brief"
+        - "No commands are executed"
+      stakeholders:
+        - demo-user
+        - coding-agents
+      constraints:
+        - "No private paths in public examples"
+        - "No network calls"
+      assumptions:
+        - "Local YAML is sufficient for first version"
+
+    gtd:
+      list: next-actions
+      desired_outcome: "Single command shows project context without manual lookup"
+      next_action: "Implement schema loader and brief renderer"
+      context:
+        - computer
+        - codex
+      energy: medium
+      time_estimate: "45m"
+      waiting_for: []
+      someday_maybe: false
+
+    wbs:
+      area: ai_control_plane
+      package: workspace_unification
+      component: registry
+
+    risk:
+      level: medium
+      register:
+        - id: R-DEMO-001
+          category: scope
+          probability: medium
+          impact: medium
+          description: "Feature grows into full project-management platform"
+          response_strategy: mitigate
+          response: "Only implement read-only board rendering in first slice"
+
+    validation:
+      required_checks:
+        - "python -m pytest tests/test_workspace_board.py"
+        - "git diff --check"
+
+    closing:
+      done_definition:
+        - "Tests pass"
+        - "Docs explain local/private separation"
+      lessons_learned: []
+      evidence:
+        commits: []
+        prs: []
+        docs: []
+
+  - id: DEMO-002
+    project: example-commons
+    title: Draft consent and key custody flow
+    type: governance-model
+
+    kanban:
+      status: ready
+      priority: high
+
+    pmi:
+      process_group: planning
+      lifecycle_model: research
+      deliverable: "Consent model specification with recall state machine"
+
+    gtd:
+      list: next-actions
+      desired_outcome: "Define a recall-rights model that preserves consent and auditability"
+      next_action: "Draft recall state machine with owner-held decryption key flow"
+      context:
+        - thinking
+        - chatgpt
+      energy: high
+
+    wbs:
+      area: commons_governance
+      package: consent_and_recall
+      component: key-custody
+
+    risk:
+      level: medium
+      register:
+        - id: R-DEMO-002
+          category: privacy
+          probability: low
+          impact: high
+          description: "Real user data introduced before consent model is ready"
+          response_strategy: avoid
+          response: "Use only synthetic data until consent flow is validated"
+
+  - id: DEMO-003
+    project: example-monitoring
+    title: Clarify resource freshness vs observation freshness
+    type: documentation
+
+    kanban:
+      status: review
+      priority: medium
+
+    pmi:
+      process_group: monitoring-controlling
+
+    gtd:
+      next_action: "Review public claims language for accuracy"
+      context:
+        - writing
+      energy: low
+
+    wbs:
+      area: environmental_monitoring
+      package: public_data_trust
+      component: freshness-language
+
+    risk:
+      level: low
+
+  - id: DEMO-004
+    project: example-safety
+    title: Synthetic evidence pipeline for local integration tests
+    type: feature
+
+    kanban:
+      status: blocked
+      priority: medium
+      blocked_by:
+        - "Privacy/NAS boundary plan not ready"
+
+    pmi:
+      process_group: planning
+
+    wbs:
+      area: safety_privacy
+      package: synthetic_evidence
+
+    risk:
+      level: high
+      register:
+        - id: R-DEMO-004
+          category: safety
+          probability: medium
+          impact: high
+          description: "Real camera feeds used before privacy boundary is established"
+          response_strategy: avoid
+          response: "Keep synthetic-only until local NAS/privacy plan is ready"
+
+  - id: DEMO-005
+    project: example-control-plane
+    title: Agent identity rotation smoke tests
+    type: feature
+
+    kanban:
+      status: done
+      priority: high
+
+    pmi:
+      process_group: closing
+
+    wbs:
+      area: ai_control_plane
+      package: agent_identity
+      component: rotation
+
+    closing:
+      done_definition:
+        - "Rotation tests pass"
+        - "Signed events validate"
+      lessons_learned:
+        - "Keep key material ephemeral in tests"
+      evidence:
+        commits:
+          - "abc1234"
+        prs: []
+        docs:
+          - "docs/security/identity_rotation.md"

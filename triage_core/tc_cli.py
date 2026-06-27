@@ -531,34 +531,69 @@ def tc_identity_revoke(agent_id: str) -> None:
     print(f"Registry: {registry.registry_path}")
 
 
-def tc_identity_check() -> None:
+def tc_identity_doctor(agent_id: Optional[str]) -> None:
     registry = _identity_registry()
-    report = registry.check_consistency()
+    report = registry.check_health(agent_id)
+
+    try:
+        import json
+        ledger_path = _ledger_path()
+        audit_lookup = set()
+        if ledger_path.exists():
+            with open(ledger_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    if not line.strip(): continue
+                    try:
+                        e = json.loads(line)
+                        if e.get("event_type") == "identity_rotation" and "payload" in e:
+                            audit_lookup.add((e["payload"].get("agent_id"), e["payload"].get("rotated_at")))
+                    except Exception:
+                        pass
+    except Exception as e:
+        print(f"Warning: Failed to load ledger for audit cross-check: {e}")
+        audit_lookup = None
+
+    if audit_lookup is not None:
+        try:
+            identities = registry.load()
+            from triage_core.agent_identity import ROTATED_STATUS, IdentityDoctorIssue
+            for a_id, agent_list in identities.items():
+                if agent_id and a_id != agent_id:
+                    continue
+                for rot_id in agent_list:
+                    if rot_id.status == ROTATED_STATUS and rot_id.rotated_at:
+                        if (a_id, rot_id.rotated_at) not in audit_lookup:
+                            report.warnings.append(IdentityDoctorIssue(
+                                severity="warning",
+                                code="missing_audit_event",
+                                agent_id=a_id,
+                                fingerprint=rot_id.public_key_fingerprint,
+                                message=f"No identity_rotation audit event found for rotated_at={rot_id.rotated_at}"
+                            ))
+        except Exception:
+            pass # Malformed registry already handled by check_health
+
     if report.has_errors:
         status = "failed"
-    elif report.permission_warnings:
+    elif report.warnings:
         status = "warnings"
     else:
         status = "passed"
 
     print(
-        "Identity check "
-        f"{status}: "
-        f"identities={report.identity_count} "
-        f"keys={report.key_count} "
-        f"missing_keys={len(report.missing_key_agent_ids)} "
-        f"orphaned_keys={len(report.orphaned_key_agent_ids)} "
-        f"malformed_registry={int(report.malformed_registry)} "
-        f"permission_warnings={len(report.permission_warnings)}"
+        f"Identity doctor {status}: "
+        f"checked_agents={len(report.checked_agent_ids)} "
+        f"errors={len(report.errors)} "
+        f"warnings={len(report.warnings)}"
     )
-    if report.malformed_registry:
-        print("ERROR malformed_registry")
-    for agent_id in report.missing_key_agent_ids:
-        print(f"ERROR missing_private_key agent_id={agent_id}")
-    for agent_id in report.orphaned_key_agent_ids:
-        print(f"ERROR orphaned_private_key agent_id={agent_id}")
-    for warning in report.permission_warnings:
-        print(f"WARNING private_key_permissions {warning}")
+
+    for err in report.errors:
+        fp_str = f" fingerprint={err.fingerprint}" if err.fingerprint else ""
+        print(f"ERROR {err.code} agent_id={err.agent_id}{fp_str} ({err.message})")
+
+    for warn in report.warnings:
+        fp_str = f" fingerprint={warn.fingerprint}" if warn.fingerprint else ""
+        print(f"WARNING {warn.code} agent_id={warn.agent_id}{fp_str} ({warn.message})")
 
     if report.has_errors:
         sys.exit(1)
@@ -1404,9 +1439,14 @@ def main():
         required=True,
         help="Stable local agent identity id",
     )
-    identity_subparsers.add_parser(
-        "check",
+    identity_doctor_parser = identity_subparsers.add_parser(
+        "doctor",
         help="Check identity registry and private-key consistency",
+    )
+    identity_doctor_parser.add_argument(
+        "agent_id",
+        nargs="?",
+        help="Optional local agent identity id to scope the check",
     )
 
     rotate_parser = identity_subparsers.add_parser("rotate", help="Rotate a local agent identity")
@@ -1572,6 +1612,32 @@ def main():
     packet_render_parser.add_argument("--output", help="Optional path to write the rendered packet")
     packet_render_parser.add_argument("--force", action="store_true", help="Overwrite the output file if it already exists")
 
+    # workspace
+    workspace_parser = subparsers.add_parser("workspace", help="Workspace orientation views (board, WBS)")
+    workspace_subparsers = workspace_parser.add_subparsers(dest="workspace_command")
+
+    workspace_board_parser = workspace_subparsers.add_parser(
+        "board",
+        help="Show a Kanban-style board of work items grouped by status",
+    )
+    workspace_board_parser.add_argument(
+        "--items", required=True, type=str,
+        help="Path to the work items YAML or JSON file",
+    )
+    workspace_board_parser.add_argument(
+        "--status", type=str, default=None,
+        help="Comma-separated list of statuses to show (e.g., active,ready,review,blocked)",
+    )
+
+    workspace_wbs_parser = workspace_subparsers.add_parser(
+        "wbs",
+        help="Show a Work Breakdown Structure outline grouped by area, project, and component",
+    )
+    workspace_wbs_parser.add_argument(
+        "--items", required=True, type=str,
+        help="Path to the work items YAML or JSON file",
+    )
+
     args = parser.parse_args()
 
     if args.command == "propose":
@@ -1620,12 +1686,12 @@ def main():
             tc_identity_list()
         elif args.identity_command == "revoke":
             tc_identity_revoke(args.agent_id)
-        elif args.identity_command == "check":
-            tc_identity_check()
+        elif args.identity_command == "doctor":
+            tc_identity_doctor(args.agent_id)
         elif args.identity_command == "rotate":
             tc_identity_rotate(args.agent_id, args.dry_run)
         else:
-            identity_parser.error("identity requires a subcommand: init, list, revoke, check, or rotate")
+            identity_parser.error("identity requires a subcommand: init, list, revoke, doctor, or rotate")
     elif args.command == "model":
         if args.model_command == "check":
             tc_model_check(args.manifest)
@@ -1681,6 +1747,31 @@ def main():
             tc_review_list()
         else:
             review_parser.error("review requires a subcommand: list")
+    elif args.command == "workspace":
+        from triage_core.workspace_board import load_work_items, render_board, render_wbs
+        if args.workspace_command == "board":
+            try:
+                items = load_work_items(args.items)
+            except (FileNotFoundError, ValueError, ImportError) as e:
+                print(f"Error: {e}")
+                sys.exit(1)
+            statuses = None
+            if args.status:
+                statuses = [s.strip() for s in args.status.split(",") if s.strip()]
+            try:
+                print(render_board(items, statuses=statuses))
+            except ValueError as e:
+                print(f"Error: {e}")
+                sys.exit(1)
+        elif args.workspace_command == "wbs":
+            try:
+                items = load_work_items(args.items)
+            except (FileNotFoundError, ValueError, ImportError) as e:
+                print(f"Error: {e}")
+                sys.exit(1)
+            print(render_wbs(items))
+        else:
+            workspace_parser.error("workspace requires a subcommand: board or wbs")
     else:
         parser.print_help()
 

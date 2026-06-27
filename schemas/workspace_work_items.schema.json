@@ -1,0 +1,296 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/coreytshaffer/TriageCore/schemas/workspace_work_items.schema.json",
+  "title": "TriageCore Workspace Work Items",
+  "description": "Schema for local-first workspace work items combining PMI governance, GTD next-action discipline, Kanban flow state, WBS hierarchy, and risk registers. Read-only orientation data — never executed, never mutated by agents.",
+  "type": "object",
+  "required": ["version", "items"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "description": "Schema version. Must be 1 for this release."
+    },
+    "items": {
+      "type": "array",
+      "description": "List of work items. May be empty.",
+      "items": {
+        "$ref": "#/$defs/WorkItem"
+      }
+    }
+  },
+  "additionalProperties": false,
+
+  "$defs": {
+    "WorkItem": {
+      "type": "object",
+      "required": ["id", "project", "title", "type", "kanban"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique item identifier (e.g., CR-WU-002)."
+        },
+        "project": {
+          "type": "string",
+          "description": "Project slug (e.g., triagecore, cyber-commons-lab)."
+        },
+        "title": {
+          "type": "string",
+          "description": "Human-readable work item title."
+        },
+        "type": {
+          "type": "string",
+          "description": "Work item type (e.g., feature, bug, documentation, governance-model)."
+        },
+        "kanban": {
+          "$ref": "#/$defs/Kanban"
+        },
+        "pmi": {
+          "$ref": "#/$defs/Pmi"
+        },
+        "gtd": {
+          "$ref": "#/$defs/Gtd"
+        },
+        "wbs": {
+          "$ref": "#/$defs/Wbs"
+        },
+        "risk": {
+          "$ref": "#/$defs/Risk"
+        },
+        "validation": {
+          "$ref": "#/$defs/Validation"
+        },
+        "closing": {
+          "$ref": "#/$defs/Closing"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "primary_tool": {
+          "type": "string"
+        },
+        "reviewer_tool": {
+          "type": "string"
+        },
+        "data_sensitivity": {
+          "type": "string",
+          "enum": ["low", "medium", "high"]
+        },
+        "notes": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "Kanban": {
+      "type": "object",
+      "required": ["status", "priority"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["backlog", "ready", "active", "review", "blocked", "done", "parked"]
+        },
+        "priority": {
+          "type": "string",
+          "enum": ["critical", "high", "medium", "low", "someday"]
+        },
+        "blocked_by": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of item IDs or descriptions blocking this item."
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "Pmi": {
+      "type": "object",
+      "required": ["process_group"],
+      "properties": {
+        "process_group": {
+          "type": "string",
+          "enum": ["initiating", "planning", "executing", "monitoring-controlling", "closing"]
+        },
+        "lifecycle_model": {
+          "type": "string",
+          "enum": ["predictive", "agile", "hybrid", "research", "operational"]
+        },
+        "deliverable": {
+          "type": "string"
+        },
+        "objective": {
+          "type": "string"
+        },
+        "acceptance_criteria": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "stakeholders": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "constraints": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "assumptions": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "Gtd": {
+      "type": "object",
+      "required": ["next_action"],
+      "properties": {
+        "list": {
+          "type": "string",
+          "enum": ["inbox", "next-actions", "waiting-for", "someday-maybe", "reference"]
+        },
+        "desired_outcome": {
+          "type": "string"
+        },
+        "next_action": {
+          "type": "string",
+          "description": "The single concrete next physical/digital action."
+        },
+        "context": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "GTD contexts (e.g., computer, codex, chatgpt, thinking)."
+        },
+        "energy": {
+          "type": "string",
+          "enum": ["low", "medium", "high"]
+        },
+        "time_estimate": {
+          "type": "string"
+        },
+        "waiting_for": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "someday_maybe": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "Wbs": {
+      "type": "object",
+      "properties": {
+        "area": {
+          "type": "string",
+          "description": "Top-level WBS area (e.g., ai_control_plane, environmental_monitoring)."
+        },
+        "package": {
+          "type": "string",
+          "description": "Work package within the area."
+        },
+        "component": {
+          "type": "string",
+          "description": "Component within the package."
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "Risk": {
+      "type": "object",
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": ["low", "medium", "high"]
+        },
+        "register": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RiskEntry"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "RiskEntry": {
+      "type": "object",
+      "required": ["id", "description"],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string"
+        },
+        "probability": {
+          "type": "string",
+          "enum": ["low", "medium", "high"]
+        },
+        "impact": {
+          "type": "string",
+          "enum": ["low", "medium", "high"]
+        },
+        "description": {
+          "type": "string"
+        },
+        "response_strategy": {
+          "type": "string",
+          "enum": ["avoid", "mitigate", "transfer", "accept", "escalate"]
+        },
+        "response": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "Validation": {
+      "type": "object",
+      "properties": {
+        "required_checks": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of validation commands or checks. Never executed by this tool."
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "Closing": {
+      "type": "object",
+      "properties": {
+        "done_definition": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "lessons_learned": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "evidence": {
+          "type": "object",
+          "properties": {
+            "commits": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "prs": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "docs": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
