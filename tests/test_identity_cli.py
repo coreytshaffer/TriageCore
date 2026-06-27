@@ -422,3 +422,97 @@ def test_identity_rotate_dry_run_non_active_identity_fails(tmp_path, monkeypatch
     assert exc.value.code == 1
     out = capsys.readouterr().out
     assert "Cannot rotate non-active identity" in out
+
+
+def test_identity_rotate_emits_audit_event_on_success(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_identity_init("rotation-test", "Role", [])
+        tc_identity_rotate("rotation-test", dry_run=False)
+
+    ledger_path = tmp_path / ".triagecore" / "ledger.jsonl"
+    lines = ledger_path.read_text(encoding="utf-8").strip().split("\n")
+    events = [json.loads(line) for line in lines if line]
+
+    assert len(events) == 1
+    event = events[0]
+    assert event["event_type"] == "identity_rotation"
+    assert event["payload"]["agent_id"] == "rotation-test"
+    assert event["payload"]["result_status"] == "success"
+    assert "old_fingerprint" in event["payload"]
+    assert "new_fingerprint" in event["payload"]
+    assert "rotated_at" in event["payload"]
+    assert "archived_key_path" in event["payload"]
+    assert "active_key_path" in event["payload"]
+    assert event["payload"]["source"] == "tc identity rotate"
+    assert "identity-rotation-rotation-test" in event["task_id"]
+
+
+def test_identity_rotate_dry_run_emits_no_audit_event(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_identity_init("rotation-test", "Role", [])
+        tc_identity_rotate("rotation-test", dry_run=True)
+
+    ledger_path = tmp_path / ".triagecore" / "ledger.jsonl"
+    assert not ledger_path.exists()
+
+
+def test_identity_rotate_failed_rotation_emits_no_success_audit_event(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_identity_init("rotation-test", "Role", [])
+
+        from triage_core.agent_identity import AgentIdentityError
+        with patch("triage_core.agent_identity.AgentIdentityRegistry.rotate_identity", side_effect=AgentIdentityError("Mock failure")):
+            with pytest.raises(SystemExit):
+                tc_identity_rotate("rotation-test", dry_run=False)
+
+    ledger_path = tmp_path / ".triagecore" / "ledger.jsonl"
+    assert not ledger_path.exists()
+
+
+def test_identity_rotate_repeated_rotations_produce_distinct_audit_entries(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_identity_init("rotation-test", "Role", [])
+        tc_identity_rotate("rotation-test", dry_run=False)
+        tc_identity_rotate("rotation-test", dry_run=False)
+
+    ledger_path = tmp_path / ".triagecore" / "ledger.jsonl"
+    lines = ledger_path.read_text(encoding="utf-8").strip().split("\n")
+    events = [json.loads(line) for line in lines if line]
+
+    assert len(events) == 2
+    assert events[0]["task_id"] != events[1]["task_id"]
+
+
+def test_tc_audit_renders_identity_rotation_event(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_identity_init("rotation-test", "Role", [])
+        tc_identity_rotate("rotation-test", dry_run=False)
+
+    capsys.readouterr()  # clear
+
+    from triage_core.tc_cli import tc_audit
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_audit("identity_rotation", 5)
+
+    out = capsys.readouterr().out
+    assert "identity_rotation agent=rotation-test old=" in out
+    assert "status=success" in out
+
+
+def test_identity_rotate_audit_failure_does_not_rerotate_or_rollback_success(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_identity_init("rotation-test", "Role", [])
+
+        with patch("triage_core.task_ledger.TaskLedger.append_event", side_effect=OSError("Disk full")):
+            tc_identity_rotate("rotation-test", dry_run=False)
+
+    out = capsys.readouterr().out
+    assert "Identity rotated successfully" in out
+    assert "Warning: Identity rotation completed, but audit event emission failed" in out
+    assert "Disk full" in out

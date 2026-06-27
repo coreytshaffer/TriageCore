@@ -60,3 +60,9 @@ tc identity rotate <agent-id> --dry-run
 Rotation is best-effort atomic across local files using temporary files, exclusive archive creation, and `os.replace`. Because the registry and key files are separate entities on disk, a system crash during the final cutover phase may require manual recovery.
 
 If the registry fails to update after the active key has been replaced, the rotation command will attempt an automatic rollback. In the rare event of a total crash leaving the files in an inconsistent state, the active key can be manually restored using the archived key located at `keys/<agent-id>.<old_fingerprint>.key.rotated`.
+
+### Rotation Audit Events
+
+A successful real rotation emits a structured local audit event to the `TaskLedger` with event type `identity_rotation`. This ensures that identity lineage leaves an auditable trail on disk.
+
+> **Note**: CR-086 emits *structured* local audit events. Signed identity-rotation attestations are out of scope for this slice.

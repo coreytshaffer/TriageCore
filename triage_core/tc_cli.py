@@ -230,6 +230,13 @@ def tc_audit(kind: str, last: int):
             print(f"  Decision: {payload.get('decision')} | Reason: {reason}")
             print(f"  Privacy: {payload.get('privacy_level')} (Scan Passed: {privacy_passed})")
             print(f"  Local Only: {local_only} | Route: {route} | Backend: {payload.get('selected_backend')}")
+        elif r.get("event_type") == "identity_rotation":
+            agent_id = payload.get("agent_id")
+            old_fp = payload.get("old_fingerprint")
+            new_fp = payload.get("new_fingerprint")
+            rotated_at = payload.get("rotated_at")
+            status = payload.get("result_status")
+            print(f"  identity_rotation agent={agent_id} old={old_fp} new={new_fp} rotated_at={rotated_at} status={status}")
         else:
             # General safe metadata fallback
             for k, v in payload.items():
@@ -604,6 +611,29 @@ def tc_identity_rotate(agent_id: str, dry_run: bool) -> None:
             print(f"rotated_at: {result.rotated_at}")
             print(f"active_key: {result.active_key_path}")
             print(f"archived_key: {result.archived_key_path}")
+
+            from triage_core.task_ledger import TaskLedger
+            try:
+                ledger_path = _ledger_path()
+                ledger_path.parent.mkdir(parents=True, exist_ok=True)
+                ledger = TaskLedger(str(ledger_path.parent))
+                audit_payload = {
+                    "agent_id": result.agent_id,
+                    "old_fingerprint": result.old_fingerprint,
+                    "new_fingerprint": result.new_fingerprint,
+                    "rotated_at": result.rotated_at,
+                    "archived_key_path": str(result.archived_key_path),
+                    "active_key_path": str(result.active_key_path),
+                    "result_status": "success",
+                    "source": "tc identity rotate",
+                }
+                # Use a deterministic-ish prefix task ID
+                task_id = f"identity-rotation-{result.agent_id}-{result.rotated_at}"
+                ledger.append_event(task_id, "identity_rotation", audit_payload)
+            except Exception as e:
+                print(f"\nWarning: Identity rotation completed, but audit event emission failed: {e}")
+                print("Do not retry rotation blindly. Inspect the registry and ledger state.")
+
         except AgentIdentityError as e:
             print(f"Rotation failed: {e}")
             sys.exit(1)
