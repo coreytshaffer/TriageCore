@@ -1,0 +1,14 @@
+date: 2026-06-27
+
+focus:
+  - DEMO-001
+  - DEMO-002
+  - DEMO-003
+
+limits:
+  max_active_items: 3
+  max_high_risk_items: 1
+
+notes:
+  - "Close one slice before opening another."
+  - "Use the board to choose, not to inventory everything."

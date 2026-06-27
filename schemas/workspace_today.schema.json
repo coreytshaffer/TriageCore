@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://triagecore.local/schemas/workspace_today.schema.json",
+  "title": "TriageCore Workspace Today Focus List",
+  "description": "Schema for the daily focus list used by the tc workspace now command.",
+  "type": "object",
+  "properties": {
+    "date": {
+      "type": ["string", "null"],
+      "format": "date",
+      "description": "Optional ISO 8601 date string for when this focus list was created or intended."
+    },
+    "focus": {
+      "type": "array",
+      "description": "List of work item IDs to focus on today.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "limits": {
+      "type": "object",
+      "description": "Self-imposed limits for today's work.",
+      "properties": {
+        "max_active_items": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum number of focus items before a warning is issued."
+        },
+        "max_high_risk_items": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum number of high risk focus items before a warning is issued."
+        }
+      },
+      "additionalProperties": false
+    },
+    "notes": {
+      "type": "array",
+      "description": "General notes, intentions, or reminders for the day.",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": ["focus"],
+  "additionalProperties": false
+}

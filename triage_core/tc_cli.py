@@ -1638,6 +1638,19 @@ def main():
         help="Path to the work items YAML or JSON file",
     )
 
+    workspace_now_parser = workspace_subparsers.add_parser(
+        "now",
+        help="Show a focused list of what matters today",
+    )
+    workspace_now_parser.add_argument(
+        "--items", required=True, type=str,
+        help="Path to the work items YAML or JSON file",
+    )
+    workspace_now_parser.add_argument(
+        "--today", required=True, type=str,
+        help="Path to the today.yaml focus list file",
+    )
+
     args = parser.parse_args()
 
     if args.command == "propose":
@@ -1770,8 +1783,17 @@ def main():
                 print(f"Error: {e}")
                 sys.exit(1)
             print(render_wbs(items))
+        elif args.workspace_command == "now":
+            from triage_core.workspace_now import load_today_file, render_now
+            try:
+                items = load_work_items(args.items)
+                today = load_today_file(args.today)
+                print(render_now(items, today))
+            except (FileNotFoundError, ValueError, ImportError) as e:
+                print(f"Error: {e}")
+                sys.exit(1)
         else:
-            workspace_parser.error("workspace requires a subcommand: board or wbs")
+            workspace_parser.error("workspace requires a subcommand: board, wbs, or now")
     else:
         parser.print_help()
 
