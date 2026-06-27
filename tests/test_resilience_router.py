@@ -48,6 +48,8 @@ def test_local_only_privacy_skips_cloud_routes():
 
 
 def test_local_heavy_unavailable_routes_small_work_to_local_fast():
+    # task_class "docs_update" prefers local_fast. 
+    # If it's preferred and succeeds, depth should be 0.
     decision = choose_resilience_route(
         ResilienceRouteInput(
             task_class="docs_update",
@@ -59,7 +61,37 @@ def test_local_heavy_unavailable_routes_small_work_to_local_fast():
     )
 
     assert decision.selected_route == "local_fast"
-    assert decision.fallback_depth == 3
+    assert decision.fallback_depth == 0
+
+def test_fallback_depth_first_unavailable_second_succeeds():
+    # "novel_design" with high complexity prefers cloud_primary, then cloud_secondary
+    # If cloud_primary is down, cloud_secondary is depth 1
+    decision = choose_resilience_route(
+        ResilienceRouteInput(
+            task_class="novel_design",
+            complexity="high",
+            cloud_primary_available=False,
+            cloud_secondary_available=True,
+            local_heavy_available=False,
+        )
+    )
+    assert decision.selected_route == "cloud_secondary"
+    assert decision.fallback_depth == 1
+
+def test_local_heavy_is_preferred_and_succeeds_first():
+    # A task that prefers local heavy (not in CLOUD_PRIMARY_TASK_CLASSES, complexity medium)
+    decision = choose_resilience_route(
+        ResilienceRouteInput(
+            task_class="python_generation",
+            complexity="medium",
+            cloud_credit_state="healthy",
+            local_heavy_available=True,
+            memory_headroom_mb=8192,
+        )
+    )
+
+    assert decision.selected_route == "local_heavy"
+    assert decision.fallback_depth == 0
 
 
 def test_deterministic_task_uses_tool_route_first():
