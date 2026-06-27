@@ -560,43 +560,53 @@ def tc_identity_check() -> None:
 def tc_identity_rotate(agent_id: str, dry_run: bool) -> None:
     from datetime import datetime, timezone
 
-    if not dry_run:
-        print("Non-dry-run identity rotation is not implemented yet. Re-run with --dry-run to preview.")
-        sys.exit(1)
-
     registry = _identity_registry()
-    try:
-        identities = registry.load()
-        if agent_id not in identities or not identities[agent_id]:
-            print(f"Error: Unknown agent identity: {agent_id}")
+
+    if dry_run:
+        try:
+            identities = registry.load()
+            if agent_id not in identities or not identities[agent_id]:
+                print(f"Error: Unknown agent identity: {agent_id}")
+                sys.exit(1)
+
+            current_identity = None
+            for identity in identities[agent_id]:
+                if identity.status == "active":
+                    current_identity = identity
+                    break
+
+            if not current_identity:
+                print("Error: Cannot rotate non-active identity")
+                sys.exit(1)
+
+            print("Identity rotation dry run\n")
+            print(f"agent_id: {agent_id}")
+            print(f"current_status: {current_identity.status}")
+            print("would_mark_current_key: rotated")
+
+            dummy_ts = datetime.now(timezone.utc).isoformat()
+            print(f"would_set_rotated_at: {dummy_ts}")
+
+            print("would_generate_new_key: yes")
+            print("would_write_registry: no")
+            print("would_write_private_key: no\n")
+            print("No files were modified.")
+        except AgentIdentityError as e:
+            print(f"Error: {e}")
             sys.exit(1)
-
-        current_identity = None
-        for identity in identities[agent_id]:
-            if identity.status == "active":
-                current_identity = identity
-                break
-
-        if not current_identity:
-            print("Error: Cannot rotate non-active identity")
+    else:
+        try:
+            result = registry.rotate_identity(agent_id)
+            print("Identity rotated successfully\n")
+            print(f"agent_id: {result.agent_id}")
+            print(f"old_fingerprint: {result.old_fingerprint}")
+            print(f"new_fingerprint: {result.new_fingerprint}")
+            print(f"rotated_at: {result.rotated_at}")
+            print(f"active_key: {result.active_key_path}")
+            print(f"archived_key: {result.archived_key_path}")
+        except AgentIdentityError as e:
+            print(f"Rotation failed: {e}")
             sys.exit(1)
-
-        print("Identity rotation dry run\n")
-        print(f"agent_id: {agent_id}")
-        print(f"current_status: {current_identity.status}")
-        print("would_mark_current_key: rotated")
-
-        dummy_ts = datetime.now(timezone.utc).isoformat()
-        print(f"would_set_rotated_at: {dummy_ts}")
-
-        print("would_generate_new_key: yes")
-        print("would_write_registry: no")
-        print("would_write_private_key: no\n")
-        print("No files were modified.")
-
-    except AgentIdentityError as e:
-        print(f"Error: {e}")
-        sys.exit(1)
 
 import re
 

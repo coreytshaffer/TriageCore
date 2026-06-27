@@ -43,11 +43,20 @@ If a key is lost, the only supported path is to rotate to a new key.
 
 ## CLI Usage
 
-The `tc identity rotate` command is designed to manage key rotation. Currently (as of CR-084), only a dry-run preview is supported. Real rotation is not yet implemented.
+The `tc identity rotate` command rotates an active identity to a new key.
 
-To preview rotation changes:
+To perform a real rotation:
+```powershell
+tc identity rotate <agent-id>
+```
+
+To preview rotation changes without modifying files:
 ```powershell
 tc identity rotate <agent-id> --dry-run
 ```
 
-This command will output the intended registry and key updates without actually modifying `agents.json` or any `.key` files on disk. The dry-run enforces constraints, such as verifying the identity is `active`, before outputting the preview.
+### Rotation Atomicity and Recovery
+
+Rotation is best-effort atomic across local files using temporary files, exclusive archive creation, and `os.replace`. Because the registry and key files are separate entities on disk, a system crash during the final cutover phase may require manual recovery.
+
+If the registry fails to update after the active key has been replaced, the rotation command will attempt an automatic rollback. In the rare event of a total crash leaving the files in an inconsistent state, the active key can be manually restored using the archived key located at `keys/<agent-id>.<old_fingerprint>.key.rotated`.

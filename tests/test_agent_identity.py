@@ -8,11 +8,14 @@ import pytest
 from triage_core.agent_identity import (
     ACTIVE_STATUS,
     REVOKED_STATUS,
+    ROTATED_STATUS,
     AgentIdentity,
     AgentIdentityError,
     AgentIdentityRegistry,
     PrivateKeyPermissionError,
     RevokedAgentError,
+    RotationRollbackError,
+    RotationResult,
     UnauthorizedCapabilityError,
     UnknownAgentError,
     UnsupportedKeyAlgorithmError,
@@ -563,3 +566,110 @@ def test_duplicate_fingerprint_rejected(tmp_path):
         )
     assert not list(registry.identity_dir.glob("*.tmp"))
     assert not list(registry.keys_dir.glob("*.tmp"))
+
+
+def test_rotate_identity_success(tmp_path):
+    registry = AgentIdentityRegistry(tmp_path / ".triagecore")
+    identity = registry.generate_identity("test-agent", "TestRole", ["test:cap"])
+
+    result = registry.rotate_identity("test-agent")
+
+    assert result.agent_id == "test-agent"
+    assert result.old_fingerprint == identity.public_key_fingerprint
+    assert result.new_fingerprint != identity.public_key_fingerprint
+    assert result.active_key_path.exists()
+    assert result.archived_key_path.exists()
+
+    loaded = AgentIdentityRegistry(tmp_path / ".triagecore")
+    loaded.load()
+    new_identity = loaded.get_identity("test-agent")
+    assert new_identity.public_key_fingerprint == result.new_fingerprint
+
+def test_rotate_identity_result_reports_old_and_new_fingerprints(tmp_path):
+    registry = AgentIdentityRegistry(tmp_path / ".triagecore")
+    registry.generate_identity("test-agent", "TestRole", [])
+
+    result = registry.rotate_identity("test-agent")
+    assert result.old_fingerprint
+    assert result.new_fingerprint
+    assert result.old_fingerprint != result.new_fingerprint
+
+def test_rotate_identity_maintains_old_key_metadata_and_adds_rotated_at(tmp_path):
+    registry = AgentIdentityRegistry(tmp_path / ".triagecore")
+    identity = registry.generate_identity("test-agent", "TestRole", [])
+
+    registry.rotate_identity("test-agent")
+
+    raw = json.loads(registry.registry_path.read_text(encoding="utf-8"))
+    agents = raw["agents"]
+    assert len(agents) == 2
+
+    old_record = next(a for a in agents if a["status"] == ROTATED_STATUS)
+    assert old_record["public_key_fingerprint"] == identity.public_key_fingerprint
+    assert old_record["rotated_at"] is not None
+
+def test_rotate_identity_enforces_active_only(tmp_path):
+    registry = AgentIdentityRegistry(tmp_path / ".triagecore")
+    registry.generate_identity("test-agent", "TestRole", [])
+    registry.revoke_identity("test-agent")
+
+    with pytest.raises(RevokedAgentError):
+        registry.rotate_identity("test-agent")
+
+def test_rotate_identity_archives_old_key_file(tmp_path):
+    registry = AgentIdentityRegistry(tmp_path / ".triagecore")
+    identity = registry.generate_identity("test-agent", "TestRole", [])
+
+    result = registry.rotate_identity("test-agent")
+    assert result.archived_key_path.exists()
+    assert result.archived_key_path.name == f"test-agent.{identity.public_key_fingerprint}.key.rotated"
+
+def test_rotate_identity_refuses_when_archive_file_already_exists(tmp_path):
+    registry = AgentIdentityRegistry(tmp_path / ".triagecore")
+    identity = registry.generate_identity("test-agent", "TestRole", [])
+
+    archived_key_path = registry.keys_dir / f"test-agent.{identity.public_key_fingerprint}.key.rotated"
+    archived_key_path.write_text("conflict")
+
+    with pytest.raises(AgentIdentityError, match="Archived key already exists"):
+        registry.rotate_identity("test-agent")
+
+def test_rotate_identity_does_not_modify_active_key_if_temp_key_write_fails(tmp_path):
+    registry = AgentIdentityRegistry(tmp_path / ".triagecore")
+    registry.generate_identity("test-agent", "TestRole", [])
+
+    active_key_content = registry._private_key_path("test-agent").read_bytes()
+
+    with patch("triage_core.agent_identity.harden_private_key_permissions", side_effect=Exception("Failed permissions")):
+        with pytest.raises(AgentIdentityError):
+            registry.rotate_identity("test-agent")
+
+    assert registry._private_key_path("test-agent").read_bytes() == active_key_content
+    # Archived key should not exist because writing temp key failed
+    assert not list(registry.keys_dir.glob("*.rotated"))
+
+
+
+def test_rotate_identity_rolls_back_active_key_if_registry_replace_fails_after_key_replace(tmp_path):
+    registry = AgentIdentityRegistry(tmp_path / ".triagecore")
+    registry.generate_identity("test-agent", "TestRole", [])
+
+    active_key_content = registry._private_key_path("test-agent").read_bytes()
+
+    import os
+    original_replace = os.replace
+
+    with patch("os.replace") as mock_replace:
+        def fake_replace(src, dst):
+            if str(dst).endswith("agents.json"):
+                raise OSError("Registry write failed")
+            original_replace(src, dst)
+        mock_replace.side_effect = fake_replace
+
+        with pytest.raises(RotationRollbackError, match="Rotation registry save failed, rolled back active key"):
+            registry.rotate_identity("test-agent")
+
+    # Key should be restored to original
+    assert registry._private_key_path("test-agent").read_bytes() == active_key_content
+    # Archive key was left in place
+    assert list(registry.keys_dir.glob("*.rotated"))

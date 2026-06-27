@@ -56,6 +56,21 @@ class PrivateKeyPermissionError(AgentIdentityError):
     pass
 
 
+class RotationRollbackError(AgentIdentityError):
+    pass
+
+
+@dataclass
+class RotationResult:
+    agent_id: str
+    old_fingerprint: str
+    new_fingerprint: str
+    rotated_at: str
+    active_key_path: Path
+    archived_key_path: Path
+    registry_path: Path
+
+
 @dataclass
 class AgentIdentityCheckReport:
     identity_count: int = 0
@@ -308,6 +323,159 @@ class AgentIdentityRegistry:
 
         self.save()
         return revoked_identity
+
+    def rotate_identity(self, agent_id: str) -> RotationResult:
+        self._ensure_loaded()
+        identity = self.get_identity(agent_id)
+
+        rotated_at = datetime.now(timezone.utc).isoformat()
+        rotated_identity = AgentIdentity(
+            agent_id=identity.agent_id,
+            role=identity.role,
+            public_key=identity.public_key,
+            public_key_fingerprint=identity.public_key_fingerprint,
+            key_algorithm=identity.key_algorithm,
+            created_at=identity.created_at,
+            status=ROTATED_STATUS,
+            capabilities=identity.capabilities,
+            rotated_at=rotated_at,
+        )
+
+        if identity.key_algorithm == "ed25519":
+            private_key = ed25519.Ed25519PrivateKey.generate()
+        else:
+            raise UnsupportedKeyAlgorithmError(
+                f"Unsupported key algorithm: {identity.key_algorithm}"
+            )
+
+        public_key = private_key.public_key().public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        ).decode("utf-8")
+
+        new_identity = AgentIdentity(
+            agent_id=agent_id,
+            role=identity.role,
+            public_key=public_key,
+            key_algorithm=identity.key_algorithm,
+            capabilities=identity.capabilities,
+            status=ACTIVE_STATUS,
+        )
+
+        private_key_bytes = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+
+        candidate_identities = dict(self._identities)
+        candidate_identities[agent_id] = list(candidate_identities[agent_id])
+
+        for i, existing in enumerate(candidate_identities[agent_id]):
+            if existing.public_key_fingerprint == identity.public_key_fingerprint:
+                candidate_identities[agent_id][i] = rotated_identity
+                break
+
+        candidate_identities[agent_id].append(new_identity)
+
+        return self._perform_rotation_cutover(
+            agent_id=agent_id,
+            old_identity=identity,
+            new_identity=new_identity,
+            private_key_bytes=private_key_bytes,
+            candidate_identities=candidate_identities,
+            rotated_at=str(rotated_identity.rotated_at),
+        )
+
+    def _perform_rotation_cutover(
+        self,
+        agent_id: str,
+        old_identity: AgentIdentity,
+        new_identity: AgentIdentity,
+        private_key_bytes: bytes,
+        candidate_identities: Dict[str, List[AgentIdentity]],
+        rotated_at: str,
+    ) -> RotationResult:
+        active_key_path = self._private_key_path(agent_id)
+        archived_key_path = self.keys_dir / f"{agent_id}.{old_identity.public_key_fingerprint}.key.rotated"
+
+        temp_new_key = self.keys_dir / f".{agent_id}.key.next.{new_identity.public_key_fingerprint}.tmp"
+        registry_temp_path = self.identity_dir / f".agents.{uuid.uuid4().hex}.tmp"
+
+        temp_files_to_clean = []
+
+        try:
+            temp_new_key.write_bytes(private_key_bytes)
+            harden_private_key_permissions(temp_new_key)
+            temp_files_to_clean.append(temp_new_key)
+
+            with open(archived_key_path, "xb") as dest, open(active_key_path, "rb") as src:
+                dest.write(src.read())
+
+            self._write_registry(registry_temp_path, candidate_identities)
+            temp_files_to_clean.append(registry_temp_path)
+
+        except Exception as exc:
+            for temp_file in temp_files_to_clean:
+                temp_file.unlink(missing_ok=True)
+            if isinstance(exc, FileExistsError):
+                raise AgentIdentityError(f"Archived key already exists: {archived_key_path}") from exc
+            raise AgentIdentityError("Failed to prepare rotation transaction") from exc
+
+        try:
+            os.replace(temp_new_key, active_key_path)
+            temp_files_to_clean.remove(temp_new_key)
+        except Exception as exc:
+            for temp_file in temp_files_to_clean:
+                temp_file.unlink(missing_ok=True)
+            raise AgentIdentityError("Failed to cut over to new active key") from exc
+
+        try:
+            os.replace(registry_temp_path, self.registry_path)
+            temp_files_to_clean.remove(registry_temp_path)
+        except Exception as exc:
+            self._rollback_key_cutover(
+                agent_id=agent_id,
+                archived_key_path=archived_key_path,
+                active_key_path=active_key_path,
+                temp_files_to_clean=temp_files_to_clean,
+                exc=exc,
+            )
+
+        self._identities = candidate_identities
+        return RotationResult(
+            agent_id=agent_id,
+            old_fingerprint=old_identity.public_key_fingerprint,
+            new_fingerprint=new_identity.public_key_fingerprint,
+            rotated_at=rotated_at,
+            active_key_path=active_key_path,
+            archived_key_path=archived_key_path,
+            registry_path=self.registry_path,
+        )
+
+    def _rollback_key_cutover(
+        self,
+        agent_id: str,
+        archived_key_path: Path,
+        active_key_path: Path,
+        temp_files_to_clean: List[Path],
+        exc: Exception,
+    ) -> None:
+        try:
+            with open(active_key_path, "wb") as dest, open(archived_key_path, "rb") as src:
+                dest.write(src.read())
+        except Exception as rollback_exc:
+            raise RotationRollbackError(
+                f"CRITICAL: Failed to rollback active key after registry write failure for agent {agent_id}. "
+                f"The registry and key file may be out of sync. Please restore the old key manually from {archived_key_path}."
+            ) from rollback_exc
+
+        for temp_file in temp_files_to_clean:
+            temp_file.unlink(missing_ok=True)
+
+        raise RotationRollbackError(
+            f"Rotation registry save failed, rolled back active key from {archived_key_path.name}"
+        ) from exc
 
     def check_consistency(self) -> AgentIdentityCheckReport:
         report = AgentIdentityCheckReport()

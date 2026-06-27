@@ -310,18 +310,25 @@ def test_identity_check_passes_for_revoked_identity_with_existing_key(tmp_path, 
     assert "PRIVATE KEY" not in out
 
 
-def test_identity_rotate_without_dry_run_fails_not_implemented(tmp_path, monkeypatch, capsys):
+def test_identity_rotate_performs_rotation_and_prints_success(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
-        with pytest.raises(SystemExit) as exc:
-            tc_identity_rotate("some-agent", dry_run=False)
+        tc_identity_init("rotation-test", "Role", [])
+    capsys.readouterr()
 
-    assert exc.value.code == 1
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_identity_rotate("rotation-test", dry_run=False)
+
     out = capsys.readouterr().out
-    assert "Non-dry-run identity rotation is not implemented yet. Re-run with --dry-run to preview." in out
+    assert "Identity rotated successfully" in out
+    assert "agent_id: rotation-test" in out
+    assert "old_fingerprint:" in out
+    assert "new_fingerprint:" in out
+    assert "active_key:" in out
+    assert "archived_key:" in out
 
 
-def test_identity_rotate_dry_run_shows_intended_changes(tmp_path, monkeypatch, capsys):
+def test_identity_rotate_cli_preserves_dry_run_behavior_after_real_rotation_added(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
         tc_identity_init("rotation-test", "Role", [])
