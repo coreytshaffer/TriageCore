@@ -40,3 +40,14 @@ TriageCore does not support automated or implied recovery of lost keys.
 Local private keys are high-value trust material. Loss of a private key means permanent loss of signing ability for that key. Public registry metadata alone does not restore signing authority.
 
 If a key is lost, the only supported path is to rotate to a new key.
+
+## CLI Usage
+
+The `tc identity rotate` command is designed to manage key rotation. Currently (as of CR-084), only a dry-run preview is supported. Real rotation is not yet implemented.
+
+To preview rotation changes:
+```powershell
+tc identity rotate <agent-id> --dry-run
+```
+
+This command will output the intended registry and key updates without actually modifying `agents.json` or any `.key` files on disk. The dry-run enforces constraints, such as verifying the identity is `active`, before outputting the preview.

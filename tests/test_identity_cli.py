@@ -8,6 +8,7 @@ from triage_core.tc_cli import (
     tc_identity_init,
     tc_identity_list,
     tc_identity_revoke,
+    tc_identity_rotate,
 )
 
 
@@ -307,3 +308,110 @@ def test_identity_check_passes_for_revoked_identity_with_existing_key(tmp_path, 
     assert "identities=1" in out
     assert "keys=1" in out
     assert "PRIVATE KEY" not in out
+
+
+def test_identity_rotate_without_dry_run_fails_not_implemented(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        with pytest.raises(SystemExit) as exc:
+            tc_identity_rotate("some-agent", dry_run=False)
+
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "Non-dry-run identity rotation is not implemented yet. Re-run with --dry-run to preview." in out
+
+
+def test_identity_rotate_dry_run_shows_intended_changes(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_identity_init("rotation-test", "Role", [])
+    capsys.readouterr()
+
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_identity_rotate("rotation-test", dry_run=True)
+
+    out = capsys.readouterr().out
+    assert "Identity rotation dry run" in out
+    assert "agent_id: rotation-test" in out
+    assert "current_status: active" in out
+    assert "would_mark_current_key: rotated" in out
+    assert "would_set_rotated_at:" in out
+    assert "would_generate_new_key: yes" in out
+    assert "would_write_registry: no" in out
+    assert "would_write_private_key: no" in out
+    assert "No files were modified." in out
+
+
+def test_identity_rotate_dry_run_preserves_registry(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_identity_init("rotation-test", "Role", [])
+    capsys.readouterr()
+
+    registry_path = tmp_path / ".triagecore" / "identity" / "agents.json"
+    before_content = registry_path.read_text(encoding="utf-8")
+
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_identity_rotate("rotation-test", dry_run=True)
+
+    after_content = registry_path.read_text(encoding="utf-8")
+    assert before_content == after_content
+
+
+def test_identity_rotate_dry_run_preserves_existing_key_file(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_identity_init("rotation-test", "Role", [])
+    capsys.readouterr()
+
+    key_path = tmp_path / ".triagecore" / "identity" / "keys" / "rotation-test.key"
+    before_content = key_path.read_text(encoding="utf-8")
+
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_identity_rotate("rotation-test", dry_run=True)
+
+    after_content = key_path.read_text(encoding="utf-8")
+    assert before_content == after_content
+
+
+def test_identity_rotate_dry_run_does_not_create_new_key_material(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_identity_init("rotation-test", "Role", [])
+    capsys.readouterr()
+
+    keys_dir = tmp_path / ".triagecore" / "identity" / "keys"
+    files_before = set(keys_dir.iterdir())
+
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_identity_rotate("rotation-test", dry_run=True)
+
+    files_after = set(keys_dir.iterdir())
+    assert files_before == files_after
+
+
+def test_identity_rotate_dry_run_unknown_identity_fails(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        with pytest.raises(SystemExit) as exc:
+            tc_identity_rotate("missing-agent", dry_run=True)
+
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "Error: Unknown agent identity: missing-agent" in out
+
+
+def test_identity_rotate_dry_run_non_active_identity_fails(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_identity_init("rotation-test", "Role", [])
+        tc_identity_revoke("rotation-test")
+    capsys.readouterr()
+
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        with pytest.raises(SystemExit) as exc:
+            tc_identity_rotate("rotation-test", dry_run=True)
+
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "Cannot rotate non-active identity" in out
