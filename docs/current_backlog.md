@@ -2,13 +2,13 @@
 
 ## Status
 
-This document summarizes the active TriageCore backlog after CR-079.
+This document summarizes the active TriageCore backlog after CR-081.
 
 ## Active GitHub Backlog
 
 - Issue #72: Expand signed ledger event coverage beyond `route_audit`
-  - Status: `validation_result` path complete via CR-078 and CR-079; broader event coverage remains future work
-  - Purpose: selectively enforce identity checks and signatures for core ledger events beyond `route_audit` without treating signatures as approval. The first additional signed-event path now covers `validation_result` creation plus operator-facing verification; future work is deciding whether to sign additional event types such as `route_decision`, `taskpacket_created`, or `project_steward_decision`.
+  - Status: `validation_result` creation, verification, and reviewer-facing example complete via CR-078, CR-079, and CR-081; broader event coverage remains future work
+  - Purpose: selectively enforce identity checks and signatures for core ledger events beyond `route_audit` without treating signatures as approval. The first additional signed-event path now covers `validation_result` creation, operator-facing verification, and reviewer-facing examples; future work is deciding whether to sign additional event types such as `route_decision`, `taskpacket_created`, or `project_steward_decision`.
 
 - Issue #73: Implement runtime key rotation behavior
   - Status: open
@@ -98,7 +98,7 @@ This document summarizes the active TriageCore backlog after CR-079.
 
 Keep three work lanes distinct:
 
-- Identity lifecycle work #4 is closed. CR-078 and CR-079 complete the signed `validation_result` path under Issue #72; remaining signed-event expansion and Issue #73 runtime rotation behavior should stay separate implementation slices.
+- Identity lifecycle work #4 is closed. CR-078, CR-079, and CR-081 complete the signed `validation_result` path under Issue #72 through creation, verification, and reviewer-facing examples; remaining signed-event expansion and Issue #73 runtime rotation behavior should stay separate implementation slices.
 - Model and runtime integrity work should build on CR-031 through CR-033. Keep
   policy baseline, route-manifest artifact shape, manifest validation, and live
   enforcement as separate reviewable slices.
@@ -106,7 +106,7 @@ Keep three work lanes distinct:
   hygiene work should be limited to stale documented claims or a separately
   proposed repo-consistency checker.
 
-For signed ledger coverage, keep the `validation_result` path stable and legible, then choose deliberately between reviewer-facing verification docs/examples or one additional signed event type. Do not treat a valid signature as approval, safety, or correctness.
+For signed ledger coverage, the reviewer-facing `validation_result` path is now in place. The next slice should deliberately choose either one additional signed event type or a lane switch into key lifecycle behavior. Do not treat a valid signature as approval, safety, or correctness.
 
 For the empirical AI safety evaluation track, keep the next slices sequential: fixture validation first, evaluator CLI second, and broader adversarial/tampering studies only after the fixture contract is stable.
 
