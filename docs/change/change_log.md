@@ -5,6 +5,7 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+- Implemented CR-078 (Signed Ledger Event Coverage Plan): Documented signed-event coverage, added a signed `validation_result` ledger path with explicit `validation_result:sign` authorization, and covered provenance-only signing behavior with focused tests.
 - Implemented TD-007 (TriageDesk GUI consolidation pass): Consolidated GUI improvements, added safety boundary documentation to `app.py`, fixed stale comments, and ensured all recent panels align with the read-only operator console goal.
 - Implemented TD-006 (Packet Preview UI integration): Wired up the UI for `packet render` dry-runs within the Context Planner tab, producing safely bounded deterministic outputs visually in a read-only textbox without executing or mutating.
 - Implemented TD-005 (Read-only Context Planner panel): Added a dedicated sidebar tab in TriageDesk for context planner dry-runs, allowing evaluation of token budgets without writing packets.

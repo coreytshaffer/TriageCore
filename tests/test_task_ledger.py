@@ -12,6 +12,7 @@ from triage_core.agent_identity import (
 from triage_core.task_ledger import (
     TaskLedger,
     verify_route_audit_event_signature,
+    verify_validation_result_event_signature,
 )
 
 def test_ledger_append_and_read():
@@ -706,6 +707,126 @@ def test_append_signed_route_audit_event_fails_for_unauthorized_agent():
                 {
                     "decision": "allowed",
                     "reason_code": "public_safe_demo",
+                },
+                signing_registry=registry,
+                signing_agent_id="context-planner",
+            )
+
+
+def test_append_signed_validation_result_event_writes_signature_metadata():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        ledger = TaskLedger(ledger_dir=temp_dir)
+        registry = AgentIdentityRegistry(ledger_dir=temp_dir)
+        registry.generate_identity(
+            "validator-tools",
+            "validator_tools",
+            ["validation_result:sign"],
+        )
+
+        payload = {
+            "validator_name": "deterministic_demo_validator",
+            "validator_version": "1.0",
+            "validation_status": "passed",
+            "checked_files": ["triage_core/task_ledger.py"],
+        }
+        written_event = ledger.append_signed_validation_result_event(
+            "task-validation-123",
+            payload,
+            signing_registry=registry,
+            signing_agent_id="validator-tools",
+        )
+
+        assert written_event["event_type"] == "validation_result"
+        assert written_event["payload"] == payload
+        assert written_event["signature_metadata"]["agent_id"] == "validator-tools"
+        assert written_event["signature_metadata"]["capability"] == "validation_result:sign"
+        assert verify_validation_result_event_signature(written_event, registry) is True
+
+        stored_events = ledger.get_events("task-validation-123")
+        assert len(stored_events) == 1
+        assert "signature_metadata" in stored_events[0]
+        assert verify_validation_result_event_signature(stored_events[0], registry) is True
+
+
+def test_signed_validation_result_event_verification_fails_after_payload_tamper():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        ledger = TaskLedger(ledger_dir=temp_dir)
+        registry = AgentIdentityRegistry(ledger_dir=temp_dir)
+        registry.generate_identity(
+            "validator-tools",
+            "validator_tools",
+            ["validation_result:sign"],
+        )
+
+        event = ledger.append_signed_validation_result_event(
+            "task-validation-456",
+            {
+                "validator_name": "deterministic_demo_validator",
+                "validation_status": "passed",
+                "checked_files": ["triage_core/task_ledger.py"],
+            },
+            signing_registry=registry,
+            signing_agent_id="validator-tools",
+        )
+
+        tampered_event = dict(event)
+        tampered_event["payload"] = dict(event["payload"])
+        tampered_event["payload"]["validation_status"] = "failed"
+
+        assert verify_validation_result_event_signature(tampered_event, registry) is False
+
+
+def test_signed_validation_result_event_fails_for_revoked_agent():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        registry = AgentIdentityRegistry(ledger_dir=temp_dir)
+        registry.generate_identity(
+            "revoked-validator",
+            "validator_tools",
+            ["validation_result:sign"],
+            status=REVOKED_STATUS,
+        )
+
+        event = {
+            "event_id": "evt-validation-1",
+            "task_id": "task-validation-999",
+            "timestamp": "2026-06-12T00:00:00+00:00",
+            "schema_version": "0.2.0",
+            "role_taxonomy_version": "2026-06-worker-council-v2",
+            "event_type": "validation_result",
+            "payload": {
+                "validator_name": "deterministic_demo_validator",
+                "validation_status": "passed",
+            },
+            "signature_metadata": {
+                "agent_id": "revoked-validator",
+                "capability": "validation_result:sign",
+                "payload_hash": "abc",
+                "signature_algorithm": "ed25519",
+                "signed_at": "2026-06-12T00:00:00+00:00",
+                "signature": "ZmFrZQ==",
+            },
+        }
+
+        with pytest.raises(RevokedAgentError):
+            verify_validation_result_event_signature(event, registry)
+
+
+def test_append_signed_validation_result_event_fails_for_unauthorized_agent():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        ledger = TaskLedger(ledger_dir=temp_dir)
+        registry = AgentIdentityRegistry(ledger_dir=temp_dir)
+        registry.generate_identity(
+            "context-planner",
+            "context_planner",
+            ["route_audit:sign"],
+        )
+
+        with pytest.raises(UnauthorizedCapabilityError):
+            ledger.append_signed_validation_result_event(
+                "task-validation-unauthorized",
+                {
+                    "validator_name": "deterministic_demo_validator",
+                    "validation_status": "passed",
                 },
                 signing_registry=registry,
                 signing_agent_id="context-planner",
