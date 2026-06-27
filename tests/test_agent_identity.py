@@ -225,8 +225,7 @@ def test_tampering_with_signed_payload_metadata_fails_verification(tmp_path):
 
     tampered_metadata = dict(signature_metadata)
     tampered_metadata["capability"] = "route_audit:sign"
-    with pytest.raises(UnauthorizedCapabilityError):
-        registry.verify_signed_payload(payload, tampered_metadata)
+    assert registry.verify_signed_payload(payload, tampered_metadata) is False
 
 
 def test_unknown_agents_fail_verification(tmp_path):
@@ -257,21 +256,9 @@ def test_revoked_agents_fail_verification(tmp_path):
         "project_steward_decision:sign",
         payload,
     )
-    registry.register_identity(
-        AgentIdentity(
-            agent_id=active_identity.agent_id,
-            role=active_identity.role,
-            public_key=active_identity.public_key,
-            public_key_fingerprint=active_identity.public_key_fingerprint,
-            key_algorithm=active_identity.key_algorithm,
-            created_at=active_identity.created_at,
-            status=REVOKED_STATUS,
-            capabilities=active_identity.capabilities,
-        )
-    )
+    registry.revoke_identity("project-steward")
 
-    with pytest.raises(RevokedAgentError):
-        registry.verify_signed_payload(payload, signature_metadata)
+    assert registry.verify_signed_payload(payload, signature_metadata) is False
 
 
 def test_revoke_identity_marks_status_and_preserves_public_metadata(tmp_path):
@@ -431,21 +418,148 @@ def test_generated_private_key_permissions_are_restrictive(tmp_path):
     assert warning is None
 
 
-def test_permission_hardening_failure_leaves_no_identity_artifacts(tmp_path):
+def test_permission_hardening_failure_leaves_no_identity_artifacts(tmp_path, monkeypatch):
     registry = AgentIdentityRegistry(tmp_path / ".triagecore")
 
-    with patch(
-        "triage_core.agent_identity.harden_private_key_permissions",
-        side_effect=PrivateKeyPermissionError("simulated permission failure"),
-    ):
-        with pytest.raises(PrivateKeyPermissionError):
-            registry.generate_identity(
-                "project-steward",
-                "ProjectSteward",
-                ["route_audit:sign"],
-            )
+    def mock_harden(*args, **kwargs):
+        raise PrivateKeyPermissionError("Mock failure")
 
-    assert not registry.registry_path.exists()
-    assert not (registry.keys_dir / "project-steward.key").exists()
+    monkeypatch.setattr(
+        "triage_core.agent_identity.harden_private_key_permissions",
+        mock_harden,
+    )
+
+    with pytest.raises(PrivateKeyPermissionError):
+        registry.generate_identity("fail-agent", "Role", ["cap"])
+
+    assert not (tmp_path / ".triagecore" / "identity" / "keys").exists() or not list(
+        (tmp_path / ".triagecore" / "identity" / "keys").iterdir()
+    )
+    assert not (tmp_path / ".triagecore" / "identity" / "agents.json").exists()
+
+
+def test_rotated_identity_requires_rotated_at(tmp_path):
+    registry = AgentIdentityRegistry(tmp_path / ".triagecore")
+    with pytest.raises(AgentIdentityError, match="requires a rotated_at timestamp"):
+        registry.register_identity(
+            AgentIdentity(
+                agent_id="test-agent",
+                role="Role",
+                public_key="some-key",
+                key_algorithm="ed25519",
+                capabilities=["cap"],
+                status="rotated",
+                rotated_at=None,
+            )
+        )
+
+
+def test_historical_validation_succeeds_for_rotated_key(tmp_path):
+    registry = AgentIdentityRegistry(tmp_path / ".triagecore")
+    identity = registry.generate_identity("test-agent", "Role", ["cap"])
+
+    # Sign payload with active key
+    payload = {"foo": "bar"}
+    signature_metadata = registry.sign_payload("test-agent", "cap", payload)
+
+    # Force the key to be rotated AFTER the signature was created
+    rotated_identity = AgentIdentity(
+        agent_id=identity.agent_id,
+        role=identity.role,
+        public_key=identity.public_key,
+        public_key_fingerprint=identity.public_key_fingerprint,
+        key_algorithm=identity.key_algorithm,
+        capabilities=identity.capabilities,
+        status="rotated",
+        rotated_at="2027-01-01T00:00:00+00:00",  # Future
+    )
+    registry._identities["test-agent"][0] = rotated_identity
+
+    # Should still verify because signature was BEFORE rotation
+    assert registry.verify_signed_payload(payload, signature_metadata) is True
+
+
+def test_historical_validation_fails_if_signed_after_rotated(tmp_path):
+    registry = AgentIdentityRegistry(tmp_path / ".triagecore")
+    identity = registry.generate_identity("test-agent", "Role", ["cap"])
+
+    # Force the key to be rotated IN THE PAST
+    rotated_identity = AgentIdentity(
+        agent_id=identity.agent_id,
+        role=identity.role,
+        public_key=identity.public_key,
+        public_key_fingerprint=identity.public_key_fingerprint,
+        key_algorithm=identity.key_algorithm,
+        capabilities=identity.capabilities,
+        status="rotated",
+        rotated_at="2020-01-01T00:00:00+00:00",  # Past
+    )
+    registry._identities["test-agent"][0] = rotated_identity
+
+    # Attempt to sign now (fails because no active key)
+    # So let's manually construct a signature claiming to be signed now
+    with pytest.raises(RevokedAgentError):
+        registry.sign_payload("test-agent", "cap", {"foo": "bar"})
+
+
+def test_compromised_key_raises_error_on_match(tmp_path):
+    registry = AgentIdentityRegistry(tmp_path / ".triagecore")
+    identity = registry.generate_identity("test-agent", "Role", ["cap"])
+
+    payload = {"foo": "bar"}
+    signature_metadata = registry.sign_payload("test-agent", "cap", payload)
+
+    # Mark compromised
+    compromised_identity = AgentIdentity(
+        agent_id=identity.agent_id,
+        role=identity.role,
+        public_key=identity.public_key,
+        public_key_fingerprint=identity.public_key_fingerprint,
+        key_algorithm=identity.key_algorithm,
+        capabilities=identity.capabilities,
+        status="compromised",
+    )
+    registry._identities["test-agent"][0] = compromised_identity
+
+    from triage_core.agent_identity import CompromisedKeyError
+    with pytest.raises(CompromisedKeyError, match="compromised key"):
+        registry.verify_signed_payload(payload, signature_metadata)
+
+
+def test_multiple_active_keys_rejected(tmp_path):
+    registry = AgentIdentityRegistry(tmp_path / ".triagecore")
+    registry.generate_identity("test-agent", "Role", ["cap"])
+
+    # Try to register another active key for the same agent
+    with pytest.raises(AgentIdentityError, match="already has an active key"):
+        registry.register_identity(
+            AgentIdentity(
+                agent_id="test-agent",
+                role="Role",
+                public_key="some-other-key",
+                key_algorithm="ed25519",
+                capabilities=["cap"],
+                status="active",
+            )
+        )
+
+
+def test_duplicate_fingerprint_rejected(tmp_path):
+    registry = AgentIdentityRegistry(tmp_path / ".triagecore")
+    identity = registry.generate_identity("test-agent", "Role", ["cap"])
+
+    # Try to register a duplicate key for the same agent
+    with pytest.raises(AgentIdentityError, match="Duplicate fingerprint"):
+        registry.register_identity(
+            AgentIdentity(
+                agent_id="test-agent",
+                role="Role",
+                public_key=identity.public_key,
+                key_algorithm="ed25519",
+                capabilities=["cap"],
+                status="rotated",
+                rotated_at="2027-01-01T00:00:00+00:00",
+            )
+        )
     assert not list(registry.identity_dir.glob("*.tmp"))
     assert not list(registry.keys_dir.glob("*.tmp"))

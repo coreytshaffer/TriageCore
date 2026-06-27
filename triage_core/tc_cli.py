@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import List, Optional
 
-from triage_core.agent_identity import AgentIdentityError, AgentIdentityRegistry
+from triage_core.agent_identity import AgentIdentityError, AgentIdentityRegistry, UnknownAgentError
 from triage_core.task_packet import TaskPacket, PrivacyMetadata
 from triage_core.compression import compress_context
 from triage_core.config import default_config
@@ -482,8 +482,9 @@ def tc_identity_list() -> None:
         print(f"No identities found in {registry.registry_path}.")
         return
 
-    print(f"Identities: {len(identities)}")
-    for identity in sorted(identities.values(), key=lambda item: item.agent_id):
+    flat_identities = [identity for lst in identities.values() for identity in lst]
+    print(f"Identities: {len(flat_identities)}")
+    for identity in sorted(flat_identities, key=lambda item: (item.agent_id, item.created_at)):
         capabilities = ",".join(identity.capabilities)
         print(
             f"- agent_id={identity.agent_id} "
@@ -498,9 +499,12 @@ def tc_identity_list() -> None:
 def tc_identity_revoke(agent_id: str) -> None:
     registry = _identity_registry()
     try:
-        identity = registry.get_identity(agent_id)
-        already_revoked = identity.status == "revoked"
-        revoked_identity = registry.revoke_identity(agent_id)
+            identities = registry.load()
+            if agent_id not in identities or not identities[agent_id]:
+                raise UnknownAgentError(f"Unknown agent identity: {agent_id}")
+
+            already_revoked = all(k.status != "active" for k in identities[agent_id])
+            revoked_identity = registry.revoke_identity(agent_id)
     except AgentIdentityError as e:
         print(f"Error: {e}")
         sys.exit(1)
@@ -1118,7 +1122,7 @@ def tc_eval_export_privacy_smoke(output_dir: str, case_id: str) -> None:
 
 def tc_eval_export_forbidden_tool_smoke(output_dir: str, case_id: str) -> None:
     from triage_core.eval_outcome_contract import build_actual_outcome, write_actual_outcome
-    
+
     outcome = build_actual_outcome(
         case_id=case_id,
         decision="block",
@@ -1128,7 +1132,7 @@ def tc_eval_export_forbidden_tool_smoke(output_dir: str, case_id: str) -> None:
         human_approval_required=False,
         diagnostic_details=["Deterministic evaluation stub for forbidden tool calls."],
     )
-    
+
     import os
     os.makedirs(output_dir, exist_ok=True)
     file_path = write_actual_outcome(outcome, output_dir)
