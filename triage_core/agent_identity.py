@@ -23,6 +23,8 @@ from cryptography.hazmat.primitives.asymmetric import ed25519
 SUPPORTED_KEY_ALGORITHMS = {"ed25519"}
 ACTIVE_STATUS = "active"
 REVOKED_STATUS = "revoked"
+ROTATED_STATUS = "rotated"
+COMPROMISED_STATUS = "compromised"
 AGENT_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
@@ -35,6 +37,10 @@ class UnknownAgentError(AgentIdentityError):
 
 
 class RevokedAgentError(AgentIdentityError):
+    pass
+
+
+class CompromisedKeyError(AgentIdentityError):
     pass
 
 
@@ -80,6 +86,7 @@ class AgentIdentity:
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
     status: str = ACTIVE_STATUS
+    rotated_at: Optional[str] = None
 
     def __post_init__(self) -> None:
         if self.key_algorithm not in SUPPORTED_KEY_ALGORITHMS:
@@ -112,6 +119,7 @@ class AgentIdentity:
             created_at=str(metadata["created_at"]),
             status=str(metadata["status"]),
             capabilities=[str(item) for item in metadata.get("capabilities", [])],
+            rotated_at=str(metadata["rotated_at"]) if metadata.get("rotated_at") else None,
         )
 
 
@@ -121,12 +129,24 @@ class AgentIdentityRegistry:
         self.identity_dir = self.ledger_dir / "identity"
         self.registry_path = self.identity_dir / "agents.json"
         self.keys_dir = self.identity_dir / "keys"
-        self._identities: Dict[str, AgentIdentity] = {}
+        self._identities: Dict[str, List[AgentIdentity]] = {}
         self._loaded = False
 
     def register_identity(self, identity: AgentIdentity) -> None:
         self._ensure_loaded()
-        self._identities[identity.agent_id] = identity
+        if identity.agent_id not in self._identities:
+            self._identities[identity.agent_id] = []
+
+        for existing in self._identities[identity.agent_id]:
+            if existing.public_key_fingerprint == identity.public_key_fingerprint:
+                raise AgentIdentityError(f"Duplicate fingerprint {identity.public_key_fingerprint} for {identity.agent_id}")
+            if identity.status == ACTIVE_STATUS and existing.status == ACTIVE_STATUS:
+                raise AgentIdentityError(f"Agent identity '{identity.agent_id}' already has an active key.")
+
+        if identity.status == ROTATED_STATUS and not identity.rotated_at:
+            raise AgentIdentityError(f"Rotated identity '{identity.agent_id}' requires a rotated_at timestamp.")
+
+        self._identities[identity.agent_id].append(identity)
 
     def save(self) -> Path:
         self._ensure_loaded()
@@ -191,7 +211,10 @@ class AgentIdentityRegistry:
         )
 
         candidate_identities = dict(self._identities)
-        candidate_identities[agent_id] = identity
+        if agent_id not in candidate_identities:
+            candidate_identities[agent_id] = []
+        candidate_identities[agent_id] = list(candidate_identities[agent_id])
+        candidate_identities[agent_id].append(identity)
         key_temp_path = self.keys_dir / f".{agent_id}.{uuid.uuid4().hex}.tmp"
         registry_temp_path = self.identity_dir / f".agents.{uuid.uuid4().hex}.tmp"
         key_committed = False
@@ -229,12 +252,22 @@ class AgentIdentityRegistry:
             if not isinstance(metadata_items, list):
                 raise TypeError("agents must be a list")
 
-            identities: Dict[str, AgentIdentity] = {}
+            identities: Dict[str, List[AgentIdentity]] = {}
             for metadata in metadata_items:
                 identity = AgentIdentity.from_public_metadata(metadata)
-                if identity.agent_id in identities:
-                    raise ValueError("duplicate agent_id")
-                identities[identity.agent_id] = identity
+                if identity.agent_id not in identities:
+                    identities[identity.agent_id] = []
+
+                for existing in identities[identity.agent_id]:
+                    if existing.public_key_fingerprint == identity.public_key_fingerprint:
+                        raise AgentIdentityError(f"Duplicate fingerprint {identity.public_key_fingerprint} for {identity.agent_id}")
+                    if identity.status == ACTIVE_STATUS and existing.status == ACTIVE_STATUS:
+                        raise AgentIdentityError(f"Multiple active keys found for {identity.agent_id}")
+
+                if identity.status == ROTATED_STATUS and not identity.rotated_at:
+                    raise AgentIdentityError(f"Rotated identity '{identity.agent_id}' requires a rotated_at timestamp.")
+
+                identities[identity.agent_id].append(identity)
         except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
             raise AgentIdentityError("Identity registry is malformed.") from exc
 
@@ -244,9 +277,16 @@ class AgentIdentityRegistry:
 
     def revoke_identity(self, agent_id: str) -> AgentIdentity:
         self._ensure_loaded()
-        identity = self.get_identity(agent_id)
-        if identity.status == REVOKED_STATUS:
-            return identity
+
+        try:
+            identity = self.get_identity(agent_id)
+        except RevokedAgentError:
+            # If no active identity, see if we can return a revoked one for idempotency
+            if agent_id in self._identities and self._identities[agent_id]:
+                for existing in self._identities[agent_id]:
+                    if existing.status == REVOKED_STATUS:
+                        return existing
+            raise
 
         revoked_identity = AgentIdentity(
             agent_id=identity.agent_id,
@@ -257,14 +297,21 @@ class AgentIdentityRegistry:
             created_at=identity.created_at,
             status=REVOKED_STATUS,
             capabilities=identity.capabilities,
+            rotated_at=identity.rotated_at,
         )
-        self._identities[agent_id] = revoked_identity
+
+        identities_list = self._identities[agent_id]
+        for i, existing in enumerate(identities_list):
+            if existing.public_key_fingerprint == identity.public_key_fingerprint:
+                identities_list[i] = revoked_identity
+                break
+
         self.save()
         return revoked_identity
 
     def check_consistency(self) -> AgentIdentityCheckReport:
         report = AgentIdentityCheckReport()
-        identities: Dict[str, AgentIdentity] = {}
+        identities: Dict[str, List[AgentIdentity]] = {}
 
         if self.registry_path.exists():
             try:
@@ -273,7 +320,7 @@ class AgentIdentityRegistry:
                 report.malformed_registry = True
 
         key_paths = sorted(self.keys_dir.glob("*.key")) if self.keys_dir.exists() else []
-        report.identity_count = len(identities)
+        report.identity_count = sum(len(lst) for lst in identities.values())
         report.key_count = len(key_paths)
 
         if not report.malformed_registry:
@@ -291,9 +338,14 @@ class AgentIdentityRegistry:
 
     def get_identity(self, agent_id: str) -> AgentIdentity:
         self._ensure_loaded()
-        if agent_id not in self._identities:
+        if agent_id not in self._identities or not self._identities[agent_id]:
             raise UnknownAgentError(f"Unknown agent identity: {agent_id}")
-        return self._identities[agent_id]
+
+        for identity in self._identities[agent_id]:
+            if identity.status == ACTIVE_STATUS:
+                return identity
+
+        raise RevokedAgentError(f"No active identity found for agent '{agent_id}'")
 
     def require_authorized_capability(
         self,
@@ -354,9 +406,10 @@ class AgentIdentityRegistry:
 
         agent_id = str(signature_metadata["agent_id"])
         capability = str(signature_metadata["capability"])
-        identity = self.require_authorized_capability(agent_id, capability)
-        if identity.key_algorithm != signature_algorithm:
-            return False
+
+        self._ensure_loaded()
+        if agent_id not in self._identities:
+            raise UnknownAgentError(f"Unknown agent identity: {agent_id}")
 
         expected_payload_hash = canonical_payload_hash(payload)
         if signature_metadata["payload_hash"] != expected_payload_hash:
@@ -370,14 +423,43 @@ class AgentIdentityRegistry:
             signed_at=str(signature_metadata["signed_at"]),
         )
         signature_bytes = base64.b64decode(signature_metadata["signature"])
-        public_key = serialization.load_pem_public_key(
-            identity.public_key.encode("utf-8")
-        )
-        try:
-            public_key.verify(signature_bytes, _canonical_json(signature_fields))
-        except InvalidSignature:
-            return False
-        return True
+        canonical_msg = _canonical_json(signature_fields)
+        signed_at_str = str(signature_metadata["signed_at"])
+
+        for identity in self._identities[agent_id]:
+            if identity.key_algorithm != signature_algorithm:
+                continue
+            if capability not in identity.capabilities:
+                continue
+
+            public_key = serialization.load_pem_public_key(
+                identity.public_key.encode("utf-8")
+            )
+            try:
+                public_key.verify(signature_bytes, canonical_msg)
+            except InvalidSignature:
+                continue
+
+            if identity.status == ACTIVE_STATUS:
+                return True
+            elif identity.status == ROTATED_STATUS:
+                if not identity.rotated_at:
+                    return False
+                try:
+                    signed_at_dt = datetime.fromisoformat(signed_at_str)
+                    rotated_at_dt = datetime.fromisoformat(identity.rotated_at)
+                    if signed_at_dt <= rotated_at_dt:
+                        return True
+                    else:
+                        return False
+                except ValueError:
+                    return False
+            elif identity.status == COMPROMISED_STATUS:
+                raise CompromisedKeyError(f"Signature verified against a compromised key for agent '{agent_id}'")
+            elif identity.status == REVOKED_STATUS:
+                return False
+
+        return False
 
     def _private_key_path(self, agent_id: str) -> Path:
         _validate_agent_id(agent_id)
@@ -390,14 +472,18 @@ class AgentIdentityRegistry:
     @staticmethod
     def _write_registry(
         path: Path,
-        identities: Dict[str, AgentIdentity],
+        identities: Dict[str, List[AgentIdentity]],
     ) -> None:
+        flat_identities = []
+        for lst in identities.values():
+            flat_identities.extend(lst)
+
         payload = {
             "agents": [
                 identity.to_public_metadata()
                 for identity in sorted(
-                    identities.values(),
-                    key=lambda item: item.agent_id,
+                    flat_identities,
+                    key=lambda item: (item.agent_id, item.created_at),
                 )
             ]
         }

@@ -281,8 +281,8 @@ def test_signed_smoke_test_fails_for_revoked_identity(tmp_path, monkeypatch, cap
 
     assert exc.value.code == 1
     out = capsys.readouterr().out
-    assert "is not active" in out
-    assert "status=revoked" in out
+    assert "No active identity found" in out
+    assert "revoked-smoke-agent" in out
 
 
 def test_audit_verify_signatures_fails_for_revoked_signing_identity(tmp_path, capsys):
@@ -751,7 +751,7 @@ def test_audit_verify_signatures_validation_result_fails_for_revoked_identity(
     assert exc.value.code == 1
     out = capsys.readouterr().out
     assert "Validation result signature verification failed" in out
-    assert "reason=revoked_agent" in out
+    assert "reason=signature_mismatch" in out
 
 
 def test_audit_verify_signatures_rejects_unsupported_kind(capsys):

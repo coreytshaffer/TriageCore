@@ -687,8 +687,7 @@ def test_signed_route_audit_event_fails_for_revoked_agent():
             },
         }
 
-        with pytest.raises(RevokedAgentError):
-            verify_route_audit_event_signature(event, registry)
+        assert verify_route_audit_event_signature(event, registry) is False
 
 
 def test_append_signed_route_audit_event_fails_for_unauthorized_agent():
@@ -807,8 +806,7 @@ def test_signed_validation_result_event_fails_for_revoked_agent():
             },
         }
 
-        with pytest.raises(RevokedAgentError):
-            verify_validation_result_event_signature(event, registry)
+        assert verify_validation_result_event_signature(event, registry) is False
 
 
 def test_append_signed_validation_result_event_fails_for_unauthorized_agent():
