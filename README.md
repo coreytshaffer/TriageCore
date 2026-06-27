@@ -75,6 +75,7 @@ Invoke-Item ~/.triagecore/dashboard.html
 - **TriageDesk** = human control cockpit.
 - **Meta-harness** = agent coordination layer.
 - **Independent evaluator** = external assessment layer.
+- See [Fluidic Signal Paths](docs/architecture/fluidic_signal_paths.md) for the architecture note on how context, handoffs, approvals, evaluator outputs, and evidence should flow between these layers.
 
 ### Safety Invariants
 
