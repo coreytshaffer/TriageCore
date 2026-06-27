@@ -1651,6 +1651,23 @@ def main():
         help="Path to the today.yaml focus list file",
     )
 
+    workspace_dashboard_parser = workspace_subparsers.add_parser(
+        "dashboard",
+        help="Generate a static HTML dashboard view of the workspace",
+    )
+    workspace_dashboard_parser.add_argument(
+        "--items", required=True, type=str,
+        help="Path to the work items YAML or JSON file",
+    )
+    workspace_dashboard_parser.add_argument(
+        "--today", required=True, type=str,
+        help="Path to the today.yaml focus list file",
+    )
+    workspace_dashboard_parser.add_argument(
+        "--output", required=True, type=str,
+        help="Path to write the HTML output file",
+    )
+
     args = parser.parse_args()
 
     if args.command == "propose":
@@ -1792,8 +1809,21 @@ def main():
             except (FileNotFoundError, ValueError, ImportError) as e:
                 print(f"Error: {e}")
                 sys.exit(1)
+        elif args.workspace_command == "dashboard":
+            from triage_core.workspace_now import load_today_file
+            from triage_core.workspace_dashboard import render_html
+            try:
+                items = load_work_items(args.items)
+                today = load_today_file(args.today)
+                html_out = render_html(items, today)
+                with open(args.output, "w", encoding="utf-8") as f:
+                    f.write(html_out)
+                print(f"Dashboard generated at {args.output}")
+            except (FileNotFoundError, ValueError, ImportError) as e:
+                print(f"Error: {e}")
+                sys.exit(1)
         else:
-            workspace_parser.error("workspace requires a subcommand: board, wbs, or now")
+            workspace_parser.error("workspace requires a subcommand: board, wbs, now, or dashboard")
     else:
         parser.print_help()
 

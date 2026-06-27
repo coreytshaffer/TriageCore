@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='utf-8'>
+<title>TriageCore Workspace</title>
+<style>
+    :root {
+        --bg: #1e1e1e;
+        --fg: #d4d4d4;
+        --border: #444;
+        --card-bg: #2d2d2d;
+        --accent: #007acc;
+        --warn: #d7ba7d;
+        --error: #f48771;
+        --success: #89d185;
+    }
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        background-color: var(--bg);
+        color: var(--fg);
+        margin: 0;
+        padding: 20px;
+        line-height: 1.5;
+    }
+    .header-banner {
+        border: 1px solid var(--border);
+        padding: 15px 20px;
+        border-radius: 6px;
+        margin-bottom: 30px;
+        display: flex;
+        justify-content: space-between;
+        background: var(--card-bg);
+    }
+    .focus-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 20px;
+        margin-bottom: 40px;
+    }
+    .card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+    .card-header {
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 8px;
+    }
+    .card-title {
+        font-size: 1.1em;
+        margin-top: 4px;
+    }
+    .badge {
+        font-size: 0.8em;
+        padding: 2px 6px;
+        border-radius: 3px;
+        background: #444;
+        margin-right: 4px;
+    }
+    .status-blocked { background: var(--error); color: #000; }
+    .status-done { background: var(--success); color: #000; }
+    .status-active { background: var(--accent); color: #fff; }
+    .risk-high { background: var(--error); color: #000; }
+    .risk-medium { background: var(--warn); color: #000; }
+    .card-action {
+        font-size: 1.05em;
+        color: #fff;
+    }
+    .card-why { font-style: italic; color: #aaa; }
+    .card-stop { color: var(--warn); }
+    .card-tools { color: #888; }
+    .card-buttons {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: auto;
+    }
+    button {
+        background: #444;
+        color: #888;
+        border: 1px solid #555;
+        border-radius: 3px;
+        padding: 6px;
+        cursor: not-allowed;
+        text-align: left;
+    }
+    .list-section {
+        margin-bottom: 30px;
+    }
+    .list-section h2 {
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 5px;
+    }
+    ul { list-style-type: none; padding-left: 0; }
+    li { margin-bottom: 10px; padding-left: 10px; border-left: 3px solid var(--border); }
+    .blocked-li { border-left-color: var(--error); }
+    .warning-li { border-left-color: var(--warn); }
+    </style>
+</head>
+<body>
+
+    <div class="header-banner">
+        <div><strong>TriageCore Workspace Now</strong></div>
+        <div>2026-06-27</div>
+    </div>
+    <div style="margin-bottom: 20px;">
+        Focus: 3 items &nbsp;|&nbsp; Warnings: 0 &nbsp;|&nbsp; Blocked: 1 &nbsp;|&nbsp; Review: 0
+    </div>
+    
+<div class="focus-grid">
+
+    <div class="card">
+        <div class="card-header">
+            <strong>DEMO-001</strong>
+            <div class="card-title">Workspace Schema</div>
+        </div>
+        
+        <div class="card-meta">
+            <span class="badge status-active">Status: Active Implementation</span>
+            <span class="badge priority-high">Priority: High</span>
+            <span class="badge risk-medium">Risk: Medium</span>
+        </div>
+        
+        <div class="card-action">
+            <strong>Next:</strong> Implement schema loader and brief renderer
+        </div>
+    
+        <div class="card-why">
+            <strong>Why:</strong> Reduces daily context switching and makes agent handoffs repeatable.
+        </div>
+        
+        <div class="card-stop">
+            <strong>Stop rule:</strong> Stop after schema loader works; do not add dashboard UI.
+        </div>
+        
+        <div class="card-tools">
+            <small>Tool: codex | Review: chatgpt</small>
+        </div>
+        
+        <div class="card-buttons">
+            <button disabled title="Coming in CR-WU-006">Copy Codex Handoff</button>
+            <button disabled title="Coming in CR-WU-006">Copy ChatGPT Prompt</button>
+            <button disabled title="Coming in CR-WU-006">Copy Status Summary</button>
+        </div>
+    </div>
+    
+
+    <div class="card">
+        <div class="card-header">
+            <strong>DEMO-002</strong>
+            <div class="card-title">Draft consent and key custody flow</div>
+        </div>
+        
+        <div class="card-meta">
+            <span class="badge status-ready">Status: Ready</span>
+            <span class="badge priority-high">Priority: High</span>
+            <span class="badge risk-medium">Risk: Medium</span>
+        </div>
+        
+        <div class="card-action">
+            <strong>Next:</strong> Draft recall state machine with owner-held decryption key flow
+        </div>
+    
+        <div class="card-tools">
+            <small>Tool: None | Review: None</small>
+        </div>
+        
+        <div class="card-buttons">
+            <button disabled title="Coming in CR-WU-006">Copy Codex Handoff</button>
+            <button disabled title="Coming in CR-WU-006">Copy ChatGPT Prompt</button>
+            <button disabled title="Coming in CR-WU-006">Copy Status Summary</button>
+        </div>
+    </div>
+    
+
+    <div class="card">
+        <div class="card-header">
+            <strong>DEMO-003</strong>
+            <div class="card-title">Clarify resource freshness vs observation freshness</div>
+        </div>
+        
+        <div class="card-meta">
+            <span class="badge status-review">Status: Review</span>
+            <span class="badge priority-medium">Priority: Medium</span>
+            <span class="badge risk-low">Risk: Low</span>
+        </div>
+        
+        <div class="card-action">
+            <strong>Next:</strong> Review public claims language for accuracy
+        </div>
+    
+        <div class="card-tools">
+            <small>Tool: None | Review: None</small>
+        </div>
+        
+        <div class="card-buttons">
+            <button disabled title="Coming in CR-WU-006">Copy Codex Handoff</button>
+            <button disabled title="Coming in CR-WU-006">Copy ChatGPT Prompt</button>
+            <button disabled title="Coming in CR-WU-006">Copy Status Summary</button>
+        </div>
+    </div>
+    
+</div>
+<div class="list-section"><h2>Blocked</h2><ul>
+<li class="blocked-li"><strong>DEMO-004</strong> — example-safety — Waiting on: Privacy/NAS boundary plan not ready</li>
+</ul></div>
+<div style="margin-top: 50px; font-size: 0.8em; color: #666;">Generated at: 2026-06-27 14:14:12</div>
+</body></html>

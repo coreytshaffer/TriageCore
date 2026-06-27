@@ -187,6 +187,22 @@ class ClosingFields:
 
 
 @dataclass
+class UxFields:
+    short_label: Optional[str] = None
+    why_it_matters: Optional[str] = None
+    friendly_status: Optional[str] = None
+
+
+@dataclass
+class HandoffFields:
+    preferred_tool: Optional[str] = None
+    reviewer_tool: Optional[str] = None
+    prompt_style: Optional[str] = None
+    stop_rule: Optional[str] = None
+    return_format: list[str] = field(default_factory=list)
+
+
+@dataclass
 class WorkItem:
     id: str
     project: str
@@ -204,6 +220,8 @@ class WorkItem:
     reviewer_tool: Optional[str] = None
     data_sensitivity: Optional[DataSensitivity] = None
     notes: Optional[str] = None
+    ux: Optional[UxFields] = None
+    handoff: Optional[HandoffFields] = None
 
 
 # ---------------------------------------------------------------------------
@@ -365,12 +383,34 @@ def _parse_work_item(raw: dict[str, Any], index: int) -> WorkItem:
     wbs = _parse_wbs(raw["wbs"], item_id) if "wbs" in raw else None
     risk = _parse_risk(raw["risk"], item_id) if "risk" in raw else None
     validation = _parse_validation(raw["validation"], item_id) if "validation" in raw else None
-    closing = _parse_closing(raw["closing"], item_id) if "closing" in raw else None
+    
+    closing = None
+    if "closing" in raw:
+        closing = _parse_closing(raw["closing"], item_id)
+        
+    ux = None
+    if "ux" in raw and isinstance(raw["ux"], dict):
+        ru = raw["ux"]
+        ux = UxFields(
+            short_label=ru.get("short_label"),
+            why_it_matters=ru.get("why_it_matters"),
+            friendly_status=ru.get("friendly_status")
+        )
+        
+    handoff = None
+    if "handoff" in raw and isinstance(raw["handoff"], dict):
+        rh = raw["handoff"]
+        handoff = HandoffFields(
+            preferred_tool=rh.get("preferred_tool"),
+            reviewer_tool=rh.get("reviewer_tool"),
+            prompt_style=rh.get("prompt_style"),
+            stop_rule=rh.get("stop_rule"),
+            return_format=rh.get("return_format", [])
+        )
 
-    # Optional scalar fields
-    data_sensitivity = None
+    sensitivity = None
     if "data_sensitivity" in raw:
-        data_sensitivity = _parse_enum(DataSensitivity, raw["data_sensitivity"],
+        sensitivity = _parse_enum(DataSensitivity, raw["data_sensitivity"],
                                        "data_sensitivity", item_id)
 
     return WorkItem(
@@ -388,8 +428,10 @@ def _parse_work_item(raw: dict[str, Any], index: int) -> WorkItem:
         owner=raw.get("owner"),
         primary_tool=raw.get("primary_tool"),
         reviewer_tool=raw.get("reviewer_tool"),
-        data_sensitivity=data_sensitivity,
+        data_sensitivity=sensitivity,
         notes=raw.get("notes"),
+        ux=ux,
+        handoff=handoff,
     )
 
 

@@ -18,6 +18,21 @@ items:
     data_sensitivity: low
     notes: "Read-only context feature. No model calls or command execution."
 
+    ux:
+      short_label: "Workspace Schema"
+      why_it_matters: "Reduces daily context switching and makes agent handoffs repeatable."
+      friendly_status: "Active Implementation"
+
+    handoff:
+      preferred_tool: codex
+      reviewer_tool: chatgpt
+      prompt_style: implementation
+      stop_rule: "Stop after schema loader works; do not add dashboard UI."
+      return_format:
+        - changed_files
+        - tests_run
+        - unresolved_risks
+
     kanban:
       status: active
       priority: high
