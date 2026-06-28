@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 
@@ -58,3 +59,24 @@ def test_write_workspace_evaluator_packet_requires_force(tmp_path):
     write_workspace_evaluator_packet(packet, output_path, force=True)
     data = json.loads(output_path.read_text(encoding="utf-8"))
     assert data["case_id"] == packet["case_id"]
+
+
+def test_workspace_eval_packet_example_fixture_stays_stable():
+    items = load_work_items("docs/examples/workspace_work_items.example.yaml")
+    today = load_today_file("docs/examples/workspace_today.example.yaml")
+    target = next(item for item in items if item.id == "DEMO-001")
+
+    packet = build_workspace_evaluator_packet(
+        target,
+        today=today,
+        generated_at="2026-06-27T00:00:00Z",
+    )
+
+    fixture_path = Path("docs/examples/workspace_eval_packet.example.json")
+    expected = json.loads(fixture_path.read_text(encoding="utf-8"))
+
+    assert packet == expected
+
+    rendered = json.dumps(packet, sort_keys=True)
+    assert "Read-only context feature" not in rendered
+    assert "Close one slice before opening another." not in rendered

@@ -1,0 +1,129 @@
+{
+  "boundary": {
+    "approval_authority": "human",
+    "evaluator_can_approve": false,
+    "external_evaluator_required": true,
+    "triagecore_scores_packet": false
+  },
+  "case_id": "workspace_demo-001",
+  "evidence_summary": {
+    "closing_evidence": {
+      "commit_count": 0,
+      "doc_count": 0,
+      "pr_count": 0
+    },
+    "done_definition": [
+      "Tests pass",
+      "Docs explain local/private separation"
+    ],
+    "external_reference": {
+      "source": null
+    },
+    "handoff": {
+      "preferred_tool": "codex",
+      "prompt_style": "implementation",
+      "return_format": [
+        "changed_files",
+        "tests_run",
+        "unresolved_risks"
+      ],
+      "reviewer_tool": "chatgpt",
+      "stop_rule": "Stop after schema loader works; do not add dashboard UI."
+    },
+    "required_checks": [
+      "python -m pytest tests/test_workspace_board.py",
+      "git diff --check"
+    ]
+  },
+  "focus_context": {
+    "focus_rank": 1,
+    "in_today_focus": true,
+    "max_active_items": 3,
+    "max_high_risk_items": 1,
+    "today_date": "2026-06-27",
+    "today_file_present": true,
+    "today_notes_omitted": true
+  },
+  "generated_at": "2026-06-27T00:00:00Z",
+  "non_claims": [
+    "TriageCore did not score this packet.",
+    "This packet does not approve actions.",
+    "The independent evaluator remains external to TriageCore."
+  ],
+  "observations": [
+    {
+      "code": "kanban_status",
+      "value": "active"
+    },
+    {
+      "code": "kanban_priority",
+      "value": "high"
+    },
+    {
+      "code": "in_today_focus",
+      "value": true
+    },
+    {
+      "code": "is_blocked",
+      "value": false
+    },
+    {
+      "code": "is_stale",
+      "value": false
+    },
+    {
+      "code": "is_someday",
+      "value": false
+    },
+    {
+      "code": "has_handoff",
+      "value": true
+    },
+    {
+      "code": "has_stop_rule",
+      "value": true
+    },
+    {
+      "code": "has_required_checks",
+      "value": true
+    },
+    {
+      "code": "has_external_reference",
+      "value": false
+    },
+    {
+      "code": "private_notes_omitted",
+      "value": true
+    }
+  ],
+  "omissions": {
+    "local_paths": true,
+    "today_notes": true,
+    "work_item_notes": true
+  },
+  "packet_kind": "workspace_evaluator_input",
+  "schema_version": "workspace_evaluator_input_v1",
+  "source": {
+    "export_command": "tc workspace export-eval",
+    "subsystem": "Workspace Unifier",
+    "system": "TriageCore"
+  },
+  "work_item": {
+    "blocked_by": [],
+    "data_sensitivity": "low",
+    "deliverable": "Validated workspace registry with project brief CLI",
+    "id": "DEMO-001",
+    "lifecycle_model": "hybrid",
+    "next_action": "Implement schema loader and brief renderer",
+    "objective": "Reduce orientation cost when switching between projects",
+    "owner": "demo-user",
+    "primary_tool": "codex",
+    "priority": "high",
+    "process_group": "executing",
+    "project": "example-control-plane",
+    "reviewer_tool": "chatgpt",
+    "status": "active",
+    "title": "Implement workspace registry schema",
+    "type": "feature"
+  }
+}

@@ -37,6 +37,7 @@ def build_workspace_evaluator_packet(
     today: Optional[TodayFocus] = None,
     case_id: Optional[str] = None,
     stale_after_days: int = 14,
+    generated_at: Optional[str] = None,
 ) -> dict[str, Any]:
     resolved_case_id = case_id or _default_case_id(item.id)
     _validate_case_id(resolved_case_id)
@@ -74,7 +75,7 @@ def build_workspace_evaluator_packet(
         "schema_version": "workspace_evaluator_input_v1",
         "packet_kind": "workspace_evaluator_input",
         "case_id": resolved_case_id,
-        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "generated_at": generated_at or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "source": {
             "system": "TriageCore",
             "subsystem": "Workspace Unifier",

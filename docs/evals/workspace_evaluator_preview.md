@@ -79,3 +79,7 @@ The export is intentionally selective.
 - It does not approve actions.
 - It does not mutate workspace items.
 - It does not claim the evaluator result inside TriageCore.
+
+## Related Contract Artifact
+
+For the deterministic canonical example packet and the evaluator-facing interpretation rules, see [Workspace Eval Packet Contract](workspace_eval_packet_contract.md).
