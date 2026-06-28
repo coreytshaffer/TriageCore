@@ -70,6 +70,11 @@ from .. import token_budget
 
 try:
     from ..evaluator_result import load_evaluator_result, EvaluatorResultValidationError
+    from ..evaluator_result_history import (
+        load_evaluator_result_folder, 
+        load_evaluator_result_files, 
+        EvaluatorResultSummary
+    )
     _EVAL_AVAILABLE = True
 except ImportError:
     _EVAL_AVAILABLE = False
@@ -2543,7 +2548,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
     def _build_evaluator_frame(self):
         f = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
         f.grid_columnconfigure(0, weight=1)
-        f.grid_rowconfigure(2, weight=1)
+        f.grid_rowconfigure(3, weight=1)
         self.evaluator_frame = f
 
         header_row = ctk.CTkFrame(f, fg_color="transparent")
@@ -2553,26 +2558,43 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         ctk.CTkLabel(
             header_row, text="Evaluator Result Panel", font=ctk.CTkFont(size=22, weight="bold")
         ).grid(row=0, column=0, sticky="w")
-
+        
+        btn_frame = ctk.CTkFrame(header_row, fg_color="transparent")
+        btn_frame.grid(row=0, column=1, sticky="e")
+        
         load_btn = ctk.CTkButton(
-            header_row,
+            btn_frame,
             text="Load Result JSON",
             command=self._load_evaluator_result_ui,
             fg_color="#0ea5e9",
             hover_color="#0284c7"
         )
-        load_btn.grid(row=0, column=1, sticky="e")
+        load_btn.grid(row=0, column=0, padx=(0, 10))
+        
+        folder_btn = ctk.CTkButton(
+            btn_frame,
+            text="Load Result Folder",
+            command=self._load_evaluator_result_folder_ui,
+            fg_color="#0ea5e9",
+            hover_color="#0284c7"
+        )
+        folder_btn.grid(row=0, column=1)
 
         banner = ctk.CTkLabel(
-            f, text="ASSESSMENT ONLY — NOT APPROVAL",
+            f, text="ASSESSMENT ONLY — NOT APPROVAL", 
             font=ctk.CTkFont(size=14, weight="bold"),
             text_color="#000000", fg_color="#fbbf24", corner_radius=6
         )
         banner.grid(row=1, column=0, padx=24, pady=10, sticky="ew")
 
+        # History table container
+        self.history_frame = ctk.CTkScrollableFrame(f, corner_radius=8, fg_color=("gray85", "gray17"), height=200)
+        self.history_frame.grid(row=2, column=0, padx=24, pady=10, sticky="ew")
+        self.history_frame.grid_columnconfigure(1, weight=1)
+
         # Container for details
         self.eval_details_frame = ctk.CTkScrollableFrame(f, corner_radius=8, fg_color=("gray85", "gray17"))
-        self.eval_details_frame.grid(row=2, column=0, padx=24, pady=10, sticky="nsew")
+        self.eval_details_frame.grid(row=3, column=0, padx=24, pady=10, sticky="nsew")
         self.eval_details_frame.grid_columnconfigure(1, weight=1)
 
         def _add_field(parent, row, label_text):
@@ -2595,12 +2617,108 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         self._eval_textbox.insert("0.0", "No file loaded.")
         self._eval_textbox.configure(state="disabled")
 
+    def _render_evaluator_history(self, summaries):
+        for widget in self.history_frame.winfo_children():
+            widget.destroy()
+            
+        headers = ["Result", "Item ID", "Decision", "Generated At", "Warnings"]
+        for i, h in enumerate(headers):
+            lbl = ctk.CTkLabel(self.history_frame, text=h, font=ctk.CTkFont(weight="bold"))
+            lbl.grid(row=0, column=i, padx=10, pady=5, sticky="w")
+            
+        for i, s in enumerate(summaries, start=1):
+            if s.status_label == "PASS":
+                color = "#22c55e"
+            elif s.status_label == "FAIL":
+                color = "#ef4444"
+            elif s.status_label == "AMBIG":
+                color = "#f59e0b"
+            elif s.status_label == "UNSAFE":
+                color = "#ef4444"
+            elif s.status_label == "INVALID":
+                color = "#ef4444"
+            elif s.status_label == "MALFORMED":
+                color = "#f43f5e"
+            else:
+                color = "#6b7280"
+                
+            def make_handler(summary=s):
+                return lambda e: self._on_history_select(summary)
+
+            c1 = ctk.CTkLabel(self.history_frame, text=s.status_label, text_color=color, font=ctk.CTkFont(weight="bold"))
+            c2 = ctk.CTkLabel(self.history_frame, text=s.item_id)
+            c3 = ctk.CTkLabel(self.history_frame, text=s.decision)
+            c4 = ctk.CTkLabel(self.history_frame, text=s.generated_at[:10] if s.generated_at else "—")
+            c5 = ctk.CTkLabel(self.history_frame, text=str(s.warnings_count))
+            
+            for j, c in enumerate([c1, c2, c3, c4, c5]):
+                c.grid(row=i, column=j, padx=10, pady=2, sticky="w")
+                c.bind("<Button-1>", make_handler())
+
+    def _on_history_select(self, summary):
+        if not summary.is_valid:
+            self._eval_item_id.configure(text=summary.item_id)
+            self._eval_packet_id.configure(text="—")
+            self._eval_status.configure(text="—")
+            self._eval_target.configure(text="—")
+            self._eval_score.configure(text="—")
+            self._eval_generated.configure(text="—")
+            
+            if summary.status_label == "UNSAFE":
+                d_color = "#ef4444"
+            else:
+                d_color = "#f43f5e"
+                
+            self._eval_decision.configure(text=summary.status_label, text_color=d_color)
+            
+            self._eval_textbox.configure(state="normal")
+            self._eval_textbox.delete("0.0", "end")
+            self._eval_textbox.insert("end", f"ERROR:\n{summary.error_message}")
+            self._eval_textbox.configure(state="disabled")
+            
+            if hasattr(self, "status_label"):
+                self.status_label.configure(text=f"Selected {summary.status_label} result: {os.path.basename(summary.filepath)}", text_color=d_color)
+            return
+
+        res = summary.original_result
+        self._eval_item_id.configure(text=res.item_id)
+        self._eval_packet_id.configure(text=res.packet_id)
+        self._eval_status.configure(text=res.approval_status)
+        self._eval_target.configure(text=res.target_invocation)
+        self._eval_score.configure(text=res.score)
+        self._eval_generated.configure(text=res.generated_at or "N/A")
+
+        if summary.status_label == "PASS":
+            d_color = "#22c55e"
+        elif summary.status_label == "FAIL":
+            d_color = "#ef4444"
+        elif summary.status_label == "AMBIG":
+            d_color = "#f59e0b"
+        else:
+            d_color = "#6b7280"
+
+        self._eval_decision.configure(text=summary.status_label, text_color=d_color)
+
+        self._eval_textbox.configure(state="normal")
+        self._eval_textbox.delete("0.0", "end")
+        self._eval_textbox.insert("end", "REASONS:\n")
+        for r in res.reasons:
+            self._eval_textbox.insert("end", f" - {r}\n")
+        if res.warnings:
+            self._eval_textbox.insert("end", "\nWARNINGS:\n")
+            for w in res.warnings:
+                self._eval_textbox.insert("end", f" - {w}\n")
+        self._eval_textbox.configure(state="disabled")
+
+        if hasattr(self, "status_label"):
+            self.status_label.configure(text=f"Selected result: {os.path.basename(summary.filepath)}", text_color="#22c55e")
+
     def _load_evaluator_result_ui(self):
         if not _EVAL_AVAILABLE:
             if hasattr(self, "status_label"):
                 self.status_label.configure(text="Evaluator parser missing.", text_color="#ef4444")
             return
-
+            
         filepath = filedialog.askopenfilename(
             title="Select Evaluator Result JSON",
             filetypes=[("JSON Files", "*.json")]
@@ -2608,63 +2726,32 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         if not filepath:
             return
 
-        try:
-            res = load_evaluator_result(filepath)
-            self._eval_item_id.configure(text=res.item_id)
-            self._eval_packet_id.configure(text=res.packet_id)
-            self._eval_status.configure(text=res.approval_status)
-            self._eval_target.configure(text=res.target_invocation)
-            self._eval_score.configure(text=res.score)
-            self._eval_generated.configure(text=res.generated_at or "N/A")
-
-            d_lower = res.decision.lower()
-            if d_lower in ["pass", "observe"]:
-                d_color = "#22c55e"
-                d_label = "PASS / OBSERVE"
-            elif d_lower == "fail":
-                d_color = "#ef4444"
-                d_label = "FAIL"
-            elif d_lower == "ambiguous":
-                d_color = "#f59e0b"
-                d_label = "AMBIGUOUS"
-            else:
-                d_color = "#6b7280"
-                d_label = "NOT EVALUATED"
-
-            self._eval_decision.configure(text=d_label, text_color=d_color)
-
-            self._eval_textbox.configure(state="normal")
-            self._eval_textbox.delete("0.0", "end")
-            self._eval_textbox.insert("end", "REASONS:\n")
-            for r in res.reasons:
-                self._eval_textbox.insert("end", f" - {r}\n")
-            if res.warnings:
-                self._eval_textbox.insert("end", "\nWARNINGS:\n")
-                for w in res.warnings:
-                    self._eval_textbox.insert("end", f" - {w}\n")
-            self._eval_textbox.configure(state="disabled")
-
+        summaries = load_evaluator_result_files([filepath])
+        self._render_evaluator_history(summaries)
+        if summaries:
+            self._on_history_select(summaries[0])
             if hasattr(self, "status_label"):
                 self.status_label.configure(text=f"Loaded evaluator result: {os.path.basename(filepath)}", text_color="#22c55e")
-        except EvaluatorResultValidationError as e:
-            self._eval_item_id.configure(text="—")
-            self._eval_packet_id.configure(text="—")
-            self._eval_status.configure(text="—")
-            self._eval_target.configure(text="—")
-            self._eval_score.configure(text="—")
-            self._eval_generated.configure(text="—")
-            self._eval_decision.configure(text="INVALID", text_color="#ef4444")
 
-            self._eval_textbox.configure(state="normal")
-            self._eval_textbox.delete("0.0", "end")
-            self._eval_textbox.insert("end", f"VALIDATION ERROR:\n{str(e)}")
-            self._eval_textbox.configure(state="disabled")
+    def _load_evaluator_result_folder_ui(self):
+        if not _EVAL_AVAILABLE:
+            if hasattr(self, "status_label"):
+                self.status_label.configure(text="Evaluator parser missing.", text_color="#ef4444")
+            return
+            
+        folderpath = filedialog.askdirectory(title="Select Evaluator Result Folder")
+        if not folderpath:
+            return
 
+        summaries = load_evaluator_result_folder(folderpath)
+        self._render_evaluator_history(summaries)
+        if summaries:
+            self._on_history_select(summaries[0])
             if hasattr(self, "status_label"):
-                self.status_label.configure(text="Invalid evaluator result loaded.", text_color="#ef4444")
-        except Exception as e:
+                self.status_label.configure(text=f"Loaded {len(summaries)} results from folder.", text_color="#22c55e")
+        else:
             if hasattr(self, "status_label"):
-                self.status_label.configure(text=f"Error loading result: {e}", text_color="#ef4444")
+                self.status_label.configure(text="No valid JSON results found in folder.", text_color="#f59e0b")
 
     # ─── Export Helpers ───────────────────────────────────────────────────────
     def _export_safe_value(self, value):
