@@ -531,6 +531,39 @@ def tc_identity_revoke(agent_id: str) -> None:
     print(f"Registry: {registry.registry_path}")
 
 
+def tc_identity_check() -> None:
+    registry = _identity_registry()
+    report = registry.check_consistency()
+    if report.has_errors:
+        status = "failed"
+    elif report.permission_warnings:
+        status = "warnings"
+    else:
+        status = "passed"
+
+    print(
+        "Identity check "
+        f"{status}: "
+        f"identities={report.identity_count} "
+        f"keys={report.key_count} "
+        f"missing_keys={len(report.missing_key_agent_ids)} "
+        f"orphaned_keys={len(report.orphaned_key_agent_ids)} "
+        f"malformed_registry={int(report.malformed_registry)} "
+        f"permission_warnings={len(report.permission_warnings)}"
+    )
+    if report.malformed_registry:
+        print("ERROR malformed_registry")
+    for agent_id in report.missing_key_agent_ids:
+        print(f"ERROR missing_private_key agent_id={agent_id}")
+    for agent_id in report.orphaned_key_agent_ids:
+        print(f"ERROR orphaned_private_key agent_id={agent_id}")
+    for warning in report.permission_warnings:
+        print(f"WARNING private_key_permissions {warning}")
+
+    if report.has_errors:
+        sys.exit(1)
+
+
 def tc_identity_doctor(agent_id: Optional[str]) -> None:
     registry = _identity_registry()
     report = registry.check_health(agent_id)
@@ -1430,6 +1463,10 @@ def main():
     )
 
     identity_subparsers.add_parser("list", help="List registered public agent identities")
+    identity_subparsers.add_parser(
+        "check",
+        help="Check local identity registry and private-key consistency",
+    )
     identity_revoke_parser = identity_subparsers.add_parser(
         "revoke",
         help="Mark a local agent identity as revoked",
@@ -1796,12 +1833,14 @@ def main():
             tc_identity_list()
         elif args.identity_command == "revoke":
             tc_identity_revoke(args.agent_id)
+        elif args.identity_command == "check":
+            tc_identity_check()
         elif args.identity_command == "doctor":
             tc_identity_doctor(args.agent_id)
         elif args.identity_command == "rotate":
             tc_identity_rotate(args.agent_id, args.dry_run)
         else:
-            identity_parser.error("identity requires a subcommand: init, list, revoke, doctor, or rotate")
+            identity_parser.error("identity requires a subcommand: init, list, revoke, check, doctor, or rotate")
     elif args.command == "model":
         if args.model_command == "check":
             tc_model_check(args.manifest)
