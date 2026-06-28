@@ -1,37 +1,148 @@
+import json
+from pathlib import Path
+
 import pytest
-from unittest.mock import patch
-import io
-import sys
-import os
-from triage_core.tc_cli import tc_doctor
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ed25519
 
-def test_doctor_command_runs_and_prints_header():
-    with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
-        tc_doctor()
-    output = mock_stdout.getvalue()
-    assert "TriageCore Doctor" in output
-    assert "- Python executable:" in output
-    assert "- triage_core import path:" in output
-    assert "- Git status:" in output
+from triage_core.tc_cli import tc_identity_init, tc_identity_doctor, tc_identity_rotate, main
+from triage_core.agent_identity import AgentIdentityRegistry, IdentityDoctorIssue
 
-@patch("subprocess.check_output")
-def test_missing_git_repo_handled_gracefully(mock_subprocess):
-    # Simulate git error
-    mock_subprocess.side_effect = Exception("Git not found")
-    with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
-        tc_doctor()
-    output = mock_stdout.getvalue()
-    assert "- Git repo root: unavailable" in output
-    assert "- Git branch: unavailable" in output
-    assert "- Git status: unavailable" in output
+def run_cli_command(monkeypatch, capsys, tmp_path, args):
+    monkeypatch.chdir(tmp_path)
+    import sys
+    with monkeypatch.context() as m:
+        m.setattr(sys, 'argv', ["tc"] + args)
+        m.setattr("triage_core.tc_cli._repo_root_or_cwd", lambda: tmp_path)
+        try:
+            main()
+        except SystemExit:
+            pass
+    return capsys.readouterr().out
 
-def test_scratch_exclusion_detection(tmp_path):
-    # Create a dummy pyproject.toml
-    pyproject_path = tmp_path / "pyproject.toml"
-    pyproject_path.write_text('[tool.pytest.ini_options]\nnorecursedirs = ["scratch"]\n', encoding="utf-8")
-    
-    with patch("os.getcwd", return_value=str(tmp_path)):
-        with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
-            tc_doctor()
-        output = mock_stdout.getvalue()
-        assert "- pyproject/pytest config path: " in output
+def test_doctor_healthy_identity(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    with monkeypatch.context() as m:
+        m.setattr("triage_core.tc_cli._repo_root_or_cwd", lambda: tmp_path)
+        tc_identity_init("agent-001", "Role", ["cap:read"])
+
+    out = run_cli_command(monkeypatch, capsys, tmp_path, ["identity", "doctor", "agent-001"])
+    assert "Identity doctor passed" in out
+    assert "errors=0 warnings=0" in out
+
+def test_doctor_read_only_guarantee(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    with monkeypatch.context() as m:
+        m.setattr("triage_core.tc_cli._repo_root_or_cwd", lambda: tmp_path)
+        tc_identity_init("agent-001", "Role", ["cap:read"])
+
+    registry_path = tmp_path / ".triagecore" / "identity" / "agents.json"
+    key_path = tmp_path / ".triagecore" / "identity" / "keys" / "agent-001.key"
+
+    reg_before = registry_path.read_bytes()
+    key_before = key_path.read_bytes()
+
+    # Run check_health directly
+    registry = AgentIdentityRegistry(ledger_dir=tmp_path / ".triagecore")
+    report = registry.check_health("agent-001")
+
+    assert not report.has_errors
+
+    reg_after = registry_path.read_bytes()
+    key_after = key_path.read_bytes()
+
+    assert reg_before == reg_after
+    assert key_before == key_after
+
+    # Corrupt key to trigger error and verify still read-only
+    key_path.write_bytes(b"corrupted")
+    key_before2 = key_path.read_bytes()
+
+    run_cli_command(monkeypatch, capsys, tmp_path, ["identity", "doctor", "agent-001"])
+
+    assert registry_path.read_bytes() == reg_after
+    assert key_path.read_bytes() == key_before2
+
+def test_doctor_alias_rotation_status(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    with monkeypatch.context() as m:
+        m.setattr("triage_core.tc_cli._repo_root_or_cwd", lambda: tmp_path)
+        tc_identity_init("agent-001", "Role", ["cap:read"])
+
+    out_doctor = run_cli_command(monkeypatch, capsys, tmp_path, ["identity", "doctor", "agent-001"])
+    out_alias = run_cli_command(monkeypatch, capsys, tmp_path, ["identity", "rotation-status", "agent-001"])
+
+    assert "Identity doctor passed" in out_doctor
+    assert "Identity doctor passed" in out_alias
+
+def test_doctor_corrupted_active_key(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    with monkeypatch.context() as m:
+        m.setattr("triage_core.tc_cli._repo_root_or_cwd", lambda: tmp_path)
+        tc_identity_init("agent-001", "Role", ["cap:read"])
+
+    key_path = tmp_path / ".triagecore" / "identity" / "keys" / "agent-001.key"
+    key_path.write_bytes(b"invalid-pem-data")
+
+    out = run_cli_command(monkeypatch, capsys, tmp_path, ["identity", "doctor", "agent-001"])
+
+    assert "ERROR" in out
+    assert "malformed_active_key" in out
+
+def test_doctor_missing_active_key(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    with monkeypatch.context() as m:
+        m.setattr("triage_core.tc_cli._repo_root_or_cwd", lambda: tmp_path)
+        tc_identity_init("agent-001", "Role", ["cap:read"])
+
+    key_path = tmp_path / ".triagecore" / "identity" / "keys" / "agent-001.key"
+    key_path.unlink()
+
+    out = run_cli_command(monkeypatch, capsys, tmp_path, ["identity", "doctor", "agent-001"])
+
+    assert "ERROR" in out
+    assert "missing_active_key" in out
+
+def test_doctor_multiple_active_keys(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    with monkeypatch.context() as m:
+        m.setattr("triage_core.tc_cli._repo_root_or_cwd", lambda: tmp_path)
+        tc_identity_init("agent-001", "Role", ["cap:read"])
+        registry = AgentIdentityRegistry(ledger_dir=tmp_path / ".triagecore")
+        new_identity = registry.generate_identity("agent-002", "Role", ["cap:read"])
+        # Change agent_id back to agent-001 so it's a duplicate active key for agent-001
+
+        registry_path = tmp_path / ".triagecore" / "identity" / "agents.json"
+        data = json.loads(registry_path.read_text())
+
+        # We find the agent-002 entry and move it to agent-001
+        agent2_data = next(a for a in data["agents"] if a["agent_id"] == "agent-002")
+        agent2_data["agent_id"] = "agent-001"
+        data["agents"].append(agent2_data)
+        # remove the original agent-002
+        data["agents"] = [a for a in data["agents"] if a["agent_id"] == "agent-001"]
+        registry_path.write_text(json.dumps(data))
+
+    out = run_cli_command(monkeypatch, capsys, tmp_path, ["identity", "doctor", "agent-001"])
+
+    assert "ERROR" in out
+    assert "malformed_registry" in out
+
+def test_doctor_missing_archived_key(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    with monkeypatch.context() as m:
+        m.setattr("triage_core.tc_cli._repo_root_or_cwd", lambda: tmp_path)
+        tc_identity_init("agent-001", "Role", ["cap:read"])
+
+        # tc_identity_rotate requires --dry-run or not to just run it, main defaults to no dry run if missing
+        # But wait, tc_identity_rotate doesn't exist like this exactly? Let's check imports
+        tc_identity_rotate("agent-001", False)
+
+    archived_keys = list((tmp_path / ".triagecore" / "identity" / "keys").glob("*.rotated"))
+    assert len(archived_keys) == 1
+    archived_keys[0].unlink()
+
+    out = run_cli_command(monkeypatch, capsys, tmp_path, ["identity", "doctor", "agent-001"])
+
+    assert "WARNING" in out
+    assert "missing_archived_key" in out

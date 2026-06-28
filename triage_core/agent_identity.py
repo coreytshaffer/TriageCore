@@ -89,6 +89,26 @@ class AgentIdentityCheckReport:
         )
 
 
+@dataclass
+class IdentityDoctorIssue:
+    severity: str
+    code: str
+    agent_id: str
+    message: str
+    fingerprint: Optional[str] = None
+
+
+@dataclass
+class IdentityDoctorReport:
+    errors: List[IdentityDoctorIssue] = field(default_factory=list)
+    warnings: List[IdentityDoctorIssue] = field(default_factory=list)
+    checked_agent_ids: List[str] = field(default_factory=list)
+
+    @property
+    def has_errors(self) -> bool:
+        return len(self.errors) > 0
+
+
 @dataclass(frozen=True)
 class AgentIdentity:
     agent_id: str
@@ -501,6 +521,125 @@ class AgentIdentityRegistry:
             warning = check_private_key_permissions(key_path)
             if warning:
                 report.permission_warnings.append(f"{key_path.name}: {warning}")
+
+        return report
+
+    def check_health(self, agent_id: Optional[str] = None) -> IdentityDoctorReport:
+        report = IdentityDoctorReport()
+        try:
+            identities = dict(self.load())
+        except AgentIdentityError as e:
+            report.errors.append(IdentityDoctorIssue(
+                severity="error",
+                code="malformed_registry",
+                agent_id="*",
+                message=f"Registry identity metadata is unreadable or structurally invalid: {e}"
+            ))
+            return report
+
+        for a_id, agent_list in identities.items():
+            if agent_id and a_id != agent_id:
+                continue
+
+            report.checked_agent_ids.append(a_id)
+
+            active_keys = [rot_id for rot_id in agent_list if rot_id.status == ACTIVE_STATUS]
+
+            if len(active_keys) == 0:
+                report.errors.append(IdentityDoctorIssue(
+                    severity="error",
+                    code="no_active_key",
+                    agent_id=a_id,
+                    message="No active key found for agent identity"
+                ))
+            elif len(active_keys) > 1:
+                report.errors.append(IdentityDoctorIssue(
+                    severity="error",
+                    code="multiple_active_keys",
+                    agent_id=a_id,
+                    message="Multiple active keys found for agent identity"
+                ))
+
+            if len(active_keys) == 1:
+                active_identity = active_keys[0]
+                key_path = self._private_key_path(a_id)
+                if not key_path.exists():
+                    report.errors.append(IdentityDoctorIssue(
+                        severity="error",
+                        code="missing_active_key",
+                        agent_id=a_id,
+                        fingerprint=active_identity.public_key_fingerprint,
+                        message="Active private key missing from disk"
+                    ))
+                else:
+                    try:
+                        priv_key = self._load_private_key(a_id, active_identity.key_algorithm)
+                        pub_key = priv_key.public_key().public_bytes(
+                            encoding=serialization.Encoding.PEM,
+                            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+                        ).decode("utf-8")
+                        fp = _fingerprint_public_key(pub_key)
+                        if fp != active_identity.public_key_fingerprint:
+                            report.errors.append(IdentityDoctorIssue(
+                                severity="error",
+                                code="fingerprint_mismatch",
+                                agent_id=a_id,
+                                fingerprint=active_identity.public_key_fingerprint,
+                                message="Active key fingerprint mismatch"
+                            ))
+                    except Exception as e:
+                        report.errors.append(IdentityDoctorIssue(
+                            severity="error",
+                            code="malformed_active_key",
+                            agent_id=a_id,
+                            fingerprint=active_identity.public_key_fingerprint,
+                            message=f"Malformed active key material: {e}"
+                        ))
+
+            for hist_id in agent_list:
+                if hist_id.status != ACTIVE_STATUS:
+                    if not hist_id.rotated_at:
+                        report.warnings.append(IdentityDoctorIssue(
+                            severity="warning",
+                            code="missing_rotated_at",
+                            agent_id=a_id,
+                            fingerprint=hist_id.public_key_fingerprint,
+                            message="rotated_at missing on non-active historical key"
+                        ))
+
+                    archived_path = self.keys_dir / f"{a_id}.{hist_id.public_key_fingerprint}.key.rotated"
+                    if not archived_path.exists():
+                        report.warnings.append(IdentityDoctorIssue(
+                            severity="warning",
+                            code="missing_archived_key",
+                            agent_id=a_id,
+                            fingerprint=hist_id.public_key_fingerprint,
+                            message="archived/rotated key material missing from disk"
+                        ))
+                    else:
+                        try:
+                            priv_key = serialization.load_pem_private_key(archived_path.read_bytes(), password=None)
+                            pub_key = priv_key.public_key().public_bytes(
+                                encoding=serialization.Encoding.PEM,
+                                format=serialization.PublicFormat.SubjectPublicKeyInfo,
+                            ).decode("utf-8")
+                            fp = _fingerprint_public_key(pub_key)
+                            if fp != hist_id.public_key_fingerprint:
+                                report.warnings.append(IdentityDoctorIssue(
+                                    severity="warning",
+                                    code="historical_fingerprint_mismatch",
+                                    agent_id=a_id,
+                                    fingerprint=hist_id.public_key_fingerprint,
+                                    message="historical fingerprint cannot be verified"
+                                ))
+                        except Exception as e:
+                            report.warnings.append(IdentityDoctorIssue(
+                                severity="warning",
+                                code="malformed_historical_key",
+                                agent_id=a_id,
+                                fingerprint=hist_id.public_key_fingerprint,
+                                message=f"historical fingerprint cannot be verified (malformed key material: {e})"
+                            ))
 
         return report
 

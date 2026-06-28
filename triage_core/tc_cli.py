@@ -1517,6 +1517,7 @@ def main():
     identity_doctor_parser = identity_subparsers.add_parser(
         "doctor",
         help="Check identity registry and private-key consistency",
+        aliases=["rotation-status"],
     )
     identity_doctor_parser.add_argument(
         "agent_id",
@@ -1885,12 +1886,12 @@ def main():
             tc_identity_revoke(args.agent_id)
         elif args.identity_command == "check":
             tc_identity_check()
-        elif args.identity_command == "doctor":
+        elif args.identity_command in ("doctor", "rotation-status"):
             tc_identity_doctor(args.agent_id)
         elif args.identity_command == "rotate":
             tc_identity_rotate(args.agent_id, args.dry_run)
         else:
-            identity_parser.error("identity requires a subcommand: init, list, revoke, check, doctor, or rotate")
+            identity_parser.error("identity requires a subcommand: init, list, revoke, check, doctor, rotation-status, or rotate")
     elif args.command == "model":
         if args.model_command == "check":
             tc_model_check(args.manifest)
