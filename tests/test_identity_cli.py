@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import patch
 
 from triage_core.tc_cli import (
-    tc_identity_check,
+    tc_identity_doctor,
     tc_identity_init,
     tc_identity_list,
     tc_identity_revoke,
@@ -99,56 +99,40 @@ def test_identity_list_when_empty_reports_no_identities(tmp_path, monkeypatch, c
     assert "No identities found in" in out
 
 
-def test_identity_check_passes_for_consistent_registry(tmp_path, capsys):
+def test_identity_doctor_healthy_state(tmp_path, capsys):
     with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
-        tc_identity_init(
-            "project-steward",
-            "ProjectSteward",
-            ["route_audit:sign"],
-        )
+        tc_identity_init("project-steward", "ProjectSteward", ["route_audit:sign"])
     capsys.readouterr()
 
     with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
-        tc_identity_check()
+        tc_identity_doctor(None)
 
     out = capsys.readouterr().out
-    assert "Identity check passed" in out
-    assert "identities=1" in out
-    assert "keys=1" in out
-    assert "missing_keys=0" in out
-    assert "orphaned_keys=0" in out
-    assert "permission_warnings=0" in out
+    assert "Identity doctor passed" in out
+    assert "checked_agents=1" in out
+    assert "errors=0" in out
+    assert "warnings=0" in out
     assert "PRIVATE KEY" not in out
 
 
-def test_identity_check_fails_for_missing_private_key(tmp_path, capsys):
+def test_identity_doctor_detects_missing_active_key(tmp_path, capsys):
     with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
-        tc_identity_init(
-            "project-steward",
-            "ProjectSteward",
-            ["route_audit:sign"],
-        )
+        tc_identity_init("project-steward", "ProjectSteward", ["route_audit:sign"])
     capsys.readouterr()
-    key_path = (
-        tmp_path
-        / ".triagecore"
-        / "identity"
-        / "keys"
-        / "project-steward.key"
-    )
+    key_path = tmp_path / ".triagecore" / "identity" / "keys" / "project-steward.key"
     key_path.unlink()
 
     with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
         with pytest.raises(SystemExit) as exc:
-            tc_identity_check()
+            tc_identity_doctor(None)
 
     assert exc.value.code == 1
     out = capsys.readouterr().out
-    assert "Identity check failed" in out
-    assert "ERROR missing_private_key agent_id=project-steward" in out
+    assert "Identity doctor failed" in out
+    assert "ERROR missing_active_key agent_id=project-steward" in out
 
 
-def test_identity_check_fails_for_orphaned_private_key(tmp_path, capsys):
+def test_identity_doctor_fails_for_orphaned_private_key(tmp_path, capsys):
     keys_dir = tmp_path / ".triagecore" / "identity" / "keys"
     keys_dir.mkdir(parents=True)
     (keys_dir / "orphaned-agent.key").write_text(
@@ -158,40 +142,36 @@ def test_identity_check_fails_for_orphaned_private_key(tmp_path, capsys):
 
     with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
         with pytest.raises(SystemExit) as exc:
-            tc_identity_check()
+            tc_identity_doctor(None)
 
     assert exc.value.code == 1
     out = capsys.readouterr().out
-    assert "orphaned_keys=1" in out
+    assert "errors=1" in out
     assert "ERROR orphaned_private_key agent_id=orphaned-agent" in out
     assert "test key placeholder" not in out
 
 
-def test_identity_check_fails_for_malformed_registry(tmp_path, capsys):
+def test_identity_doctor_fails_for_malformed_registry(tmp_path, capsys):
     identity_dir = tmp_path / ".triagecore" / "identity"
     identity_dir.mkdir(parents=True)
     (identity_dir / "agents.json").write_text("{not json\n", encoding="utf-8")
 
     with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
         with pytest.raises(SystemExit) as exc:
-            tc_identity_check()
+            tc_identity_doctor(None)
 
     assert exc.value.code == 1
     out = capsys.readouterr().out
-    assert "malformed_registry=1" in out
+    assert "errors=1" in out
     assert "ERROR malformed_registry" in out
     assert "{not json" not in out
 
 
-def test_identity_check_reports_permission_warning_without_key_contents(
+def test_identity_doctor_reports_permission_warning_without_key_contents(
     tmp_path, capsys
 ):
     with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
-        tc_identity_init(
-            "project-steward",
-            "ProjectSteward",
-            ["route_audit:sign"],
-        )
+        tc_identity_init("project-steward", "ProjectSteward", ["route_audit:sign"])
     capsys.readouterr()
 
     with (
@@ -201,12 +181,12 @@ def test_identity_check_reports_permission_warning_without_key_contents(
             return_value="permissions are inherited",
         ),
     ):
-        tc_identity_check()
+        tc_identity_doctor(None)
 
     out = capsys.readouterr().out
-    assert "Identity check warnings" in out
-    assert "permission_warnings=1" in out
-    assert "WARNING private_key_permissions project-steward.key" in out
+    assert "Identity doctor warnings" in out
+    assert "warnings=1" in out
+    assert "WARNING private_key_permissions agent_id=project-steward" in out
     assert "PRIVATE KEY" not in out
 
 
@@ -290,23 +270,18 @@ def test_identity_revoke_is_idempotent_for_already_revoked_identity(tmp_path, mo
     assert "PRIVATE KEY" not in out
 
 
-def test_identity_check_passes_for_revoked_identity_with_existing_key(tmp_path, capsys):
+def test_identity_doctor_passes_for_revoked_identity_with_existing_key(tmp_path, capsys):
     with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
-        tc_identity_init(
-            "revocation-test-agent",
-            "ProjectSteward",
-            ["route_audit:sign"],
-        )
+        tc_identity_init("revocation-test-agent", "ProjectSteward", ["route_audit:sign"])
         tc_identity_revoke("revocation-test-agent")
     capsys.readouterr()
 
     with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
-        tc_identity_check()
+        tc_identity_doctor(None)
 
     out = capsys.readouterr().out
-    assert "Identity check passed" in out
-    assert "identities=1" in out
-    assert "keys=1" in out
+    assert "Identity doctor passed" in out
+    assert "checked_agents=1" in out
     assert "PRIVATE KEY" not in out
 
 
@@ -516,3 +491,167 @@ def test_identity_rotate_audit_failure_does_not_rerotate_or_rollback_success(tmp
     assert "Identity rotated successfully" in out
     assert "Warning: Identity rotation completed, but audit event emission failed" in out
     assert "Disk full" in out
+
+
+
+
+def _get_steward_agent(data):
+    for idx, agent in enumerate(data["agents"]):
+        if agent["agent_id"] == "project-steward":
+            return idx, agent
+    return -1, None
+
+
+
+def test_identity_doctor_detects_multiple_active_identities(tmp_path, capsys):
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_identity_init("agent-1", "Role", ["cap"])
+        tc_identity_init("agent-2", "Role", ["cap"])
+
+    # Make agent-2 act as a second active identity for agent-1
+    registry_path = tmp_path / ".triagecore" / "identity" / "agents.json"
+    import json
+    data = json.loads(registry_path.read_text())
+
+    agent2 = None
+    for a in data["agents"]:
+        if a["agent_id"] == "agent-2":
+            agent2 = a
+            break
+
+    agent2["agent_id"] = "agent-1"
+    registry_path.write_text(json.dumps(data))
+    capsys.readouterr()
+
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        with pytest.raises(SystemExit) as exc:
+            tc_identity_doctor(None)
+
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "Identity doctor failed" in out
+    assert "ERROR multiple_active_identities agent_id=agent-1" in out
+
+
+def test_identity_doctor_detects_missing_rotated_at(tmp_path, capsys):
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_identity_init("agent-1", "Role", ["cap"])
+
+    registry_path = tmp_path / ".triagecore" / "identity" / "agents.json"
+    import json
+    data = json.loads(registry_path.read_text())
+    for a in data["agents"]:
+        if a["agent_id"] == "agent-1":
+            a["status"] = "rotated"
+            if "rotated_at" in a:
+                del a["rotated_at"]
+    registry_path.write_text(json.dumps(data))
+    capsys.readouterr()
+
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        with pytest.raises(SystemExit) as exc:
+            tc_identity_doctor(None)
+
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "ERROR missing_rotated_at agent_id=agent-1" in out
+
+
+def test_identity_doctor_detects_missing_archived_key(tmp_path, capsys):
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_identity_init("agent-1", "Role", ["cap"])
+
+    registry_path = tmp_path / ".triagecore" / "identity" / "agents.json"
+    import json
+    data = json.loads(registry_path.read_text())
+    for a in data["agents"]:
+        if a["agent_id"] == "agent-1":
+            a["status"] = "rotated"
+            a["rotated_at"] = "2026-01-01T00:00:00Z"
+    registry_path.write_text(json.dumps(data))
+    capsys.readouterr()
+
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        with pytest.raises(SystemExit) as exc:
+            tc_identity_doctor(None)
+
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "ERROR missing_archived_key agent_id=agent-1" in out
+
+
+def test_identity_doctor_detects_fingerprint_mismatch(tmp_path, capsys):
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_identity_init("agent-1", "Role", ["cap"])
+        tc_identity_init("agent-2", "Role", ["cap"])
+
+    # Overwrite agent-1's private key with agent-2's private key
+    keys_dir = tmp_path / ".triagecore" / "identity" / "keys"
+    (keys_dir / "agent-1.key").write_bytes((keys_dir / "agent-2.key").read_bytes())
+    capsys.readouterr()
+
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        with pytest.raises(SystemExit) as exc:
+            tc_identity_doctor("agent-1")
+
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "ERROR active_key_fingerprint_mismatch agent_id=agent-1" in out
+
+
+def test_identity_doctor_warns_on_missing_audit_event(tmp_path, capsys):
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_identity_init("project-steward", "ProjectSteward", ["route_audit:sign"])
+        tc_identity_rotate("project-steward", dry_run=False)
+
+    # Delete ledger to simulate missing audit event
+    ledger_path = tmp_path / ".triagecore" / "ledger.jsonl"
+    if ledger_path.exists():
+        ledger_path.unlink()
+    capsys.readouterr()
+
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_identity_doctor(None)
+
+    out = capsys.readouterr().out
+    assert "Identity doctor warnings" in out
+    assert "WARNING missing_audit_event agent_id=project-steward" in out
+
+
+def test_identity_doctor_scoped_to_agent_id(tmp_path, capsys):
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_identity_init("agent-1", "Role", ["cap"])
+        tc_identity_init("agent-2", "Role", ["cap"])
+
+    # Break agent-1
+    key_path = tmp_path / ".triagecore" / "identity" / "keys" / "agent-1.key"
+    key_path.unlink()
+    capsys.readouterr()
+
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        # Should pass for agent-2
+        tc_identity_doctor("agent-2")
+        out = capsys.readouterr().out
+        assert "Identity doctor passed" in out
+        assert "checked_agents=1" in out
+
+        # Should fail for agent-1
+        with pytest.raises(SystemExit) as exc:
+            tc_identity_doctor("agent-1")
+        assert exc.value.code == 1
+        out = capsys.readouterr().out
+        assert "ERROR missing_active_key agent_id=agent-1" in out
+
+
+def test_identity_doctor_unknown_agent_fails_cleanly(tmp_path, capsys):
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_identity_init("project-steward", "ProjectSteward", ["route_audit:sign"])
+    capsys.readouterr()
+
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        with pytest.raises(SystemExit) as exc:
+            tc_identity_doctor("unknown-agent")
+
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "ERROR unknown_agent agent_id=unknown-agent" in out

@@ -72,21 +72,23 @@ class RotationResult:
 
 
 @dataclass
-class AgentIdentityCheckReport:
-    identity_count: int = 0
-    key_count: int = 0
-    missing_key_agent_ids: List[str] = field(default_factory=list)
-    orphaned_key_agent_ids: List[str] = field(default_factory=list)
-    malformed_registry: bool = False
-    permission_warnings: List[str] = field(default_factory=list)
+class IdentityDoctorIssue:
+    severity: str
+    code: str
+    agent_id: str
+    message: str
+    fingerprint: Optional[str] = None
+
+
+@dataclass
+class IdentityDoctorReport:
+    checked_agent_ids: List[str] = field(default_factory=list)
+    errors: List[IdentityDoctorIssue] = field(default_factory=list)
+    warnings: List[IdentityDoctorIssue] = field(default_factory=list)
 
     @property
     def has_errors(self) -> bool:
-        return (
-            self.malformed_registry
-            or bool(self.missing_key_agent_ids)
-            or bool(self.orphaned_key_agent_ids)
-        )
+        return bool(self.errors)
 
 
 @dataclass(frozen=True)
@@ -276,11 +278,10 @@ class AgentIdentityRegistry:
                 for existing in identities[identity.agent_id]:
                     if existing.public_key_fingerprint == identity.public_key_fingerprint:
                         raise AgentIdentityError(f"Duplicate fingerprint {identity.public_key_fingerprint} for {identity.agent_id}")
-                    if identity.status == ACTIVE_STATUS and existing.status == ACTIVE_STATUS:
-                        raise AgentIdentityError(f"Multiple active keys found for {identity.agent_id}")
 
                 if identity.status == ROTATED_STATUS and not identity.rotated_at:
-                    raise AgentIdentityError(f"Rotated identity '{identity.agent_id}' requires a rotated_at timestamp.")
+                    # Let check_health report this instead of breaking load
+                    pass
 
                 identities[identity.agent_id].append(identity)
         except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
@@ -477,32 +478,130 @@ class AgentIdentityRegistry:
             f"Rotation registry save failed, rolled back active key from {archived_key_path.name}"
         ) from exc
 
-    def check_consistency(self) -> AgentIdentityCheckReport:
-        report = AgentIdentityCheckReport()
+    def check_health(self, target_agent_id: Optional[str] = None) -> IdentityDoctorReport:
+        report = IdentityDoctorReport()
         identities: Dict[str, List[AgentIdentity]] = {}
 
         if self.registry_path.exists():
             try:
                 identities = dict(self.load())
             except AgentIdentityError:
-                report.malformed_registry = True
+                report.errors.append(IdentityDoctorIssue(
+                    severity="error",
+                    code="malformed_registry",
+                    agent_id="*",
+                    message="Registry file agents.json is malformed or unreadable"
+                ))
+                return report
+
+        agent_ids_to_check = [target_agent_id] if target_agent_id else list(identities.keys())
+
+        if target_agent_id and target_agent_id not in identities:
+            report.errors.append(IdentityDoctorIssue(
+                severity="error",
+                code="unknown_agent",
+                agent_id=target_agent_id,
+                message=f"Agent '{target_agent_id}' not found in registry"
+            ))
+            return report
 
         key_paths = sorted(self.keys_dir.glob("*.key")) if self.keys_dir.exists() else []
-        report.identity_count = sum(len(lst) for lst in identities.values())
-        report.key_count = len(key_paths)
+        key_ids = {path.stem for path in key_paths}
 
-        if not report.malformed_registry:
+        if not target_agent_id:
+            # Check for orphaned keys globally
             identity_ids = set(identities)
-            key_ids = {path.stem for path in key_paths}
-            report.missing_key_agent_ids = sorted(identity_ids - key_ids)
-            report.orphaned_key_agent_ids = sorted(key_ids - identity_ids)
+            orphaned = sorted(key_ids - identity_ids)
+            for orphaned_id in orphaned:
+                report.errors.append(IdentityDoctorIssue(
+                    severity="error",
+                    code="orphaned_private_key",
+                    agent_id=orphaned_id,
+                    message=f"Found active key file for agent '{orphaned_id}' not in registry"
+                ))
 
-        for key_path in key_paths:
-            warning = check_private_key_permissions(key_path)
-            if warning:
-                report.permission_warnings.append(f"{key_path.name}: {warning}")
+        for agent_id in agent_ids_to_check:
+            report.checked_agent_ids.append(agent_id)
+            agent_list = identities.get(agent_id, [])
+
+            active_identities = [i for i in agent_list if i.status == ACTIVE_STATUS]
+
+            if len(active_identities) > 1:
+                report.errors.append(IdentityDoctorIssue(
+                    severity="error",
+                    code="multiple_active_identities",
+                    agent_id=agent_id,
+                    message=f"Found {len(active_identities)} active identities, expected exactly 1"
+                ))
+
+            if len(active_identities) == 1:
+                active_identity = active_identities[0]
+                expected_key_path = self.keys_dir / f"{agent_id}.key"
+                if expected_key_path.stem not in key_ids:
+                    report.errors.append(IdentityDoctorIssue(
+                        severity="error",
+                        code="missing_active_key",
+                        agent_id=agent_id,
+                        message=f"Active identity exists in registry but {agent_id}.key is missing"
+                    ))
+                else:
+                    # Check if fingerprint matches
+                    try:
+                        private_key = self._load_private_key(agent_id, active_identity.key_algorithm)
+                        actual_public_key_pem = private_key.public_key().public_bytes(
+                            encoding=serialization.Encoding.PEM,
+                            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+                        ).decode("utf-8")
+                        actual_fingerprint = _fingerprint_public_key(actual_public_key_pem)
+                        if actual_fingerprint != active_identity.public_key_fingerprint:
+                            report.errors.append(IdentityDoctorIssue(
+                                severity="error",
+                                code="active_key_fingerprint_mismatch",
+                                agent_id=agent_id,
+                                fingerprint=actual_fingerprint,
+                                message=f"Active private key fingerprint does not match registry (registry={active_identity.public_key_fingerprint})"
+                            ))
+                        else:
+                            # Check permissions
+                            warning = check_private_key_permissions(expected_key_path)
+                            if warning:
+                                report.warnings.append(IdentityDoctorIssue(
+                                    severity="warning",
+                                    code="private_key_permissions",
+                                    agent_id=agent_id,
+                                    message=f"{expected_key_path.name}: {warning}"
+                                ))
+                    except Exception as e:
+                        report.errors.append(IdentityDoctorIssue(
+                            severity="error",
+                            code="unreadable_private_key",
+                            agent_id=agent_id,
+                            message=f"Failed to read or parse private key for {agent_id}: {e}"
+                        ))
+
+            rotated_identities = [i for i in agent_list if i.status == ROTATED_STATUS]
+            for rot_id in rotated_identities:
+                if not rot_id.rotated_at:
+                    report.errors.append(IdentityDoctorIssue(
+                        severity="error",
+                        code="missing_rotated_at",
+                        agent_id=agent_id,
+                        fingerprint=rot_id.public_key_fingerprint,
+                        message=f"Rotated identity (fp={rot_id.public_key_fingerprint}) is missing rotated_at timestamp"
+                    ))
+
+                archived_key_path = self.keys_dir / f"{agent_id}.{rot_id.public_key_fingerprint}.key.rotated"
+                if not archived_key_path.exists():
+                    report.errors.append(IdentityDoctorIssue(
+                        severity="error",
+                        code="missing_archived_key",
+                        agent_id=agent_id,
+                        fingerprint=rot_id.public_key_fingerprint,
+                        message=f"Archived rotated key file is missing: {archived_key_path.name}"
+                    ))
 
         return report
+
 
     def get_identity(self, agent_id: str) -> AgentIdentity:
         self._ensure_loaded()
