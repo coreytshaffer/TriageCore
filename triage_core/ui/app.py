@@ -60,12 +60,19 @@ import threading
 import time
 from typing import Optional
 from datetime import datetime, timezone
+from tkinter import filedialog
 from ..config import default_config
 from ..task_ledger import TaskLedger
 from ..classifier import DangerDetector, TaskClassifier
 from ..sustainability import SustainabilityEstimator, PowerMonitor
 from ..context_budget import create_context_pack_artifact
 from .. import token_budget
+
+try:
+    from ..evaluator_result import load_evaluator_result, EvaluatorResultValidationError
+    _EVAL_AVAILABLE = True
+except ImportError:
+    _EVAL_AVAILABLE = False
 
 try:
     from .. import triagedesk_adapter as _td_adapter
@@ -1067,6 +1074,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         self._build_dispatch_frame()
         self._build_planner_frame()
         self._build_ledger_frame()
+        self._build_evaluator_frame()
         self._build_telemetry_frame()
         self._build_status_panel()
         self._build_review_queue_panel()
@@ -1143,6 +1151,19 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         btn_ledger.grid(row=4, column=0, padx=12, pady=4, sticky="ew")
         self._nav_btns["ledger"] = btn_ledger
 
+        # Evaluator
+        btn_evaluator = ctk.CTkButton(
+            sb,
+            text="Evaluator",
+            anchor="w",
+            command=lambda: self.select_frame("evaluator"),
+            fg_color="transparent",
+            text_color=("gray10", "gray90"),
+            hover_color=("gray70", "gray30"),
+        )
+        btn_evaluator.grid(row=5, column=0, padx=12, pady=4, sticky="ew")
+        self._nav_btns["evaluator"] = btn_evaluator
+
         # Link to Log Repository under the Task Ledger button
         self.link_log = ctk.CTkButton(
             sb,
@@ -1154,7 +1175,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             hover_color=("gray70", "gray30"),
             font=ctk.CTkFont(size=11, underline=True),
         )
-        self.link_log.grid(row=5, column=0, padx=12, pady=(0, 4), sticky="ew")
+        self.link_log.grid(row=6, column=0, padx=12, pady=(0, 4), sticky="ew")
 
         # System Logs
         btn_logs = ctk.CTkButton(
@@ -1166,7 +1187,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             text_color=("gray10", "gray90"),
             hover_color=("gray70", "gray30"),
         )
-        btn_logs.grid(row=6, column=0, padx=12, pady=4, sticky="ew")
+        btn_logs.grid(row=7, column=0, padx=12, pady=4, sticky="ew")
         self._nav_btns["logs"] = btn_logs
 
         # Council Rules
@@ -1179,15 +1200,15 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             text_color=("gray10", "gray90"),
             hover_color=("gray70", "gray30"),
         )
-        btn_rules.grid(row=7, column=0, padx=12, pady=4, sticky="ew")
+        btn_rules.grid(row=8, column=0, padx=12, pady=4, sticky="ew")
         self._nav_btns["rules"] = btn_rules
 
-        for btn in [btn_dash, btn_planner, btn_ledger, self.link_log, btn_logs, btn_rules]:
+        for btn in [btn_dash, btn_planner, btn_ledger, btn_evaluator, self.link_log, btn_logs, btn_rules]:
             self._add_focus_ring(btn)
 
         # ── Agent Status Panel ─────────────────────────
         self.agent_panel = ctk.CTkFrame(sb, corner_radius=10, fg_color="transparent")
-        self.agent_panel.grid(row=8, column=0, padx=12, pady=(10, 0), sticky="sew")
+        self.agent_panel.grid(row=9, column=0, padx=12, pady=(10, 0), sticky="sew")
 
         _SectionLabel(self.agent_panel, "Agent Status").pack(
             anchor="w", padx=10, pady=(0, 8)
@@ -1244,9 +1265,9 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
 
         # ── Live Resource Ticker (bottom of sidebar) ──────────────────────────
         ticker = ctk.CTkFrame(sb, corner_radius=10, fg_color=("gray85", "gray20"))
-        ticker.grid(row=9, column=0, padx=12, pady=12, sticky="sew")
-        sb.grid_rowconfigure(9, weight=0)
-        sb.grid_rowconfigure(8, weight=1)
+        ticker.grid(row=10, column=0, padx=12, pady=12, sticky="sew")
+        sb.grid_rowconfigure(10, weight=0)
+        sb.grid_rowconfigure(9, weight=1)
 
         _SectionLabel(ticker, "Live Session").pack(anchor="w", padx=10, pady=(8, 2))
 
@@ -2519,6 +2540,132 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
 
         default_config.__init__()
 
+    def _build_evaluator_frame(self):
+        f = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
+        f.grid_columnconfigure(0, weight=1)
+        f.grid_rowconfigure(2, weight=1)
+        self.evaluator_frame = f
+
+        header_row = ctk.CTkFrame(f, fg_color="transparent")
+        header_row.grid(row=0, column=0, padx=24, pady=(20, 10), sticky="ew")
+        header_row.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            header_row, text="Evaluator Result Panel", font=ctk.CTkFont(size=22, weight="bold")
+        ).grid(row=0, column=0, sticky="w")
+
+        load_btn = ctk.CTkButton(
+            header_row,
+            text="Load Result JSON",
+            command=self._load_evaluator_result_ui,
+            fg_color="#0ea5e9",
+            hover_color="#0284c7"
+        )
+        load_btn.grid(row=0, column=1, sticky="e")
+
+        banner = ctk.CTkLabel(
+            f, text="ASSESSMENT ONLY — NOT APPROVAL",
+            font=ctk.CTkFont(size=14, weight="bold"),
+            text_color="#000000", fg_color="#fbbf24", corner_radius=6
+        )
+        banner.grid(row=1, column=0, padx=24, pady=10, sticky="ew")
+
+        # Container for details
+        self.eval_details_frame = ctk.CTkScrollableFrame(f, corner_radius=8, fg_color=("gray85", "gray17"))
+        self.eval_details_frame.grid(row=2, column=0, padx=24, pady=10, sticky="nsew")
+        self.eval_details_frame.grid_columnconfigure(1, weight=1)
+
+        def _add_field(parent, row, label_text):
+            ctk.CTkLabel(parent, text=label_text, font=ctk.CTkFont(weight="bold")).grid(row=row, column=0, sticky="w", padx=10, pady=5)
+            val = ctk.CTkLabel(parent, text="—", anchor="w")
+            val.grid(row=row, column=1, sticky="ew", padx=10, pady=5)
+            return val
+
+        self._eval_item_id = _add_field(self.eval_details_frame, 0, "Item ID:")
+        self._eval_packet_id = _add_field(self.eval_details_frame, 1, "Packet ID:")
+        self._eval_decision = _add_field(self.eval_details_frame, 2, "Decision:")
+        self._eval_status = _add_field(self.eval_details_frame, 3, "Approval Status:")
+        self._eval_target = _add_field(self.eval_details_frame, 4, "Target Invocation:")
+        self._eval_score = _add_field(self.eval_details_frame, 5, "Score:")
+        self._eval_generated = _add_field(self.eval_details_frame, 6, "Generated At:")
+
+        ctk.CTkLabel(self.eval_details_frame, text="Reasons & Warnings:", font=ctk.CTkFont(weight="bold")).grid(row=7, column=0, sticky="nw", padx=10, pady=10)
+        self._eval_textbox = ctk.CTkTextbox(self.eval_details_frame, height=200)
+        self._eval_textbox.grid(row=7, column=1, sticky="nsew", padx=10, pady=10)
+        self._eval_textbox.insert("0.0", "No file loaded.")
+        self._eval_textbox.configure(state="disabled")
+
+    def _load_evaluator_result_ui(self):
+        if not _EVAL_AVAILABLE:
+            if hasattr(self, "status_label"):
+                self.status_label.configure(text="Evaluator parser missing.", text_color="#ef4444")
+            return
+
+        filepath = filedialog.askopenfilename(
+            title="Select Evaluator Result JSON",
+            filetypes=[("JSON Files", "*.json")]
+        )
+        if not filepath:
+            return
+
+        try:
+            res = load_evaluator_result(filepath)
+            self._eval_item_id.configure(text=res.item_id)
+            self._eval_packet_id.configure(text=res.packet_id)
+            self._eval_status.configure(text=res.approval_status)
+            self._eval_target.configure(text=res.target_invocation)
+            self._eval_score.configure(text=res.score)
+            self._eval_generated.configure(text=res.generated_at or "N/A")
+
+            d_lower = res.decision.lower()
+            if d_lower in ["pass", "observe"]:
+                d_color = "#22c55e"
+                d_label = "PASS / OBSERVE"
+            elif d_lower == "fail":
+                d_color = "#ef4444"
+                d_label = "FAIL"
+            elif d_lower == "ambiguous":
+                d_color = "#f59e0b"
+                d_label = "AMBIGUOUS"
+            else:
+                d_color = "#6b7280"
+                d_label = "NOT EVALUATED"
+
+            self._eval_decision.configure(text=d_label, text_color=d_color)
+
+            self._eval_textbox.configure(state="normal")
+            self._eval_textbox.delete("0.0", "end")
+            self._eval_textbox.insert("end", "REASONS:\n")
+            for r in res.reasons:
+                self._eval_textbox.insert("end", f" - {r}\n")
+            if res.warnings:
+                self._eval_textbox.insert("end", "\nWARNINGS:\n")
+                for w in res.warnings:
+                    self._eval_textbox.insert("end", f" - {w}\n")
+            self._eval_textbox.configure(state="disabled")
+
+            if hasattr(self, "status_label"):
+                self.status_label.configure(text=f"Loaded evaluator result: {os.path.basename(filepath)}", text_color="#22c55e")
+        except EvaluatorResultValidationError as e:
+            self._eval_item_id.configure(text="—")
+            self._eval_packet_id.configure(text="—")
+            self._eval_status.configure(text="—")
+            self._eval_target.configure(text="—")
+            self._eval_score.configure(text="—")
+            self._eval_generated.configure(text="—")
+            self._eval_decision.configure(text="INVALID", text_color="#ef4444")
+
+            self._eval_textbox.configure(state="normal")
+            self._eval_textbox.delete("0.0", "end")
+            self._eval_textbox.insert("end", f"VALIDATION ERROR:\n{str(e)}")
+            self._eval_textbox.configure(state="disabled")
+
+            if hasattr(self, "status_label"):
+                self.status_label.configure(text="Invalid evaluator result loaded.", text_color="#ef4444")
+        except Exception as e:
+            if hasattr(self, "status_label"):
+                self.status_label.configure(text=f"Error loading result: {e}", text_color="#ef4444")
+
     # ─── Export Helpers ───────────────────────────────────────────────────────
     def _export_safe_value(self, value):
         import json
@@ -3052,6 +3199,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         self.dispatch_frame.grid_forget()
         self.planner_frame.grid_forget()
         self.ledger_frame.grid_forget()
+        self.evaluator_frame.grid_forget()
         self.telemetry_frame.grid_forget()
         self.logs_frame.grid_forget()
         self.rules_frame.grid_forget()
@@ -3075,6 +3223,8 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             self._refresh_ledger()
         elif name == "planner":
             self.planner_frame.grid(row=0, column=1, rowspan=2, sticky="nsew")
+        elif name == "evaluator":
+            self.evaluator_frame.grid(row=0, column=1, rowspan=2, sticky="nsew")
         elif name == "logs":
             self.logs_frame.grid(row=0, column=1, rowspan=2, sticky="nsew")
             self._refresh_logs()

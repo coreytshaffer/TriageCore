@@ -1,0 +1,16 @@
+{
+  "result_type": "workspace_packet_evaluation_result",
+  "item_id": "DEMO-001",
+  "packet_id": "workspace_eval_packet_contract_001",
+  "decision": "observe",
+  "approval_status": "not_approval",
+  "target_invocation": "not_invoked",
+  "score": "pass",
+  "reasons": [
+    "Required workspace packet fields are present.",
+    "Private fields were not included.",
+    "Evaluator result is observation-only."
+  ],
+  "warnings": [],
+  "generated_at": "2026-06-27T00:00:00Z"
+}
