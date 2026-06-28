@@ -1689,6 +1689,65 @@ def main():
         help="The output format (default: text)",
     )
 
+    workspace_github_parser = workspace_subparsers.add_parser(
+        "import-github",
+        help="Import open GitHub issues into a preview YAML file."
+    )
+    workspace_github_parser.add_argument("--repo", required=True, help="Format: owner/repo (e.g. coreytshaffer/TriageCore)")
+    workspace_github_parser.add_argument("--output", required=True, help="Path to write the preview YAML file")
+    workspace_github_parser.add_argument("--force", action="store_true", help="Overwrite the output file if it exists")
+
+    workspace_promote_parser = workspace_subparsers.add_parser(
+        "promote",
+        help="Promote selected imported GitHub preview items into the real work_items.yaml."
+    )
+    workspace_promote_parser.add_argument("--items", required=True, help="Path to your live work_items.yaml")
+    workspace_promote_parser.add_argument("--preview", required=True, help="Path to the generated GitHub preview YAML")
+    workspace_promote_parser.add_argument("--id", action="append", required=True, help="ID(s) of the work item(s) to promote (can be used multiple times)")
+    workspace_promote_parser.add_argument("--output", required=True, help="Path to write the updated YAML file")
+    workspace_promote_parser.add_argument("--force", action="store_true", help="Overwrite the output file if it exists (use this for in-place updates)")
+    workspace_promote_parser.add_argument("--backup", action="store_true", help="Backup the live file before overwriting it in-place")
+
+    workspace_review_import_parser = workspace_subparsers.add_parser(
+        "review-import",
+        help="Show imported preview items in a compact review table."
+    )
+    workspace_review_import_parser.add_argument("--preview", required=True, help="Path to the generated GitHub preview YAML")
+    workspace_review_import_parser.add_argument("--label", help="Filter by label")
+    workspace_review_import_parser.add_argument("--updated-since", help="Filter by updated date (e.g. 2026-06-01)")
+    workspace_review_import_parser.add_argument("--limit", type=int, help="Limit the number of items shown")
+
+    workspace_close_parser = workspace_subparsers.add_parser(
+        "close",
+        help="Generate a closing packet and optionally mark the item as done."
+    )
+    workspace_close_parser.add_argument("--items", required=True, help="Path to your live work_items.yaml")
+    workspace_close_parser.add_argument("--id", required=True, help="ID of the work item to close")
+    workspace_close_parser.add_argument("--commit", help="Commit hash or evidence link")
+    workspace_close_parser.add_argument("--tests", help="Tests run")
+    workspace_close_parser.add_argument("--summary", help="Summary of changes")
+    workspace_close_parser.add_argument("--output", help="Optional path to write the updated YAML file")
+    workspace_close_parser.add_argument("--force", action="store_true", help="Overwrite the output file if it exists (use this for in-place updates)")
+    workspace_close_parser.add_argument("--backup", action="store_true", help="Backup the live file before overwriting it in-place")
+
+    workspace_touch_parser = workspace_subparsers.add_parser(
+        "touch",
+        help="Update an item's review.last_touched timestamp."
+    )
+    workspace_touch_parser.add_argument("--items", required=True, help="Path to your live work_items.yaml")
+    workspace_touch_parser.add_argument("--id", required=True, help="ID of the work item to touch")
+    workspace_touch_parser.add_argument("--note", help="Optional note to set as review_note")
+    workspace_touch_parser.add_argument("--output", help="Optional path to write the updated YAML file")
+    workspace_touch_parser.add_argument("--force", action="store_true", help="Overwrite the output file if it exists (use this for in-place updates)")
+    workspace_touch_parser.add_argument("--backup", action="store_true", help="Backup the live file before overwriting it in-place")
+
+    workspace_review_parser = workspace_subparsers.add_parser(
+        "review",
+        help="Show a Weekly Review of the workspace items."
+    )
+    workspace_review_parser.add_argument("--items", required=True, help="Path to your live work_items.yaml")
+    workspace_review_parser.add_argument("--stale-after-days", type=int, default=14, help="Days of inactivity before an item is considered stale (default: 14)")
+
     args = parser.parse_args()
 
     if args.command == "propose":
@@ -1863,8 +1922,71 @@ def main():
             except (FileNotFoundError, ValueError, ImportError) as e:
                 print(f"Error: {e}")
                 sys.exit(1)
+        elif args.workspace_command == "import-github":
+            try:
+                from triage_core.workspace_github_import import generate_preview_yaml
+                generate_preview_yaml(args.repo, args.output, force=args.force)
+                print(f"Generated GitHub issues preview at {args.output}")
+            except Exception as e:
+                print(f"Error importing GitHub issues: {e}")
+                sys.exit(1)
+        elif args.workspace_command == "promote":
+            try:
+                from triage_core.workspace_promote import promote_items
+                promote_items(args.items, args.preview, args.output, args.id, force=args.force, backup=args.backup)
+                print(f"Promoted {len(args.id)} item(s) to {args.output}")
+            except Exception as e:
+                print(f"Error promoting items: {e}")
+                sys.exit(1)
+        elif args.workspace_command == "review-import":
+            try:
+                from triage_core.workspace_review_import import render_import_review
+                print(render_import_review(args.preview, label=args.label, updated_since=args.updated_since, limit=args.limit))
+            except Exception as e:
+                print(f"Error reviewing imports: {e}")
+                sys.exit(1)
+        elif args.workspace_command == "close":
+            try:
+                from triage_core.workspace_close import generate_closing_packet, close_work_item
+                items = load_work_items(args.items)
+                target_item = None
+                for it in items:
+                    if it.id == args.id:
+                        target_item = it
+                        break
+                
+                if not target_item:
+                    raise ValueError(f"Work item {args.id} not found in {args.items}")
+                    
+                packet = generate_closing_packet(target_item, args.commit, args.tests, args.summary)
+                print(packet)
+                
+                if args.output or args.force:
+                    output_path = args.output if args.output else args.items
+                    close_work_item(args.items, args.id, output_path, force=args.force, backup=args.backup)
+                    print(f"\n[System] Work item {args.id} marked as done in {output_path}")
+            except Exception as e:
+                print(f"Error closing item: {e}")
+                sys.exit(1)
+        elif args.workspace_command == "touch":
+            try:
+                from triage_core.workspace_touch import touch_work_item
+                output_path = args.output if args.output else args.items
+                touch_work_item(args.items, args.id, output_path, note=args.note, force=args.force, backup=args.backup)
+                print(f"[System] Work item {args.id} touched in {output_path}")
+            except Exception as e:
+                print(f"Error touching item: {e}")
+                sys.exit(1)
+        elif args.workspace_command == "review":
+            try:
+                from triage_core.workspace_review import render_weekly_review
+                items = load_work_items(args.items)
+                print(render_weekly_review(items, stale_after_days=args.stale_after_days))
+            except Exception as e:
+                print(f"Error generating review: {e}")
+                sys.exit(1)
         else:
-            workspace_parser.error("workspace requires a subcommand: board, wbs, now, dashboard, or handoff")
+            workspace_parser.error("workspace requires a subcommand: board, wbs, now, dashboard, handoff, import-github, promote, review-import, close, touch, or review")
     else:
         parser.print_help()
 

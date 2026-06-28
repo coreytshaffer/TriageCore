@@ -1,0 +1,30 @@
+version: 1
+items:
+- id: GH-TRIAGECORE-999
+  project: TriageCore
+  title: Add warp drive module
+  type: feature
+  kanban:
+    status: backlog
+    priority: medium
+  pmi:
+    process_group: initiating
+    lifecycle_model: hybrid
+  gtd:
+    list: inbox
+    next_action: Clarify imported GitHub issue and decide whether to promote it into
+      active work.
+  risk:
+    level: low
+  external:
+    source: github
+    github:
+      repo: coreytshaffer/TriageCore
+      issue_number: 999
+      url: https://github.com/coreytshaffer/TriageCore/issues/999
+      state: open
+      labels:
+      - enhancement
+      created_at: '2026-06-25T10:00:00Z'
+      updated_at: '2026-06-26T12:00:00Z'
+      imported_at: '2026-06-27T21:30:49Z'

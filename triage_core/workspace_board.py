@@ -203,6 +203,32 @@ class HandoffFields:
 
 
 @dataclass
+class ExternalGithub:
+    repo: Optional[str] = None
+    issue_number: Optional[int] = None
+    url: Optional[str] = None
+    state: Optional[str] = None
+    labels: list[str] = field(default_factory=list)
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    imported_at: Optional[str] = None
+
+
+@dataclass
+class ExternalFields:
+    source: Optional[str] = None
+    github: Optional[ExternalGithub] = None
+
+
+@dataclass
+class ReviewFields:
+    last_touched: Optional[str] = None
+    last_reviewed: Optional[str] = None
+    stale_after_days: Optional[int] = None
+    review_note: Optional[str] = None
+
+
+@dataclass
 class WorkItem:
     id: str
     project: str
@@ -222,6 +248,8 @@ class WorkItem:
     notes: Optional[str] = None
     ux: Optional[UxFields] = None
     handoff: Optional[HandoffFields] = None
+    external: Optional[ExternalFields] = None
+    review: Optional[ReviewFields] = None
 
 
 # ---------------------------------------------------------------------------
@@ -362,6 +390,41 @@ def _parse_closing(raw: dict[str, Any], item_id: str) -> ClosingFields:
     )
 
 
+def _parse_external(raw: dict[str, Any], item_id: str) -> ExternalFields:
+    """Parse external source data."""
+    if not isinstance(raw, dict):
+        raise ValueError(f"external section for item {item_id} must be a mapping")
+    github = None
+    if "github" in raw:
+        g = raw["github"]
+        github = ExternalGithub(
+            repo=g.get("repo"),
+            issue_number=g.get("issue_number"),
+            url=g.get("url"),
+            state=g.get("state"),
+            labels=g.get("labels", []),
+            created_at=g.get("created_at"),
+            updated_at=g.get("updated_at"),
+            imported_at=g.get("imported_at")
+        )
+    return ExternalFields(
+        source=raw.get("source"),
+        github=github
+    )
+
+
+def _parse_review(raw: dict[str, Any], item_id: str) -> ReviewFields:
+    """Parse review section."""
+    if not isinstance(raw, dict):
+        raise ValueError(f"review section for item {item_id} must be a mapping")
+    return ReviewFields(
+        last_touched=raw.get("last_touched"),
+        last_reviewed=raw.get("last_reviewed"),
+        stale_after_days=raw.get("stale_after_days"),
+        review_note=raw.get("review_note")
+    )
+
+
 def _parse_work_item(raw: dict[str, Any], index: int) -> WorkItem:
     """Parse and validate a single work item dict into a WorkItem dataclass."""
     # Required top-level fields
@@ -412,7 +475,13 @@ def _parse_work_item(raw: dict[str, Any], index: int) -> WorkItem:
     if "data_sensitivity" in raw:
         sensitivity = _parse_enum(DataSensitivity, raw["data_sensitivity"],
                                        "data_sensitivity", item_id)
+        
+    external = _parse_external(raw["external"], item_id) if "external" in raw else None
 
+    review_fields = None
+    if "review" in raw:
+        review_fields = _parse_review(raw["review"], item_id)
+        
     return WorkItem(
         id=item_id,
         project=raw["project"],
@@ -432,6 +501,8 @@ def _parse_work_item(raw: dict[str, Any], index: int) -> WorkItem:
         notes=raw.get("notes"),
         ux=ux,
         handoff=handoff,
+        external=external,
+        review=review_fields
     )
 
 

@@ -78,6 +78,36 @@
         },
         "notes": {
           "type": "string"
+        },
+        "external": {
+          "$ref": "#/$defs/External"
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "External": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "github": {
+          "type": "object",
+          "properties": {
+            "repo": { "type": "string" },
+            "issue_number": { "type": "integer" },
+            "url": { "type": "string" },
+            "state": { "type": "string" },
+            "labels": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "created_at": { "type": "string" },
+            "updated_at": { "type": "string" },
+            "imported_at": { "type": "string" }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false
