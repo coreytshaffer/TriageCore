@@ -2,6 +2,7 @@ import os
 import sys
 import tempfile
 import unittest.mock
+from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 from triage_core.tc_cli import tc_preflight, tc_handoff
@@ -158,3 +159,28 @@ def test_tc_eval_export_forbidden_tool_smoke(tmp_path):
     assert data["human_approval_required"] is False
     assert data["diagnostic_details"] == ["Deterministic evaluation stub for forbidden tool calls."]
 
+
+
+def test_tc_workspace_export_eval(tmp_path):
+    from triage_core.tc_cli import tc_workspace_export_eval
+    import json
+
+    repo_root = Path(__file__).resolve().parents[1]
+    items_path = repo_root / "docs" / "examples" / "workspace_work_items.example.yaml"
+    today_path = repo_root / "docs" / "examples" / "workspace_today.example.yaml"
+    output_path = tmp_path / "workspace_eval_packet.json"
+
+    tc_workspace_export_eval(
+        str(items_path),
+        "DEMO-001",
+        str(output_path),
+        today_path=str(today_path),
+    )
+
+    assert output_path.exists()
+    data = json.loads(output_path.read_text(encoding="utf-8"))
+    assert data["schema_version"] == "workspace_evaluator_input_v1"
+    assert data["work_item"]["id"] == "DEMO-001"
+    assert data["focus_context"]["in_today_focus"] is True
+    assert data["boundary"]["triagecore_scores_packet"] is False
+    assert "Read-only context feature" not in json.dumps(data, sort_keys=True)

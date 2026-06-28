@@ -64,6 +64,7 @@ Invoke-Item ~/.triagecore/dashboard.html
 | `tc workspace close --items <path> --id <id>` | Generates a closing packet and can persist closure metadata only when explicitly directed. |
 | `tc workspace review --items <path>` | Shows a weekly review view of stale, active, and blocked work. |
 | `tc workspace touch --items <path> --id <id>` | Updates review metadata for an item with explicit write intent. |
+| `tc workspace export-eval --items <path> --id <id> --output <path>` | Writes a static evaluator-input packet for a selected work item without scoring it. |
 
 > **Note on GitHub imports:**
 > You can import open GitHub issues via `tc workspace import-github --repo owner/repo --output preview.yaml`.
@@ -75,6 +76,7 @@ Invoke-Item ~/.triagecore/dashboard.html
 - **TriageDesk** = human control cockpit.
 - **Meta-harness** = agent coordination layer.
 - **Independent evaluator** = external assessment layer.
+- See [Workspace Evaluator Preview](docs/evals/workspace_evaluator_preview.md) for the file-contract-based workspace export that feeds external assessment without importing or invoking the evaluator.
 - See [Fluidic Signal Paths](docs/architecture/fluidic_signal_paths.md) for the architecture note on how context, handoffs, approvals, evaluator outputs, and evidence should flow between these layers.
 
 ### Safety Invariants

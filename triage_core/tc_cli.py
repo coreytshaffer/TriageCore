@@ -632,6 +632,44 @@ def tc_identity_doctor(agent_id: Optional[str]) -> None:
         sys.exit(1)
 
 
+def tc_workspace_export_eval(
+    items_path: str,
+    item_id: str,
+    output_path: str,
+    *,
+    today_path: Optional[str] = None,
+    case_id: Optional[str] = None,
+    stale_after_days: int = 14,
+    force: bool = False,
+) -> None:
+    from triage_core.workspace_board import load_work_items
+    from triage_core.workspace_eval_packet import (
+        build_workspace_evaluator_packet,
+        write_workspace_evaluator_packet,
+    )
+    from triage_core.workspace_now import load_today_file
+
+    items = load_work_items(items_path)
+    target_item = None
+    for item in items:
+        if item.id == item_id:
+            target_item = item
+            break
+
+    if target_item is None:
+        raise ValueError(f"Work item {item_id} not found in {items_path}")
+
+    today = load_today_file(today_path) if today_path else None
+    packet = build_workspace_evaluator_packet(
+        target_item,
+        today=today,
+        case_id=case_id,
+        stale_after_days=stale_after_days,
+    )
+    written_path = write_workspace_evaluator_packet(packet, output_path, force=force)
+    print(f"Workspace evaluator packet written to {written_path}")
+
+
 def tc_identity_rotate(agent_id: str, dry_run: bool) -> None:
     from datetime import datetime, timezone
 
@@ -1785,6 +1823,18 @@ def main():
     workspace_review_parser.add_argument("--items", required=True, help="Path to your live work_items.yaml")
     workspace_review_parser.add_argument("--stale-after-days", type=int, default=14, help="Days of inactivity before an item is considered stale (default: 14)")
 
+    workspace_export_eval_parser = workspace_subparsers.add_parser(
+        "export-eval",
+        help="Write a static evaluator-input packet for a selected workspace item.",
+    )
+    workspace_export_eval_parser.add_argument("--items", required=True, help="Path to the work items YAML or JSON file")
+    workspace_export_eval_parser.add_argument("--id", required=True, help="ID of the work item to export")
+    workspace_export_eval_parser.add_argument("--output", required=True, help="Path to write the evaluator packet JSON file")
+    workspace_export_eval_parser.add_argument("--today", help="Optional today.yaml focus list file")
+    workspace_export_eval_parser.add_argument("--case-id", help="Optional evaluator-facing case ID override")
+    workspace_export_eval_parser.add_argument("--stale-after-days", type=int, default=14, help="Days of inactivity before an item is considered stale (default: 14)")
+    workspace_export_eval_parser.add_argument("--force", action="store_true", help="Overwrite the output file if it exists")
+
     args = parser.parse_args()
 
     if args.command == "propose":
@@ -2024,8 +2074,22 @@ def main():
             except Exception as e:
                 print(f"Error generating review: {e}")
                 sys.exit(1)
+        elif args.workspace_command == "export-eval":
+            try:
+                tc_workspace_export_eval(
+                    args.items,
+                    args.id,
+                    args.output,
+                    today_path=args.today,
+                    case_id=args.case_id,
+                    stale_after_days=args.stale_after_days,
+                    force=args.force,
+                )
+            except Exception as e:
+                print(f"Error exporting evaluator packet: {e}")
+                sys.exit(1)
         else:
-            workspace_parser.error("workspace requires a subcommand: board, wbs, now, dashboard, handoff, import-github, promote, review-import, close, touch, or review")
+            workspace_parser.error("workspace requires a subcommand: board, wbs, now, dashboard, handoff, import-github, promote, review-import, close, touch, review, or export-eval")
     else:
         parser.print_help()
 
