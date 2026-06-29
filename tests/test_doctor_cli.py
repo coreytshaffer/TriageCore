@@ -146,3 +146,33 @@ def test_doctor_missing_archived_key(tmp_path, monkeypatch, capsys):
 
     assert "WARNING" in out
     assert "missing_archived_key" in out
+
+
+def test_doctor_capability_check_passes_for_route_decision_signer(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    with monkeypatch.context() as m:
+        m.setattr("triage_core.tc_cli._repo_root_or_cwd", lambda: tmp_path)
+        tc_identity_init("router-tools", "Role", ["route_decision:sign"])
+
+    out = run_cli_command(monkeypatch, capsys, tmp_path, ["identity", "doctor", "router-tools", "--for-capability", "route_decision:sign"])
+    assert "Identity doctor passed" in out
+    assert "OK capability_ready agent_id=router-tools capability=route_decision:sign" in out
+
+
+def test_doctor_capability_check_fails_when_capability_missing(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    with monkeypatch.context() as m:
+        m.setattr("triage_core.tc_cli._repo_root_or_cwd", lambda: tmp_path)
+        tc_identity_init("router-tools", "Role", ["route_audit:sign"])
+
+    out = run_cli_command(monkeypatch, capsys, tmp_path, ["identity", "doctor", "router-tools", "--for-capability", "route_decision:sign"])
+    assert "Identity doctor failed" in out
+    assert "ERROR missing_requested_capability agent_id=router-tools" in out
+    assert "route_decision:sign" in out
+
+
+def test_doctor_fails_for_unknown_scoped_agent(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    out = run_cli_command(monkeypatch, capsys, tmp_path, ["identity", "doctor", "missing-agent", "--for-capability", "route_decision:sign"])
+    assert "Identity doctor failed" in out
+    assert "ERROR unknown_agent agent_id=missing-agent" in out

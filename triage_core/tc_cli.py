@@ -599,9 +599,10 @@ def tc_identity_check() -> None:
         sys.exit(1)
 
 
-def tc_identity_doctor(agent_id: Optional[str]) -> None:
+def tc_identity_doctor(agent_id: Optional[str], for_capability: Optional[str] = None) -> None:
     registry = _identity_registry()
     report = registry.check_health(agent_id)
+    capability_ready_agents = []
 
     try:
         import json
@@ -610,7 +611,8 @@ def tc_identity_doctor(agent_id: Optional[str]) -> None:
         if ledger_path.exists():
             with open(ledger_path, "r", encoding="utf-8") as f:
                 for line in f:
-                    if not line.strip(): continue
+                    if not line.strip():
+                        continue
                     try:
                         e = json.loads(line)
                         if e.get("event_type") == "identity_rotation" and "payload" in e:
@@ -621,11 +623,25 @@ def tc_identity_doctor(agent_id: Optional[str]) -> None:
         print(f"Warning: Failed to load ledger for audit cross-check: {e}")
         audit_lookup = None
 
-    if audit_lookup is not None:
+    loaded_identities = None
+    try:
+        loaded_identities = registry.load()
+    except Exception:
+        loaded_identities = None
+
+    if agent_id and agent_id not in report.checked_agent_ids:
+        from triage_core.agent_identity import IdentityDoctorIssue
+        report.errors.append(IdentityDoctorIssue(
+            severity="error",
+            code="unknown_agent",
+            agent_id=agent_id,
+            message="Unknown agent identity",
+        ))
+
+    if audit_lookup is not None and loaded_identities is not None:
         try:
-            identities = registry.load()
             from triage_core.agent_identity import ROTATED_STATUS, IdentityDoctorIssue
-            for a_id, agent_list in identities.items():
+            for a_id, agent_list in loaded_identities.items():
                 if agent_id and a_id != agent_id:
                     continue
                 for rot_id in agent_list:
@@ -639,7 +655,27 @@ def tc_identity_doctor(agent_id: Optional[str]) -> None:
                                 message=f"No identity_rotation audit event found for rotated_at={rot_id.rotated_at}"
                             ))
         except Exception:
-            pass # Malformed registry already handled by check_health
+            pass
+
+    if for_capability and loaded_identities is not None:
+        from triage_core.agent_identity import ACTIVE_STATUS, IdentityDoctorIssue
+        for a_id, agent_list in loaded_identities.items():
+            if agent_id and a_id != agent_id:
+                continue
+            active_identities = [item for item in agent_list if item.status == ACTIVE_STATUS]
+            if len(active_identities) != 1:
+                continue
+            active_identity = active_identities[0]
+            if for_capability not in active_identity.capabilities:
+                report.errors.append(IdentityDoctorIssue(
+                    severity="error",
+                    code="missing_requested_capability",
+                    agent_id=a_id,
+                    fingerprint=active_identity.public_key_fingerprint,
+                    message=f"Active identity is not authorized for capability '{for_capability}'",
+                ))
+            else:
+                capability_ready_agents.append((a_id, for_capability, active_identity.public_key_fingerprint))
 
     if report.has_errors:
         status = "failed"
@@ -662,6 +698,12 @@ def tc_identity_doctor(agent_id: Optional[str]) -> None:
     for warn in report.warnings:
         fp_str = f" fingerprint={warn.fingerprint}" if warn.fingerprint else ""
         print(f"WARNING {warn.code} agent_id={warn.agent_id}{fp_str} ({warn.message})")
+
+    for ready_agent_id, capability, fingerprint in capability_ready_agents:
+        print(
+            f"OK capability_ready agent_id={ready_agent_id} "
+            f"capability={capability} fingerprint={fingerprint}"
+        )
 
     if report.has_errors:
         sys.exit(1)
@@ -1564,6 +1606,10 @@ def main():
         nargs="?",
         help="Optional local agent identity id to scope the check",
     )
+    identity_doctor_parser.add_argument(
+        "--for-capability",
+        help="Optional capability to verify on the active identity, such as route_decision:sign",
+    )
 
     rotate_parser = identity_subparsers.add_parser("rotate", help="Rotate a local agent identity")
     rotate_parser.add_argument("agent_id", help="Stable local agent identity id")
@@ -1932,7 +1978,7 @@ def main():
         elif args.identity_command == "check":
             tc_identity_check()
         elif args.identity_command in ("doctor", "rotation-status"):
-            tc_identity_doctor(args.agent_id)
+            tc_identity_doctor(args.agent_id, for_capability=args.for_capability)
         elif args.identity_command == "rotate":
             tc_identity_rotate(args.agent_id, args.dry_run)
         else:

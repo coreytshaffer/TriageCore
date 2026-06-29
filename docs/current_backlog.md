@@ -2,12 +2,12 @@
 
 ## Status
 
-This document summarizes the active TriageCore backlog after CR-083.
+This document summarizes the active TriageCore backlog after CR-084.
 
 ## Active GitHub Backlog
 
 - Issue #72: Expand signed ledger event coverage beyond `route_audit`
-  - Status: `validation_result` creation, verification, and reviewer-facing example complete via CR-078, CR-079, and CR-081; signed `route_decision` creation and operator-facing verification complete via CR-082; signed `route_decision` smoke example and reviewer-facing verification doc complete via CR-083; broader event coverage remains future work
+  - Status: `validation_result` creation, verification, and reviewer-facing example complete via CR-078, CR-079, and CR-081; signed `route_decision` creation and operator-facing verification complete via CR-082; signed `route_decision` smoke example and reviewer-facing verification doc complete via CR-083; capability-targeted identity doctor checks for route-decision signers complete via CR-084; broader event coverage remains future work
   - Purpose: selectively enforce identity checks and signatures for core ledger events beyond `route_audit` without treating signatures as approval. Additional signed-event paths now cover `validation_result` creation, operator-facing verification, reviewer-facing examples, explicit signed `route_decision` creation plus verification, and an end-to-end signed `route_decision` smoke example; future work is deciding whether to sign additional event types such as `taskpacket_created` or `project_steward_decision`.
 
 - Issue #73: Implement runtime key rotation behavior
@@ -106,7 +106,7 @@ Keep three work lanes distinct:
   hygiene work should be limited to stale documented claims or a separately
   proposed repo-consistency checker.
 
-For signed ledger coverage, the reviewer-facing `validation_result` path and the signed `route_decision` path are now in place, including a smoke example for the latter. The next slice should deliberately choose either one additional signed event type or a lane switch into key lifecycle behavior. Do not treat a valid signature as approval, safety, or correctness.
+For signed ledger coverage, the reviewer-facing `validation_result` path and the signed `route_decision` path are now in place, including a smoke example and a capability-targeted doctor check for the latter. The next slice should deliberately choose either one additional signed event type or a lane switch into key lifecycle behavior. Do not treat a valid signature as approval, safety, or correctness.
 
 For the empirical AI safety evaluation track, keep the next slices sequential: fixture validation first, evaluator CLI second, and broader adversarial/tampering studies only after the fixture contract is stable.
 
