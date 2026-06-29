@@ -12,6 +12,7 @@ from triage_core.agent_identity import (
 from triage_core.task_ledger import (
     TaskLedger,
     verify_route_audit_event_signature,
+    verify_route_decision_event_signature,
     verify_validation_result_event_signature,
 )
 
@@ -706,6 +707,93 @@ def test_append_signed_route_audit_event_fails_for_unauthorized_agent():
                 {
                     "decision": "allowed",
                     "reason_code": "public_safe_demo",
+                },
+                signing_registry=registry,
+                signing_agent_id="context-planner",
+            )
+
+
+def test_append_signed_route_decision_event_writes_signature_metadata():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        ledger = TaskLedger(ledger_dir=temp_dir)
+        registry = AgentIdentityRegistry(ledger_dir=temp_dir)
+        registry.generate_identity(
+            "router-tools",
+            "router_tools",
+            ["route_decision:sign"],
+        )
+
+        payload = {
+            "selected_route": "local_fast",
+            "reason": "bounded_local_route",
+            "route_source": "resilience_router",
+            "selected_backend": "ollama",
+            "selected_model": "qwen2.5-coder:7b",
+            "fallback_depth": 0,
+        }
+        written_event = ledger.append_signed_route_decision_event(
+            "task-route-123",
+            payload,
+            signing_registry=registry,
+            signing_agent_id="router-tools",
+        )
+
+        assert written_event["event_type"] == "route_decision"
+        assert written_event["payload"] == payload
+        assert written_event["signature_metadata"]["agent_id"] == "router-tools"
+        assert written_event["signature_metadata"]["capability"] == "route_decision:sign"
+        assert verify_route_decision_event_signature(written_event, registry) is True
+
+        stored_events = ledger.get_events("task-route-123")
+        assert len(stored_events) == 1
+        assert "signature_metadata" in stored_events[0]
+        assert verify_route_decision_event_signature(stored_events[0], registry) is True
+
+
+def test_signed_route_decision_event_verification_fails_after_payload_tamper():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        ledger = TaskLedger(ledger_dir=temp_dir)
+        registry = AgentIdentityRegistry(ledger_dir=temp_dir)
+        registry.generate_identity(
+            "router-tools",
+            "router_tools",
+            ["route_decision:sign"],
+        )
+
+        event = ledger.append_signed_route_decision_event(
+            "task-route-456",
+            {
+                "selected_route": "local_fast",
+                "reason": "tamper_target",
+                "route_source": "resilience_router",
+            },
+            signing_registry=registry,
+            signing_agent_id="router-tools",
+        )
+
+        tampered_event = dict(event)
+        tampered_event["payload"] = dict(event["payload"])
+        tampered_event["payload"]["selected_route"] = "cloud_primary"
+
+        assert verify_route_decision_event_signature(tampered_event, registry) is False
+
+
+def test_append_signed_route_decision_event_fails_for_unauthorized_agent():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        ledger = TaskLedger(ledger_dir=temp_dir)
+        registry = AgentIdentityRegistry(ledger_dir=temp_dir)
+        registry.generate_identity(
+            "context-planner",
+            "context_planner",
+            ["validation_result:sign"],
+        )
+
+        with pytest.raises(UnauthorizedCapabilityError):
+            ledger.append_signed_route_decision_event(
+                "task-route-unauthorized",
+                {
+                    "selected_route": "local_fast",
+                    "reason": "public_safe_demo",
                 },
                 signing_registry=registry,
                 signing_agent_id="context-planner",

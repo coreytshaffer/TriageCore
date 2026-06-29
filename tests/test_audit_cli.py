@@ -8,6 +8,7 @@ from triage_core.task_ledger import TaskLedger
 from triage_core.tc_cli import (
     tc_audit,
     tc_audit_privacy_invariants,
+    tc_audit_signed_route_decision_smoke_test,
     tc_audit_signed_smoke_test,
     tc_audit_self_test,
     tc_audit_verify_signatures,
@@ -283,6 +284,108 @@ def test_signed_smoke_test_fails_for_revoked_identity(tmp_path, monkeypatch, cap
     out = capsys.readouterr().out
     assert "No active identity found" in out
     assert "revoked-smoke-agent" in out
+
+
+def test_signed_route_decision_smoke_test_writes_signed_route_decision_event(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    ledger_dir = tmp_path / ".triagecore"
+    registry = AgentIdentityRegistry(ledger_dir=ledger_dir)
+    registry.generate_identity(
+        "router-tools",
+        "RouterTools",
+        ["route_decision:sign"],
+    )
+
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_audit_signed_route_decision_smoke_test("router-tools")
+
+    out = capsys.readouterr().out
+    ledger_path = ledger_dir / "ledger.jsonl"
+    assert "Success: Wrote metadata-only signed route_decision smoke test event" in out
+    assert "agent_id=router-tools" in out
+    assert ledger_path.exists()
+
+    records = [
+        json.loads(line)
+        for line in ledger_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert len(records) == 1
+    record = records[0]
+    payload = record["payload"]
+
+    assert record["event_type"] == "route_decision"
+    assert record["task_id"] == "audit-signed-route-decision-smoke-test"
+    assert record["signature_metadata"]["agent_id"] == "router-tools"
+    assert record["signature_metadata"]["capability"] == "route_decision:sign"
+    assert payload == {
+        "selected_route": "local_fast",
+        "reason": "signed_route_decision_smoke_test",
+        "route_source": "smoke_test",
+        "fallback_depth": 0,
+        "selected_backend": "local",
+        "selected_model": "smoke-test-model",
+        "human_review_required": False,
+        "required_checks": [],
+        "smoke_test": True,
+    }
+    for forbidden_field in ["prompt", "data", "content", "raw_prompt", "raw_data"]:
+        assert forbidden_field not in payload
+
+
+def test_signed_route_decision_smoke_test_fails_if_identity_missing(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        with pytest.raises(SystemExit) as exc:
+            tc_audit_signed_route_decision_smoke_test("missing-router")
+
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "Error: Unknown agent identity: missing-router" in out
+
+
+def test_signed_route_decision_smoke_test_fails_if_identity_lacks_route_decision_sign(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    ledger_dir = tmp_path / ".triagecore"
+    registry = AgentIdentityRegistry(ledger_dir=ledger_dir)
+    registry.generate_identity(
+        "router-tools",
+        "RouterTools",
+        ["route_audit:sign"],
+    )
+
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        with pytest.raises(SystemExit) as exc:
+            tc_audit_signed_route_decision_smoke_test("router-tools")
+
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "route_decision:sign" in out
+
+
+def test_signed_route_decision_smoke_test_event_verifies_with_signature_audit(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    ledger_dir = tmp_path / ".triagecore"
+    registry = AgentIdentityRegistry(ledger_dir=ledger_dir)
+    registry.generate_identity(
+        "router-tools",
+        "RouterTools",
+        ["route_decision:sign"],
+    )
+
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_audit_signed_route_decision_smoke_test("router-tools")
+    capsys.readouterr()
+
+    with patch("triage_core.tc_cli._repo_root_or_cwd", return_value=tmp_path):
+        tc_audit_verify_signatures(kind="route_decision")
+
+    out = capsys.readouterr().out
+    assert "Route decision signature verification passed" in out
+    assert "valid_signed=1" in out
+    assert "invalid_signed=0" in out
+    assert "unsigned=0" in out
 
 
 def test_audit_verify_signatures_fails_for_revoked_signing_identity(tmp_path, capsys):
@@ -754,6 +857,97 @@ def test_audit_verify_signatures_validation_result_fails_for_revoked_identity(
     assert "reason=signature_mismatch" in out
 
 
+def test_audit_verify_signatures_route_decision_passes_with_signed_and_unsigned_records(
+    tmp_path, capsys
+):
+    ledger_dir = tmp_path / ".triagecore"
+    ledger = TaskLedger(str(ledger_dir))
+    registry = AgentIdentityRegistry(ledger_dir=ledger_dir)
+    registry.generate_identity(
+        "router-tools",
+        "router_tools",
+        ["route_decision:sign"],
+    )
+
+    ledger.append_signed_route_decision_event(
+        "route-task",
+        {
+            "selected_route": "local_fast",
+            "reason": "route_decision_signed",
+            "route_source": "resilience_router",
+        },
+        signing_registry=registry,
+        signing_agent_id="router-tools",
+    )
+    ledger.append_event(
+        "route-unsigned",
+        "route_decision",
+        {
+            "selected_route": "local_heavy",
+            "reason": "legacy_unsigned_route_decision",
+        },
+    )
+    ledger.append_event(
+        "other-task",
+        "route_audit",
+        {
+            "decision": "allowed",
+            "reason_code": "ignored_route_audit",
+        },
+    )
+
+    with patch("triage_core.tc_cli._ledger_path", return_value=ledger_dir / "ledger.jsonl"):
+        tc_audit_verify_signatures(kind="route_decision")
+
+    out = capsys.readouterr().out
+    assert "Route decision signature verification passed" in out
+    assert "event_type=route_decision" in out
+    assert "valid_signed=1" in out
+    assert "unsigned=1" in out
+    assert "skipped_non_target=1" in out
+    assert "PASS event_type=route_decision task_id=route-task agent_id=router-tools" in out
+    assert "route_decision_signed" not in out
+    assert "ignored_route_audit" not in out
+
+
+def test_audit_verify_signatures_route_decision_fails_for_tampered_event(
+    tmp_path, capsys
+):
+    ledger_dir = tmp_path / ".triagecore"
+    ledger = TaskLedger(str(ledger_dir))
+    registry = AgentIdentityRegistry(ledger_dir=ledger_dir)
+    registry.generate_identity(
+        "router-tools",
+        "router_tools",
+        ["route_decision:sign"],
+    )
+
+    event = ledger.append_signed_route_decision_event(
+        "route-task",
+        {
+            "selected_route": "local_fast",
+            "reason": "tamper_target",
+            "route_source": "resilience_router",
+        },
+        signing_registry=registry,
+        signing_agent_id="router-tools",
+    )
+    tampered = dict(event)
+    tampered["payload"] = dict(event["payload"])
+    tampered["payload"]["selected_route"] = "cloud_primary"
+    (ledger_dir / "ledger.jsonl").write_text(json.dumps(tampered) + "\n", encoding="utf-8")
+
+    with patch("triage_core.tc_cli._ledger_path", return_value=ledger_dir / "ledger.jsonl"):
+        with pytest.raises(SystemExit) as exc:
+            tc_audit_verify_signatures(kind="route_decision")
+
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "Route decision signature verification failed" in out
+    assert "FAIL event_type=route_decision task_id=route-task agent_id=router-tools reason=signature_mismatch" in out
+    assert "tamper_target" not in out
+
+
 def test_audit_verify_signatures_rejects_unsupported_kind(capsys):
     with patch("triage_core.tc_cli._ledger_path", return_value=Path("ignored.jsonl")):
         with pytest.raises(SystemExit) as exc:
@@ -761,4 +955,4 @@ def test_audit_verify_signatures_rejects_unsupported_kind(capsys):
 
     assert exc.value.code == 1
     out = capsys.readouterr().out
-    assert "supports only 'route_audit' or 'validation_result'" in out
+    assert "supports only 'route_audit', 'validation_result', or 'route_decision'" in out

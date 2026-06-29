@@ -5,6 +5,8 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+- Implemented CR-083 (Signed Route Decision Smoke Example): Added a dedicated signed `route_decision` smoke command, a reviewer-facing verification doc covering unsigned versus opt-in signed behavior, and focused audit-cli coverage proving the smoke path stays valid.
+- Implemented CR-082 (Signed Route Decision Verification Path): Added an explicit signed `route_decision` ledger path, optional `TriageClient` support for writing signed route decisions, and operator-facing `tc audit --verify-signatures --kind route_decision` coverage with metadata-only pass/fail readouts.
 - Implemented CR-081 (Signed Validation Result Verification Example): Added a reviewer-facing verification example for signed `validation_result` ledger events, including metadata-only success and failure readouts plus the provenance-only boundary.
 - Implemented CR-079 (Verify Signed Validation Result Events): Extended `tc audit --verify-signatures` to support signed `validation_result` ledger events with metadata-only pass/fail readouts and safe failure reasons.
 - Implemented CR-078 (Signed Ledger Event Coverage Plan): Documented signed-event coverage, added a signed `validation_result` ledger path with explicit `validation_result:sign` authorization, and covered provenance-only signing behavior with focused tests.

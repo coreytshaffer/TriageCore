@@ -8,6 +8,7 @@ from .routing import (
     build_worker_result_payload,
     choose_resilience_route,
 )
+from .agent_identity import AgentIdentityRegistry
 from .task_ledger import TaskLedger
 from .privacy_scanner import scan_task_packet, PrivacyViolationError
 from .config import default_config
@@ -45,6 +46,8 @@ class TriageClient:
         ledger: Optional[TaskLedger] = None,
         task_id: Optional[str] = None,
         task_packet: Optional[Any] = None,
+        route_decision_signing_registry: Optional[AgentIdentityRegistry] = None,
+        route_decision_signing_agent_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Runs a given prompt and data through the execution engine.
@@ -155,11 +158,12 @@ class TriageClient:
                 else route_decision.get("model") or getattr(self.engine.backend, "model", "")
             ),
         )
-        self._append_optional_event(
+        self._append_route_decision_event(
             ledger=ledger,
             task_id=task_id,
-            event_type="route_decision",
             payload=route_payload,
+            signing_registry=route_decision_signing_registry,
+            signing_agent_id=route_decision_signing_agent_id,
         )
         
         steward = ProjectSteward()
@@ -267,6 +271,26 @@ class TriageClient:
         if ledger is None or not task_id:
             return
         ledger.append_event(task_id, event_type, payload)
+
+    @staticmethod
+    def _append_route_decision_event(
+        ledger: Optional[TaskLedger],
+        task_id: Optional[str],
+        payload: Dict[str, Any],
+        signing_registry: Optional[AgentIdentityRegistry],
+        signing_agent_id: Optional[str],
+    ) -> None:
+        if ledger is None or not task_id:
+            return
+        if signing_registry is not None and signing_agent_id:
+            ledger.append_signed_route_decision_event(
+                task_id,
+                payload,
+                signing_registry=signing_registry,
+                signing_agent_id=signing_agent_id,
+            )
+            return
+        ledger.append_event(task_id, "route_decision", payload)
 
     @staticmethod
     def _merge_route_fields(result: Dict[str, Any], route_payload: Dict[str, Any]) -> Dict[str, Any]:

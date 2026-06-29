@@ -302,6 +302,40 @@ def tc_audit_signed_smoke_test(agent_id: str) -> None:
     )
 
 
+def tc_audit_signed_route_decision_smoke_test(agent_id: str) -> None:
+    payload = {
+        "selected_route": "local_fast",
+        "reason": "signed_route_decision_smoke_test",
+        "route_source": "smoke_test",
+        "fallback_depth": 0,
+        "selected_backend": "local",
+        "selected_model": "smoke-test-model",
+        "human_review_required": False,
+        "required_checks": [],
+        "smoke_test": True,
+    }
+    ledger_path = _ledger_path()
+    ledger_path.parent.mkdir(parents=True, exist_ok=True)
+    ledger = TaskLedger(str(ledger_path.parent))
+    registry = _identity_registry()
+    registry.load()
+    try:
+        ledger.append_signed_route_decision_event(
+            "audit-signed-route-decision-smoke-test",
+            payload,
+            signing_registry=registry,
+            signing_agent_id=agent_id,
+        )
+    except AgentIdentityError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
+    print(
+        "Success: Wrote metadata-only signed route_decision smoke test event "
+        f"to {ledger_path} using agent_id={agent_id}."
+    )
+
+
 def tc_audit_privacy_invariants() -> None:
     ledger_path = _ledger_path()
     if not ledger_path.exists():
@@ -361,11 +395,12 @@ def tc_audit_verify_signatures(kind: str = "route_audit", strict: bool = False) 
     supported_event_types = {
         "route_audit": "Route audit",
         "validation_result": "Validation result",
+        "route_decision": "Route decision",
     }
     if kind not in supported_event_types:
         print(
             "Error: --verify-signatures supports only "
-            "'route_audit' or 'validation_result'."
+            "'route_audit', 'validation_result', or 'route_decision'."
         )
         sys.exit(1)
 
@@ -1426,6 +1461,11 @@ def main():
         help="Write one metadata-only signed route_audit smoke-test event",
     )
     audit_parser.add_argument(
+        "--signed-route-decision-smoke-test",
+        action="store_true",
+        help="Write one metadata-only signed route_decision smoke-test event",
+    )
+    audit_parser.add_argument(
         "--agent-id",
         type=str,
         help="Existing agent identity to use for signed smoke-test events",
@@ -1438,7 +1478,7 @@ def main():
     audit_parser.add_argument(
         "--verify-signatures",
         action="store_true",
-        help="Verify signed route_audit or validation_result ledger events using registered public identities",
+        help="Verify signed route_audit, validation_result, or route_decision ledger events using registered public identities",
     )
     audit_parser.add_argument(
         "--strict",
@@ -1851,24 +1891,29 @@ def main():
             for flag in (
                 args.self_test,
                 args.signed_smoke_test,
+                args.signed_route_decision_smoke_test,
                 args.privacy_invariants,
                 args.verify_signatures,
             )
         )
         if active_audit_modes > 1:
             audit_parser.error(
-                "--self-test, --signed-smoke-test, --privacy-invariants, and --verify-signatures cannot be used together"
+                "--self-test, --signed-smoke-test, --signed-route-decision-smoke-test, --privacy-invariants, and --verify-signatures cannot be used together"
             )
         if args.strict and not args.verify_signatures:
             audit_parser.error("--strict requires --verify-signatures")
         if args.signed_smoke_test and not args.agent_id:
             audit_parser.error("--signed-smoke-test requires --agent-id")
+        if args.signed_route_decision_smoke_test and not args.agent_id:
+            audit_parser.error("--signed-route-decision-smoke-test requires --agent-id")
         if args.privacy_invariants:
             tc_audit_privacy_invariants()
         elif args.verify_signatures:
             tc_audit_verify_signatures(kind=args.kind, strict=args.strict)
         elif args.signed_smoke_test:
             tc_audit_signed_smoke_test(args.agent_id)
+        elif args.signed_route_decision_smoke_test:
+            tc_audit_signed_route_decision_smoke_test(args.agent_id)
         elif args.self_test:
             tc_audit_self_test()
         else:
