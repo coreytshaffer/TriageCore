@@ -3,6 +3,9 @@
 ## Purpose
 This document shows the reviewer-facing path for inspecting optional signed `route_decision` ledger evidence after CR-082 and CR-083.
 
+## Related Checkpoint
+For the full Issue #72 reviewer/operator flow, see [issue-72-signed-route-decision-checkpoint.md](issue-72-signed-route-decision-checkpoint.md).
+
 ## Default Unsigned Behavior
 By default, `TriageClient.run_task(...)` still writes ordinary unsigned `route_decision` events. Signing remains opt-in.
 
