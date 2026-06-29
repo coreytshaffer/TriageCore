@@ -5,6 +5,7 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+- Implemented CR-086 (TriageCore Stabilization Reviewer Checkpoint): Added docs-only stabilization and packaging/readiness checkpoints that summarize current capabilities, validation commands, signed route-decision boundaries, reviewer artifacts, and deferred work without changing runtime behavior.
 - Implemented CR-085 (Issue #72 Signed Route Decision Checkpoint): Added a reviewer-facing checkpoint doc that consolidates identity readiness, smoke artifact creation, audit verification, and claim boundaries for the signed route-decision path without changing runtime behavior.
 - Implemented CR-084 (Identity Doctor Route-Decision Capability Check): Added an optional capability-targeted `tc identity doctor --for-capability ...` check, including explicit `route_decision:sign` readiness and fail-closed unknown-agent or missing-capability readouts.
 - Implemented CR-083 (Signed Route Decision Smoke Example): Added a dedicated signed `route_decision` smoke command, a reviewer-facing verification doc covering unsigned versus opt-in signed behavior, and focused audit-cli coverage proving the smoke path stays valid.

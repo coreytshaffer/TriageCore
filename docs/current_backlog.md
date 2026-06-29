@@ -2,17 +2,21 @@
 
 ## Status
 
-This document summarizes the active TriageCore backlog after CR-085.
+This document summarizes the active TriageCore backlog after CR-086.
 
 ## Active GitHub Backlog
 
 - Issue #72: Expand signed ledger event coverage beyond `route_audit`
-  - Status: `validation_result` creation, verification, and reviewer-facing example complete via CR-078, CR-079, and CR-081; signed `route_decision` creation and operator-facing verification complete via CR-082; signed `route_decision` smoke example and reviewer-facing verification doc complete via CR-083; capability-targeted identity doctor checks for route-decision signers complete via CR-084; consolidated reviewer checkpoint doc complete via CR-085; broader event coverage remains future work
+  - Status: `validation_result` creation, verification, and reviewer-facing example complete via CR-078, CR-079, and CR-081; signed `route_decision` creation and operator-facing verification complete via CR-082; signed `route_decision` smoke example and reviewer-facing verification doc complete via CR-083; capability-targeted identity doctor checks for route-decision signers complete via CR-084; consolidated reviewer checkpoint doc complete via CR-085; stabilization reviewer checkpoint and packaging/readiness docs complete via CR-086; broader event coverage remains future work
   - Purpose: selectively enforce identity checks and signatures for core ledger events beyond `route_audit` without treating signatures as approval. Additional signed-event paths now cover `validation_result` creation, operator-facing verification, reviewer-facing examples, explicit signed `route_decision` creation plus verification, and an end-to-end signed `route_decision` smoke example; future work is deciding whether to sign additional event types such as `taskpacket_created` or `project_steward_decision`.
 
 - Issue #73: Implement runtime key rotation behavior
   - Status: open
   - Purpose: implement safe key rotation logic separate from the identity MVP, ensuring superseded keys are rejected while old signatures remain verifiable.
+
+- Stabilization and packaging readiness
+  - Status: reviewer checkpoint and packaging/readiness docs complete via CR-086; release mechanics remain future work
+  - Purpose: make the current system easier to trust, run, review, and package without adding new cryptographic surface area, execution pathways, or agent authority.
 
 ## Candidate Future Work
 
@@ -98,7 +102,7 @@ This document summarizes the active TriageCore backlog after CR-085.
 
 Keep three work lanes distinct:
 
-- Identity lifecycle work #4 is closed. CR-078, CR-079, CR-081, CR-082, and CR-083 complete the signed `validation_result` and `route_decision` paths under Issue #72 through creation, verification, smoke evidence, and reviewer-facing or operator-facing examples; remaining signed-event expansion and Issue #73 runtime rotation behavior should stay separate implementation slices.
+- Identity lifecycle work #4 is closed. CR-078, CR-079, CR-081, CR-082, CR-083, CR-084, and CR-085 complete the signed `validation_result` and `route_decision` paths under Issue #72 through creation, verification, smoke evidence, capability readiness checks, and reviewer-facing or operator-facing examples; CR-086 adds a stabilization/readiness checkpoint around that completed lane. Remaining signed-event expansion and Issue #73 runtime rotation behavior should stay separate implementation slices.
 - Model and runtime integrity work should build on CR-031 through CR-033. Keep
   policy baseline, route-manifest artifact shape, manifest validation, and live
   enforcement as separate reviewable slices.
@@ -106,7 +110,7 @@ Keep three work lanes distinct:
   hygiene work should be limited to stale documented claims or a separately
   proposed repo-consistency checker.
 
-For signed ledger coverage, the reviewer-facing `validation_result` path and the signed `route_decision` path are now in place, including a smoke example, a capability-targeted doctor check, and a consolidated reviewer checkpoint for the latter. The next slice should deliberately choose packaging/stabilization or a lane switch into key lifecycle behavior rather than immediately expanding signing surface area. Do not treat a valid signature as approval, safety, or correctness.
+For signed ledger coverage, the reviewer-facing `validation_result` path and the signed `route_decision` path are now in place, including a smoke example, a capability-targeted doctor check, and a consolidated reviewer checkpoint for the latter. The next safe lane is packaging/stabilization, reviewer entrypoint cleanup, and release-readiness documentation. Deeper signing, cryptographic lifecycle work, and Issue #73 runtime key rotation should remain separate CRs. Do not treat a valid signature as approval, safety, or correctness.
 
 For the empirical AI safety evaluation track, keep the next slices sequential: fixture validation first, evaluator CLI second, and broader adversarial/tampering studies only after the fixture contract is stable.
 
