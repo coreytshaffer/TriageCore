@@ -5,6 +5,7 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+- Implemented CR-088 (Submission Video Runbook): Added a docs-only Qwen optional reviewer video runbook with timed script, media bundle checklist, no-secret exclusions, fallback smoke path, and explicit non-claims without changing runtime behavior.
 - Implemented CR-087 (Reviewer Smoke Runbook): Added a docs-only reviewer smoke runbook covering clean-tree expectations, current CLI smoke commands, dirty-tree warning interpretation, optional unittest validation, and explicit non-claims without changing runtime behavior.
 - Implemented CR-086 (TriageCore Stabilization Reviewer Checkpoint): Added docs-only stabilization and packaging/readiness checkpoints that summarize current capabilities, validation commands, signed route-decision boundaries, reviewer artifacts, and deferred work without changing runtime behavior.
 - Implemented CR-085 (Issue #72 Signed Route Decision Checkpoint): Added a reviewer-facing checkpoint doc that consolidates identity readiness, smoke artifact creation, audit verification, and claim boundaries for the signed route-decision path without changing runtime behavior.

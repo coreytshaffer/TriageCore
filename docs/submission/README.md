@@ -6,24 +6,26 @@ Use it when you want the fastest path through the project without reading the fu
 
 ## Reading Order
 
-1. [hackathon_submission_overview.md](hackathon_submission_overview.md)
-2. [judge_quickstart.md](judge_quickstart.md)
-3. [track_mapping.md](track_mapping.md)
-4. [claim_boundaries.md](claim_boundaries.md)
-5. [public_evidence_example.md](public_evidence_example.md)
-6. [public_launch_metadata_pack.md](public_launch_metadata_pack.md)
-7. [final_validation_evidence_redacted.md](final_validation_evidence_redacted.md)
+1. [qwen_optional_reviewer_video_runbook.md](qwen_optional_reviewer_video_runbook.md)
+2. [hackathon_submission_overview.md](hackathon_submission_overview.md)
+3. [judge_quickstart.md](judge_quickstart.md)
+4. [track_mapping.md](track_mapping.md)
+5. [claim_boundaries.md](claim_boundaries.md)
+6. [public_evidence_example.md](public_evidence_example.md)
+7. [public_launch_metadata_pack.md](public_launch_metadata_pack.md)
+8. [final_validation_evidence_redacted.md](final_validation_evidence_redacted.md)
 
 ## Fastest Judge Path
 
 If you only have a few minutes:
 
-1. Read the overview.
-2. Run the quickstart commands.
+1. Watch the linked demo video or read the video runbook.
+2. Read the overview.
+3. Run the quickstart commands.
    For redacted final validation excerpts, see [final_validation_evidence_redacted.md](final_validation_evidence_redacted.md).
-3. Check the public evidence example.
-4. Check the track mapping so the primary demo, supporting framing, and future extension stay distinct.
-5. Use the public launch metadata pack when preparing GitHub About text, topics, release notes, and the first public tag.
+4. Check the public evidence example.
+5. Check the track mapping so the primary demo, supporting framing, and future extension stay distinct.
+6. Use the public launch metadata pack when preparing GitHub About text, topics, release notes, and the first public tag.
 
 ## Related Workflow
 
