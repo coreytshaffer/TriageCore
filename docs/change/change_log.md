@@ -5,6 +5,8 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+- Implemented CR-092 (Experiment Observability Trace Contract): Added durable experiment trace records, schema, focused tests, and operator documentation linking task fixtures, agent groups, backend profiles, runtime efficiency records, quality gates, and claim-validity boundaries without adding live model calls or runtime migration.
+- Implemented CR-090 (Runtime Efficiency Ledger): Added deterministic runtime backend profiles, runtime efficiency records, schema, focused validation tests, and operator documentation for comparing Ollama and llama.cpp evidence without changing runtime behavior or adding live benchmark calls.
 - Implemented CR-089 (Reviewer Entrypoints Index): Added a docs-only reviewer entrypoints index that links stabilization, smoke, packaging, signed route-decision, submission/video, backlog, and changelog docs while preserving current non-goals and Qwen optional artifact boundaries.
 - Implemented CR-088 (Submission Video Runbook): Added a docs-only Qwen optional reviewer video runbook with timed script, media bundle checklist, no-secret exclusions, fallback smoke path, and explicit non-claims without changing runtime behavior.
 - Implemented CR-087 (Reviewer Smoke Runbook): Added a docs-only reviewer smoke runbook covering clean-tree expectations, current CLI smoke commands, dirty-tree warning interpretation, optional unittest validation, and explicit non-claims without changing runtime behavior.

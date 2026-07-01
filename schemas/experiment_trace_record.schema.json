@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://triagecore.local/schemas/experiment_trace_record.schema.json",
+  "title": "TriageCore Experiment Trace Record",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "trace_id",
+    "created_at",
+    "experiment_id",
+    "run_id",
+    "task_fixture_digest",
+    "agent_group_id",
+    "runtime_backend_profile_id",
+    "runtime_efficiency_record_id",
+    "runtime_efficiency_record",
+    "quality_gate_id",
+    "quality_gate_result",
+    "claim_validity",
+    "lineage",
+    "failure_reason"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": "experiment_trace_record.v1"},
+    "trace_id": {"type": "string", "minLength": 1},
+    "created_at": {"type": "string", "minLength": 1},
+    "experiment_id": {"type": "string", "minLength": 1},
+    "run_id": {"type": "string", "minLength": 1},
+    "task_fixture_digest": {"type": "string", "minLength": 1},
+    "agent_group_id": {"type": "string", "minLength": 1},
+    "runtime_backend_profile_id": {"type": "string", "minLength": 1},
+    "runtime_efficiency_record_id": {"type": "string", "minLength": 1},
+    "runtime_efficiency_record": {"type": "object"},
+    "quality_gate_id": {"type": "string", "minLength": 1},
+    "quality_gate_result": {
+      "type": "object",
+      "required": ["passed", "method", "notes"],
+      "additionalProperties": false,
+      "properties": {
+        "passed": {"type": "boolean"},
+        "method": {"type": "string", "minLength": 1},
+        "notes": {"type": ["string", "null"]}
+      }
+    },
+    "claim_validity": {
+      "type": "object",
+      "required": [
+        "efficiency_claim_valid",
+        "energy_claim_valid",
+        "reason"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "efficiency_claim_valid": {"type": "boolean"},
+        "energy_claim_valid": {"type": "boolean"},
+        "reason": {"type": ["string", "null"]}
+      }
+    },
+    "lineage": {
+      "type": "object",
+      "required": ["baseline_group_id", "candidate_group_id"],
+      "additionalProperties": false,
+      "properties": {
+        "baseline_group_id": {"type": "string", "minLength": 1},
+        "candidate_group_id": {"type": "string", "minLength": 1}
+      }
+    },
+    "failure_reason": {"type": ["string", "null"]}
+  }
+}

@@ -2,7 +2,7 @@
 
 ## Status
 
-This document summarizes the active TriageCore backlog after CR-089.
+This document summarizes the active TriageCore backlog after CR-092.
 
 ## Active GitHub Backlog
 
@@ -17,6 +17,10 @@ This document summarizes the active TriageCore backlog after CR-089.
 - Stabilization and packaging readiness
   - Status: reviewer checkpoint and packaging/readiness docs complete via CR-086; reviewer smoke runbook complete via CR-087; submission video runbook complete via CR-088; reviewer entrypoints index complete via CR-089; release mechanics remain future work
   - Purpose: make the current system easier to trust, run, review, and package without adding new cryptographic surface area, execution pathways, or agent authority.
+
+- Runtime efficiency evidence
+  - Status: runtime efficiency ledger schema, backend profiles, deterministic record builder, and focused tests complete via CR-090; controlled experiment plans, agent group profiles, synthetic result records, schemas, and focused tests complete via CR-091; experiment observability trace contract, schema, and focused tests complete via CR-092; live benchmark capture and durable evidence storage remain future work
+  - Purpose: record comparable token, latency, backend-profile, quality-gate, agent-group, baseline-lineage, claim-validity, and energy-evidence-tier data for local runtime choices such as Ollama and llama.cpp before any runtime migration.
 
 ## Candidate Future Work
 

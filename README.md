@@ -2,9 +2,9 @@
 
 [![tests](https://github.com/coreytshaffer/TriageCore/actions/workflows/tests.yml/badge.svg)](https://github.com/coreytshaffer/TriageCore/actions/workflows/tests.yml)
 
-**A Local-First Developer-Agent Control Harness**
+**Observable, Traceable, Data-Driven**
 
-TriageCore is an early research workbench for AI-assisted software work that keeps local control, reviewable artifacts, and privacy boundaries visible to the operator. It can generate preflight and handoff packets, inspect privacy-safe route audit events, run local benchmark/report workflows, and support a bounded Qwen Cloud path for external-safe packets. The project is real and runnable today, but it should be read as a prototype and research harness, not a finished production framework. Cloud supervisors are optional and intentional here, not the default path for every task.
+TriageCore is an observable, traceable, data-driven control-plane harness for evaluating local AI routing decisions. It records structured evidence about model and runtime choices, agent-group behavior, token use, latency, quality gates, and energy-measurement tier before making stronger orchestration claims. The project remains an early research workbench for AI-assisted software work that keeps local control, reviewable artifacts, and privacy boundaries visible to the operator. It can generate preflight and handoff packets, inspect privacy-safe route audit events, run local benchmark/report workflows, and support a bounded Qwen Cloud path for external-safe packets.
 
 > **Status**
 > TriageCore is active as a local-first prototype/workbench. Current capabilities, supporting docs, tests, and demo paths are in-repo now. Broader governance, release polish, and long-term environmental-edge integrations should be treated as ongoing work, not completed product claims.
@@ -461,4 +461,3 @@ pytest tests/
 
 ## License
 MIT
-
