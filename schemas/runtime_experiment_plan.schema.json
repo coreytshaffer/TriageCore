@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://triagecore.local/schemas/runtime_experiment_plan.schema.json",
+  "title": "TriageCore Runtime Experiment Plan",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "experiment_id",
+    "task_class",
+    "task_fixture",
+    "baseline_group",
+    "candidate_groups",
+    "repetitions",
+    "quality_gate",
+    "measurement_config",
+    "allowed_runtime_backends",
+    "token_budget",
+    "notes"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": "runtime_experiment_plan.v1"},
+    "experiment_id": {"type": "string", "minLength": 1},
+    "task_class": {"type": "string", "minLength": 1},
+    "task_fixture": {"type": "string", "minLength": 1},
+    "baseline_group": {"type": "string", "minLength": 1},
+    "candidate_groups": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    },
+    "repetitions": {"type": "integer", "minimum": 1},
+    "quality_gate": {
+      "type": "object",
+      "required": ["required", "rubric"],
+      "additionalProperties": false,
+      "properties": {
+        "required": {"type": "boolean"},
+        "rubric": {"type": "string"}
+      }
+    },
+    "measurement_config": {
+      "type": "object",
+      "required": ["token_metrics", "latency_metrics", "energy_tier"],
+      "additionalProperties": false,
+      "properties": {
+        "token_metrics": {"type": "boolean"},
+        "latency_metrics": {"type": "boolean"},
+        "energy_tier": {
+          "enum": [
+            "token_proxy",
+            "runtime_proxy",
+            "software_energy_estimate",
+            "wall_power_measured"
+          ]
+        }
+      }
+    },
+    "allowed_runtime_backends": {
+      "type": "array",
+      "items": {
+        "enum": ["ollama", "llama_cpp", "generic_openai_compatible"]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "token_budget": {"type": "integer", "minimum": 1},
+    "notes": {"type": ["string", "null"]}
+  }
+}
