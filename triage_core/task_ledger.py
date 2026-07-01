@@ -21,6 +21,7 @@ LEDGER_SCHEMA_VERSION = "0.2.0"
 ROLE_TAXONOMY_VERSION = "2026-06-worker-council-v2"
 ROUTE_AUDIT_SIGN_CAPABILITY = "route_audit:sign"
 VALIDATION_RESULT_SIGN_CAPABILITY = "validation_result:sign"
+ROUTE_DECISION_SIGN_CAPABILITY = "route_decision:sign"
 
 
 @dataclass
@@ -236,6 +237,31 @@ class TaskLedger:
             signing_agent_id,
             VALIDATION_RESULT_SIGN_CAPABILITY,
             validation_result_signature_payload(event),
+            signature_algorithm=signature_algorithm,
+        )
+        with open(self.ledger_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(event) + "\n")
+        return event
+
+
+    def append_signed_route_decision_event(
+        self,
+        task_id: str,
+        payload: Dict[str, Any],
+        *,
+        signing_registry: AgentIdentityRegistry,
+        signing_agent_id: str,
+        signature_algorithm: str = "ed25519",
+    ) -> Dict[str, Any]:
+        assert_persistent_privacy_safe(
+            payload,
+            artifact_name="TaskLedger payload for event_type=route_decision",
+        )
+        event = self._build_event(task_id, "route_decision", payload)
+        event["signature_metadata"] = signing_registry.sign_payload(
+            signing_agent_id,
+            ROUTE_DECISION_SIGN_CAPABILITY,
+            route_decision_signature_payload(event),
             signature_algorithm=signature_algorithm,
         )
         with open(self.ledger_path, "a", encoding="utf-8") as f:
@@ -700,6 +726,14 @@ def validation_result_signature_payload(event: Dict[str, Any]) -> Dict[str, Any]
     return ledger_event_signature_payload(event)
 
 
+def route_decision_signature_payload(event: Dict[str, Any]) -> Dict[str, Any]:
+    if event.get("event_type") != "route_decision":
+        raise ValueError(
+            "route_decision_signature_payload only supports route_decision events."
+        )
+    return ledger_event_signature_payload(event)
+
+
 def ledger_event_signature_payload(event: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "event_id": event["event_id"],
@@ -738,6 +772,19 @@ def verify_validation_result_event_signature(
     )
 
 
+def verify_route_decision_event_signature(
+    event: Dict[str, Any],
+    signing_registry: AgentIdentityRegistry,
+) -> bool:
+    signature_metadata = event.get("signature_metadata")
+    if not signature_metadata:
+        return False
+    return signing_registry.verify_signed_payload(
+        route_decision_signature_payload(event),
+        signature_metadata,
+    )
+
+
 def verify_ledger_event_signatures_in_ledger(
     ledger_path: str | Path,
     *,
@@ -746,6 +793,7 @@ def verify_ledger_event_signatures_in_ledger(
     supported_event_types = {
         "route_audit": verify_route_audit_event_signature,
         "validation_result": verify_validation_result_event_signature,
+        "route_decision": verify_route_decision_event_signature,
     }
     if event_type not in supported_event_types:
         raise ValueError(f"Unsupported signed ledger event type: {event_type}")

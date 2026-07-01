@@ -1,5 +1,6 @@
 from triage_core.backends import BackendResponse
 from triage_core.client import TriageClient
+from triage_core.agent_identity import AgentIdentityRegistry
 from triage_core.task_ledger import TaskLedger
 from triage_core.task_packet import TaskPacket, PrivacyMetadata
 
@@ -170,6 +171,38 @@ def test_run_task_writes_route_decision_and_worker_result_events():
     assert route_event["payload"]["selected_route"] == result["selected_route"]
     assert worker_event["payload"]["worker_result_status"] == "completed"
     assert worker_event["payload"]["backend_failure"] is False
+
+
+def test_run_task_can_write_signed_route_decision_event():
+    backend = RecordingBackend()
+    client = TriageClient(backend=backend)
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        ledger = TaskLedger(ledger_dir=temp_dir)
+        registry = AgentIdentityRegistry(ledger_dir=temp_dir)
+        registry.generate_identity(
+            "router-tools",
+            "router_tools",
+            ["route_decision:sign"],
+        )
+        task_id = str(uuid.uuid4())
+        ledger.append_event(task_id, "task_created", {"title": "Signed Route Decision Task"})
+
+        result = client.run_task(
+            "Summarize this text",
+            "small data",
+            ledger=ledger,
+            task_id=task_id,
+            route_decision_signing_registry=registry,
+            route_decision_signing_agent_id="router-tools",
+        )
+        route_event = next(
+            event for event in ledger.get_events(task_id) if event["event_type"] == "route_decision"
+        )
+
+    assert result["status"] == "success"
+    assert route_event["signature_metadata"]["agent_id"] == "router-tools"
+    assert route_event["signature_metadata"]["capability"] == "route_decision:sign"
 
 
 def test_router_handoff_event_is_recorded_without_backend_failure():

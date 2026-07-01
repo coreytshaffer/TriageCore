@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://triagecore.local/schemas/runtime_experiment_result.schema.json",
+  "title": "TriageCore Runtime Experiment Result",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "experiment_id",
+    "run_id",
+    "group_id",
+    "task_class",
+    "repetition_index",
+    "runtime_efficiency_record",
+    "quality_gate",
+    "claim_validity",
+    "baseline_group",
+    "baseline_run_id",
+    "failure_reason"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": "runtime_experiment_result.v1"},
+    "experiment_id": {"type": "string", "minLength": 1},
+    "run_id": {"type": "string", "minLength": 1},
+    "group_id": {"type": "string", "minLength": 1},
+    "task_class": {"type": "string", "minLength": 1},
+    "repetition_index": {"type": "integer", "minimum": 0},
+    "runtime_efficiency_record": {"type": "object"},
+    "quality_gate": {
+      "type": "object",
+      "required": ["passed", "method", "notes"],
+      "additionalProperties": false,
+      "properties": {
+        "passed": {"type": "boolean"},
+        "method": {"type": "string", "minLength": 1},
+        "notes": {"type": ["string", "null"]}
+      }
+    },
+    "claim_validity": {
+      "type": "object",
+      "required": [
+        "efficiency_claim_valid",
+        "reason",
+        "token_efficiency_claimed",
+        "latency_efficiency_claimed",
+        "energy_efficiency_claimed"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "efficiency_claim_valid": {"type": "boolean"},
+        "reason": {"type": ["string", "null"]},
+        "token_efficiency_claimed": {"type": "boolean"},
+        "latency_efficiency_claimed": {"type": "boolean"},
+        "energy_efficiency_claimed": {"type": "boolean"}
+      }
+    },
+    "baseline_group": {"type": "string", "minLength": 1},
+    "baseline_run_id": {"type": "string", "minLength": 1},
+    "failure_reason": {"type": ["string", "null"]}
+  }
+}
