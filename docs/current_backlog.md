@@ -6,6 +6,10 @@ This document summarizes the active TriageCore backlog after CR-095.
 
 ## Active GitHub Backlog
 
+- CR-097: Fail-Closed Identity Registry Load Handling
+  - Status: complete via CR-097
+  - Purpose: Catch unhandled identity registry IO/parse exceptions in reviewer-facing CLI paths and return a bounded `registry_load_failed` output without leaking stack traces or secret strings.
+
 - CR-096: Fix TriageDesk review evidence payload integrity
   - Status: complete via CR-096
   - Purpose: fix payload keys so "needs revision" survives end-to-end and remove fabricated effort metadata from the GUI review submission, ensuring the ledger only claims what is actually known.
