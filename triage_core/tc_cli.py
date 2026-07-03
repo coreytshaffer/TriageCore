@@ -1535,6 +1535,46 @@ def tc_packet_render(task_path: str, model_profile: str, includes: list[str], ou
         print(res.content)
 
 
+def tc_task_show(task_id: str) -> None:
+    from triage_core.task_ledger import TaskLedger
+
+    from pathlib import Path
+    ledger_path = Path(_ledger_path())
+    ledger = TaskLedger(ledger_dir=str(ledger_path.parent))
+    task = ledger.get_task(task_id)
+
+    if task is None:
+        print("Error: task not found")
+        print("reason=task_not_found")
+        sys.exit(1)
+
+    events = ledger.get_events(task_id)
+    has_review = any(e.get("event_type") == "review_completed" for e in events)
+
+    title = task.title if task.title else "N/A"
+    status = task.status if task.status else "not_recorded"
+
+    if has_review:
+        accepted = str(task.accepted).lower()
+        review_decision = task.review_decision if task.review_decision else "not_recorded"
+    else:
+        accepted = "not_recorded"
+        review_decision = "not_recorded"
+
+    print(f"Task ID: {task.task_id}")
+    print(f"Title: {title}")
+    print(f"Status: {status}")
+    print(f"Accepted: {accepted}")
+    print(f"Review decision: {review_decision}")
+    print(f"Ledger events: {len(events)}")
+    print("Timeline:")
+    for event in events:
+        timestamp = event.get("timestamp", "not_recorded")
+        etype = event.get("event_type", "unknown")
+        print(f"- {timestamp} | {etype}")
+    print("Signature verification: not checked by this command; run tc audit --verify-signatures")
+
+
 def main():
     parser = argparse.ArgumentParser(description="TriageCore Operator Workflow")
     subparsers = parser.add_subparsers(dest="command")
@@ -1707,6 +1747,12 @@ def main():
         default="pending",
         help="Simulate the human review decision (default: pending)",
     )
+
+    # task
+    task_parser = subparsers.add_parser("task", help="Inspect or show task evidence chains")
+    task_subparsers = task_parser.add_subparsers(dest="task_command")
+    task_show_parser = task_subparsers.add_parser("show", help="Show task evidence timeline")
+    task_show_parser.add_argument("task_id", type=str, help="The ID of the task to show")
 
     # task-envelope
     task_envelope_parser = subparsers.add_parser("task-envelope", help="Manage task envelopes")
@@ -2075,6 +2121,11 @@ def main():
         if not args.dry_run:
             demo_parser.error("the demo command currently requires --dry-run")
         tc_demo_dry_run(args.decision)
+    elif args.command == "task":
+        if args.task_command == "show":
+            tc_task_show(args.task_id)
+        else:
+            task_parser.error("task requires a subcommand: show")
     elif args.command == "task-envelope":
         if args.task_envelope_command == "preview":
             tc_task_envelope_preview()

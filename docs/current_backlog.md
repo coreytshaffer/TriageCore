@@ -6,6 +6,10 @@ This document summarizes the active TriageCore backlog after CR-095.
 
 ## Active GitHub Backlog
 
+- CR-098: Add Task Evidence Show Command
+  - Status: complete via CR-098
+  - Purpose: Read-only task evidence display. Shows the task's complete ledger-derived evidence timeline and status, fail closed on missing tasks, and prints note that signatures are not checked.
+
 - CR-097: Fail-Closed Identity Registry Load Handling
   - Status: complete via CR-097
   - Purpose: Catch unhandled identity registry IO/parse exceptions in reviewer-facing CLI paths and return a bounded `registry_load_failed` output without leaking stack traces or secret strings.
