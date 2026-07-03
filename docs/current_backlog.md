@@ -6,6 +6,10 @@ This document summarizes the active TriageCore backlog after CR-095.
 
 ## Active GitHub Backlog
 
+- CR-100: Record Route-Decision and Worker-Result Ledger Events
+  - Status: complete via CR-100
+  - Purpose: Add a standalone telemetry-only route/worker ledger event contract with fail-closed metadata validation, without changing routing, execution, admission, approval, or identity behavior.
+
 - CR-099: Reviewer Release Checkpoint and Changelog Cut
   - Status: complete via CR-099
   - Purpose: Bind repository state, changelog claims, and validation results into a clean dated checkpoint record.
@@ -148,5 +152,5 @@ For operator UX, future slices should focus on reviewability, export polish, and
 
 ## Next Candidate Slices
 
-- **Identity doctor orphaned-key warning**: Warn when private key files exist with no corresponding registry entry in `.triagecore/identity/agents.json`.
+- **Route/worker ledger integration review**: Decide whether the CR-100 standalone contract should be wired into an existing append seam, keeping it telemetry-only and separate from execution authority.
 - **Signature verification options on task show**: Decouple signature checking from CLI-abort mechanics so `tc task show --verify-signatures` verifies signatures safely.

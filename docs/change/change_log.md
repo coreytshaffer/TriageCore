@@ -5,6 +5,7 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+- Implemented CR-100 (Record Route-Decision and Worker-Result Ledger Events): Added a standalone metadata-only route/worker ledger event contract with validated builders, bounded worker statuses, prohibited raw/secret-key rejection, and deterministic JSONL append behavior without changing routing, execution, admission, approval, or identity semantics.
 
 ## [0.1.0-reviewer-checkpoint] - 2026-07-02
 - Implemented CR-098 (Add Task Evidence Show Command): Added a read-only CLI command `tc task show <task_id>` to display a task's complete ledger-derived evidence timeline and status, fail closed with a bounded `task_not_found` error on missing tasks, and cleanly print a note indicating signatures are not checked.
