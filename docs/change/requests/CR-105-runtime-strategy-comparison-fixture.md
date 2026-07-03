@@ -4,6 +4,8 @@
 
 Implemented
 
+Pushed and CI verified: `origin/main` at `99f7e7c`, GitHub Actions run `28686048246` passed on Python 3.10, 3.11, and 3.12 (Node 20 deprecation annotations only; no failures). Runtime strategy comparison fixtures now cover `heavy_only`, `small_first_compact`, `small_only`, and `over_orchestrated`, with derived model-call, handoff, total-token, backend-token, and quality-gate metrics. The `over_orchestrated` fixture provides a negative control showing that extra orchestration can cost more than the heavy-only baseline.
+
 ## Scope
 
 - Add deterministic comparison fixtures for multiple runtime strategy shapes.
