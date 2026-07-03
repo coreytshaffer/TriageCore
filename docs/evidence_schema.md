@@ -79,6 +79,12 @@ they do not replace exact backend token usage.
 | `emissions_gco2e_estimate` | Estimated operational carbon emissions. |
 | `grid_intensity_gco2e_per_kwh` | Carbon intensity assumption or measured value. |
 | `accepted` | Human accepted this output. |
+| `review_decision` | Recorded review outcome: `accepted`, `accepted_with_minor_edits`, or `rejected`. |
+| `task_outcome` | Whether the underlying task ended `resolved` or `unresolved`, as recorded or revised by review events. |
+| `reviewer_notes` | Human-readable rationale recorded with the review decision. |
+| `correction_summary` | Optional summary of corrections the reviewer applied or required. |
+| `affected_files` | Files the review decision or outcome revision identified as affected. |
+| `remaining_risk` | Optional reviewer note on risk left open after the decision. |
 | `human_review_minutes` | Time spent reviewing, when captured. |
 | `review_workload` | Optional reviewer workload label: `not_recorded`, `low`, `medium`, or `high`. |
 | `artifact_paths` | Generated handoff packets, reports, or output files. |
