@@ -63,6 +63,7 @@ tc audit --kind review_completed --last 10   # recorded approval/rejection state
 tc review list                               # tasks still awaiting a review decision
 tc audit --privacy-invariants                # persisted evidence contains no raw content
 tc audit --verify-signatures --kind route_decision   # provenance check for signed events, when present
+tc task show <task_id>                       # show one task's complete evidence chain (displays ledger evidence, does not verify signatures)
 ```
 
 Repeatable test evidence:
