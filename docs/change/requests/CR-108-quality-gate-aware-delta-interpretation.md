@@ -4,6 +4,8 @@
 
 Implemented
 
+Pushed and CI verified: `origin/main` at `faa76e7`, GitHub Actions run `28687021169` passed on Python 3.10, 3.11, and 3.12 (Node 20 deprecation annotations only; no failures). Strategy deltas now report cost and quality as two independent axes: the fixture rows all show `quality_not_evaluated`, and a regression test pins that a token-saving candidate with a failed gate keeps its `token_saving` cost interpretation while reporting `quality_failed` — quality gates qualify interpretations, they never rewrite them.
+
 ## Scope
 
 - Add a `quality_gate_effect` axis to strategy delta records, derived from the
