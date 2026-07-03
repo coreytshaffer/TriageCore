@@ -15,6 +15,24 @@ QUALITY_GATE_STATUSES = frozenset({"not_evaluated", "passed", "failed"})
 TOP_LEVEL_FIELDS = frozenset(
     {"schema_version", "kind", "task_id", "strategy", "steps", "totals", "quality_gate"}
 )
+DELTA_SCHEMA_VERSION = "runtime_strategy_delta.v1"
+DELTA_KIND = "runtime_strategy_delta"
+DELTA_INTERPRETATIONS = frozenset(
+    {
+        "token_saving",
+        "token_saving_with_added_handoff",
+        "token_neutral",
+        "orchestration_overhead",
+        "invalid_comparison",
+    }
+)
+INVALID_COMPARISON_REASONS = frozenset(
+    {
+        "task_id_mismatch",
+        "identical_strategy",
+        "zero_baseline_tokens",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -347,6 +365,139 @@ def build_strategy_comparison_fixture_records() -> list[RuntimeStrategyEvidenceR
 
 def build_strategy_comparison_fixture() -> RuntimeStrategyComparison:
     return RuntimeStrategyComparison(build_strategy_comparison_fixture_records())
+
+
+@dataclass(frozen=True)
+class RuntimeStrategyDelta:
+    baseline_strategy: str
+    candidate_strategy: str
+    interpretation: str
+    task_id: str | None = None
+    estimated_tokens_delta: int | None = None
+    estimated_percent_delta: float | None = None
+    model_calls_delta: int | None = None
+    handoffs_delta: int | None = None
+    invalid_reason: str | None = None
+    kind: str = DELTA_KIND
+    schema_version: str = DELTA_SCHEMA_VERSION
+
+    def __post_init__(self) -> None:
+        if self.kind != DELTA_KIND:
+            raise ValueError(f"kind must be {DELTA_KIND}")
+        _require_text(self.baseline_strategy, "baseline_strategy")
+        _require_text(self.candidate_strategy, "candidate_strategy")
+        if self.interpretation not in DELTA_INTERPRETATIONS:
+            raise ValueError(f"unsupported interpretation: {self.interpretation}")
+        if self.interpretation == "invalid_comparison":
+            if self.invalid_reason not in INVALID_COMPARISON_REASONS:
+                raise ValueError(
+                    f"unsupported invalid_comparison reason: {self.invalid_reason}"
+                )
+        elif self.invalid_reason is not None:
+            raise ValueError("invalid_reason is only allowed for invalid_comparison")
+
+        assert_persistent_privacy_safe(
+            self.to_dict(),
+            artifact_name="runtime strategy delta record",
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": self.schema_version,
+            "kind": self.kind,
+            "task_id": self.task_id,
+            "baseline_strategy": self.baseline_strategy,
+            "candidate_strategy": self.candidate_strategy,
+            "estimated_tokens_delta": self.estimated_tokens_delta,
+            "estimated_percent_delta": self.estimated_percent_delta,
+            "model_calls_delta": self.model_calls_delta,
+            "handoffs_delta": self.handoffs_delta,
+            "interpretation": self.interpretation,
+            "invalid_reason": self.invalid_reason,
+        }
+
+    def to_json(self) -> str:
+        return json.dumps(self.to_dict(), sort_keys=True, separators=(",", ":"))
+
+
+def compute_strategy_delta(
+    baseline: RuntimeStrategyEvidenceRecord,
+    candidate: RuntimeStrategyEvidenceRecord,
+) -> RuntimeStrategyDelta:
+    """Compare a candidate strategy record against a baseline record.
+
+    The result is a deterministic, metadata-only delta record. Interpretation
+    labels describe estimated token pressure only; they claim nothing about
+    output quality while quality gates are not evaluated.
+    """
+    if baseline.task_id != candidate.task_id:
+        return RuntimeStrategyDelta(
+            baseline_strategy=baseline.strategy,
+            candidate_strategy=candidate.strategy,
+            interpretation="invalid_comparison",
+            invalid_reason="task_id_mismatch",
+        )
+    if baseline.strategy == candidate.strategy:
+        return RuntimeStrategyDelta(
+            baseline_strategy=baseline.strategy,
+            candidate_strategy=candidate.strategy,
+            interpretation="invalid_comparison",
+            task_id=baseline.task_id,
+            invalid_reason="identical_strategy",
+        )
+    if baseline.totals.estimated_tokens == 0:
+        return RuntimeStrategyDelta(
+            baseline_strategy=baseline.strategy,
+            candidate_strategy=candidate.strategy,
+            interpretation="invalid_comparison",
+            task_id=baseline.task_id,
+            invalid_reason="zero_baseline_tokens",
+        )
+
+    tokens_delta = candidate.totals.estimated_tokens - baseline.totals.estimated_tokens
+    percent_delta = round(
+        tokens_delta / baseline.totals.estimated_tokens * 100,
+        1,
+    )
+    handoffs_delta = candidate.totals.handoffs - baseline.totals.handoffs
+
+    if tokens_delta == 0:
+        interpretation = "token_neutral"
+    elif tokens_delta > 0:
+        interpretation = "orchestration_overhead"
+    elif handoffs_delta > 0:
+        interpretation = "token_saving_with_added_handoff"
+    else:
+        interpretation = "token_saving"
+
+    return RuntimeStrategyDelta(
+        baseline_strategy=baseline.strategy,
+        candidate_strategy=candidate.strategy,
+        interpretation=interpretation,
+        task_id=baseline.task_id,
+        estimated_tokens_delta=tokens_delta,
+        estimated_percent_delta=percent_delta,
+        model_calls_delta=candidate.totals.model_calls - baseline.totals.model_calls,
+        handoffs_delta=handoffs_delta,
+    )
+
+
+def compute_fixture_strategy_deltas(
+    baseline_strategy: str = "heavy_only",
+) -> list[RuntimeStrategyDelta]:
+    """Compute deltas for every non-baseline fixture strategy against the baseline."""
+    records = {
+        record.strategy: record
+        for record in build_strategy_comparison_fixture_records()
+    }
+    if baseline_strategy not in records:
+        raise ValueError(f"unknown baseline strategy: {baseline_strategy}")
+    baseline = records[baseline_strategy]
+    return [
+        compute_strategy_delta(baseline, candidate)
+        for strategy, candidate in records.items()
+        if strategy != baseline_strategy
+    ]
 
 def runtime_strategy_evidence_from_mapping(
     payload: Mapping[str, Any],

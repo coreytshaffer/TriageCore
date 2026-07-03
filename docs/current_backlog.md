@@ -2,9 +2,13 @@
 
 ## Status
 
-This document summarizes the active TriageCore backlog after CR-095.
+This document summarizes the active TriageCore backlog after CR-106.
 
 ## Active GitHub Backlog
+
+- CR-106: Strategy Delta Calculation
+  - Status: complete via CR-106
+  - Purpose: Compare a candidate runtime strategy fixture against the heavy-only baseline and report token delta, percent delta, model-call delta, handoff delta, and a closed interpretation label, including the over-orchestrated negative control losing to the baseline.
 
 - CR-105: Runtime Strategy Comparison Fixture
   - Status: complete via CR-105

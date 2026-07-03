@@ -3,6 +3,7 @@ import json
 import pytest
 
 from triage_core.runtime_strategy_evidence import (
+    DELTA_SCHEMA_VERSION,
     SCHEMA_VERSION,
     RuntimeStrategyEvidenceRecord,
     RuntimeStrategyQualityGate,
@@ -12,8 +13,17 @@ from triage_core.runtime_strategy_evidence import (
     build_strategy_comparison_fixture,
     build_strategy_comparison_fixture_records,
     build_small_first_compact_fixture_record,
+    compute_fixture_strategy_deltas,
+    compute_strategy_delta,
     runtime_strategy_evidence_from_mapping,
 )
+
+
+def _fixture_records_by_strategy():
+    return {
+        record.strategy: record
+        for record in build_strategy_comparison_fixture_records()
+    }
 
 
 def test_small_first_compact_fixture_record_shape():
@@ -204,3 +214,180 @@ def test_strategy_comparison_fixture_derives_backend_totals():
         "lm_studio": 8100,
         "ollama": 7340,
     }
+
+
+def test_small_first_compact_delta_beats_heavy_only_baseline():
+    records = _fixture_records_by_strategy()
+
+    delta = compute_strategy_delta(
+        records["heavy_only"],
+        records["small_first_compact"],
+    )
+    data = delta.to_dict()
+
+    assert data["schema_version"] == DELTA_SCHEMA_VERSION
+    assert data["kind"] == "runtime_strategy_delta"
+    assert data["task_id"] == "fixture-doc-summary-001"
+    assert data["baseline_strategy"] == "heavy_only"
+    assert data["candidate_strategy"] == "small_first_compact"
+    assert data["estimated_tokens_delta"] == -2470
+    assert data["estimated_percent_delta"] == -51.5
+    assert data["model_calls_delta"] == 1
+    assert data["handoffs_delta"] == 1
+    assert data["interpretation"] == "token_saving_with_added_handoff"
+    assert data["invalid_reason"] is None
+
+
+def test_over_orchestrated_delta_loses_to_heavy_only_baseline():
+    records = _fixture_records_by_strategy()
+
+    delta = compute_strategy_delta(
+        records["heavy_only"],
+        records["over_orchestrated"],
+    )
+    data = delta.to_dict()
+
+    assert data["estimated_tokens_delta"] == 1790
+    assert data["estimated_percent_delta"] == 37.3
+    assert data["model_calls_delta"] == 3
+    assert data["handoffs_delta"] == 3
+    assert data["interpretation"] == "orchestration_overhead"
+
+
+def test_small_only_delta_is_token_saving_without_added_handoff():
+    records = _fixture_records_by_strategy()
+
+    delta = compute_strategy_delta(records["heavy_only"], records["small_only"])
+    data = delta.to_dict()
+
+    assert data["estimated_tokens_delta"] == -3080
+    assert data["estimated_percent_delta"] == -64.2
+    assert data["model_calls_delta"] == 0
+    assert data["handoffs_delta"] == 0
+    assert data["interpretation"] == "token_saving"
+
+
+def test_equal_token_totals_are_token_neutral():
+    baseline = _fixture_records_by_strategy()["heavy_only"]
+    candidate = build_runtime_strategy_evidence_record(
+        task_id=baseline.task_id,
+        strategy="heavy_only_alternate",
+        steps=[
+            RuntimeStrategyStep(
+                role="reviewer",
+                backend="lm_studio",
+                model_profile="heavy_reviewer_alt",
+                estimated_input_tokens=4200,
+                estimated_output_tokens=600,
+                schema_valid=True,
+            )
+        ],
+        handoffs=0,
+        quality_gate_status="not_evaluated",
+        quality_gate_reason="token-neutral synthetic candidate",
+    )
+
+    delta = compute_strategy_delta(baseline, candidate)
+
+    assert delta.estimated_tokens_delta == 0
+    assert delta.estimated_percent_delta == 0.0
+    assert delta.interpretation == "token_neutral"
+
+
+def test_task_id_mismatch_is_invalid_comparison():
+    records = _fixture_records_by_strategy()
+    other_task = build_runtime_strategy_evidence_record(
+        task_id="fixture-other-task-002",
+        strategy="small_only",
+        steps=[
+            RuntimeStrategyStep(
+                role="summarizer",
+                backend="ollama",
+                model_profile="small_summarizer",
+                estimated_input_tokens=100,
+                estimated_output_tokens=20,
+                schema_valid=True,
+            )
+        ],
+        handoffs=0,
+        quality_gate_status="not_evaluated",
+        quality_gate_reason="mismatched task fixture",
+    )
+
+    delta = compute_strategy_delta(records["heavy_only"], other_task)
+    data = delta.to_dict()
+
+    assert data["interpretation"] == "invalid_comparison"
+    assert data["invalid_reason"] == "task_id_mismatch"
+    assert data["task_id"] is None
+    assert data["estimated_tokens_delta"] is None
+    assert data["estimated_percent_delta"] is None
+
+
+def test_identical_strategy_is_invalid_comparison():
+    records = _fixture_records_by_strategy()
+
+    delta = compute_strategy_delta(records["heavy_only"], records["heavy_only"])
+
+    assert delta.interpretation == "invalid_comparison"
+    assert delta.invalid_reason == "identical_strategy"
+    assert delta.estimated_tokens_delta is None
+
+
+def test_zero_baseline_tokens_is_invalid_comparison():
+    zero_baseline = build_runtime_strategy_evidence_record(
+        task_id="fixture-doc-summary-001",
+        strategy="zero_baseline",
+        steps=[
+            RuntimeStrategyStep(
+                role="noop",
+                backend="ollama",
+                model_profile="noop_profile",
+                estimated_input_tokens=0,
+                estimated_output_tokens=0,
+                schema_valid=True,
+            )
+        ],
+        handoffs=0,
+        quality_gate_status="not_evaluated",
+        quality_gate_reason="zero-token synthetic baseline",
+    )
+    candidate = _fixture_records_by_strategy()["small_only"]
+
+    delta = compute_strategy_delta(zero_baseline, candidate)
+
+    assert delta.interpretation == "invalid_comparison"
+    assert delta.invalid_reason == "zero_baseline_tokens"
+    assert delta.estimated_percent_delta is None
+
+
+def test_fixture_strategy_deltas_cover_all_candidates():
+    deltas = {
+        delta.candidate_strategy: delta
+        for delta in compute_fixture_strategy_deltas()
+    }
+
+    assert set(deltas) == {"small_first_compact", "small_only", "over_orchestrated"}
+    assert all(
+        delta.baseline_strategy == "heavy_only" for delta in deltas.values()
+    )
+    assert deltas["small_first_compact"].interpretation == (
+        "token_saving_with_added_handoff"
+    )
+    assert deltas["small_only"].interpretation == "token_saving"
+    assert deltas["over_orchestrated"].interpretation == "orchestration_overhead"
+
+
+def test_delta_json_is_deterministic_and_metadata_only():
+    records = _fixture_records_by_strategy()
+
+    delta = compute_strategy_delta(
+        records["heavy_only"],
+        records["small_first_compact"],
+    )
+    encoded = delta.to_json()
+
+    assert encoded == delta.to_json()
+    assert "prompt" not in encoded
+    assert "raw_context" not in encoded
+    assert "model_output" not in encoded

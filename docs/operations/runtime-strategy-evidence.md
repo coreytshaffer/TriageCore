@@ -77,6 +77,58 @@ The fixture derives:
 
 The negative-control strategy matters because token-aware orchestration should be able to show when a multi-step plan costs more than the heavy-only baseline.
 
+## Strategy Delta Calculation
+
+`compute_strategy_delta(baseline, candidate)` compares two strategy records for the same task id and reports whether the candidate saves estimated tokens or adds orchestration overhead. The output is a deterministic, metadata-only delta record:
+
+```json
+{
+  "schema_version": "runtime_strategy_delta.v1",
+  "kind": "runtime_strategy_delta",
+  "task_id": "fixture-doc-summary-001",
+  "baseline_strategy": "heavy_only",
+  "candidate_strategy": "small_first_compact",
+  "estimated_tokens_delta": -2470,
+  "estimated_percent_delta": -51.5,
+  "model_calls_delta": 1,
+  "handoffs_delta": 1,
+  "interpretation": "token_saving_with_added_handoff",
+  "invalid_reason": null
+}
+```
+
+The negative control against the same baseline:
+
+```json
+{
+  "baseline_strategy": "heavy_only",
+  "candidate_strategy": "over_orchestrated",
+  "estimated_tokens_delta": 1790,
+  "estimated_percent_delta": 37.3,
+  "interpretation": "orchestration_overhead"
+}
+```
+
+Interpretation labels are a closed, deterministic vocabulary:
+
+| Label | Rule |
+|---|---|
+| `token_neutral` | Candidate and baseline have equal estimated tokens. |
+| `orchestration_overhead` | Candidate costs more estimated tokens than the baseline. |
+| `token_saving_with_added_handoff` | Candidate saves estimated tokens but adds handoffs. |
+| `token_saving` | Candidate saves estimated tokens without adding handoffs. |
+| `invalid_comparison` | Records are not comparable; `invalid_reason` is one of `task_id_mismatch`, `identical_strategy`, or `zero_baseline_tokens`. |
+
+Delta rules:
+
+- `estimated_tokens_delta` is candidate minus baseline estimated tokens.
+- `estimated_percent_delta` is the token delta as a percentage of the baseline, rounded to one decimal place.
+- `model_calls_delta` and `handoffs_delta` are candidate minus baseline counts.
+- Invalid comparisons return `invalid_comparison` with null deltas instead of raising.
+- The delta record must pass the persistent privacy invariant.
+
+Interpretation labels describe estimated token pressure only. While both records carry `quality_gate.status = "not_evaluated"`, a `token_saving` label claims nothing about output quality — a cheaper strategy that produces unusable output is not a saving.
+
 ## Validation Rules
 
 - Each step must declare a role, backend, model profile, estimated input tokens, estimated output tokens, and schema-validity status.
