@@ -6,6 +6,10 @@ This document summarizes the active TriageCore backlog after CR-095.
 
 ## Active GitHub Backlog
 
+- CR-103: Add Route/Worker Ledger Inspection Runbook Check
+  - Status: complete via CR-103
+  - Purpose: Harden the reviewer runbook and focused regression test so the CR-100 through CR-102 route-worker telemetry path remains one-command verifiable without new CLI or runtime behavior.
+
 - CR-102: Add Route/Worker Ledger Fixture Demo
   - Status: complete via CR-102
   - Purpose: Provide a deterministic metadata-only demo ledger and operations note for reviewers to inspect the CR-100/CR-101 route-worker telemetry path without runtime integration.
@@ -160,5 +164,5 @@ For operator UX, future slices should focus on reviewability, export polish, and
 
 ## Next Candidate Slices
 
-- **Route/worker ledger integration review**: Decide whether any explicit append seam should call the CR-100 helper, keeping the behavior telemetry-only and separate from execution authority.
+- **Reviewer checkpoint or release-hygiene slice**: Freeze the completed route-worker reviewer lane into a concise checkpoint, packaging note, or release-hygiene update instead of adding more telemetry features.
 - **Signature verification options on task show**: Decouple signature checking from CLI-abort mechanics so `tc task show --verify-signatures` verifies signatures safely.

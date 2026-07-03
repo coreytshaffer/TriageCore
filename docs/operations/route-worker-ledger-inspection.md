@@ -12,6 +12,8 @@ From the repository root:
 tc route-worker-ledger inspect --ledger docs/examples/route_worker_ledger_demo.jsonl
 ```
 
+This is the reviewer smoke path for the route/worker ledger lane. It validates the fixture through the same CR-101 inspection path used for any explicit route/worker telemetry ledger.
+
 Expected summary shape:
 
 ```text
@@ -28,6 +30,27 @@ Mutation: none
 
 The exact `Ledger:` path line depends on the operator's working directory.
 
+## Runbook Check
+
+Reviewers can verify the route/worker telemetry path with one command:
+
+```powershell
+tc route-worker-ledger inspect --ledger docs/examples/route_worker_ledger_demo.jsonl
+```
+
+Treat the check as passed when the output confirms all of the following:
+
+- `Validation: passed`
+- `Total records: 5`
+- `route_decision_recorded: 2`
+- `worker_result_recorded: 3`
+- `blocked: 1`
+- `failed: 1`
+- `succeeded: 1`
+- `Mutation: none`
+
+This check is read-only. It does not create files, append telemetry, execute workers, or load runtime state outside the explicit fixture path.
+
 ## What This Demonstrates
 
 - A route decision can be recorded as a metadata-only fact.
@@ -37,7 +60,7 @@ The exact `Ledger:` path line depends on the operator's working directory.
 
 ## Privacy Boundary
 
-The demo ledger intentionally excludes prompts, raw request payloads, raw model outputs, secrets, credentials, environment variables, and exception traces. Evidence references are short labels only.
+The demo ledger intentionally excludes prompts, raw request payloads, raw model outputs, secrets, credentials, environment variables, and unsanitized exception traces. Evidence references are short labels only.
 
 ## Non-Goals
 
