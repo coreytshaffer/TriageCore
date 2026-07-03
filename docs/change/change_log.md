@@ -5,6 +5,7 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+- Implemented CR-101 (Add Route/Worker Ledger Inspection CLI): Added `tc route-worker-ledger inspect --ledger <path>` to validate explicit CR-100 telemetry JSONL files and print read-only reviewer summaries by event type and worker status, failing closed on missing files, malformed JSON, invalid records, and unknown or prohibited fields without changing routing, execution, admission, approval, identity, or persistence defaults.
 - Implemented CR-100 (Record Route-Decision and Worker-Result Ledger Events): Added a standalone metadata-only route/worker ledger event contract with validated builders, bounded worker statuses, prohibited raw/secret-key rejection, and deterministic JSONL append behavior without changing routing, execution, admission, approval, or identity semantics.
 
 ## [0.1.0-reviewer-checkpoint] - 2026-07-02

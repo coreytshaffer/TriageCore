@@ -6,6 +6,10 @@ This document summarizes the active TriageCore backlog after CR-095.
 
 ## Active GitHub Backlog
 
+- CR-101: Add Route/Worker Ledger Inspection CLI
+  - Status: complete via CR-101
+  - Purpose: Add an explicit-path, read-only CLI inspection command for CR-100 route/worker telemetry JSONL files, with fail-closed validation and reviewer summary counts.
+
 - CR-100: Record Route-Decision and Worker-Result Ledger Events
   - Status: complete via CR-100
   - Purpose: Add a standalone telemetry-only route/worker ledger event contract with fail-closed metadata validation, without changing routing, execution, admission, approval, or identity behavior.
@@ -152,5 +156,5 @@ For operator UX, future slices should focus on reviewability, export polish, and
 
 ## Next Candidate Slices
 
-- **Route/worker ledger integration review**: Decide whether the CR-100 standalone contract should be wired into an existing append seam, keeping it telemetry-only and separate from execution authority.
+- **Route/worker ledger example fixture**: Add a small public sample JSONL fixture for CR-100/CR-101 reviewer walkthroughs without wiring it into runtime.
 - **Signature verification options on task show**: Decouple signature checking from CLI-abort mechanics so `tc task show --verify-signatures` verifies signatures safely.

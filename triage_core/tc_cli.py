@@ -31,6 +31,11 @@ from triage_core.model_manifest import (
     validate_model_manifest,
 )
 from triage_core.privacy_invariants import find_forbidden_persistent_fields
+from triage_core.route_worker_ledger import (
+    RouteWorkerLedgerValidationError,
+    format_route_worker_ledger_inspection,
+    inspect_route_worker_ledger,
+)
 import triage_core.diagnostics as diagnostics
 import triage_core.review_queue as review_queue
 def _find_cr_file(cr_id: str) -> str:
@@ -1535,6 +1540,25 @@ def tc_packet_render(task_path: str, model_profile: str, includes: list[str], ou
         print(res.content)
 
 
+def tc_route_worker_ledger_inspect(ledger_path: str) -> None:
+    try:
+        summary = inspect_route_worker_ledger(ledger_path)
+    except FileNotFoundError:
+        print(f"Error: route/worker ledger not found: {ledger_path}")
+        print("reason=ledger_not_found")
+        sys.exit(1)
+    except OSError as exc:
+        print(f"Error reading route/worker ledger: {exc}")
+        print("reason=ledger_read_failed")
+        sys.exit(1)
+    except RouteWorkerLedgerValidationError as exc:
+        print(f"Error: invalid route/worker ledger: {exc}")
+        print("reason=route_worker_ledger_invalid")
+        sys.exit(1)
+
+    print(format_route_worker_ledger_inspection(summary))
+
+
 def tc_task_show(task_id: str) -> None:
     from triage_core.task_ledger import TaskLedger
 
@@ -1746,6 +1770,24 @@ def main():
         choices=["pending", "approve", "reject"],
         default="pending",
         help="Simulate the human review decision (default: pending)",
+    )
+
+    # route-worker-ledger
+    route_worker_ledger_parser = subparsers.add_parser(
+        "route-worker-ledger",
+        help="Inspect route/worker telemetry ledgers",
+    )
+    route_worker_ledger_subparsers = route_worker_ledger_parser.add_subparsers(
+        dest="route_worker_ledger_command"
+    )
+    route_worker_ledger_inspect_parser = route_worker_ledger_subparsers.add_parser(
+        "inspect",
+        help="Validate and summarize a route/worker telemetry JSONL file",
+    )
+    route_worker_ledger_inspect_parser.add_argument(
+        "--ledger",
+        required=True,
+        help="Explicit path to a route/worker telemetry JSONL file",
     )
 
     # task
@@ -2121,6 +2163,13 @@ def main():
         if not args.dry_run:
             demo_parser.error("the demo command currently requires --dry-run")
         tc_demo_dry_run(args.decision)
+    elif args.command == "route-worker-ledger":
+        if args.route_worker_ledger_command == "inspect":
+            tc_route_worker_ledger_inspect(args.ledger)
+        else:
+            route_worker_ledger_parser.error(
+                "route-worker-ledger requires a subcommand: inspect"
+            )
     elif args.command == "task":
         if args.task_command == "show":
             tc_task_show(args.task_id)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -18,6 +18,23 @@ ROUTE_WORKER_LEDGER_SCHEMA_VERSION = "route-worker-ledger.v1"
 ROUTE_DECISION_RECORDED = "route_decision_recorded"
 WORKER_RESULT_RECORDED = "worker_result_recorded"
 WORKER_RESULT_STATUSES = frozenset({"succeeded", "failed", "blocked", "skipped"})
+
+ROUTE_WORKER_TOP_LEVEL_FIELDS = frozenset(
+    {"schema_version", "event_type", "task_id", "request_id", "timestamp", "payload"}
+)
+ROUTE_DECISION_PAYLOAD_FIELDS = frozenset(
+    {"selected_route", "backend", "worker_class", "decision_basis", "evidence_refs"}
+)
+WORKER_RESULT_PAYLOAD_FIELDS = frozenset(
+    {
+        "worker_id",
+        "backend",
+        "status",
+        "duration_seconds",
+        "error_category",
+        "evidence_refs",
+    }
+)
 
 PROHIBITED_ROUTE_WORKER_KEYS = FORBIDDEN_PERSISTENT_KEYS | frozenset(
     {
@@ -44,6 +61,14 @@ class RouteWorkerLedgerValidationError(ValueError):
 
     def __str__(self) -> str:
         return self.reason
+
+
+@dataclass
+class RouteWorkerLedgerInspectionSummary:
+    ledger_path: str
+    total_records: int = 0
+    event_type_counts: dict[str, int] = field(default_factory=dict)
+    worker_status_counts: dict[str, int] = field(default_factory=dict)
 
 
 def build_route_decision_recorded_event(
@@ -115,6 +140,7 @@ def build_worker_result_recorded_event(
 def validate_route_worker_ledger_event(event: Mapping[str, Any]) -> None:
     """Fail closed for incomplete telemetry or unsafe persistent fields."""
     _reject_prohibited_keys(event)
+    _reject_unknown_keys(event, ROUTE_WORKER_TOP_LEVEL_FIELDS, path="$")
     assert_persistent_privacy_safe(
         event,
         artifact_name="route worker ledger event",
@@ -134,8 +160,10 @@ def validate_route_worker_ledger_event(event: Mapping[str, Any]) -> None:
         raise RouteWorkerLedgerValidationError("payload must be an object")
 
     if event_type == ROUTE_DECISION_RECORDED:
+        _reject_unknown_keys(payload, ROUTE_DECISION_PAYLOAD_FIELDS, path="$.payload")
         _validate_route_decision_payload(payload)
     elif event_type == WORKER_RESULT_RECORDED:
+        _reject_unknown_keys(payload, WORKER_RESULT_PAYLOAD_FIELDS, path="$.payload")
         _validate_worker_result_payload(payload)
     else:
         raise RouteWorkerLedgerValidationError(f"unsupported event_type: {event_type}")
@@ -154,6 +182,75 @@ def append_route_worker_ledger_event(
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(dict(event), sort_keys=True, separators=(",", ":")))
         handle.write("\n")
+
+
+def inspect_route_worker_ledger(ledger_path: str | Path) -> RouteWorkerLedgerInspectionSummary:
+    """Read and summarize one explicit route/worker telemetry JSONL file."""
+    path = Path(ledger_path)
+    if not path.exists():
+        raise FileNotFoundError(str(path))
+    if not path.is_file():
+        raise RouteWorkerLedgerValidationError("ledger path must be a file")
+
+    summary = RouteWorkerLedgerInspectionSummary(ledger_path=str(path))
+    with path.open("r", encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, start=1):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise RouteWorkerLedgerValidationError(
+                    f"line {line_number}: malformed JSON ({exc.msg})"
+                ) from exc
+            if not isinstance(event, Mapping):
+                raise RouteWorkerLedgerValidationError(
+                    f"line {line_number}: event must be an object"
+                )
+            try:
+                validate_route_worker_ledger_event(event)
+            except (PersistentPrivacyInvariantError, RouteWorkerLedgerValidationError) as exc:
+                raise RouteWorkerLedgerValidationError(f"line {line_number}: {exc}") from exc
+
+            event_type = str(event["event_type"])
+            summary.total_records += 1
+            summary.event_type_counts[event_type] = summary.event_type_counts.get(event_type, 0) + 1
+            if event_type == WORKER_RESULT_RECORDED:
+                payload = event["payload"]
+                status = str(payload["status"])
+                summary.worker_status_counts[status] = summary.worker_status_counts.get(status, 0) + 1
+
+    return summary
+
+
+def format_route_worker_ledger_inspection(
+    summary: RouteWorkerLedgerInspectionSummary,
+) -> str:
+    """Render a reviewer-oriented route/worker telemetry summary."""
+    lines = [
+        "Route/Worker Ledger Inspection",
+        f"Ledger: {summary.ledger_path}",
+        "Validation: passed",
+        f"Total records: {summary.total_records}",
+        "Event type counts:",
+    ]
+
+    if summary.event_type_counts:
+        for event_type in sorted(summary.event_type_counts):
+            lines.append(f"- {event_type}: {summary.event_type_counts[event_type]}")
+    else:
+        lines.append("- none: 0")
+
+    lines.append("Worker result counts by status:")
+    if summary.worker_status_counts:
+        for status in sorted(summary.worker_status_counts):
+            lines.append(f"- {status}: {summary.worker_status_counts[status]}")
+    else:
+        lines.append("- none: 0")
+
+    lines.append("Mutation: none")
+    return "\n".join(lines)
 
 
 def _validate_route_decision_payload(payload: Mapping[str, Any]) -> None:
@@ -183,6 +280,25 @@ def _validate_worker_result_payload(payload: Mapping[str, Any]) -> None:
     if "error_category" in payload and payload["error_category"] is not None:
         _require_text(payload, "error_category")
     _validate_evidence_refs(payload.get("evidence_refs", []))
+
+
+def _reject_unknown_keys(
+    value: Mapping[str, Any],
+    allowed_keys: frozenset[str],
+    *,
+    path: str,
+) -> None:
+    for key in value:
+        key_text = str(key)
+        if key_text not in allowed_keys:
+            child_path = (
+                f"{path}.{key_text}"
+                if key_text.isidentifier()
+                else f"{path}[{key_text!r}]"
+            )
+            raise RouteWorkerLedgerValidationError(
+                f"unknown field: {child_path}"
+            )
 
 
 def _require_text(container: Mapping[str, Any], key: str) -> str:
