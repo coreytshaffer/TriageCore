@@ -60,6 +60,18 @@ class RotationRollbackError(AgentIdentityError):
     pass
 
 
+class IdentityRegistryUnreadableError(AgentIdentityError):
+    pass
+
+
+class IdentityRegistryMalformedError(AgentIdentityError):
+    pass
+
+
+class InvalidIdentityRecordError(AgentIdentityError):
+    pass
+
+
 @dataclass
 class RotationResult:
     agent_id: str
@@ -282,29 +294,37 @@ class AgentIdentityRegistry:
             return self._identities
 
         try:
-            payload = json.loads(self.registry_path.read_text(encoding="utf-8"))
+            content = self.registry_path.read_text(encoding="utf-8")
+        except (OSError, PermissionError) as exc:
+            raise IdentityRegistryUnreadableError("Identity registry unreadable") from exc
+
+        try:
+            payload = json.loads(content)
             metadata_items = payload["agents"]
             if not isinstance(metadata_items, list):
                 raise TypeError("agents must be a list")
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+            raise IdentityRegistryMalformedError("Identity registry is malformed.") from exc
 
-            identities: Dict[str, List[AgentIdentity]] = {}
-            for metadata in metadata_items:
+        identities: Dict[str, List[AgentIdentity]] = {}
+        for metadata in metadata_items:
+            try:
                 identity = AgentIdentity.from_public_metadata(metadata)
                 if identity.agent_id not in identities:
                     identities[identity.agent_id] = []
 
                 for existing in identities[identity.agent_id]:
                     if existing.public_key_fingerprint == identity.public_key_fingerprint:
-                        raise AgentIdentityError(f"Duplicate fingerprint {identity.public_key_fingerprint} for {identity.agent_id}")
+                        raise ValueError(f"Duplicate fingerprint {identity.public_key_fingerprint} for {identity.agent_id}")
                     if identity.status == ACTIVE_STATUS and existing.status == ACTIVE_STATUS:
-                        raise AgentIdentityError(f"Multiple active keys found for {identity.agent_id}")
+                        raise ValueError(f"Multiple active keys found for {identity.agent_id}")
 
                 if identity.status == ROTATED_STATUS and not identity.rotated_at:
-                    raise AgentIdentityError(f"Rotated identity '{identity.agent_id}' requires a rotated_at timestamp.")
+                    raise ValueError(f"Rotated identity '{identity.agent_id}' requires a rotated_at timestamp.")
 
                 identities[identity.agent_id].append(identity)
-        except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
-            raise AgentIdentityError("Identity registry is malformed.") from exc
+            except Exception as exc:
+                raise InvalidIdentityRecordError(f"Invalid identity record: {exc}") from exc
 
         self._identities = identities
         self._loaded = True

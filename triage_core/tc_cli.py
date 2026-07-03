@@ -289,8 +289,8 @@ def tc_audit_signed_smoke_test(agent_id: str) -> None:
     ledger_path.parent.mkdir(parents=True, exist_ok=True)
     ledger = TaskLedger(str(ledger_path.parent))
     registry = _identity_registry()
-    registry.load()
     try:
+        registry.load()
         ledger.append_signed_route_audit_event(
             "audit-signed-smoke-test",
             payload,
@@ -298,6 +298,8 @@ def tc_audit_signed_smoke_test(agent_id: str) -> None:
             signing_agent_id=agent_id,
         )
     except AgentIdentityError as e:
+        if _handle_registry_load_failure(registry.registry_path, e):
+            return
         print(f"Error: {e}")
         sys.exit(1)
 
@@ -323,8 +325,8 @@ def tc_audit_signed_route_decision_smoke_test(agent_id: str) -> None:
     ledger_path.parent.mkdir(parents=True, exist_ok=True)
     ledger = TaskLedger(str(ledger_path.parent))
     registry = _identity_registry()
-    registry.load()
     try:
+        registry.load()
         ledger.append_signed_route_decision_event(
             "audit-signed-route-decision-smoke-test",
             payload,
@@ -332,6 +334,8 @@ def tc_audit_signed_route_decision_smoke_test(agent_id: str) -> None:
             signing_agent_id=agent_id,
         )
     except AgentIdentityError as e:
+        if _handle_registry_load_failure(registry.registry_path, e):
+            return
         print(f"Error: {e}")
         sys.exit(1)
 
@@ -414,7 +418,12 @@ def tc_audit_verify_signatures(kind: str = "route_audit", strict: bool = False) 
         print(f"Error: {ledger_path} not found.")
         sys.exit(1)
 
-    summary = verify_ledger_event_signatures_in_ledger(ledger_path, event_type=kind)
+    try:
+        summary = verify_ledger_event_signatures_in_ledger(ledger_path, event_type=kind)
+    except AgentIdentityError as e:
+        if _handle_registry_load_failure(_identity_registry().registry_path, e):
+            return
+        raise
     status = "failed" if summary.should_fail(strict=strict) else "passed"
     strict_mode = "on" if strict else "off"
     label = supported_event_types[kind]
@@ -541,9 +550,36 @@ def tc_identity_init(agent_id: str, role: str, capabilities: List[str]) -> None:
     print(f"Private key path: {key_path}")
 
 
+def _handle_registry_load_failure(registry_path: str | Path, e: AgentIdentityError) -> bool:
+    from triage_core.agent_identity import (
+        IdentityRegistryUnreadableError,
+        IdentityRegistryMalformedError,
+        InvalidIdentityRecordError,
+    )
+    category = None
+    if isinstance(e, IdentityRegistryUnreadableError):
+        category = "unreadable_registry"
+    elif isinstance(e, IdentityRegistryMalformedError):
+        category = "malformed_registry"
+    elif isinstance(e, InvalidIdentityRecordError):
+        category = "invalid_identity_record"
+    if category:
+        print("Error: identity registry load failed")
+        print("reason=registry_load_failed")
+        print(f"registry={registry_path}")
+        print(f"category={category}")
+        sys.exit(1)
+
+    return False
+
+
 def tc_identity_list() -> None:
     registry = _identity_registry()
-    identities = registry.load()
+    try:
+        identities = registry.load()
+    except AgentIdentityError as e:
+        if not _handle_registry_load_failure(registry.registry_path, e):
+            raise
     if not identities:
         print(f"No identities found in {registry.registry_path}.")
         return

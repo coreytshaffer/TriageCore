@@ -40,6 +40,16 @@ Route decision signature verification failed: event_type=route_decision valid_si
 FAIL event_type=route_decision task_id=route-task agent_id=router-tools reason=signature_mismatch
 ```
 
+## Registry Load Failure Example
+If the local identity registry is corrupted or unreadable, CLI verification fails closed immediately with static bounded output, rather than leaking stack traces or secret bytes:
+
+```text
+Error: identity registry load failed
+reason=registry_load_failed
+registry=.triagecore/identity/agents.json
+category=malformed_registry
+```
+
 ## Boundary
 A valid signature proves provenance and tamper evidence only.
 
