@@ -55,6 +55,28 @@ The intended local architecture is:
 
 The record describes this strategy. It does not execute it.
 
+## Strategy Comparison Fixtures
+
+The deterministic comparison fixture covers four strategies for the same task id:
+
+| Strategy | Purpose | Expected interpretation |
+|---|---|---|
+| `heavy_only` | Baseline single LM Studio reviewer call | Simple but sends the full context to the heavy model. |
+| `small_first_compact` | Ollama extractor followed by LM Studio reviewer | Tests whether compact worker evidence can reduce heavy-model context. |
+| `small_only` | Single Ollama summarizer path | Cheapest local estimate, with quality still unevaluated. |
+| `over_orchestrated` | Router, extractor, critic, then heavy reviewer | Negative-control fixture showing that extra orchestration can waste tokens. |
+
+The fixture derives:
+
+- strategy name
+- model-call count
+- handoff count
+- estimated total tokens
+- estimated tokens by backend
+- quality-gate status
+
+The negative-control strategy matters because token-aware orchestration should be able to show when a multi-step plan costs more than the heavy-only baseline.
+
 ## Validation Rules
 
 - Each step must declare a role, backend, model profile, estimated input tokens, estimated output tokens, and schema-validity status.

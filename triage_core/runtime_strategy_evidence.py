@@ -94,6 +94,51 @@ class RuntimeStrategyQualityGate:
 
 
 @dataclass(frozen=True)
+class RuntimeStrategyComparison:
+    records: Sequence["RuntimeStrategyEvidenceRecord"]
+
+    def __post_init__(self) -> None:
+        if len(self.records) < 2:
+            raise ValueError("comparison requires at least two strategy records")
+        task_ids = {record.task_id for record in self.records}
+        if len(task_ids) != 1:
+            raise ValueError("comparison records must share one task_id")
+        strategies = [record.strategy for record in self.records]
+        if len(set(strategies)) != len(strategies):
+            raise ValueError("comparison strategies must be unique")
+
+    @property
+    def task_id(self) -> str:
+        return self.records[0].task_id
+
+    def strategy_names(self) -> list[str]:
+        return [record.strategy for record in self.records]
+
+    def estimated_tokens_by_backend(self) -> dict[str, int]:
+        totals: dict[str, int] = {}
+        for record in self.records:
+            for step in record.steps:
+                totals[step.backend] = totals.get(step.backend, 0) + step.estimated_total_tokens
+        return dict(sorted(totals.items()))
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "task_id": self.task_id,
+            "strategies": [
+                {
+                    "strategy": record.strategy,
+                    "estimated_total_tokens": record.totals.estimated_tokens,
+                    "model_calls": record.totals.model_calls,
+                    "handoffs": record.totals.handoffs,
+                    "quality_gate_status": record.quality_gate.status,
+                    "estimated_tokens_by_backend": _tokens_by_backend(record),
+                }
+                for record in self.records
+            ],
+            "estimated_tokens_by_backend": self.estimated_tokens_by_backend(),
+        }
+
+@dataclass(frozen=True)
 class RuntimeStrategyEvidenceRecord:
     task_id: str
     strategy: str
@@ -192,6 +237,117 @@ def build_small_first_compact_fixture_record() -> RuntimeStrategyEvidenceRecord:
     )
 
 
+def build_strategy_comparison_fixture_records() -> list[RuntimeStrategyEvidenceRecord]:
+    task_id = "fixture-doc-summary-001"
+    quality_status = "not_evaluated"
+    quality_reason = "measurement-only strategy comparison fixture"
+    return [
+        build_runtime_strategy_evidence_record(
+            task_id=task_id,
+            strategy="heavy_only",
+            steps=[
+                RuntimeStrategyStep(
+                    role="reviewer",
+                    backend="lm_studio",
+                    model_profile="heavy_reviewer",
+                    estimated_input_tokens=4200,
+                    estimated_output_tokens=600,
+                    schema_valid=True,
+                )
+            ],
+            handoffs=0,
+            quality_gate_status=quality_status,
+            quality_gate_reason=quality_reason,
+        ),
+        build_runtime_strategy_evidence_record(
+            task_id=task_id,
+            strategy="small_first_compact",
+            steps=[
+                RuntimeStrategyStep(
+                    role="extractor",
+                    backend="ollama",
+                    model_profile="small_extractor",
+                    estimated_input_tokens=1200,
+                    estimated_output_tokens=180,
+                    schema_valid=True,
+                ),
+                RuntimeStrategyStep(
+                    role="reviewer",
+                    backend="lm_studio",
+                    model_profile="heavy_reviewer",
+                    estimated_input_tokens=600,
+                    estimated_output_tokens=350,
+                    schema_valid=True,
+                ),
+            ],
+            handoffs=1,
+            quality_gate_status=quality_status,
+            quality_gate_reason=quality_reason,
+        ),
+        build_runtime_strategy_evidence_record(
+            task_id=task_id,
+            strategy="small_only",
+            steps=[
+                RuntimeStrategyStep(
+                    role="summarizer",
+                    backend="ollama",
+                    model_profile="small_summarizer",
+                    estimated_input_tokens=1300,
+                    estimated_output_tokens=420,
+                    schema_valid=True,
+                )
+            ],
+            handoffs=0,
+            quality_gate_status=quality_status,
+            quality_gate_reason=quality_reason,
+        ),
+        build_runtime_strategy_evidence_record(
+            task_id=task_id,
+            strategy="over_orchestrated",
+            steps=[
+                RuntimeStrategyStep(
+                    role="router",
+                    backend="ollama",
+                    model_profile="tiny_router",
+                    estimated_input_tokens=900,
+                    estimated_output_tokens=120,
+                    schema_valid=True,
+                ),
+                RuntimeStrategyStep(
+                    role="extractor",
+                    backend="ollama",
+                    model_profile="small_extractor",
+                    estimated_input_tokens=1200,
+                    estimated_output_tokens=220,
+                    schema_valid=True,
+                ),
+                RuntimeStrategyStep(
+                    role="critic",
+                    backend="ollama",
+                    model_profile="small_critic",
+                    estimated_input_tokens=1500,
+                    estimated_output_tokens=300,
+                    schema_valid=True,
+                ),
+                RuntimeStrategyStep(
+                    role="reviewer",
+                    backend="lm_studio",
+                    model_profile="heavy_reviewer",
+                    estimated_input_tokens=1800,
+                    estimated_output_tokens=550,
+                    schema_valid=True,
+                ),
+            ],
+            handoffs=3,
+            quality_gate_status=quality_status,
+            quality_gate_reason=quality_reason,
+        ),
+    ]
+
+
+def build_strategy_comparison_fixture() -> RuntimeStrategyComparison:
+    return RuntimeStrategyComparison(build_strategy_comparison_fixture_records())
+
 def runtime_strategy_evidence_from_mapping(
     payload: Mapping[str, Any],
 ) -> RuntimeStrategyEvidenceRecord:
@@ -279,6 +435,12 @@ def _mapping_bool(payload: Mapping[str, Any], key: str) -> bool:
         raise ValueError(f"{key} must be a boolean")
     return value
 
+
+def _tokens_by_backend(record: RuntimeStrategyEvidenceRecord) -> dict[str, int]:
+    totals: dict[str, int] = {}
+    for step in record.steps:
+        totals[step.backend] = totals.get(step.backend, 0) + step.estimated_total_tokens
+    return dict(sorted(totals.items()))
 
 def _reject_unknown_top_level_fields(payload: Mapping[str, Any]) -> None:
     for key in payload:

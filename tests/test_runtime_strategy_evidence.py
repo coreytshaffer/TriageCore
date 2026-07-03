@@ -9,6 +9,8 @@ from triage_core.runtime_strategy_evidence import (
     RuntimeStrategyStep,
     RuntimeStrategyTotals,
     build_runtime_strategy_evidence_record,
+    build_strategy_comparison_fixture,
+    build_strategy_comparison_fixture_records,
     build_small_first_compact_fixture_record,
     runtime_strategy_evidence_from_mapping,
 )
@@ -133,3 +135,72 @@ def test_mapping_loader_round_trips_record():
     loaded = runtime_strategy_evidence_from_mapping(original.to_dict())
 
     assert loaded.to_dict() == original.to_dict()
+
+def test_strategy_comparison_fixture_contains_expected_strategies():
+    records = build_strategy_comparison_fixture_records()
+
+    assert [record.strategy for record in records] == [
+        "heavy_only",
+        "small_first_compact",
+        "small_only",
+        "over_orchestrated",
+    ]
+    assert {record.task_id for record in records} == {"fixture-doc-summary-001"}
+    assert {record.quality_gate.status for record in records} == {"not_evaluated"}
+
+
+def test_strategy_comparison_fixture_derives_per_strategy_metrics():
+    comparison = build_strategy_comparison_fixture()
+    data = comparison.to_dict()
+    strategies = {item["strategy"]: item for item in data["strategies"]}
+
+    assert strategies["heavy_only"] == {
+        "strategy": "heavy_only",
+        "estimated_total_tokens": 4800,
+        "model_calls": 1,
+        "handoffs": 0,
+        "quality_gate_status": "not_evaluated",
+        "estimated_tokens_by_backend": {"lm_studio": 4800},
+    }
+    assert strategies["small_first_compact"] == {
+        "strategy": "small_first_compact",
+        "estimated_total_tokens": 2330,
+        "model_calls": 2,
+        "handoffs": 1,
+        "quality_gate_status": "not_evaluated",
+        "estimated_tokens_by_backend": {"lm_studio": 950, "ollama": 1380},
+    }
+    assert strategies["small_only"] == {
+        "strategy": "small_only",
+        "estimated_total_tokens": 1720,
+        "model_calls": 1,
+        "handoffs": 0,
+        "quality_gate_status": "not_evaluated",
+        "estimated_tokens_by_backend": {"ollama": 1720},
+    }
+
+
+def test_over_orchestrated_fixture_is_negative_control():
+    comparison = build_strategy_comparison_fixture()
+    strategies = {item["strategy"]: item for item in comparison.to_dict()["strategies"]}
+
+    assert strategies["over_orchestrated"]["estimated_total_tokens"] == 6590
+    assert strategies["over_orchestrated"]["model_calls"] == 4
+    assert strategies["over_orchestrated"]["handoffs"] == 3
+    assert strategies["over_orchestrated"]["estimated_total_tokens"] > strategies["heavy_only"]["estimated_total_tokens"]
+    assert strategies["over_orchestrated"]["estimated_total_tokens"] > strategies["small_first_compact"]["estimated_total_tokens"]
+
+
+def test_strategy_comparison_fixture_derives_backend_totals():
+    comparison = build_strategy_comparison_fixture()
+
+    assert comparison.strategy_names() == [
+        "heavy_only",
+        "small_first_compact",
+        "small_only",
+        "over_orchestrated",
+    ]
+    assert comparison.estimated_tokens_by_backend() == {
+        "lm_studio": 8100,
+        "ollama": 7340,
+    }
