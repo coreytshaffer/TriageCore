@@ -2,9 +2,13 @@
 
 ## Status
 
-This document summarizes the active TriageCore backlog after CR-106.
+This document summarizes the active TriageCore backlog after CR-107.
 
 ## Active GitHub Backlog
+
+- CR-107: Runtime Strategy Delta Report Command
+  - Status: complete via CR-107
+  - Purpose: Expose the fixture-derived strategy deltas through a read-only, deterministic `tc runtime-strategy report` command with text and JSON output, without live model calls, telemetry adapters, or strategy selection.
 
 - CR-106: Strategy Delta Calculation
   - Status: complete via CR-106

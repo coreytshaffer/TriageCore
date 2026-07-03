@@ -31,6 +31,10 @@ from triage_core.model_manifest import (
     validate_model_manifest,
 )
 from triage_core.privacy_invariants import find_forbidden_persistent_fields
+from triage_core.runtime_strategy_evidence import (
+    build_fixture_strategy_delta_report,
+    format_strategy_delta_report,
+)
 from triage_core.route_worker_ledger import (
     RouteWorkerLedgerValidationError,
     format_route_worker_ledger_inspection,
@@ -1584,6 +1588,14 @@ def tc_route_worker_ledger_inspect(ledger_path: str) -> None:
     print(format_route_worker_ledger_inspection(summary))
 
 
+def tc_runtime_strategy_report(as_json: bool = False) -> None:
+    report = build_fixture_strategy_delta_report()
+    if as_json:
+        print(json.dumps(report, indent=2, sort_keys=True))
+        return
+    print(format_strategy_delta_report(report))
+
+
 def tc_task_show(task_id: str) -> None:
     from triage_core.task_ledger import TaskLedger
 
@@ -1824,6 +1836,27 @@ def main():
         "--ledger",
         required=True,
         help="Explicit path to a route/worker telemetry JSONL file",
+    )
+
+    # runtime-strategy
+    runtime_strategy_parser = subparsers.add_parser(
+        "runtime-strategy",
+        help="Inspect deterministic runtime strategy evidence",
+    )
+    runtime_strategy_subparsers = runtime_strategy_parser.add_subparsers(
+        dest="runtime_strategy_command"
+    )
+    runtime_strategy_report_parser = runtime_strategy_subparsers.add_parser(
+        "report",
+        help=(
+            "Show fixture-derived strategy deltas against the heavy_only "
+            "baseline without live model calls"
+        ),
+    )
+    runtime_strategy_report_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit the delta report as JSON instead of a text table",
     )
 
     # task
@@ -2204,6 +2237,13 @@ def main():
             tc_tokens_smoke_test()
         else:
             tokens_parser.error("tokens requires a subcommand: smoke-test")
+    elif args.command == "runtime-strategy":
+        if args.runtime_strategy_command == "report":
+            tc_runtime_strategy_report(as_json=args.json)
+        else:
+            runtime_strategy_parser.error(
+                "runtime-strategy requires a subcommand: report"
+            )
     elif args.command == "route-worker-ledger":
         if args.route_worker_ledger_command == "inspect":
             tc_route_worker_ledger_inspect(args.ledger)

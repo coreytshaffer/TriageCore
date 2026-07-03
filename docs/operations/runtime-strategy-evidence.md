@@ -129,6 +129,37 @@ Delta rules:
 
 Interpretation labels describe estimated token pressure only. While both records carry `quality_gate.status = "not_evaluated"`, a `token_saving` label claims nothing about output quality — a cheaper strategy that produces unusable output is not a saving.
 
+## CLI Delta Report
+
+The fixture deltas are available as a read-only, deterministic reviewer command:
+
+```powershell
+tc runtime-strategy report
+tc runtime-strategy report --json
+```
+
+Expected text shape:
+
+```text
+Runtime strategy delta report
+
+Baseline: heavy_only
+Task: fixture-doc-summary-001
+
+Strategy              Tokens Delta   Percent Delta   Calls Delta   Handoffs Delta   Interpretation
+small_first_compact   -2470          -51.5%          +1            +1               token_saving_with_added_handoff
+small_only            -3080          -64.2%          +0            +0               token_saving
+over_orchestrated     +1790          +37.3%          +3            +3               orchestration_overhead
+
+Quality gates: not_evaluated
+Note: token savings do not imply quality improvement.
+```
+
+The command reads nothing from disk, writes nothing (no ledger, identity, or
+review-state access), makes no model calls, and emits ASCII-only output so it
+renders on default Windows consoles. The `--json` form emits the same report
+as a deterministic JSON object for scripting.
+
 ## Validation Rules
 
 - Each step must declare a role, backend, model profile, estimated input tokens, estimated output tokens, and schema-validity status.

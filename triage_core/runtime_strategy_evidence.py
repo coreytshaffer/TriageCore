@@ -499,6 +499,102 @@ def compute_fixture_strategy_deltas(
         if strategy != baseline_strategy
     ]
 
+
+DELTA_REPORT_KIND = "runtime_strategy_delta_report"
+DELTA_REPORT_SCHEMA_VERSION = "runtime_strategy_delta_report.v1"
+DELTA_REPORT_QUALITY_NOTE = "token savings do not imply quality improvement"
+
+
+def build_fixture_strategy_delta_report(
+    baseline_strategy: str = "heavy_only",
+) -> dict[str, Any]:
+    """Build a deterministic, metadata-only delta report over the fixture records."""
+    records = build_strategy_comparison_fixture_records()
+    deltas = compute_fixture_strategy_deltas(baseline_strategy)
+    report = {
+        "schema_version": DELTA_REPORT_SCHEMA_VERSION,
+        "kind": DELTA_REPORT_KIND,
+        "task_id": records[0].task_id,
+        "baseline_strategy": baseline_strategy,
+        "deltas": [delta.to_dict() for delta in deltas],
+        "quality_gate_statuses": sorted(
+            {record.quality_gate.status for record in records}
+        ),
+        "note": DELTA_REPORT_QUALITY_NOTE,
+    }
+    assert_persistent_privacy_safe(
+        report,
+        artifact_name="runtime strategy delta report",
+    )
+    return report
+
+
+def format_strategy_delta_report(report: Mapping[str, Any]) -> str:
+    """Render the delta report as an aligned plain-text table."""
+    # ASCII-only headers: Windows consoles commonly use cp1252, which cannot
+    # encode the delta glyph.
+    headers = (
+        "Strategy",
+        "Tokens Delta",
+        "Percent Delta",
+        "Calls Delta",
+        "Handoffs Delta",
+        "Interpretation",
+    )
+    rows = []
+    for delta in report["deltas"]:
+        rows.append(
+            (
+                str(delta["candidate_strategy"]),
+                _signed_int(delta["estimated_tokens_delta"]),
+                _signed_percent(delta["estimated_percent_delta"]),
+                _signed_int(delta["model_calls_delta"]),
+                _signed_int(delta["handoffs_delta"]),
+                str(delta["interpretation"]),
+            )
+        )
+
+    widths = [
+        max(len(headers[column]), *(len(row[column]) for row in rows))
+        for column in range(len(headers))
+    ]
+    lines = [
+        "Runtime strategy delta report",
+        "",
+        f"Baseline: {report['baseline_strategy']}",
+        f"Task: {report['task_id']}",
+        "",
+        "   ".join(
+            header.ljust(widths[column]) for column, header in enumerate(headers)
+        ).rstrip(),
+    ]
+    for row in rows:
+        lines.append(
+            "   ".join(
+                cell.ljust(widths[column]) for column, cell in enumerate(row)
+            ).rstrip()
+        )
+    lines.extend(
+        [
+            "",
+            f"Quality gates: {', '.join(report['quality_gate_statuses'])}",
+            f"Note: {report['note']}.",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _signed_int(value: Any) -> str:
+    if value is None:
+        return "n/a"
+    return f"{value:+d}"
+
+
+def _signed_percent(value: Any) -> str:
+    if value is None:
+        return "n/a"
+    return f"{value:+.1f}%"
+
 def runtime_strategy_evidence_from_mapping(
     payload: Mapping[str, Any],
 ) -> RuntimeStrategyEvidenceRecord:
