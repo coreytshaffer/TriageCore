@@ -15,8 +15,17 @@ QUALITY_GATE_STATUSES = frozenset({"not_evaluated", "passed", "failed"})
 TOP_LEVEL_FIELDS = frozenset(
     {"schema_version", "kind", "task_id", "strategy", "steps", "totals", "quality_gate"}
 )
-DELTA_SCHEMA_VERSION = "runtime_strategy_delta.v1"
+DELTA_SCHEMA_VERSION = "runtime_strategy_delta.v2"
 DELTA_KIND = "runtime_strategy_delta"
+QUALITY_GATE_EFFECTS = frozenset(
+    {
+        "quality_not_evaluated",
+        "quality_passed",
+        "quality_failed",
+        "quality_mixed",
+        "quality_unknown",
+    }
+)
 DELTA_INTERPRETATIONS = frozenset(
     {
         "token_saving",
@@ -378,6 +387,9 @@ class RuntimeStrategyDelta:
     model_calls_delta: int | None = None
     handoffs_delta: int | None = None
     invalid_reason: str | None = None
+    baseline_quality_gate_status: str | None = None
+    candidate_quality_gate_status: str | None = None
+    quality_gate_effect: str | None = None
     kind: str = DELTA_KIND
     schema_version: str = DELTA_SCHEMA_VERSION
 
@@ -395,6 +407,22 @@ class RuntimeStrategyDelta:
                 )
         elif self.invalid_reason is not None:
             raise ValueError("invalid_reason is only allowed for invalid_comparison")
+
+        for status_field, status_value in (
+            ("baseline_quality_gate_status", self.baseline_quality_gate_status),
+            ("candidate_quality_gate_status", self.candidate_quality_gate_status),
+        ):
+            if status_value is not None and status_value not in QUALITY_GATE_STATUSES:
+                raise ValueError(
+                    f"unsupported {status_field}: {status_value}"
+                )
+        if (
+            self.quality_gate_effect is not None
+            and self.quality_gate_effect not in QUALITY_GATE_EFFECTS
+        ):
+            raise ValueError(
+                f"unsupported quality_gate_effect: {self.quality_gate_effect}"
+            )
 
         assert_persistent_privacy_safe(
             self.to_dict(),
@@ -414,10 +442,36 @@ class RuntimeStrategyDelta:
             "handoffs_delta": self.handoffs_delta,
             "interpretation": self.interpretation,
             "invalid_reason": self.invalid_reason,
+            "baseline_quality_gate_status": self.baseline_quality_gate_status,
+            "candidate_quality_gate_status": self.candidate_quality_gate_status,
+            "quality_gate_effect": self.quality_gate_effect,
         }
 
     def to_json(self) -> str:
         return json.dumps(self.to_dict(), sort_keys=True, separators=(",", ":"))
+
+
+def derive_quality_gate_effect(
+    baseline_status: str,
+    candidate_status: str,
+) -> str:
+    """Derive the quality axis for a strategy comparison.
+
+    This is a separate axis from the cost interpretation: a failed strategy
+    can still be token-saving; it is just not acceptable. Precedence:
+    any failed gate dominates, then fully passed, then fully not evaluated,
+    then partially evaluated pairs are mixed.
+    """
+    statuses = {baseline_status, candidate_status}
+    if not statuses <= QUALITY_GATE_STATUSES:
+        return "quality_unknown"
+    if "failed" in statuses:
+        return "quality_failed"
+    if statuses == {"passed"}:
+        return "quality_passed"
+    if statuses == {"not_evaluated"}:
+        return "quality_not_evaluated"
+    return "quality_mixed"
 
 
 def compute_strategy_delta(
@@ -426,16 +480,24 @@ def compute_strategy_delta(
 ) -> RuntimeStrategyDelta:
     """Compare a candidate strategy record against a baseline record.
 
-    The result is a deterministic, metadata-only delta record. Interpretation
-    labels describe estimated token pressure only; they claim nothing about
-    output quality while quality gates are not evaluated.
+    The result is a deterministic, metadata-only delta record with two
+    independent axes: the cost interpretation describes estimated token
+    pressure only, and the quality-gate effect describes gate posture only.
+    Quality gates never rewrite the cost interpretation.
     """
+    baseline_quality = baseline.quality_gate.status
+    candidate_quality = candidate.quality_gate.status
+    quality_effect = derive_quality_gate_effect(baseline_quality, candidate_quality)
+
     if baseline.task_id != candidate.task_id:
         return RuntimeStrategyDelta(
             baseline_strategy=baseline.strategy,
             candidate_strategy=candidate.strategy,
             interpretation="invalid_comparison",
             invalid_reason="task_id_mismatch",
+            baseline_quality_gate_status=baseline_quality,
+            candidate_quality_gate_status=candidate_quality,
+            quality_gate_effect=quality_effect,
         )
     if baseline.strategy == candidate.strategy:
         return RuntimeStrategyDelta(
@@ -444,6 +506,9 @@ def compute_strategy_delta(
             interpretation="invalid_comparison",
             task_id=baseline.task_id,
             invalid_reason="identical_strategy",
+            baseline_quality_gate_status=baseline_quality,
+            candidate_quality_gate_status=candidate_quality,
+            quality_gate_effect=quality_effect,
         )
     if baseline.totals.estimated_tokens == 0:
         return RuntimeStrategyDelta(
@@ -452,6 +517,9 @@ def compute_strategy_delta(
             interpretation="invalid_comparison",
             task_id=baseline.task_id,
             invalid_reason="zero_baseline_tokens",
+            baseline_quality_gate_status=baseline_quality,
+            candidate_quality_gate_status=candidate_quality,
+            quality_gate_effect=quality_effect,
         )
 
     tokens_delta = candidate.totals.estimated_tokens - baseline.totals.estimated_tokens
@@ -479,6 +547,9 @@ def compute_strategy_delta(
         estimated_percent_delta=percent_delta,
         model_calls_delta=candidate.totals.model_calls - baseline.totals.model_calls,
         handoffs_delta=handoffs_delta,
+        baseline_quality_gate_status=baseline_quality,
+        candidate_quality_gate_status=candidate_quality,
+        quality_gate_effect=quality_effect,
     )
 
 
@@ -501,7 +572,7 @@ def compute_fixture_strategy_deltas(
 
 
 DELTA_REPORT_KIND = "runtime_strategy_delta_report"
-DELTA_REPORT_SCHEMA_VERSION = "runtime_strategy_delta_report.v1"
+DELTA_REPORT_SCHEMA_VERSION = "runtime_strategy_delta_report.v2"
 DELTA_REPORT_QUALITY_NOTE = "token savings do not imply quality improvement"
 
 
@@ -540,6 +611,7 @@ def format_strategy_delta_report(report: Mapping[str, Any]) -> str:
         "Calls Delta",
         "Handoffs Delta",
         "Interpretation",
+        "Quality Effect",
     )
     rows = []
     for delta in report["deltas"]:
@@ -551,6 +623,7 @@ def format_strategy_delta_report(report: Mapping[str, Any]) -> str:
                 _signed_int(delta["model_calls_delta"]),
                 _signed_int(delta["handoffs_delta"]),
                 str(delta["interpretation"]),
+                str(delta["quality_gate_effect"]),
             )
         )
 

@@ -378,6 +378,104 @@ def test_fixture_strategy_deltas_cover_all_candidates():
     assert deltas["over_orchestrated"].interpretation == "orchestration_overhead"
 
 
+def test_quality_gate_effect_derivation_matrix():
+    from triage_core.runtime_strategy_evidence import derive_quality_gate_effect
+
+    assert derive_quality_gate_effect("not_evaluated", "not_evaluated") == (
+        "quality_not_evaluated"
+    )
+    assert derive_quality_gate_effect("passed", "passed") == "quality_passed"
+    assert derive_quality_gate_effect("failed", "failed") == "quality_failed"
+    # A failed gate anywhere in the pair dominates.
+    assert derive_quality_gate_effect("passed", "failed") == "quality_failed"
+    assert derive_quality_gate_effect("failed", "not_evaluated") == "quality_failed"
+    # Partially evaluated pairs are mixed.
+    assert derive_quality_gate_effect("passed", "not_evaluated") == "quality_mixed"
+    assert derive_quality_gate_effect("not_evaluated", "passed") == "quality_mixed"
+    # Defensive fallback for statuses outside the closed vocabulary.
+    assert derive_quality_gate_effect("passed", "surprise") == "quality_unknown"
+
+
+def test_fixture_deltas_carry_quality_gate_fields():
+    records = _fixture_records_by_strategy()
+
+    delta = compute_strategy_delta(
+        records["heavy_only"],
+        records["small_first_compact"],
+    )
+    data = delta.to_dict()
+
+    assert data["baseline_quality_gate_status"] == "not_evaluated"
+    assert data["candidate_quality_gate_status"] == "not_evaluated"
+    assert data["quality_gate_effect"] == "quality_not_evaluated"
+
+
+def test_failed_quality_gate_does_not_rewrite_cost_interpretation():
+    baseline = _fixture_records_by_strategy()["heavy_only"]
+    failed_candidate = build_runtime_strategy_evidence_record(
+        task_id=baseline.task_id,
+        strategy="small_only_failed_gate",
+        steps=[
+            RuntimeStrategyStep(
+                role="summarizer",
+                backend="ollama",
+                model_profile="small_summarizer",
+                estimated_input_tokens=1300,
+                estimated_output_tokens=420,
+                schema_valid=True,
+            )
+        ],
+        handoffs=0,
+        quality_gate_status="failed",
+        quality_gate_reason="synthetic failed-gate candidate",
+    )
+
+    delta = compute_strategy_delta(baseline, failed_candidate)
+
+    # The cost axis stays honest: a failed strategy can still be token-saving.
+    assert delta.interpretation == "token_saving"
+    assert delta.estimated_tokens_delta == -3080
+    # The quality axis reports the failure independently.
+    assert delta.quality_gate_effect == "quality_failed"
+    assert delta.candidate_quality_gate_status == "failed"
+
+
+def test_passed_pair_reports_quality_passed_effect():
+    records = _fixture_records_by_strategy()
+    passed_baseline = build_runtime_strategy_evidence_record(
+        task_id=records["heavy_only"].task_id,
+        strategy="heavy_only_passed",
+        steps=list(records["heavy_only"].steps),
+        handoffs=0,
+        quality_gate_status="passed",
+        quality_gate_reason="synthetic passed-gate baseline",
+    )
+    passed_candidate = build_runtime_strategy_evidence_record(
+        task_id=records["small_only"].task_id,
+        strategy="small_only_passed",
+        steps=list(records["small_only"].steps),
+        handoffs=0,
+        quality_gate_status="passed",
+        quality_gate_reason="synthetic passed-gate candidate",
+    )
+
+    delta = compute_strategy_delta(passed_baseline, passed_candidate)
+
+    assert delta.interpretation == "token_saving"
+    assert delta.quality_gate_effect == "quality_passed"
+
+
+def test_invalid_comparison_still_reports_quality_fields():
+    records = _fixture_records_by_strategy()
+
+    delta = compute_strategy_delta(records["heavy_only"], records["heavy_only"])
+
+    assert delta.interpretation == "invalid_comparison"
+    assert delta.baseline_quality_gate_status == "not_evaluated"
+    assert delta.candidate_quality_gate_status == "not_evaluated"
+    assert delta.quality_gate_effect == "quality_not_evaluated"
+
+
 def test_delta_json_is_deterministic_and_metadata_only():
     records = _fixture_records_by_strategy()
 

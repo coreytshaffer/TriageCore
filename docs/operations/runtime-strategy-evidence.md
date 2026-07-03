@@ -83,7 +83,7 @@ The negative-control strategy matters because token-aware orchestration should b
 
 ```json
 {
-  "schema_version": "runtime_strategy_delta.v1",
+  "schema_version": "runtime_strategy_delta.v2",
   "kind": "runtime_strategy_delta",
   "task_id": "fixture-doc-summary-001",
   "baseline_strategy": "heavy_only",
@@ -93,7 +93,10 @@ The negative-control strategy matters because token-aware orchestration should b
   "model_calls_delta": 1,
   "handoffs_delta": 1,
   "interpretation": "token_saving_with_added_handoff",
-  "invalid_reason": null
+  "invalid_reason": null,
+  "baseline_quality_gate_status": "not_evaluated",
+  "candidate_quality_gate_status": "not_evaluated",
+  "quality_gate_effect": "quality_not_evaluated"
 }
 ```
 
@@ -129,6 +132,20 @@ Delta rules:
 
 Interpretation labels describe estimated token pressure only. While both records carry `quality_gate.status = "not_evaluated"`, a `token_saving` label claims nothing about output quality — a cheaper strategy that produces unusable output is not a saving.
 
+## Quality-Gate Axis
+
+The delta record carries a second, independent axis: `quality_gate_effect`, derived from the baseline and candidate `quality_gate.status` values. Quality gates never rewrite the cost interpretation — a failed strategy can still be `token_saving`; it is just not acceptable. The two axes are reported side by side and read together.
+
+| Effect | Rule |
+|---|---|
+| `quality_failed` | Either record's gate failed (failure dominates the pair). |
+| `quality_passed` | Both gates passed. |
+| `quality_not_evaluated` | Neither gate has been evaluated. |
+| `quality_mixed` | One gate passed while the other is not evaluated. |
+| `quality_unknown` | Defensive fallback for a status outside the closed vocabulary; unreachable through validated records. |
+
+The delta record also carries `baseline_quality_gate_status` and `candidate_quality_gate_status` so the effect is auditable from the record itself.
+
 ## CLI Delta Report
 
 The fixture deltas are available as a read-only, deterministic reviewer command:
@@ -146,10 +163,10 @@ Runtime strategy delta report
 Baseline: heavy_only
 Task: fixture-doc-summary-001
 
-Strategy              Tokens Delta   Percent Delta   Calls Delta   Handoffs Delta   Interpretation
-small_first_compact   -2470          -51.5%          +1            +1               token_saving_with_added_handoff
-small_only            -3080          -64.2%          +0            +0               token_saving
-over_orchestrated     +1790          +37.3%          +3            +3               orchestration_overhead
+Strategy              Tokens Delta   Percent Delta   Calls Delta   Handoffs Delta   Interpretation                    Quality Effect
+small_first_compact   -2470          -51.5%          +1            +1               token_saving_with_added_handoff   quality_not_evaluated
+small_only            -3080          -64.2%          +0            +0               token_saving                      quality_not_evaluated
+over_orchestrated     +1790          +37.3%          +3            +3               orchestration_overhead            quality_not_evaluated
 
 Quality gates: not_evaluated
 Note: token savings do not imply quality improvement.

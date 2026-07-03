@@ -33,6 +33,8 @@ def test_report_text_output_shows_fixture_deltas(capsys):
     assert "orchestration_overhead" in out
     assert "Quality gates: not_evaluated" in out
     assert f"Note: {DELTA_REPORT_QUALITY_NOTE}." in out
+    assert "Quality Effect" in out
+    assert out.count("quality_not_evaluated") == 3
 
 
 def test_report_json_output_matches_computed_deltas(capsys):

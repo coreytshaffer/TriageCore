@@ -2,9 +2,13 @@
 
 ## Status
 
-This document summarizes the active TriageCore backlog after CR-107.
+This document summarizes the active TriageCore backlog after CR-108.
 
 ## Active GitHub Backlog
+
+- CR-108: Quality-Gate-Aware Delta Interpretation
+  - Status: complete via CR-108
+  - Purpose: Qualify token-based delta interpretations with an independent quality-gate effect axis (failure dominates, closed vocabulary) without letting quality gates rewrite cost interpretations, rank strategies, or recommend a "best" strategy.
 
 - CR-107: Runtime Strategy Delta Report Command
   - Status: complete via CR-107
