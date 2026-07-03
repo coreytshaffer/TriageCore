@@ -4,6 +4,8 @@
 
 Implemented
 
+Pushed and CI verified: `origin/main` at `7a5f58c`, GitHub Actions run `28686645590` passed on Python 3.10, 3.11, and 3.12 (Node 20 deprecation annotations only; no failures). Reviewers can now run `tc runtime-strategy report` locally to see the fixture-derived deltas — `small_first_compact` saving 51.5% with one added handoff, `small_only` saving 64.2%, and the `over_orchestrated` negative control costing 37.3% more than the `heavy_only` baseline — in one deterministic, read-only command.
+
 ## Scope
 
 - Add a read-only `tc runtime-strategy report` command that renders the
