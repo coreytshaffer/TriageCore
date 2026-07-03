@@ -36,6 +36,7 @@ from triage_core.route_worker_ledger import (
     format_route_worker_ledger_inspection,
     inspect_route_worker_ledger,
 )
+from triage_core.token_efficiency import build_smoke_test_record
 import triage_core.diagnostics as diagnostics
 import triage_core.review_queue as review_queue
 def _find_cr_file(cr_id: str) -> str:
@@ -463,6 +464,20 @@ def tc_audit_verify_signatures(kind: str = "route_audit", strict: bool = False) 
         print(line)
     if summary.should_fail(strict=strict):
         sys.exit(1)
+
+
+def tc_tokens_smoke_test() -> None:
+    try:
+        record = build_smoke_test_record()
+    except (OSError, ValueError) as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
+    print("Token efficiency smoke test passed")
+    print(f"baseline_estimated_total={record.baseline.estimated_total_tokens}")
+    print(f"candidate_estimated_total={record.candidate.estimated_total_tokens}")
+    print(f"estimated_tokens_saved={record.savings.estimated_tokens_saved}")
+    print(f"estimated_percent_saved={record.savings.estimated_percent_saved:.1f}")
 
 
 def tc_demo_dry_run(decision: str = "pending") -> None:
@@ -1782,6 +1797,17 @@ def main():
         help="Simulate the human review decision (default: pending)",
     )
 
+    # tokens
+    tokens_parser = subparsers.add_parser(
+        "tokens",
+        help="Inspect deterministic token-efficiency evidence",
+    )
+    tokens_subparsers = tokens_parser.add_subparsers(dest="tokens_command")
+    tokens_subparsers.add_parser(
+        "smoke-test",
+        help="Run a deterministic token-efficiency smoke test",
+    )
+
     # route-worker-ledger
     route_worker_ledger_parser = subparsers.add_parser(
         "route-worker-ledger",
@@ -2173,6 +2199,11 @@ def main():
         if not args.dry_run:
             demo_parser.error("the demo command currently requires --dry-run")
         tc_demo_dry_run(args.decision)
+    elif args.command == "tokens":
+        if args.tokens_command == "smoke-test":
+            tc_tokens_smoke_test()
+        else:
+            tokens_parser.error("tokens requires a subcommand: smoke-test")
     elif args.command == "route-worker-ledger":
         if args.route_worker_ledger_command == "inspect":
             tc_route_worker_ledger_inspect(args.ledger)
