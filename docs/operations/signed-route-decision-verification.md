@@ -10,7 +10,13 @@ For the full Issue #72 reviewer/operator flow, see [issue-72-signed-route-decisi
 By default, `TriageClient.run_task(...)` still writes ordinary unsigned `route_decision` events. Signing remains opt-in.
 
 ## Opt-In Signed Smoke Path
-Use the existing audit surface with the dedicated route-decision smoke flag:
+First discover the available signer identities:
+
+```powershell
+tc identity list
+```
+
+Then run the canonical signed route-decision smoke command:
 
 ```powershell
 tc audit --signed-route-decision-smoke-test --agent-id router-tools

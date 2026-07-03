@@ -26,8 +26,9 @@ It does not make route-decision signing automatic, does not alter default task e
 Run the following commands in order:
 
 ```powershell
-tc identity doctor <agent-id> --for-capability route_decision:sign
-tc audit --signed-route-decision-smoke-test --agent-id <agent-id>
+tc identity list
+tc identity doctor router-tools --for-capability route_decision:sign
+tc audit --signed-route-decision-smoke-test --agent-id router-tools
 tc audit --verify-signatures --kind route_decision
 ```
 

@@ -350,6 +350,16 @@ def tc_audit_signed_route_decision_smoke_test(agent_id: str) -> None:
     )
 
 
+def _exit_missing_route_decision_smoke_agent_id(
+    audit_parser: argparse.ArgumentParser,
+) -> None:
+    audit_parser.exit(
+        2,
+        "--agent-id is required for signed route-decision smoke tests.\n"
+        "Run `tc identity list` to view available signer identities.\n",
+    )
+
+
 def tc_audit_privacy_invariants() -> None:
     ledger_path = _ledger_path()
     if not ledger_path.exists():
@@ -2115,7 +2125,7 @@ def main():
         if args.signed_smoke_test and not args.agent_id:
             audit_parser.error("--signed-smoke-test requires --agent-id")
         if args.signed_route_decision_smoke_test and not args.agent_id:
-            audit_parser.error("--signed-route-decision-smoke-test requires --agent-id")
+            _exit_missing_route_decision_smoke_agent_id(audit_parser)
         if args.privacy_invariants:
             tc_audit_privacy_invariants()
         elif args.verify_signatures:

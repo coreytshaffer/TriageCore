@@ -6,6 +6,7 @@ from unittest.mock import patch
 from triage_core.agent_identity import AgentIdentityRegistry
 from triage_core.task_ledger import TaskLedger
 from triage_core.tc_cli import (
+    main,
     tc_audit,
     tc_audit_privacy_invariants,
     tc_audit_signed_route_decision_smoke_test,
@@ -284,6 +285,35 @@ def test_signed_smoke_test_fails_for_revoked_identity(tmp_path, monkeypatch, cap
     out = capsys.readouterr().out
     assert "No active identity found" in out
     assert "revoked-smoke-agent" in out
+
+
+def run_audit_cli_command(monkeypatch, tmp_path, args):
+    monkeypatch.chdir(tmp_path)
+    import sys
+
+    with monkeypatch.context() as m:
+        m.setattr(sys, "argv", ["tc"] + args)
+        m.setattr("triage_core.tc_cli._repo_root_or_cwd", lambda: tmp_path)
+        with pytest.raises(SystemExit) as exc:
+            main()
+
+    return exc.value.code
+
+
+def test_signed_route_decision_smoke_test_requires_agent_id_and_points_to_identity_list(
+    tmp_path, monkeypatch, capsys
+):
+    exit_code = run_audit_cli_command(
+        monkeypatch,
+        tmp_path,
+        ["audit", "--signed-route-decision-smoke-test"],
+    )
+
+    assert exit_code == 2
+    captured = capsys.readouterr()
+    combined = captured.out + captured.err
+    assert "--agent-id" in combined
+    assert "tc identity list" in combined
 
 
 def test_signed_route_decision_smoke_test_writes_signed_route_decision_event(tmp_path, monkeypatch, capsys):
