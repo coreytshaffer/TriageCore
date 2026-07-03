@@ -6,6 +6,10 @@ This document summarizes the active TriageCore backlog after CR-095.
 
 ## Active GitHub Backlog
 
+- CR-099: Reviewer Release Checkpoint and Changelog Cut
+  - Status: complete via CR-099
+  - Purpose: Bind repository state, changelog claims, and validation results into a clean dated checkpoint record.
+
 - CR-098: Add Task Evidence Show Command
   - Status: complete via CR-098
   - Purpose: Read-only task evidence display. Shows the task's complete ledger-derived evidence timeline and status, fail closed on missing tasks, and prints note that signatures are not checked.
@@ -141,3 +145,8 @@ For the empirical AI safety evaluation track, keep the next slices sequential: f
 For external runtime interoperability, the next approved slice should be policy tests or execution-path validation for the bounded adapter path.
 
 For operator UX, future slices should focus on reviewability, export polish, and dashboard/TUI surfaces only after artifact contracts remain stable. Avoid re-opening completed wizard or Markdown renderer work unless there is a concrete regression or usability gap.
+
+## Next Candidate Slices
+
+- **Identity doctor orphaned-key warning**: Warn when private key files exist with no corresponding registry entry in `.triagecore/identity/agents.json`.
+- **Signature verification options on task show**: Decouple signature checking from CLI-abort mechanics so `tc task show --verify-signatures` verifies signatures safely.
