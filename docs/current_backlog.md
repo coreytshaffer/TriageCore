@@ -2,7 +2,7 @@
 
 ## Status
 
-This document summarizes the active TriageCore backlog after CR-092.
+This document summarizes the active TriageCore backlog after CR-095.
 
 ## Active GitHub Backlog
 
@@ -23,6 +23,11 @@ This document summarizes the active TriageCore backlog after CR-092.
   - Purpose: record comparable token, latency, backend-profile, quality-gate, agent-group, baseline-lineage, claim-validity, and energy-evidence-tier data for local runtime choices such as Ollama and llama.cpp before any runtime migration.
 
 ## Candidate Future Work
+
+- Agent authority and delegation boundary
+  - Source: CR-095 task-scoped agent authority manifest
+  - Status: authority manifest contract, reviewer-style example, invalid example, and metadata-only CLI validation complete; identity-registry binding, manifest signing, admission enforcement, and route enforcement remain future slices
+  - Purpose: keep cryptographic provenance separate from task-scoped action authority by making owner, purpose, allowed actions, denied actions, resource scope, approval gates, expiration, and revocation state inspectable before any future workflow treats an agent action as inside bounds.
 
 - Empirical AI safety evaluation track
   - Source: CR-076 and CR-077 research framing/eval taxonomy docs
@@ -101,12 +106,14 @@ This document summarizes the active TriageCore backlog after CR-092.
 - CR-032: Model Route Manifest Schema
 - CR-033: Model Manifest Check CLI
 - CR-034: Repository Consistency and Secrets Hygiene
+- CR-095: Task-Scoped Agent Authority Manifest
 
 ## Current Recommendation
 
 Keep three work lanes distinct:
 
 - Identity lifecycle work #4 is closed. CR-078, CR-079, CR-081, CR-082, CR-083, CR-084, and CR-085 complete the signed `validation_result` and `route_decision` paths under Issue #72 through creation, verification, smoke evidence, capability readiness checks, and reviewer-facing or operator-facing examples; CR-086 adds a stabilization/readiness checkpoint around that completed lane, CR-087 adds a clean reviewer smoke runbook, CR-088 adds video-first submission packaging, and CR-089 adds a reviewer entrypoints index. Remaining signed-event expansion and Issue #73 runtime rotation behavior should stay separate implementation slices.
+- Agent authority work should build on CR-095. Keep authority-manifest validation static and metadata-only until a separate CR binds it to the identity registry, signed route decisions, admission checks, or runtime enforcement. Do not treat a passing authority manifest as approval or execution permission.
 - Model and runtime integrity work should build on CR-031 through CR-033. Keep
   policy baseline, route-manifest artifact shape, manifest validation, and live
   enforcement as separate reviewable slices.

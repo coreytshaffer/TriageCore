@@ -15,6 +15,7 @@ TriageCore is an observable, traceable, data-driven control-plane harness for ev
 - Generates reviewable preflight and handoff artifacts with `tc preflight` and `tc handoff`.
 - Records and inspects privacy-safe route audit events with `tc audit`.
 - Validates and renders offline Task Envelope and Admission Evidence contracts via the `tc task-envelope` and `tc admission` CLI tools.
+- Validates static agent authority manifests with `tc authority check` without granting execution authority.
 - Supports local benchmark fixtures and benchmark reports without hiding the evidence trail.
 - Enforces local-only privacy boundaries before any optional external-safe Qwen Cloud path is considered.
 
@@ -152,6 +153,7 @@ Optional deeper verification:
 tc model check --manifest docs\security\examples\model_route_manifest_local_ollama.json
 tc model warn --manifest docs\security\examples\model_route_manifest_local_ollama.json --route docs\security\examples\route_payload_local_ollama.json
 tc model warn --manifest docs\security\examples\model_route_manifest_cloud_qwen.json --route docs\security\examples\route_payload_local_ollama.json
+tc authority check --manifest docs\security\examples\agent_authority_manifest_reviewer.json
 ```
 
 Expected outputs:
@@ -168,6 +170,9 @@ Expected outputs:
 - `tc model check` validates the documented manifest example locally.
 - `tc model warn` provides warning-only route/manifest comparison visibility and
   remains non-blocking when mismatches exist.
+- `tc authority check` validates the static authority-manifest example without writing ledger or identity state.
+
+For a hop-by-hop walkthrough of how a task's route decision, evidence record, review state, and verification evidence link together, see [Reviewer Traceability](docs/operations/reviewer-traceability.md).
 
 Sample audit transcript:
 

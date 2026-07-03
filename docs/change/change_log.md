@@ -5,6 +5,7 @@ This file provides a chronological, human-readable record of applied codebase an
 *Note: For operational task and run history, consult `.triagecore/ledger.jsonl`.*
 
 ## [Unreleased]
+- Implemented CR-095 (Task-Scoped Agent Authority Manifest): Added a static authority-manifest contract, valid and invalid examples, a metadata-only `tc authority check --manifest <path>` validator, and focused tests for task scope, expiration, revocation state, action conflicts, wildcard scope, human approval gates, and no-mutation behavior without changing routing or execution.
 - Implemented CR-092 (Experiment Observability Trace Contract): Added durable experiment trace records, schema, focused tests, and operator documentation linking task fixtures, agent groups, backend profiles, runtime efficiency records, quality gates, and claim-validity boundaries without adding live model calls or runtime migration.
 - Implemented CR-090 (Runtime Efficiency Ledger): Added deterministic runtime backend profiles, runtime efficiency records, schema, focused validation tests, and operator documentation for comparing Ollama and llama.cpp evidence without changing runtime behavior or adding live benchmark calls.
 - Implemented CR-089 (Reviewer Entrypoints Index): Added a docs-only reviewer entrypoints index that links stabilization, smoke, packaging, signed route-decision, submission/video, backlog, and changelog docs while preserving current non-goals and Qwen optional artifact boundaries.
