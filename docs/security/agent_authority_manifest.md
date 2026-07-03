@@ -7,8 +7,9 @@ agent was allowed to do.
 
 The agent authority manifest is a static, task-scoped contract for that second
 question. It binds an agent identity to an owner, purpose, action scope,
-resource scope, approval gates, expiration, and revocation state before any
-future workflow treats the agent as safe to act.
+resource scope, approval gates, expiration, and revocation state so that future
+evaluation and review can score whether an agent's recorded actions stayed
+inside a declared boundary. It never makes an agent "safe to act."
 
 This is a metadata-only validation surface. It does not grant approval,
 execute tools, mutate the identity registry, or change routing behavior.
@@ -124,9 +125,23 @@ revocation_status=active
 allowed_actions=3
 denied_actions=5
 approval_gates=4
+boundary=structural review evidence only; not approval, permission, authorization, a capability grant, or a substitute for human approval of one exact canonicalized action packet
 ```
 
 ## Boundaries
+
+A passing manifest is structural review evidence only. It is not approval, not
+permission, not authorization, not a capability grant, and not a substitute for
+human approval of one exact canonicalized action packet.
+
+Absence of an action from `requires_human_approval_for` never waives
+TriageCore's existing human-review gates. A manifest can only declare
+additional approval gates; it can never remove or relax any existing review
+requirement.
+
+`denied_actions` always takes precedence. An action listed in both
+`denied_actions` and `requires_human_approval_for` remains denied; the approval
+gate does not unlock it.
 
 This validator does not:
 

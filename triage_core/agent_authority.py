@@ -200,6 +200,12 @@ def summarize_authority_manifest_check(
                 f"allowed_actions={len(_list_at_path(manifest, '$.allowed_actions'))}",
                 f"denied_actions={len(_list_at_path(manifest, '$.denied_actions'))}",
                 f"approval_gates={len(_list_at_path(manifest, '$.requires_human_approval_for'))}",
+                (
+                    "boundary=structural review evidence only; not approval, "
+                    "permission, authorization, a capability grant, or a "
+                    "substitute for human approval of one exact canonicalized "
+                    "action packet"
+                ),
             ]
         )
 
