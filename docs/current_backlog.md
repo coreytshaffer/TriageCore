@@ -6,6 +6,10 @@ This document summarizes the active TriageCore backlog after CR-095.
 
 ## Active GitHub Backlog
 
+- CR-104: Runtime Strategy Evidence Record
+  - Status: complete via CR-104
+  - Purpose: Record one metadata-only orchestration strategy shape with typed model/runtime steps, estimated token totals, model-call counts, handoff counts, and quality-gate status before changing routing behavior.
+
 - CR-103: Add Route/Worker Ledger Inspection Runbook Check
   - Status: complete via CR-103
   - Purpose: Harden the reviewer runbook and focused regression test so the CR-100 through CR-102 route-worker telemetry path remains one-command verifiable without new CLI or runtime behavior.
@@ -52,7 +56,7 @@ This document summarizes the active TriageCore backlog after CR-095.
   - Purpose: make the current system easier to trust, run, review, and package without adding new cryptographic surface area, execution pathways, or agent authority.
 
 - Runtime efficiency evidence
-  - Status: runtime efficiency ledger schema, backend profiles, deterministic record builder, and focused tests complete via CR-090; controlled experiment plans, agent group profiles, synthetic result records, schemas, and focused tests complete via CR-091; experiment observability trace contract, schema, and focused tests complete via CR-092; live benchmark capture and durable evidence storage remain future work
+  - Status: runtime efficiency ledger schema, backend profiles, deterministic record builder, and focused tests complete via CR-090; controlled experiment plans, agent group profiles, synthetic result records, schemas, and focused tests complete via CR-091; experiment observability trace contract, schema, and focused tests complete via CR-092; token-efficiency evidence records complete via CR-094; runtime strategy evidence records complete via CR-104; live benchmark capture and durable evidence storage remain future work
   - Purpose: record comparable token, latency, backend-profile, quality-gate, agent-group, baseline-lineage, claim-validity, and energy-evidence-tier data for local runtime choices such as Ollama and llama.cpp before any runtime migration.
 
 ## Candidate Future Work
