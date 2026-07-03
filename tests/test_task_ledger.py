@@ -917,3 +917,46 @@ def test_append_signed_validation_result_event_fails_for_unauthorized_agent():
                 signing_registry=registry,
                 signing_agent_id="context-planner",
             )
+
+
+def test_review_completed_preserves_needs_revision_end_to_end():
+    with tempfile.TemporaryDirectory() as temp_dir:
+        ledger = TaskLedger(ledger_dir=temp_dir)
+        task_id = str(uuid.uuid4())
+        ledger.append_event(task_id, "task_created", {"title": "test task"})
+
+        # 1. Test approved
+        ledger.append_event(task_id, "review_completed", {"accepted": True, "review_decision": "accepted"})
+        r = ledger.get_task(task_id)
+        assert r.status == "reviewed"
+        assert r.accepted is True
+        assert r.review_decision == "accepted"
+
+        # 2. Test rejected
+        ledger.append_event(task_id, "review_completed", {"accepted": False, "review_decision": "rejected"})
+        r = ledger.get_task(task_id)
+        assert r.accepted is False
+        assert r.review_decision == "rejected"
+
+        # 3. Test needs_revision
+        ledger.append_event(task_id, "review_completed", {"accepted": False, "review_decision": "needs_revision"})
+        r = ledger.get_task(task_id)
+        assert r.accepted is False
+        assert r.review_decision == "needs_revision"
+
+        # 4. Old-style payload without review_decision behaves compatibly
+        ledger.append_event(task_id, "review_completed", {"accepted": True})
+        r = ledger.get_task(task_id)
+        assert r.accepted is True
+        assert r.review_decision == "accepted"
+
+        ledger.append_event(task_id, "review_completed", {"accepted": False})
+        r = ledger.get_task(task_id)
+        assert r.accepted is False
+        assert r.review_decision == "rejected"
+
+        # 5. Negative regression check: the reducer ignores the legacy/wrong 'decision' key and falls back to boolean-derived rejected behavior
+        ledger.append_event(task_id, "review_completed", {"accepted": False, "decision": "needs_revision"})
+        r = ledger.get_task(task_id)
+        assert r.accepted is False
+        assert r.review_decision == "rejected"

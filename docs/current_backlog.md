@@ -6,6 +6,11 @@ This document summarizes the active TriageCore backlog after CR-095.
 
 ## Active GitHub Backlog
 
+- CR-096: Fix TriageDesk review evidence payload integrity
+  - Status: complete via CR-096
+  - Purpose: fix payload keys so "needs revision" survives end-to-end and remove fabricated effort metadata from the GUI review submission, ensuring the ledger only claims what is actually known.
+
+
 - Issue #72: Expand signed ledger event coverage beyond `route_audit`
   - Status: `validation_result` creation, verification, and reviewer-facing example complete via CR-078, CR-079, and CR-081; signed `route_decision` creation and operator-facing verification complete via CR-082; signed `route_decision` smoke example and reviewer-facing verification doc complete via CR-083; capability-targeted identity doctor checks for route-decision signers complete via CR-084; consolidated reviewer checkpoint doc complete via CR-085; stabilization reviewer checkpoint and packaging/readiness docs complete via CR-086; broader event coverage remains future work
   - Purpose: selectively enforce identity checks and signatures for core ledger events beyond `route_audit` without treating signatures as approval. Additional signed-event paths now cover `validation_result` creation, operator-facing verification, reviewer-facing examples, explicit signed `route_decision` creation plus verification, and an end-to-end signed `route_decision` smoke example; future work is deciding whether to sign additional event types such as `taskpacket_created` or `project_steward_decision`.
