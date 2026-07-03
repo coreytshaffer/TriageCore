@@ -60,3 +60,7 @@ reports/
 # Credentials / secrets
 *.key
 secrets.*
+
+# Backup artifacts (editor/manual snapshots — never track)
+*.bak
+*.bak_*
