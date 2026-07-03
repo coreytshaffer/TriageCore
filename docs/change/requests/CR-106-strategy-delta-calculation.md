@@ -4,6 +4,8 @@
 
 Implemented
 
+Pushed and CI verified: `origin/main` at `b2a8ef4`, GitHub Actions run `28686328874` passed on Python 3.10, 3.11, and 3.12 (Node 20 deprecation annotations only; no failures). Strategy delta calculation now compares candidate fixtures against the `heavy_only` baseline with token, percent, model-call, and handoff deltas and a closed interpretation vocabulary; the fixture deltas show `small_first_compact` saving 51.5% with one added handoff, `small_only` saving 64.2%, and the `over_orchestrated` negative control costing 37.3% more than the baseline.
+
 ## Scope
 
 - Add `compute_strategy_delta(baseline, candidate)` to compare two existing
