@@ -1963,12 +1963,10 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
 
     def _execute_context_review(self, task_id: str, accepted: bool, decision_override: str = None):
         payload = {
-            "accepted": accepted,
-            "human_review_minutes": 1.0,
-            "review_workload": "medium"
+            "accepted": accepted
         }
         if decision_override:
-            payload["decision"] = decision_override
+            payload["review_decision"] = decision_override
 
         self.ledger.append_event(task_id, "review_completed", payload)
 

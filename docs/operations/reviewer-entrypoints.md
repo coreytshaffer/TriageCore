@@ -10,10 +10,11 @@ Use this page when the goal is to understand what is implemented, what can be va
 
 1. [stabilization-checkpoint.md](stabilization-checkpoint.md) - current project posture, implemented capabilities, and boundaries.
 2. [reviewer-smoke-runbook.md](reviewer-smoke-runbook.md) - shortest repeatable local validation path.
-3. [packaging-readiness.md](packaging-readiness.md) - local install and packaging-readiness expectations.
-4. [issue-72-signed-route-decision-checkpoint.md](issue-72-signed-route-decision-checkpoint.md) - consolidated signed route-decision reviewer path.
-5. [../submission/README.md](../submission/README.md) - judge-facing submission bundle and video-first materials.
-6. [../current_backlog.md](../current_backlog.md) and [../change/change_log.md](../change/change_log.md) - current work lanes and applied change history.
+3. [reviewer-traceability.md](reviewer-traceability.md) - hop-by-hop trace from input, to route decision and evidence record, to review state, to verification and test evidence.
+4. [packaging-readiness.md](packaging-readiness.md) - local install and packaging-readiness expectations.
+5. [issue-72-signed-route-decision-checkpoint.md](issue-72-signed-route-decision-checkpoint.md) - consolidated signed route-decision reviewer path.
+6. [../submission/README.md](../submission/README.md) - judge-facing submission bundle and video-first materials.
+7. [../current_backlog.md](../current_backlog.md) and [../change/change_log.md](../change/change_log.md) - current work lanes and applied change history.
 
 ## Validation Path
 

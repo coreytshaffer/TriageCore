@@ -13,3 +13,7 @@ It is critical for reviewers, operators, and downstream systems to understand th
 3. **Not Authority Escalation:** Identity capabilities (e.g., `route_audit:sign`) only authorize the agent to *create* the cryptographic record of that event. They do not bypass existing human review gates, admission controls, or CI/CD branch protections.
 
 Cryptographic identity in TriageCore is a tamper-evident audit trail designed to solve the "which agent did this?" problem, keeping AI-generated actions accountable and traceable. It is intentionally decoupled from trust and safety enforcement.
+
+## Authority Manifests
+
+For task-scoped action boundaries, see [Agent Authority Manifest](agent_authority_manifest.md). Authority manifests complement signatures by describing owner, purpose, allowed actions, denied actions, resource scope, approval gates, expiration, and revocation state. A passing authority-manifest check still does not grant approval or execute anything; it only proves that the static authority artifact is structurally complete under the current contract.

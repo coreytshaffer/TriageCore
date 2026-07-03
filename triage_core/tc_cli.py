@@ -17,6 +17,11 @@ from triage_core.task_ledger import (
     verify_ledger_event_signatures_in_ledger,
 )
 from triage_core.demo_dry_run import format_demo_dry_run, run_demo_dry_run
+from triage_core.agent_authority import (
+    load_authority_manifest,
+    summarize_authority_manifest_check,
+    validate_authority_manifest,
+)
 from triage_core.model_manifest import (
     compare_route_to_manifest,
     load_json_payload,
@@ -491,6 +496,25 @@ def tc_model_warn(manifest_path: str, route_path: str) -> None:
 
     report = compare_route_to_manifest(route_payload, manifest)
     print(summarize_route_manifest_warning_report(manifest_path, route_path, report))
+
+
+def tc_authority_check(manifest_path: str) -> None:
+    try:
+        manifest = load_authority_manifest(manifest_path)
+    except FileNotFoundError:
+        print(f"Error: {manifest_path} not found.")
+        sys.exit(1)
+    except json.JSONDecodeError as e:
+        print(f"Error: {manifest_path} is not valid JSON ({e.msg}).")
+        sys.exit(1)
+    except OSError as e:
+        print(f"Error reading {manifest_path}: {e}")
+        sys.exit(1)
+
+    result = validate_authority_manifest(manifest)
+    print(summarize_authority_manifest_check(manifest_path, manifest, result))
+    if not result.is_valid:
+        sys.exit(1)
 
 
 def tc_identity_init(agent_id: str, role: str, capabilities: List[str]) -> None:
@@ -1567,6 +1591,22 @@ def main():
         help="Path to a route metadata JSON file",
     )
 
+    # authority
+    authority_parser = subparsers.add_parser(
+        "authority",
+        help="Inspect task-scoped agent authority manifests safely",
+    )
+    authority_subparsers = authority_parser.add_subparsers(dest="authority_command")
+    authority_check_parser = authority_subparsers.add_parser(
+        "check",
+        help="Validate an agent authority manifest without granting authority",
+    )
+    authority_check_parser.add_argument(
+        "--manifest",
+        required=True,
+        help="Path to an agent authority manifest JSON file",
+    )
+
     # identity
     identity_parser = subparsers.add_parser("identity", help="Manage local persistent agent identities")
     identity_subparsers = identity_parser.add_subparsers(dest="identity_command")
@@ -1990,6 +2030,11 @@ def main():
             tc_model_warn(args.manifest, args.route)
         else:
             model_parser.error("model requires a subcommand: check or warn")
+    elif args.command == "authority":
+        if args.authority_command == "check":
+            tc_authority_check(args.manifest)
+        else:
+            authority_parser.error("authority requires a subcommand: check")
     elif args.command == "demo":
         if not args.dry_run:
             demo_parser.error("the demo command currently requires --dry-run")

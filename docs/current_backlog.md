@@ -2,9 +2,14 @@
 
 ## Status
 
-This document summarizes the active TriageCore backlog after CR-092.
+This document summarizes the active TriageCore backlog after CR-095.
 
 ## Active GitHub Backlog
+
+- CR-096: Fix TriageDesk review evidence payload integrity
+  - Status: complete via CR-096
+  - Purpose: fix payload keys so "needs revision" survives end-to-end and remove fabricated effort metadata from the GUI review submission, ensuring the ledger only claims what is actually known.
+
 
 - Issue #72: Expand signed ledger event coverage beyond `route_audit`
   - Status: `validation_result` creation, verification, and reviewer-facing example complete via CR-078, CR-079, and CR-081; signed `route_decision` creation and operator-facing verification complete via CR-082; signed `route_decision` smoke example and reviewer-facing verification doc complete via CR-083; capability-targeted identity doctor checks for route-decision signers complete via CR-084; consolidated reviewer checkpoint doc complete via CR-085; stabilization reviewer checkpoint and packaging/readiness docs complete via CR-086; broader event coverage remains future work
@@ -23,6 +28,11 @@ This document summarizes the active TriageCore backlog after CR-092.
   - Purpose: record comparable token, latency, backend-profile, quality-gate, agent-group, baseline-lineage, claim-validity, and energy-evidence-tier data for local runtime choices such as Ollama and llama.cpp before any runtime migration.
 
 ## Candidate Future Work
+
+- Agent authority and delegation boundary
+  - Source: CR-095 task-scoped agent authority manifest
+  - Status: authority manifest contract, reviewer-style example, invalid example, and metadata-only CLI validation complete; identity-registry binding, manifest signing, admission enforcement, and route enforcement remain future slices
+  - Purpose: keep cryptographic provenance separate from task-scoped action authority by making owner, purpose, allowed actions, denied actions, resource scope, approval gates, expiration, and revocation state inspectable before any future workflow treats an agent action as inside bounds.
 
 - Empirical AI safety evaluation track
   - Source: CR-076 and CR-077 research framing/eval taxonomy docs
@@ -101,12 +111,14 @@ This document summarizes the active TriageCore backlog after CR-092.
 - CR-032: Model Route Manifest Schema
 - CR-033: Model Manifest Check CLI
 - CR-034: Repository Consistency and Secrets Hygiene
+- CR-095: Task-Scoped Agent Authority Manifest
 
 ## Current Recommendation
 
 Keep three work lanes distinct:
 
 - Identity lifecycle work #4 is closed. CR-078, CR-079, CR-081, CR-082, CR-083, CR-084, and CR-085 complete the signed `validation_result` and `route_decision` paths under Issue #72 through creation, verification, smoke evidence, capability readiness checks, and reviewer-facing or operator-facing examples; CR-086 adds a stabilization/readiness checkpoint around that completed lane, CR-087 adds a clean reviewer smoke runbook, CR-088 adds video-first submission packaging, and CR-089 adds a reviewer entrypoints index. Remaining signed-event expansion and Issue #73 runtime rotation behavior should stay separate implementation slices.
+- Agent authority work should build on CR-095. Keep authority-manifest validation static and metadata-only until a separate CR binds it to the identity registry, signed route decisions, admission checks, or runtime enforcement. Do not treat a passing authority manifest as approval or execution permission.
 - Model and runtime integrity work should build on CR-031 through CR-033. Keep
   policy baseline, route-manifest artifact shape, manifest validation, and live
   enforcement as separate reviewable slices.

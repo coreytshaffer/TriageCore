@@ -1,0 +1,31 @@
+{
+  "schema_version": "1.0.0",
+  "agent_id": "agent.local.triagecore.reviewer",
+  "owner": "operator",
+  "purpose": "Review route decisions and write non-executing recommendations.",
+  "allowed_actions": [
+    "read_task_packet",
+    "propose_route_decision",
+    "write_review_artifact"
+  ],
+  "denied_actions": [
+    "execute_shell",
+    "access_secrets",
+    "deploy_code",
+    "modify_identity_registry",
+    "write_to_main_branch"
+  ],
+  "allowed_resources": [
+    "docs/",
+    "tests/fixtures/",
+    ".triagecore/evidence/"
+  ],
+  "requires_human_approval_for": [
+    "network_access",
+    "write_to_main_branch",
+    "credential_rotation",
+    "external_api_call"
+  ],
+  "expires_at": "2099-12-31T23:59:59Z",
+  "revocation_status": "active"
+}
