@@ -6,6 +6,10 @@ This document summarizes the active TriageCore backlog after CR-095.
 
 ## Active GitHub Backlog
 
+- CR-102: Add Route/Worker Ledger Fixture Demo
+  - Status: complete via CR-102
+  - Purpose: Provide a deterministic metadata-only demo ledger and operations note for reviewers to inspect the CR-100/CR-101 route-worker telemetry path without runtime integration.
+
 - CR-101: Add Route/Worker Ledger Inspection CLI
   - Status: complete via CR-101
   - Purpose: Add an explicit-path, read-only CLI inspection command for CR-100 route/worker telemetry JSONL files, with fail-closed validation and reviewer summary counts.
@@ -156,5 +160,5 @@ For operator UX, future slices should focus on reviewability, export polish, and
 
 ## Next Candidate Slices
 
-- **Route/worker ledger example fixture**: Add a small public sample JSONL fixture for CR-100/CR-101 reviewer walkthroughs without wiring it into runtime.
+- **Route/worker ledger integration review**: Decide whether any explicit append seam should call the CR-100 helper, keeping the behavior telemetry-only and separate from execution authority.
 - **Signature verification options on task show**: Decouple signature checking from CLI-abort mechanics so `tc task show --verify-signatures` verifies signatures safely.
