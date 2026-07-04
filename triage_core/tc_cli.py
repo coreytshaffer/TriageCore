@@ -33,7 +33,9 @@ from triage_core.model_manifest import (
 from triage_core.privacy_invariants import find_forbidden_persistent_fields
 from triage_core.runtime_strategy_evidence import (
     build_fixture_strategy_delta_report,
+    export_strategy_delta_report,
     format_strategy_delta_report,
+    render_strategy_delta_report_json,
 )
 from triage_core.route_worker_ledger import (
     RouteWorkerLedgerValidationError,
@@ -1588,10 +1590,32 @@ def tc_route_worker_ledger_inspect(ledger_path: str) -> None:
     print(format_route_worker_ledger_inspection(summary))
 
 
-def tc_runtime_strategy_report(as_json: bool = False) -> None:
+def tc_runtime_strategy_report(
+    as_json: bool = False,
+    output: str | None = None,
+    force: bool = False,
+) -> None:
     report = build_fixture_strategy_delta_report()
+    if output is not None:
+        try:
+            written_path = export_strategy_delta_report(report, output, force=force)
+        except FileExistsError:
+            print(f"Error: output file already exists: {output}")
+            print("reason=output_exists")
+            print("Pass --force to overwrite.")
+            sys.exit(1)
+        except FileNotFoundError as exc:
+            print(f"Error: {exc}")
+            print("reason=output_directory_missing")
+            sys.exit(1)
+        except OSError as exc:
+            print(f"Error writing runtime strategy delta report: {exc}")
+            print("reason=output_write_failed")
+            sys.exit(1)
+        print(f"Success: wrote runtime strategy delta report to {written_path}")
+        return
     if as_json:
-        print(json.dumps(report, indent=2, sort_keys=True))
+        print(render_strategy_delta_report_json(report), end="")
         return
     print(format_strategy_delta_report(report))
 
@@ -1853,10 +1877,26 @@ def main():
             "baseline without live model calls"
         ),
     )
-    runtime_strategy_report_parser.add_argument(
+    runtime_strategy_report_output_group = (
+        runtime_strategy_report_parser.add_mutually_exclusive_group()
+    )
+    runtime_strategy_report_output_group.add_argument(
         "--json",
         action="store_true",
         help="Emit the delta report as JSON instead of a text table",
+    )
+    runtime_strategy_report_output_group.add_argument(
+        "--output",
+        help=(
+            "Write the delta report as a metadata-only JSON artifact to this "
+            "explicit path; the parent directory must exist and existing "
+            "files are not overwritten without --force"
+        ),
+    )
+    runtime_strategy_report_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite an existing --output file",
     )
 
     # task
@@ -2239,7 +2279,13 @@ def main():
             tokens_parser.error("tokens requires a subcommand: smoke-test")
     elif args.command == "runtime-strategy":
         if args.runtime_strategy_command == "report":
-            tc_runtime_strategy_report(as_json=args.json)
+            if args.force and not args.output:
+                runtime_strategy_parser.error("--force requires --output")
+            tc_runtime_strategy_report(
+                as_json=args.json,
+                output=args.output,
+                force=args.force,
+            )
         else:
             runtime_strategy_parser.error(
                 "runtime-strategy requires a subcommand: report"

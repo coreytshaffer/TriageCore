@@ -177,6 +177,34 @@ review-state access), makes no model calls, and emits ASCII-only output so it
 renders on default Windows consoles. The `--json` form emits the same report
 as a deterministic JSON object for scripting.
 
+## Report Artifact Export
+
+The report can be written as a metadata-only JSON artifact to an explicit
+path:
+
+```powershell
+tc runtime-strategy report --output reports\runtime-strategy-deltas.json
+tc runtime-strategy report --output reports\runtime-strategy-deltas.json --force
+```
+
+Export rules:
+
+- The artifact is byte-for-byte the same JSON the `--json` form prints: one
+  serialization, one schema (`runtime_strategy_delta_report.v2`), no separate
+  artifact shape, and no generation timestamp — two exports of the same
+  fixtures produce identical bytes.
+- There is no default write location: without `--output` the command writes
+  nothing.
+- `--json` and `--output` are mutually exclusive; with `--output` the command
+  prints a single confirmation line.
+- Fails closed with `reason=output_directory_missing` when the parent
+  directory does not exist, and `reason=output_exists` when the file already
+  exists and `--force` was not passed. `--force` requires `--output`.
+- Overwrites are atomic (temp file plus replace), so a failed write cannot
+  destroy a prior artifact.
+- The artifact must remain metadata-only: no prompts, raw context, or model
+  outputs.
+
 ## Validation Rules
 
 - Each step must declare a role, backend, model profile, estimated input tokens, estimated output tokens, and schema-validity status.

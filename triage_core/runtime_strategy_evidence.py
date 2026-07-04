@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from triage_core.privacy_invariants import assert_persistent_privacy_safe
@@ -598,6 +600,50 @@ def build_fixture_strategy_delta_report(
         artifact_name="runtime strategy delta report",
     )
     return report
+
+
+def render_strategy_delta_report_json(report: Mapping[str, Any]) -> str:
+    """Render the delta report as deterministic JSON.
+
+    This is the single serialization used for both stdout JSON output and
+    file artifacts, so the two can never drift apart.
+    """
+    return json.dumps(report, indent=2, sort_keys=True) + "\n"
+
+
+def export_strategy_delta_report(
+    report: Mapping[str, Any],
+    output_path: str | Path,
+    *,
+    force: bool = False,
+) -> Path:
+    """Write the delta report to an explicit path as a metadata-only artifact.
+
+    Fails closed: the parent directory must already exist, and an existing
+    file is never overwritten unless force is set. Overwrites are atomic
+    (temp file + replace) so a failed write cannot destroy a prior artifact.
+    """
+    path = Path(output_path)
+    parent = path.parent if str(path.parent) else Path(".")
+    if not parent.is_dir():
+        raise FileNotFoundError(
+            f"output directory does not exist: {parent}"
+        )
+    if path.exists() and not force:
+        raise FileExistsError(f"output file already exists: {path}")
+
+    temp_path = path.with_name(path.name + ".tmp")
+    try:
+        temp_path.write_text(
+            render_strategy_delta_report_json(report),
+            encoding="utf-8",
+            newline="\n",
+        )
+        os.replace(temp_path, path)
+    except OSError:
+        temp_path.unlink(missing_ok=True)
+        raise
+    return path
 
 
 def format_strategy_delta_report(report: Mapping[str, Any]) -> str:

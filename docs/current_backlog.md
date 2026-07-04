@@ -2,9 +2,13 @@
 
 ## Status
 
-This document summarizes the active TriageCore backlog after CR-108.
+This document summarizes the active TriageCore backlog after CR-109.
 
 ## Active GitHub Backlog
+
+- CR-109: Runtime Strategy Report Export
+  - Status: complete via CR-109
+  - Purpose: Write the deterministic runtime strategy delta report as a metadata-only JSON artifact to an explicit operator-named path, fail-closed on existing files and missing directories, with byte-identical repeated exports and no default write location.
 
 - CR-108: Quality-Gate-Aware Delta Interpretation
   - Status: complete via CR-108
