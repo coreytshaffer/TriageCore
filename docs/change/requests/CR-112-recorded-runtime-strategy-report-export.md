@@ -4,6 +4,8 @@
 
 Implemented
 
+Pushed and CI verified: `origin/main` at `a3d7bd0`, GitHub Actions run `28733487377` passed on Python 3.10, 3.11, and 3.12 (Node 20 deprecation annotations only; no failures). CR-112 (renumbered from a draft CR-111 after the reviewer runbook note consumed that number) adds `--output <path>` and `--force` to `tc runtime-strategy recorded-report`, reusing the report-kind-agnostic CR-109 export path unchanged so fixture and recorded artifacts share one deterministic serialization and atomic write implementation, with fail-closed reason-coded handling and no modification of the input file.
+
 ## Scope
 
 - Add `--output <path>` and `--force` to
