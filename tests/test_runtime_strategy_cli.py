@@ -392,6 +392,196 @@ def test_recorded_report_rejects_single_record(tmp_path, capsys):
     assert "reason=too_few_records" in capsys.readouterr().out
 
 
+def test_recorded_export_writes_exact_report_artifact(tmp_path, capsys):
+    output_path = tmp_path / "recorded-deltas.json"
+
+    tc_runtime_strategy_recorded_report(
+        str(RECORDS_EXAMPLE_PATH),
+        output=str(output_path),
+    )
+
+    out = capsys.readouterr().out
+    assert (
+        f"Success: wrote recorded runtime strategy delta report to {output_path}"
+        in out
+    )
+    assert "Recorded runtime strategy delta report" not in out
+    expected_bytes = render_strategy_delta_report_json(
+        build_recorded_strategy_delta_report(
+            load_recorded_strategy_evidence_records(RECORDS_EXAMPLE_PATH)
+        )
+    ).encode("utf-8")
+    assert output_path.read_bytes() == expected_bytes
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["kind"] == "recorded_runtime_strategy_delta_report"
+    assert payload["schema_version"] == RECORDED_DELTA_REPORT_SCHEMA_VERSION
+    # Only the explicitly named output exists; no temp file left behind.
+    assert sorted(path.name for path in tmp_path.iterdir()) == [output_path.name]
+
+
+def test_recorded_export_is_byte_deterministic(tmp_path):
+    first = tmp_path / "first.json"
+    second = tmp_path / "second.json"
+
+    tc_runtime_strategy_recorded_report(
+        str(RECORDS_EXAMPLE_PATH), output=str(first)
+    )
+    tc_runtime_strategy_recorded_report(
+        str(RECORDS_EXAMPLE_PATH), output=str(second)
+    )
+
+    assert first.read_bytes() == second.read_bytes()
+
+
+def test_recorded_export_artifact_is_metadata_only_and_untimestamped(tmp_path):
+    output_path = tmp_path / "recorded.json"
+
+    tc_runtime_strategy_recorded_report(
+        str(RECORDS_EXAMPLE_PATH), output=str(output_path)
+    )
+
+    content = output_path.read_text(encoding="utf-8")
+    for forbidden in (
+        "prompt",
+        "raw_context",
+        "model_output",
+        "generated",
+        "timestamp",
+        "created_at",
+    ):
+        assert forbidden not in content
+
+
+def test_recorded_export_fails_closed_on_existing_file(tmp_path, capsys):
+    output_path = tmp_path / "recorded.json"
+    output_path.write_text("preserve-me\n", encoding="utf-8")
+
+    with pytest.raises(SystemExit) as exc:
+        tc_runtime_strategy_recorded_report(
+            str(RECORDS_EXAMPLE_PATH), output=str(output_path)
+        )
+
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "reason=output_exists" in out
+    assert "Pass --force to overwrite." in out
+    assert output_path.read_text(encoding="utf-8") == "preserve-me\n"
+
+
+def test_recorded_export_force_overwrites_existing_file(tmp_path):
+    output_path = tmp_path / "recorded.json"
+    output_path.write_text("stale artifact\n", encoding="utf-8")
+
+    tc_runtime_strategy_recorded_report(
+        str(RECORDS_EXAMPLE_PATH), output=str(output_path), force=True
+    )
+
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["kind"] == "recorded_runtime_strategy_delta_report"
+
+
+def test_recorded_export_fails_closed_when_parent_directory_missing(
+    tmp_path, capsys
+):
+    output_path = tmp_path / "missing" / "recorded.json"
+
+    with pytest.raises(SystemExit) as exc:
+        tc_runtime_strategy_recorded_report(
+            str(RECORDS_EXAMPLE_PATH), output=str(output_path)
+        )
+
+    assert exc.value.code == 1
+    assert "reason=output_directory_missing" in capsys.readouterr().out
+    assert not (tmp_path / "missing").exists()
+
+
+def test_recorded_export_flag_combinations_rejected(tmp_path):
+    repo_root = Path(__file__).resolve().parents[1]
+    env = os.environ.copy()
+    existing_pythonpath = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = (
+        str(repo_root)
+        if not existing_pythonpath
+        else str(repo_root) + os.pathsep + existing_pythonpath
+    )
+    base_args = [
+        sys.executable,
+        "-m",
+        "triage_core.tc_cli",
+        "runtime-strategy",
+        "recorded-report",
+        "--input",
+        str(RECORDS_EXAMPLE_PATH),
+    ]
+
+    exclusive = subprocess.run(
+        base_args + ["--json", "--output", str(tmp_path / "recorded.json")],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        env=env,
+    )
+    assert exclusive.returncode == 2
+    assert "not allowed with argument" in exclusive.stderr
+
+    force_without_output = subprocess.run(
+        base_args + ["--force"],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        env=env,
+    )
+    assert force_without_output.returncode == 2
+    assert "--force requires --output" in force_without_output.stderr
+    assert not (tmp_path / "recorded.json").exists()
+
+
+def test_recorded_export_does_not_modify_input_or_create_extra_files(tmp_path):
+    repo_root = Path(__file__).resolve().parents[1]
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    input_path = workspace / "records.json"
+    input_bytes = RECORDS_EXAMPLE_PATH.read_bytes()
+    input_path.write_bytes(input_bytes)
+    output_path = workspace / "recorded-deltas.json"
+
+    env = os.environ.copy()
+    existing_pythonpath = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = (
+        str(repo_root)
+        if not existing_pythonpath
+        else str(repo_root) + os.pathsep + existing_pythonpath
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "triage_core.tc_cli",
+            "runtime-strategy",
+            "recorded-report",
+            "--input",
+            str(input_path),
+            "--output",
+            str(output_path),
+        ],
+        capture_output=True,
+        text=True,
+        cwd=workspace,
+        env=env,
+    )
+
+    assert result.returncode == 0
+    assert "Success: wrote recorded runtime strategy delta report" in result.stdout
+    assert input_path.read_bytes() == input_bytes
+    # Exactly the input and the explicitly named output; no ledger,
+    # no .triagecore, no temp files.
+    assert sorted(path.name for path in workspace.iterdir()) == [
+        output_path.name,
+        input_path.name,
+    ]
+
+
 def test_recorded_report_cli_is_read_only(tmp_path):
     repo_root = Path(__file__).resolve().parents[1]
     workspace = tmp_path / "workspace"

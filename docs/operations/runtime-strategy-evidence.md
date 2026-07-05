@@ -249,6 +249,25 @@ report computes deterministic arithmetic over them. It does not verify that
 the recorded estimates match any real execution, and token deltas over
 recorded records carry the same quality non-claim as fixture deltas.
 
+### Recorded Report Export
+
+The recorded report can be written as a metadata-only JSON artifact using the
+same export rules as the fixture report:
+
+```powershell
+tc runtime-strategy recorded-report --input docs\examples\runtime_strategy_records.example.json --output reports\recorded-strategy-deltas.json
+tc runtime-strategy recorded-report --input docs\examples\runtime_strategy_records.example.json --output reports\recorded-strategy-deltas.json --force
+```
+
+Export rules match the fixture export exactly, through the same shared
+artifact-writing path: no default write location, `--json` and `--output`
+mutually exclusive, `--force` requires `--output`, fail-closed
+`reason=output_exists` / `reason=output_directory_missing` /
+`reason=output_write_failed`, atomic overwrites, no timestamps, and
+byte-identical repeated exports of the same input. With `--output` the
+command prints one confirmation line instead of the report body, and it
+never modifies the input file.
+
 ## Validation Rules
 
 - Each step must declare a role, backend, model profile, estimated input tokens, estimated output tokens, and schema-validity status.

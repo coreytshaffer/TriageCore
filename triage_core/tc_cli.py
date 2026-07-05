@@ -1628,6 +1628,8 @@ def tc_runtime_strategy_recorded_report(
     input_path: str,
     baseline: str | None = None,
     as_json: bool = False,
+    output: str | None = None,
+    force: bool = False,
 ) -> None:
     try:
         records = load_recorded_strategy_evidence_records(input_path)
@@ -1647,6 +1649,28 @@ def tc_runtime_strategy_recorded_report(
         print(f"Error reading recorded evidence input: {exc}")
         print("reason=input_read_failed")
         sys.exit(1)
+
+    if output is not None:
+        try:
+            written_path = export_strategy_delta_report(report, output, force=force)
+        except FileExistsError:
+            print(f"Error: output file already exists: {output}")
+            print("reason=output_exists")
+            print("Pass --force to overwrite.")
+            sys.exit(1)
+        except FileNotFoundError as exc:
+            print(f"Error: {exc}")
+            print("reason=output_directory_missing")
+            sys.exit(1)
+        except OSError as exc:
+            print(f"Error writing recorded runtime strategy delta report: {exc}")
+            print("reason=output_write_failed")
+            sys.exit(1)
+        print(
+            "Success: wrote recorded runtime strategy delta report "
+            f"to {written_path}"
+        )
+        return
 
     if as_json:
         print(render_strategy_delta_report_json(report), end="")
@@ -1954,10 +1978,26 @@ def main():
             "record in the input file"
         ),
     )
-    runtime_strategy_recorded_parser.add_argument(
+    runtime_strategy_recorded_output_group = (
+        runtime_strategy_recorded_parser.add_mutually_exclusive_group()
+    )
+    runtime_strategy_recorded_output_group.add_argument(
         "--json",
         action="store_true",
         help="Emit the recorded delta report as JSON instead of a text table",
+    )
+    runtime_strategy_recorded_output_group.add_argument(
+        "--output",
+        help=(
+            "Write the recorded delta report as a metadata-only JSON artifact "
+            "to this explicit path; the parent directory must exist and "
+            "existing files are not overwritten without --force"
+        ),
+    )
+    runtime_strategy_recorded_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite an existing --output file",
     )
 
     # task
@@ -2348,10 +2388,14 @@ def main():
                 force=args.force,
             )
         elif args.runtime_strategy_command == "recorded-report":
+            if args.force and not args.output:
+                runtime_strategy_parser.error("--force requires --output")
             tc_runtime_strategy_recorded_report(
                 input_path=args.input,
                 baseline=args.baseline,
                 as_json=args.json,
+                output=args.output,
+                force=args.force,
             )
         else:
             runtime_strategy_parser.error(

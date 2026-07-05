@@ -2,9 +2,13 @@
 
 ## Status
 
-This document summarizes the active TriageCore backlog after CR-110.
+This document summarizes the active TriageCore backlog after CR-112.
 
 ## Active GitHub Backlog
+
+- CR-112: Recorded Runtime Strategy Report Export
+  - Status: complete via CR-112
+  - Purpose: Write recorded runtime strategy delta reports as deterministic, metadata-only JSON artifacts through the same shared export path as fixture reports, with fail-closed reason-coded handling for existing files, missing directories, and write failures, and no default output location.
 
 - CR-110: Recorded Runtime Strategy Evidence Report
   - Status: complete via CR-110
