@@ -291,3 +291,4 @@ never modifies the input file.
 - [runtime-efficiency-ledger.md](runtime-efficiency-ledger.md)
 - [controlled-runtime-experiments.md](controlled-runtime-experiments.md)
 - [experiment-observability-traces.md](experiment-observability-traces.md)
+- [local-backend-telemetry.md](local-backend-telemetry.md) (design brief for a future read-only telemetry slice; no telemetry behavior exists yet)

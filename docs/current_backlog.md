@@ -2,9 +2,13 @@
 
 ## Status
 
-This document summarizes the active TriageCore backlog after CR-112.
+This document summarizes the active TriageCore backlog after CR-113.
 
 ## Active GitHub Backlog
+
+- CR-113: Local Backend Telemetry Design Brief
+  - Status: complete via CR-113 (docs-only); telemetry probe implementation remains a gated future candidate (CR-114+)
+  - Purpose: Define the boundaries for a future read-only local backend telemetry slice — metadata-only availability and model/runtime identity observations for Ollama, LM Studio, and llama.cpp local endpoints — including candidate fields with privacy considerations, a closed failure vocabulary, evidence-tier provenance, an opt-in probe posture, and a reviewer path that requires no model execution, before any probe code is written.
 
 - CR-112: Recorded Runtime Strategy Report Export
   - Status: complete via CR-112
@@ -196,5 +200,6 @@ For operator UX, future slices should focus on reviewability, export polish, and
 
 ## Next Candidate Slices
 
+- **Local backend telemetry probe (read-only)**: Implement the metadata-only local backend probe bounded by the CR-113 design brief ([local-backend-telemetry.md](operations/local-backend-telemetry.md)) — opt-in, explicit-endpoint, fail-closed, no generation calls, no ledger writes.
 - **Reviewer checkpoint or release-hygiene slice**: Freeze the completed route-worker reviewer lane into a concise checkpoint, packaging note, or release-hygiene update instead of adding more telemetry features.
 - **Signature verification options on task show**: Decouple signature checking from CLI-abort mechanics so `tc task show --verify-signatures` verifies signatures safely.
