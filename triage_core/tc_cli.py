@@ -32,9 +32,13 @@ from triage_core.model_manifest import (
 )
 from triage_core.privacy_invariants import find_forbidden_persistent_fields
 from triage_core.runtime_strategy_evidence import (
+    RecordedStrategyEvidenceError,
     build_fixture_strategy_delta_report,
+    build_recorded_strategy_delta_report,
     export_strategy_delta_report,
+    format_recorded_strategy_delta_report,
     format_strategy_delta_report,
+    load_recorded_strategy_evidence_records,
     render_strategy_delta_report_json,
 )
 from triage_core.route_worker_ledger import (
@@ -1620,6 +1624,36 @@ def tc_runtime_strategy_report(
     print(format_strategy_delta_report(report))
 
 
+def tc_runtime_strategy_recorded_report(
+    input_path: str,
+    baseline: str | None = None,
+    as_json: bool = False,
+) -> None:
+    try:
+        records = load_recorded_strategy_evidence_records(input_path)
+        report = build_recorded_strategy_delta_report(
+            records,
+            baseline_strategy=baseline,
+        )
+    except FileNotFoundError:
+        print(f"Error: input file not found: {input_path}")
+        print("reason=input_not_found")
+        sys.exit(1)
+    except RecordedStrategyEvidenceError as exc:
+        print(f"Error: {exc}")
+        print(f"reason={exc.reason}")
+        sys.exit(1)
+    except OSError as exc:
+        print(f"Error reading recorded evidence input: {exc}")
+        print("reason=input_read_failed")
+        sys.exit(1)
+
+    if as_json:
+        print(render_strategy_delta_report_json(report), end="")
+        return
+    print(format_recorded_strategy_delta_report(report))
+
+
 def tc_task_show(task_id: str) -> None:
     from triage_core.task_ledger import TaskLedger
 
@@ -1897,6 +1931,33 @@ def main():
         "--force",
         action="store_true",
         help="Overwrite an existing --output file",
+    )
+    runtime_strategy_recorded_parser = runtime_strategy_subparsers.add_parser(
+        "recorded-report",
+        help=(
+            "Render strategy deltas from operator-supplied recorded evidence "
+            "records in an explicit JSON file, without live model calls"
+        ),
+    )
+    runtime_strategy_recorded_parser.add_argument(
+        "--input",
+        required=True,
+        help=(
+            "Path to a JSON file containing a top-level list of runtime "
+            "strategy evidence records"
+        ),
+    )
+    runtime_strategy_recorded_parser.add_argument(
+        "--baseline",
+        help=(
+            "Baseline strategy name; defaults to the strategy of the first "
+            "record in the input file"
+        ),
+    )
+    runtime_strategy_recorded_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit the recorded delta report as JSON instead of a text table",
     )
 
     # task
@@ -2286,9 +2347,15 @@ def main():
                 output=args.output,
                 force=args.force,
             )
+        elif args.runtime_strategy_command == "recorded-report":
+            tc_runtime_strategy_recorded_report(
+                input_path=args.input,
+                baseline=args.baseline,
+                as_json=args.json,
+            )
         else:
             runtime_strategy_parser.error(
-                "runtime-strategy requires a subcommand: report"
+                "runtime-strategy requires a subcommand: report or recorded-report"
             )
     elif args.command == "route-worker-ledger":
         if args.route_worker_ledger_command == "inspect":

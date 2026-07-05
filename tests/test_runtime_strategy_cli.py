@@ -9,11 +9,28 @@ import pytest
 from triage_core.runtime_strategy_evidence import (
     DELTA_REPORT_QUALITY_NOTE,
     DELTA_REPORT_SCHEMA_VERSION,
+    RECORDED_DELTA_REPORT_SCHEMA_VERSION,
     build_fixture_strategy_delta_report,
+    build_recorded_strategy_delta_report,
     compute_fixture_strategy_deltas,
+    load_recorded_strategy_evidence_records,
     render_strategy_delta_report_json,
 )
-from triage_core.tc_cli import tc_runtime_strategy_report
+from triage_core.tc_cli import (
+    tc_runtime_strategy_recorded_report,
+    tc_runtime_strategy_report,
+)
+
+RECORDS_EXAMPLE_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "docs"
+    / "examples"
+    / "runtime_strategy_records.example.json"
+)
+RECORDS_INVALID_EXAMPLE_PATH = (
+    RECORDS_EXAMPLE_PATH.parent
+    / "runtime_strategy_records.invalid_duplicate_strategy.example.json"
+)
 
 
 def test_report_text_output_shows_fixture_deltas(capsys):
@@ -197,6 +214,221 @@ def test_json_and_output_flags_are_mutually_exclusive(tmp_path):
     assert force_without_output.returncode == 2
     assert "--force requires --output" in force_without_output.stderr
     assert not (tmp_path / "report.json").exists()
+
+
+def _example_records_payload():
+    return json.loads(RECORDS_EXAMPLE_PATH.read_text(encoding="utf-8"))
+
+
+def _write_records(tmp_path, payload) -> Path:
+    input_path = tmp_path / "records.json"
+    input_path.write_text(json.dumps(payload), encoding="utf-8")
+    return input_path
+
+
+def test_recorded_report_renders_text_from_example_file(capsys):
+    tc_runtime_strategy_recorded_report(str(RECORDS_EXAMPLE_PATH))
+
+    out = capsys.readouterr().out
+    assert "Recorded runtime strategy delta report" in out
+    assert "Input records: 3" in out
+    assert "Baseline: heavy_only" in out
+    assert "Task: recorded-doc-summary-001" in out
+    assert "small_first_compact" in out
+    assert "-2270" in out
+    assert "-51.6%" in out
+    assert "token_saving_with_added_handoff" in out
+    assert "small_only" in out
+    assert "-2750" in out
+    assert "token_saving" in out
+    assert "quality_not_evaluated" in out
+    assert f"Note: {DELTA_REPORT_QUALITY_NOTE}." in out
+    out.encode("ascii")
+
+
+def test_recorded_report_json_is_deterministic_and_matches_builder(capsys):
+    tc_runtime_strategy_recorded_report(str(RECORDS_EXAMPLE_PATH), as_json=True)
+    first = capsys.readouterr().out
+    tc_runtime_strategy_recorded_report(str(RECORDS_EXAMPLE_PATH), as_json=True)
+    second = capsys.readouterr().out
+
+    assert first == second
+    payload = json.loads(first)
+    assert payload["schema_version"] == RECORDED_DELTA_REPORT_SCHEMA_VERSION
+    assert payload["kind"] == "recorded_runtime_strategy_delta_report"
+    assert payload["record_count"] == 3
+    assert payload["strategies"] == [
+        "heavy_only",
+        "small_first_compact",
+        "small_only",
+    ]
+    expected = build_recorded_strategy_delta_report(
+        load_recorded_strategy_evidence_records(RECORDS_EXAMPLE_PATH)
+    )
+    assert payload == expected
+
+
+def test_recorded_report_baseline_override(capsys):
+    tc_runtime_strategy_recorded_report(
+        str(RECORDS_EXAMPLE_PATH),
+        baseline="small_only",
+    )
+
+    out = capsys.readouterr().out
+    assert "Baseline: small_only" in out
+    assert "heavy_only" in out
+    assert "orchestration_overhead" in out
+
+
+def test_recorded_report_missing_file_fails_closed(tmp_path, capsys):
+    with pytest.raises(SystemExit) as exc:
+        tc_runtime_strategy_recorded_report(str(tmp_path / "missing.json"))
+
+    assert exc.value.code == 1
+    assert "reason=input_not_found" in capsys.readouterr().out
+
+
+def test_recorded_report_malformed_json_fails_closed(tmp_path, capsys):
+    input_path = tmp_path / "records.json"
+    input_path.write_text("{not json", encoding="utf-8")
+
+    with pytest.raises(SystemExit) as exc:
+        tc_runtime_strategy_recorded_report(str(input_path))
+
+    assert exc.value.code == 1
+    assert "reason=malformed_json" in capsys.readouterr().out
+
+
+def test_recorded_report_rejects_non_list_top_level(tmp_path, capsys):
+    input_path = _write_records(tmp_path, {"records": _example_records_payload()})
+
+    with pytest.raises(SystemExit) as exc:
+        tc_runtime_strategy_recorded_report(str(input_path))
+
+    assert exc.value.code == 1
+    assert "reason=unsupported_top_level_shape" in capsys.readouterr().out
+
+
+def test_recorded_report_rejects_invalid_record(tmp_path, capsys):
+    payload = _example_records_payload()
+    payload[1]["totals"]["estimated_tokens"] = 999999
+    input_path = _write_records(tmp_path, payload)
+
+    with pytest.raises(SystemExit) as exc:
+        tc_runtime_strategy_recorded_report(str(input_path))
+
+    out = capsys.readouterr().out
+    assert exc.value.code == 1
+    assert "reason=invalid_record" in out
+    assert "record[1]" in out
+
+
+def test_recorded_report_rejects_unknown_field(tmp_path, capsys):
+    payload = _example_records_payload()
+    payload[0]["surprise_field"] = "nope"
+    input_path = _write_records(tmp_path, payload)
+
+    with pytest.raises(SystemExit) as exc:
+        tc_runtime_strategy_recorded_report(str(input_path))
+
+    out = capsys.readouterr().out
+    assert exc.value.code == 1
+    assert "reason=invalid_record" in out
+
+
+def test_recorded_report_rejects_raw_content_field(tmp_path, capsys):
+    payload = _example_records_payload()
+    payload[0]["prompt"] = "raw prompt text must never be accepted"
+    input_path = _write_records(tmp_path, payload)
+
+    with pytest.raises(SystemExit) as exc:
+        tc_runtime_strategy_recorded_report(str(input_path))
+
+    out = capsys.readouterr().out
+    assert exc.value.code == 1
+    assert "reason=invalid_record" in out
+    assert "raw prompt text must never be accepted" not in out
+
+
+def test_recorded_report_rejects_mixed_task_ids(tmp_path, capsys):
+    payload = _example_records_payload()
+    payload[2]["task_id"] = "recorded-other-task-002"
+    input_path = _write_records(tmp_path, payload)
+
+    with pytest.raises(SystemExit) as exc:
+        tc_runtime_strategy_recorded_report(str(input_path))
+
+    assert exc.value.code == 1
+    assert "reason=mixed_task_ids" in capsys.readouterr().out
+
+
+def test_recorded_report_rejects_duplicate_strategy_example(capsys):
+    with pytest.raises(SystemExit) as exc:
+        tc_runtime_strategy_recorded_report(str(RECORDS_INVALID_EXAMPLE_PATH))
+
+    assert exc.value.code == 1
+    assert "reason=duplicate_strategy" in capsys.readouterr().out
+
+
+def test_recorded_report_rejects_missing_baseline(capsys):
+    with pytest.raises(SystemExit) as exc:
+        tc_runtime_strategy_recorded_report(
+            str(RECORDS_EXAMPLE_PATH),
+            baseline="not_a_strategy",
+        )
+
+    assert exc.value.code == 1
+    assert "reason=baseline_not_found" in capsys.readouterr().out
+
+
+def test_recorded_report_rejects_single_record(tmp_path, capsys):
+    payload = _example_records_payload()[:1]
+    input_path = _write_records(tmp_path, payload)
+
+    with pytest.raises(SystemExit) as exc:
+        tc_runtime_strategy_recorded_report(str(input_path))
+
+    assert exc.value.code == 1
+    assert "reason=too_few_records" in capsys.readouterr().out
+
+
+def test_recorded_report_cli_is_read_only(tmp_path):
+    repo_root = Path(__file__).resolve().parents[1]
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    input_path = workspace / "records.json"
+    input_bytes = RECORDS_EXAMPLE_PATH.read_bytes()
+    input_path.write_bytes(input_bytes)
+
+    env = os.environ.copy()
+    existing_pythonpath = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = (
+        str(repo_root)
+        if not existing_pythonpath
+        else str(repo_root) + os.pathsep + existing_pythonpath
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "triage_core.tc_cli",
+            "runtime-strategy",
+            "recorded-report",
+            "--input",
+            str(input_path),
+        ],
+        capture_output=True,
+        text=True,
+        cwd=workspace,
+        env=env,
+    )
+
+    assert result.returncode == 0
+    assert "Recorded runtime strategy delta report" in result.stdout
+    # Input file untouched, no ledger or other files created.
+    assert input_path.read_bytes() == input_bytes
+    assert sorted(path.name for path in workspace.iterdir()) == ["records.json"]
 
 
 def test_report_cli_is_read_only(tmp_path):

@@ -647,7 +647,23 @@ def export_strategy_delta_report(
 
 
 def format_strategy_delta_report(report: Mapping[str, Any]) -> str:
-    """Render the delta report as an aligned plain-text table."""
+    """Render the fixture delta report as an aligned plain-text table."""
+    return _format_delta_report_text(
+        report,
+        title="Runtime strategy delta report",
+        header_lines=(
+            f"Baseline: {report['baseline_strategy']}",
+            f"Task: {report['task_id']}",
+        ),
+    )
+
+
+def _format_delta_report_text(
+    report: Mapping[str, Any],
+    *,
+    title: str,
+    header_lines: tuple[str, ...],
+) -> str:
     # ASCII-only headers: Windows consoles commonly use cp1252, which cannot
     # encode the delta glyph.
     headers = (
@@ -677,16 +693,12 @@ def format_strategy_delta_report(report: Mapping[str, Any]) -> str:
         max(len(headers[column]), *(len(row[column]) for row in rows))
         for column in range(len(headers))
     ]
-    lines = [
-        "Runtime strategy delta report",
-        "",
-        f"Baseline: {report['baseline_strategy']}",
-        f"Task: {report['task_id']}",
-        "",
+    lines = [title, "", *header_lines, ""]
+    lines.append(
         "   ".join(
             header.ljust(widths[column]) for column, header in enumerate(headers)
-        ).rstrip(),
-    ]
+        ).rstrip()
+    )
     for row in rows:
         lines.append(
             "   ".join(
@@ -701,6 +713,158 @@ def format_strategy_delta_report(report: Mapping[str, Any]) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+RECORDED_DELTA_REPORT_KIND = "recorded_runtime_strategy_delta_report"
+RECORDED_DELTA_REPORT_SCHEMA_VERSION = "recorded_runtime_strategy_delta_report.v1"
+RECORDED_INPUT_FAILURE_REASONS = frozenset(
+    {
+        "malformed_json",
+        "unsupported_top_level_shape",
+        "invalid_record",
+        "too_few_records",
+        "mixed_task_ids",
+        "duplicate_strategy",
+        "baseline_not_found",
+    }
+)
+
+
+class RecordedStrategyEvidenceError(ValueError):
+    """Fail-closed error for operator-supplied recorded evidence input."""
+
+    def __init__(self, reason: str, message: str) -> None:
+        if reason not in RECORDED_INPUT_FAILURE_REASONS:
+            raise ValueError(f"unsupported recorded input failure reason: {reason}")
+        self.reason = reason
+        super().__init__(message)
+
+
+def load_recorded_strategy_evidence_records(
+    input_path: str | Path,
+) -> list[RuntimeStrategyEvidenceRecord]:
+    """Load operator-supplied evidence records from a JSON file.
+
+    The input shape is a top-level JSON list of runtime strategy evidence
+    record objects. Every record is validated through
+    runtime_strategy_evidence_from_mapping, which rejects unknown fields and
+    enforces the persistent privacy invariant.
+    """
+    text = Path(input_path).read_text(encoding="utf-8")
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise RecordedStrategyEvidenceError(
+            "malformed_json",
+            f"input file is not valid JSON ({exc.msg})",
+        ) from exc
+
+    if not isinstance(payload, list):
+        raise RecordedStrategyEvidenceError(
+            "unsupported_top_level_shape",
+            "input file must contain a top-level JSON list of runtime "
+            "strategy evidence records",
+        )
+
+    records: list[RuntimeStrategyEvidenceRecord] = []
+    for index, item in enumerate(payload):
+        if not isinstance(item, Mapping):
+            raise RecordedStrategyEvidenceError(
+                "invalid_record",
+                f"record[{index}] must be a JSON object",
+            )
+        try:
+            records.append(runtime_strategy_evidence_from_mapping(item))
+        except ValueError as exc:
+            raise RecordedStrategyEvidenceError(
+                "invalid_record",
+                f"record[{index}]: {exc}",
+            ) from exc
+    return records
+
+
+def build_recorded_strategy_delta_report(
+    records: Sequence[RuntimeStrategyEvidenceRecord],
+    baseline_strategy: str | None = None,
+) -> dict[str, Any]:
+    """Build a deterministic delta report over operator-supplied records.
+
+    The baseline defaults to the strategy of the first record in the input.
+    This is a separate report kind from the fixture report; recorded records
+    are never mixed into the fixture report.
+    """
+    if len(records) < 2:
+        raise RecordedStrategyEvidenceError(
+            "too_few_records",
+            "recorded report requires at least two records",
+        )
+
+    task_ids = {record.task_id for record in records}
+    if len(task_ids) != 1:
+        raise RecordedStrategyEvidenceError(
+            "mixed_task_ids",
+            "recorded records must share one task_id; found: "
+            + ", ".join(sorted(task_ids)),
+        )
+
+    strategies = [record.strategy for record in records]
+    seen: set[str] = set()
+    for strategy in strategies:
+        if strategy in seen:
+            raise RecordedStrategyEvidenceError(
+                "duplicate_strategy",
+                f"duplicate strategy name: {strategy}",
+            )
+        seen.add(strategy)
+
+    if baseline_strategy is None:
+        baseline_strategy = strategies[0]
+    if baseline_strategy not in seen:
+        raise RecordedStrategyEvidenceError(
+            "baseline_not_found",
+            f"baseline strategy not present in records: {baseline_strategy}",
+        )
+
+    baseline = next(
+        record for record in records if record.strategy == baseline_strategy
+    )
+    deltas = [
+        compute_strategy_delta(baseline, record)
+        for record in records
+        if record.strategy != baseline_strategy
+    ]
+
+    report = {
+        "schema_version": RECORDED_DELTA_REPORT_SCHEMA_VERSION,
+        "kind": RECORDED_DELTA_REPORT_KIND,
+        "task_id": records[0].task_id,
+        "baseline_strategy": baseline_strategy,
+        "record_count": len(records),
+        "strategies": strategies,
+        "deltas": [delta.to_dict() for delta in deltas],
+        "quality_gate_statuses": sorted(
+            {record.quality_gate.status for record in records}
+        ),
+        "note": DELTA_REPORT_QUALITY_NOTE,
+    }
+    assert_persistent_privacy_safe(
+        report,
+        artifact_name="recorded runtime strategy delta report",
+    )
+    return report
+
+
+def format_recorded_strategy_delta_report(report: Mapping[str, Any]) -> str:
+    """Render the recorded delta report as an aligned plain-text table."""
+    return _format_delta_report_text(
+        report,
+        title="Recorded runtime strategy delta report",
+        header_lines=(
+            f"Input records: {report['record_count']}",
+            f"Baseline: {report['baseline_strategy']}",
+            f"Task: {report['task_id']}",
+        ),
+    )
 
 
 def _signed_int(value: Any) -> str:

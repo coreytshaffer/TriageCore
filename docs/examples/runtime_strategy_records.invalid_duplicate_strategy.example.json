@@ -1,0 +1,54 @@
+[
+  {
+    "schema_version": "runtime_strategy_evidence.v1",
+    "kind": "runtime_strategy_evidence",
+    "task_id": "recorded-doc-summary-001",
+    "strategy": "heavy_only",
+    "steps": [
+      {
+        "role": "reviewer",
+        "backend": "lm_studio",
+        "model_profile": "heavy_reviewer",
+        "estimated_input_tokens": 3900,
+        "estimated_output_tokens": 500,
+        "estimated_total_tokens": 4400,
+        "schema_valid": true
+      }
+    ],
+    "totals": {
+      "estimated_tokens": 4400,
+      "model_calls": 1,
+      "handoffs": 0
+    },
+    "quality_gate": {
+      "status": "not_evaluated",
+      "reason": "intentionally invalid example: duplicate strategy names"
+    }
+  },
+  {
+    "schema_version": "runtime_strategy_evidence.v1",
+    "kind": "runtime_strategy_evidence",
+    "task_id": "recorded-doc-summary-001",
+    "strategy": "heavy_only",
+    "steps": [
+      {
+        "role": "reviewer",
+        "backend": "lm_studio",
+        "model_profile": "heavy_reviewer",
+        "estimated_input_tokens": 3800,
+        "estimated_output_tokens": 450,
+        "estimated_total_tokens": 4250,
+        "schema_valid": true
+      }
+    ],
+    "totals": {
+      "estimated_tokens": 4250,
+      "model_calls": 1,
+      "handoffs": 0
+    },
+    "quality_gate": {
+      "status": "not_evaluated",
+      "reason": "intentionally invalid example: duplicate strategy names"
+    }
+  }
+]

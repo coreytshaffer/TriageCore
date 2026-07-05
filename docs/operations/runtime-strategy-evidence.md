@@ -205,6 +205,50 @@ Export rules:
 - The artifact must remain metadata-only: no prompts, raw context, or model
   outputs.
 
+## Recorded Evidence Report
+
+Operator-supplied evidence records can be compared without touching the
+fixture report:
+
+```powershell
+tc runtime-strategy recorded-report --input docs\examples\runtime_strategy_records.example.json
+tc runtime-strategy recorded-report --input docs\examples\runtime_strategy_records.example.json --baseline small_only
+tc runtime-strategy recorded-report --input docs\examples\runtime_strategy_records.example.json --json
+```
+
+Input contract:
+
+- The input file is a top-level JSON list of runtime strategy evidence record
+  objects (the same record shape documented above).
+- Every record is validated through the existing
+  `runtime_strategy_evidence_from_mapping` path: unknown fields are rejected
+  and the persistent privacy invariant applies, so records carrying raw
+  prompts, raw context, or model outputs fail closed.
+- All records must share one `task_id` and use unique strategy names.
+- `--baseline` selects the baseline strategy; it defaults to the strategy of
+  the first record in the file.
+
+The command is read-only: it never writes the ledger, never mutates the input
+file, and makes no model calls. The output is a separate report kind
+(`recorded_runtime_strategy_delta_report.v1`); recorded records are never
+mixed into the fixture report, so the fixture report's determinism claims
+stay independent of operator data.
+
+Fail-closed reason codes: `input_not_found`, `input_read_failed`,
+`malformed_json`, `unsupported_top_level_shape`, `invalid_record`,
+`too_few_records`, `mixed_task_ids`, `duplicate_strategy`, and
+`baseline_not_found`.
+
+A canonical valid input example lives at
+[runtime_strategy_records.example.json](../examples/runtime_strategy_records.example.json),
+with an intentionally invalid duplicate-strategy example at
+[runtime_strategy_records.invalid_duplicate_strategy.example.json](../examples/runtime_strategy_records.invalid_duplicate_strategy.example.json).
+
+Recorded records are operator-supplied claims about strategy shapes; the
+report computes deterministic arithmetic over them. It does not verify that
+the recorded estimates match any real execution, and token deltas over
+recorded records carry the same quality non-claim as fixture deltas.
+
 ## Validation Rules
 
 - Each step must declare a role, backend, model profile, estimated input tokens, estimated output tokens, and schema-validity status.

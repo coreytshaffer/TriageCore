@@ -2,9 +2,13 @@
 
 ## Status
 
-This document summarizes the active TriageCore backlog after CR-109.
+This document summarizes the active TriageCore backlog after CR-110.
 
 ## Active GitHub Backlog
+
+- CR-110: Recorded Runtime Strategy Evidence Report
+  - Status: complete via CR-110
+  - Purpose: Compare operator-supplied recorded strategy evidence records from an explicit JSON file against a selectable baseline through the existing validation and delta paths, rendered as a separate recorded report with fail-closed reason-coded input handling and no live model calls, routing changes, or ledger writes.
 
 - CR-109: Runtime Strategy Report Export
   - Status: complete via CR-109

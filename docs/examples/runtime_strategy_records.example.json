@@ -1,0 +1,89 @@
+[
+  {
+    "schema_version": "runtime_strategy_evidence.v1",
+    "kind": "runtime_strategy_evidence",
+    "task_id": "recorded-doc-summary-001",
+    "strategy": "heavy_only",
+    "steps": [
+      {
+        "role": "reviewer",
+        "backend": "lm_studio",
+        "model_profile": "heavy_reviewer",
+        "estimated_input_tokens": 3900,
+        "estimated_output_tokens": 500,
+        "estimated_total_tokens": 4400,
+        "schema_valid": true
+      }
+    ],
+    "totals": {
+      "estimated_tokens": 4400,
+      "model_calls": 1,
+      "handoffs": 0
+    },
+    "quality_gate": {
+      "status": "not_evaluated",
+      "reason": "recorded example; gate not yet evaluated"
+    }
+  },
+  {
+    "schema_version": "runtime_strategy_evidence.v1",
+    "kind": "runtime_strategy_evidence",
+    "task_id": "recorded-doc-summary-001",
+    "strategy": "small_first_compact",
+    "steps": [
+      {
+        "role": "extractor",
+        "backend": "ollama",
+        "model_profile": "small_extractor",
+        "estimated_input_tokens": 1100,
+        "estimated_output_tokens": 160,
+        "estimated_total_tokens": 1260,
+        "schema_valid": true
+      },
+      {
+        "role": "reviewer",
+        "backend": "lm_studio",
+        "model_profile": "heavy_reviewer",
+        "estimated_input_tokens": 550,
+        "estimated_output_tokens": 320,
+        "estimated_total_tokens": 870,
+        "schema_valid": true
+      }
+    ],
+    "totals": {
+      "estimated_tokens": 2130,
+      "model_calls": 2,
+      "handoffs": 1
+    },
+    "quality_gate": {
+      "status": "not_evaluated",
+      "reason": "recorded example; gate not yet evaluated"
+    }
+  },
+  {
+    "schema_version": "runtime_strategy_evidence.v1",
+    "kind": "runtime_strategy_evidence",
+    "task_id": "recorded-doc-summary-001",
+    "strategy": "small_only",
+    "steps": [
+      {
+        "role": "summarizer",
+        "backend": "ollama",
+        "model_profile": "small_summarizer",
+        "estimated_input_tokens": 1250,
+        "estimated_output_tokens": 400,
+        "estimated_total_tokens": 1650,
+        "schema_valid": true
+      }
+    ],
+    "totals": {
+      "estimated_tokens": 1650,
+      "model_calls": 1,
+      "handoffs": 0
+    },
+    "quality_gate": {
+      "status": "not_evaluated",
+      "reason": "recorded example; gate not yet evaluated"
+    }
+  }
+]
