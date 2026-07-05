@@ -4,6 +4,8 @@
 
 Implemented
 
+Pushed and CI verified: `origin/main` at `16b25f0`, GitHub Actions run `28732865961` passed on Python 3.10, 3.11, and 3.12 (Node 20 deprecation annotations only; no failures). CR-110 adds a separate recorded runtime strategy report path for operator-supplied metadata-only evidence records, validating every record through the existing privacy-invariant-preserving mapping path, keeping fixture determinism separate from recorded evidence, and making all failure paths bounded and reason-coded.
+
 ## Scope
 
 - Add `tc runtime-strategy recorded-report --input <path>` to render strategy
