@@ -4,6 +4,8 @@
 
 Implemented
 
+Pushed and CI verified: `origin/main` at `f5b2413`, GitHub Actions run `28733020758` passed on Python 3.10, 3.11, and 3.12 (Node 20 deprecation annotations only; no failures). CR-111 is a docs-only slice adding an "If `tc` is blocked or not found" note to the reviewer smoke runbook, reviewer entrypoints index, and reviewer traceability doc, documenting `python -m triage_core.tc_cli ...` as an equivalent launch form for every `tc ...` command when the console-script shim is unavailable, with no change to runtime code or CLI behavior.
+
 ## Scope
 
 - Docs-only. Add a short "If `tc` is blocked or not found" note to the
