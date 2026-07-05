@@ -4,6 +4,8 @@
 
 Implemented
 
+Pushed and CI verified: `origin/main` at `88c9cfb`, GitHub Actions run `28733743705` passed on Python 3.10, 3.11, and 3.12. CR-113 is a docs-only design brief for future read-only local backend telemetry; it adds no telemetry implementation, no endpoint probing, no runtime code, no ledger writes, no model calls, and preserves fixture-report determinism while defining the metadata-only boundary for a future CR-114+ probe slice.
+
 ## Scope
 
 - Docs-only. Add a design brief at
