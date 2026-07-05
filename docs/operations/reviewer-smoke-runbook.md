@@ -40,6 +40,18 @@ python -m unittest discover tests
 
 Use the optional unittest command only when the local environment has the project dependencies installed and the reviewer wants a broader code-level smoke check. For ordinary docs-only review, `git diff --check` plus the CLI smoke commands above is enough.
 
+## If `tc` Is Blocked Or Not Found
+
+Every `tc ...` command in this runbook can also be run as `python -m triage_core.tc_cli ...` when the `tc` console-script shim is unavailable — for example, when it is not on `PATH` or a local application-control policy blocks the installed `Scripts\tc.exe` shim. Both forms invoke the same CLI entry point.
+
+Example:
+
+```powershell
+python -m triage_core.tc_cli doctor
+```
+
+This substitution changes only how the CLI is launched; it does not change command behavior or expected output.
+
 ## Expected Output Notes
 
 ### `tc --help`

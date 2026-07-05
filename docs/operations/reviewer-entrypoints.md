@@ -31,6 +31,8 @@ triagecore benchmark --list-only
 tc audit --privacy-invariants
 ```
 
+If the `tc` console-script shim is unavailable — for example, not on `PATH` or blocked by a local application-control policy — every `tc ...` command can be run as `python -m triage_core.tc_cli ...` instead (e.g., `python -m triage_core.tc_cli doctor`). See the note in [reviewer-smoke-runbook.md](reviewer-smoke-runbook.md).
+
 For a docs-only review, the minimum repository validation is:
 
 ```powershell

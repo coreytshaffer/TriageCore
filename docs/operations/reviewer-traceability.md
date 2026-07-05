@@ -66,6 +66,8 @@ tc audit --verify-signatures --kind route_decision   # provenance check for sign
 tc task show <task_id>                       # show one task's complete evidence chain (displays ledger evidence, does not verify signatures)
 ```
 
+If the `tc` console-script shim is unavailable (for example, blocked by a local application-control policy), each `tc ...` command above can be run as `python -m triage_core.tc_cli ...` — e.g., `python -m triage_core.tc_cli review list`.
+
 Repeatable test evidence:
 
 ```powershell
