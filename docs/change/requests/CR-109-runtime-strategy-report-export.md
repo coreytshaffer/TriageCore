@@ -4,6 +4,8 @@
 
 Implemented
 
+Pushed and CI verified: `origin/main` at `2d6b4b5`, GitHub Actions run `28698319677` passed on Python 3.10, 3.11, and 3.12 (Node 20 deprecation annotations only; no failures). The runtime-strategy lane now has its durable-artifact loop: the deterministic v2 delta report can be written to an explicit operator-named path with byte-identical repeated exports, fail-closed reason-coded errors for existing files and missing directories, atomic `--force` overwrites, and no default write location — one serialization shared between stdout JSON and file artifacts so the two can never drift.
+
 ## Scope
 
 - Add `--output <path>` to `tc runtime-strategy report` to write the delta
