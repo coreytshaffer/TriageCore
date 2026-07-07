@@ -79,3 +79,4 @@ Current boundary:
 - [reviewer-smoke-runbook.md](reviewer-smoke-runbook.md)
 - [packaging-readiness.md](packaging-readiness.md)
 - [reviewer-release-checkpoint-2026-07-02.md](reviewer-release-checkpoint-2026-07-02.md)
+- [reviewer-checkpoint-2026-07-07.md](reviewer-checkpoint-2026-07-07.md)

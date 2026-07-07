@@ -2,12 +2,16 @@
 
 ## Status
 
-This document summarizes the active TriageCore backlog after CR-113.
+This document summarizes the active TriageCore backlog after CR-114.
 
 ## Active GitHub Backlog
 
+- CR-114: Reviewer Checkpoint 2026-07-07 and Tag Reconciliation
+  - Status: complete via CR-114 (docs-only); recommended checkpoint tags remain operator-run future steps and do not exist until created and pushed deliberately
+  - Purpose: Consolidate the CR-100 through CR-113 route-worker telemetry and runtime strategy lanes into a dated reviewer checkpoint at HEAD `f8bf33c` with fresh validation evidence (803 passed / 2 skipped, privacy invariants, signature verification, identity list, backend-free benchmark listing), and reconcile the never-created `v0.1.0-reviewer-checkpoint-2026-07-02` tag by preserving the `355c521` anchor in-document and recommending exact tag commands without running them. Note: CR-114 was claimed by this checkpoint slice at commit time, so the telemetry probe implementation candidate previously referenced as "CR-114+" is now CR-115+.
+
 - CR-113: Local Backend Telemetry Design Brief
-  - Status: complete via CR-113 (docs-only); telemetry probe implementation remains a gated future candidate (CR-114+)
+  - Status: complete via CR-113 (docs-only); telemetry probe implementation remains a gated future candidate (CR-115+)
   - Purpose: Define the boundaries for a future read-only local backend telemetry slice — metadata-only availability and model/runtime identity observations for Ollama, LM Studio, and llama.cpp local endpoints — including candidate fields with privacy considerations, a closed failure vocabulary, evidence-tier provenance, an opt-in probe posture, and a reviewer path that requires no model execution, before any probe code is written.
 
 - CR-112: Recorded Runtime Strategy Report Export
