@@ -1,0 +1,92 @@
+{
+  "schema_version": "review_submission_v0",
+  "context_packet_ref": "scratch/gemma_triagecore_reviewer_context.md",
+  "claims": [
+    {
+      "id": "c1",
+      "text": "TriageCore is a lightweight, local-compute-first orchestration harness for token-efficient agent workflows.",
+      "category": "context-supported",
+      "citation": "FILE: pyproject.toml"
+    },
+    {
+      "id": "c2",
+      "text": "Identity records are stored locally at .triagecore/identity/agents.json and map an agent_id to role, public_key, and capabilities.",
+      "category": "context-supported",
+      "citation": "FILE: tests/test_identity_cli.py#test_identity_init_creates_key_and_public_metadata"
+    },
+    {
+      "id": "c3",
+      "text": "Capabilities include route_audit:sign and validation_result:sign.",
+      "category": "context-supported",
+      "citation": "FILE: tests/test_identity_cli.py#test_signed_smoke_test_fails_if_identity_lacks_route_audit_sign"
+    },
+    {
+      "id": "c4",
+      "text": "Signatures attribute an action to a specific identity (cryptographic provenance).",
+      "category": "context-supported",
+      "citation": "FILE: pyproject.toml#dependencies.cryptography"
+    },
+    {
+      "id": "c5",
+      "text": "Audit logs record the paths and transitions taken by agents during a workflow.",
+      "category": "uncertain-inference"
+    },
+    {
+      "id": "c6",
+      "text": "Humans may act as stewards who provide high-level validation requiring specific signing capabilities.",
+      "category": "uncertain-inference"
+    },
+    {
+      "id": "c7",
+      "text": "TriageCore should not claim to be a centralized, cloud-based IAM system.",
+      "category": "unsupported",
+      "unsupported_category": "assumption-as-fact"
+    },
+    {
+      "id": "c8",
+      "text": "TriageCore should not claim formal verification of agent logic.",
+      "category": "unsupported",
+      "unsupported_category": "assumption-as-fact"
+    },
+    {
+      "id": "c9",
+      "text": "TriageCore should not claim real-time network-layer security.",
+      "category": "unsupported",
+      "unsupported_category": "assumption-as-fact"
+    },
+    {
+      "id": "c10",
+      "text": "TriageCore should not claim full-scale LLM lifecycle management.",
+      "category": "unsupported",
+      "unsupported_category": "assumption-as-fact"
+    },
+    {
+      "id": "c11",
+      "text": "TriageCore should not claim distributed or multi-tenant state consistency.",
+      "category": "unsupported",
+      "unsupported_category": "assumption-as-fact"
+    },
+    {
+      "id": "c12",
+      "text": "Add a Governance & Identity Model documentation section describing the agents.json schema and the capability hierarchy.",
+      "category": "authorized-next-action"
+    }
+  ],
+  "declared_actions": [
+    {
+      "text": "Add a Governance & Identity Model documentation section describing the agents.json schema and the capability hierarchy.",
+      "requires_human_review": true
+    }
+  ],
+  "validation": [
+    {
+      "command": "python -m pytest -q",
+      "recorded_result": "not_recorded"
+    }
+  ],
+  "declared_scope": [
+    "docs/evals/",
+    "tests/fixtures/evals/model_review/"
+  ],
+  "repo_diff_ref": null
+}

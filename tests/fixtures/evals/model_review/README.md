@@ -11,6 +11,11 @@ Worked examples for the
   (model reviews against a curated reviewer context bundle).
 - `gemma4_qat_sample_eval_note.md` — a curated sample eval note that applies the
   protocol's claim taxonomy and rubric to a Gemma 4 QAT review pass.
+- `review_submission_v0.example.json` — an example pre-tagged review submission
+  in the `review_submission_v0` input contract, derived from the Gemma 4 QAT
+  sample eval note. See the
+  [Review Harness Submission Schema](../../../../docs/evals/review_harness_submission_schema.md)
+  for the field reference and the structural rules the validator enforces.
 
 ## Intent
 
