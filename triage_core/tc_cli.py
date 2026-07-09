@@ -1137,6 +1137,53 @@ def tc_run(args, client=None) -> None:
     sys.exit(3)
 
 
+def tc_probe(args) -> None:
+    """Read-only local backend metadata probe (CR-114).
+
+    Probes a metadata-only endpoint of a local backend and renders a
+    privacy-safe record. Never invokes a model; writes no ledger evidence and
+    creates no artifact unless ``--output`` names one.
+
+    Exit codes:
+      0  the probe produced a valid metadata record (including reachable=false
+         and probe_disabled records)
+      1  argument / input / validation error (e.g. a secret-bearing base_url)
+    """
+    from triage_core.local_backend_probe import (
+        ProbeInputError,
+        probe_local_backend,
+        render_probe_record,
+    )
+
+    timeout = args.timeout if args.timeout is not None else 3.0
+    try:
+        record = probe_local_backend(
+            source_type=args.source_type,
+            base_url=args.base_url,
+            timeout=timeout,
+            include_model_names=args.include_model_names,
+            enabled=not args.disabled,
+        )
+        rendered = render_probe_record(record)
+    except ProbeInputError as exc:
+        print(f"Error: {exc}")
+        sys.exit(1)
+
+    print(rendered)
+
+    if args.output:
+        out_dir = os.path.dirname(args.output)
+        try:
+            if out_dir:
+                os.makedirs(out_dir, exist_ok=True)
+            with open(args.output, "w", encoding="utf-8") as handle:
+                json.dump(record.to_dict(), handle, indent=2)
+        except OSError as exc:
+            print(f"Error writing output to {args.output}: {exc}")
+            sys.exit(1)
+        print(f"Record written to {args.output}.")
+
+
 def tc_status():
     print("TriageCore Status\n")
 
@@ -2003,6 +2050,36 @@ def main():
         help="Do not write any evidence record to the ledger (prints a warning)",
     )
 
+    # probe
+    probe_parser = subparsers.add_parser(
+        "probe",
+        help="Read-only local backend metadata probe (no model calls, no ledger writes)",
+    )
+    probe_parser.add_argument(
+        "--source-type", required=True, choices=["ollama", "lm_studio", "llama_cpp"],
+        help="Local backend type to probe",
+    )
+    probe_parser.add_argument(
+        "--base-url", required=True, type=str,
+        help="Operator-supplied local endpoint (stored redacted as scheme://host[:port])",
+    )
+    probe_parser.add_argument(
+        "--timeout", type=float, default=None,
+        help="Bounded metadata-request timeout in seconds",
+    )
+    probe_parser.add_argument(
+        "--include-model-names", action="store_true",
+        help="Include reported model identifiers (off by default; path-like ids are dropped)",
+    )
+    probe_parser.add_argument(
+        "--disabled", action="store_true",
+        help="Do not contact the endpoint; emit a probe_disabled record",
+    )
+    probe_parser.add_argument(
+        "--output", type=str, default=None,
+        help="Write the rendered record to this operator-named file (no default write location)",
+    )
+
     # audit
     audit_parser = subparsers.add_parser("audit", help="Inspect ledger audit events safely")
     audit_parser.add_argument("--kind", type=str, default="route_audit", help="The event_type to filter by (default: route_audit)")
@@ -2648,6 +2725,8 @@ def main():
         tc_status()
     elif args.command == "run":
         tc_run(args)
+    elif args.command == "probe":
+        tc_probe(args)
     elif args.command == "doctor":
         tc_doctor()
     elif args.command == "identity":
