@@ -4,6 +4,7 @@ import sys
 import glob
 import subprocess
 import json
+import uuid
 from pathlib import Path
 from typing import List, Optional
 
@@ -982,6 +983,151 @@ def tc_review_list():
     pending = review_queue.get_pending_reviews(ledger)
     print(review_queue.format_review_queue(pending))
 
+
+def tc_run(args, client=None) -> None:
+    """Run a task through the governed local-first loop.
+
+    Wraps ``TriageClient.run_task`` so the operator gets the full governed path
+    (privacy scan, external-safe gate, resilience routing, local execution, and
+    evidence) from one command, unlike ``triagecore run-pipeline`` which calls
+    the engine directly and bypasses routing.
+
+    This slice adds no new backends, no live capability probe, no budget
+    enforcement, and no autonomous execution. Cloud escalation is reachable only
+    through the existing bounded Qwen path already inside ``run_task`` (off by
+    default), so ``tc run`` makes no new cloud calls.
+
+    Exit codes:
+      0  local execution succeeded
+      1  input / IO / argument error
+      2  privacy or safety fail-closed (blocked before any external egress)
+      3  governed handoff_required (valid outcome, not executed locally)
+
+    ``client`` is injectable for offline testing; when ``None`` it is built from
+    the configured local backend.
+    """
+    from triage_core.privacy_scanner import PrivacyViolationError
+    from triage_core.safe_task_packet import (
+        LocalRouteUnavailableError,
+        UnsafePacketError,
+    )
+
+    # 1. Assemble task data from --files (repeatable), then --data.
+    data_parts: List[str] = []
+    for file_path in args.files:
+        if not os.path.exists(file_path):
+            print(f"Error: input file not found: {file_path}")
+            sys.exit(1)
+        try:
+            with open(file_path, "r", encoding="utf-8") as handle:
+                data_parts.append(f"\n--- {file_path} ---\n{handle.read()}")
+        except OSError as exc:
+            print(f"Error reading {file_path}: {exc}")
+            sys.exit(1)
+    if args.data:
+        data_parts.append(args.data)
+    data = "".join(data_parts)
+
+    # 2. Map --privacy to packet metadata. Default local_only forbids egress.
+    if args.privacy == "local_only":
+        privacy_metadata = PrivacyMetadata(external_model_allowed=False)
+    else:  # external_safe or public
+        privacy_metadata = PrivacyMetadata(
+            data_class="public", external_model_allowed=True
+        )
+
+    # 3. Ledger wiring (enabled by default; --no-ledger warns).
+    ledger = None
+    if args.no_ledger:
+        print(
+            "Warning: --no-ledger set; no evidence record will be written to the "
+            "ledger for this run."
+        )
+    else:
+        ledger_dir = args.ledger_dir or default_config.get_ledger_dir()
+        try:
+            ledger = TaskLedger(ledger_dir=ledger_dir)
+        except Exception as exc:
+            print(f"Error: could not open ledger at '{ledger_dir}': {exc}")
+            sys.exit(1)
+
+    # 4. Task identity + evidence scaffolding (mirrors the pipeline runner).
+    task_id = args.task_id or str(uuid.uuid4())
+    if ledger is not None:
+        if not args.task_id or not ledger.get_task(task_id):
+            ledger.append_event(
+                task_id,
+                "task_created",
+                {
+                    "title": f"tc run: {args.prompt[:40]}",
+                    "description": args.prompt,
+                    "target_files": args.files,
+                },
+            )
+        ledger.append_event(task_id, "runner_selected", {"runner": "tc_run"})
+
+    # 5. Build the client from config unless one was injected (tests inject).
+    if client is None:
+        from triage_core.client import TriageClient
+
+        try:
+            client = TriageClient(
+                backend_type=default_config.get_backend_type(),
+                model=default_config.get_backend_model(),
+                base_url=default_config.get_backend_base_url(),
+            )
+        except Exception as exc:
+            print(f"Error: could not initialize backend: {exc}")
+            sys.exit(1)
+
+    packet = TaskPacket(
+        prompt=args.prompt,
+        data=data,
+        task_id=task_id,
+        privacy_metadata=privacy_metadata,
+    )
+
+    # 6. Governed loop. Privacy/safety failures fail closed (exit 2).
+    try:
+        result = client.run_task(task_packet=packet, ledger=ledger, task_id=task_id)
+    except PrivacyViolationError as exc:
+        print(f"Blocked (privacy fail-closed): {exc}")
+        sys.exit(2)
+    except LocalRouteUnavailableError as exc:
+        print(f"Blocked (local route unavailable, failing closed): {exc}")
+        sys.exit(2)
+    except UnsafePacketError as exc:
+        print(f"Blocked (unsafe packet, failing closed): {exc}")
+        sys.exit(2)
+
+    # 7. Interpret outcome.
+    route = result.get("selected_route")
+    if result.get("status") == "success":
+        output = result.get("output", "")
+        if args.output:
+            out_dir = os.path.dirname(args.output)
+            try:
+                if out_dir:
+                    os.makedirs(out_dir, exist_ok=True)
+                with open(args.output, "w", encoding="utf-8") as handle:
+                    handle.write(output)
+            except OSError as exc:
+                print(f"Error writing output to {args.output}: {exc}")
+                sys.exit(1)
+        print(f"Success: task ran locally (route={route}, task_id={task_id}).")
+        if ledger is not None:
+            print(f"Evidence written to {ledger.ledger_path}.")
+        if args.print_output:
+            print(output)
+        return  # exit 0
+
+    reason = result.get("handoff_reason") or result.get("reason") or "handoff required"
+    print(f"Handoff required (route={route}, task_id={task_id}): {reason}")
+    if ledger is not None:
+        print(f"Evidence written to {ledger.ledger_path}.")
+    sys.exit(3)
+
+
 def tc_status():
     print("TriageCore Status\n")
 
@@ -1804,6 +1950,46 @@ def main():
     # status
     subparsers.add_parser("status", help="Print operator status")
 
+    # run
+    run_parser = subparsers.add_parser(
+        "run",
+        help="Run a task through the governed local-first loop (privacy scan, resilience routing, evidence)",
+    )
+    run_parser.add_argument("prompt", type=str, help="The task prompt")
+    run_parser.add_argument(
+        "--files", type=str, nargs="*", default=[],
+        help="Files whose contents are included as task data (repeatable)",
+    )
+    run_parser.add_argument(
+        "--data", type=str, default=None,
+        help="Inline task data appended after any --files contents",
+    )
+    run_parser.add_argument(
+        "--privacy", choices=["local_only", "external_safe", "public"],
+        default="local_only",
+        help="Privacy class for the packet (default: local_only; forbids external egress)",
+    )
+    run_parser.add_argument(
+        "--ledger-dir", type=str, default=None,
+        help="Directory for ledger evidence (default: configured ledger dir)",
+    )
+    run_parser.add_argument(
+        "--task-id", type=str, default=None,
+        help="Append evidence to an existing task ID instead of creating a new one",
+    )
+    run_parser.add_argument(
+        "--output", type=str, default=None,
+        help="Write successful task output to this file",
+    )
+    run_parser.add_argument(
+        "--print", action="store_true", dest="print_output",
+        help="Print successful task output to stdout",
+    )
+    run_parser.add_argument(
+        "--no-ledger", action="store_true",
+        help="Do not write any evidence record to the ledger (prints a warning)",
+    )
+
     # audit
     audit_parser = subparsers.add_parser("audit", help="Inspect ledger audit events safely")
     audit_parser.add_argument("--kind", type=str, default="route_audit", help="The event_type to filter by (default: route_audit)")
@@ -2447,6 +2633,8 @@ def main():
             tc_audit(args.kind, args.last)
     elif args.command == "status":
         tc_status()
+    elif args.command == "run":
+        tc_run(args)
     elif args.command == "doctor":
         tc_doctor()
     elif args.command == "identity":

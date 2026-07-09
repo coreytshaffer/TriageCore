@@ -18,12 +18,26 @@ planning/definition record; the implementation lands under this CR only after re
   privacy scan (fail-closed) → external-safe packet gate → classify → specialist route →
   resilience route (`choose_resilience_route`) → local execution → justified cloud escalation
   via the existing bounded Qwen path.
-- Accept a prompt, optional `--files`, and an optional validator; stream output; write
-  route/worker/token evidence to `.triagecore/ledger.jsonl`.
+- Accept a prompt, repeatable `--files`, and optional inline `--data`; print or write output;
+  write route/worker/token evidence to `.triagecore/ledger.jsonl`.
 - Use the resilience router for the routing decision (unlike `triagecore run-pipeline`, which
   calls the engine directly and bypasses routing).
 - Designate `tc` as the single daily-driver surface and document `triagecore` as the
   internal/benchmark CLI, without removing existing commands.
+
+### Exit codes (finalized in review)
+
+- `0` — local execution succeeded.
+- `1` — input / IO / argument error (e.g. missing `--files` path).
+- `2` — privacy or safety fail-closed (blocked before any external egress).
+- `3` — governed `handoff_required` (a valid outcome, not executed locally).
+
+### Ledger default (finalized in review)
+
+- Ledger evidence writing is **enabled by default**; a run records its governed evidence to
+  `.triagecore/ledger.jsonl`.
+- `--no-ledger` is allowed but must print a warning that no evidence record will be written.
+- `--ledger-dir` overrides the target directory (tests use temporary directories only).
 
 ## Non-Goals
 
@@ -70,12 +84,12 @@ small and reviewable and preserving every current invariant.
   no new provider is added.
 - [ ] `tc` is documented as the daily-driver surface; existing `triagecore` commands are
   unchanged.
-- [ ] Tests cover local execution, justified escalation, and fail-closed local-only handling,
+- [ ] Tests cover local execution, justified handoff, and fail-closed local-only handling,
   running offline with mocked backends per the existing test convention.
 
 ## Validation
 
-- `python -m pytest -q`
+- `python -m pytest -q tests/test_tc_run_cli.py`
 - `tc audit --privacy-invariants` (CR-021 invariant remains clean)
 - `git diff --check`
 - Manual: `tc run` a small task against a local backend and confirm route/worker/token events
@@ -83,6 +97,6 @@ small and reviewable and preserving every current invariant.
 
 ## Dependencies / Sequencing
 
-- Depends on CR-DD-000 (planning normalization) being accepted.
+- Depends on CR-DD-000 (planning normalization), now merged (PR #88).
 - Precedes M1 (live capability probe + circuit breakers) and M2 (frontier backends). Frontier
   backends must not be started before this slice and M1 land.
