@@ -1503,6 +1503,75 @@ def tc_eval_export_forbidden_tool_smoke(output_dir: str, case_id: str) -> None:
     print(f"Success: Wrote eval export-forbidden-tool-smoke contract file to {file_path}")
 
 
+def tc_eval_review(
+    submission_path: str,
+    context_packet_path: str,
+    changed_paths,
+    output_path,
+    print_json: bool,
+    fail_on_gate: bool,
+) -> None:
+    """Thin, read-only wrapper: validate a submission, run the checker, report.
+
+    This adds no checking logic of its own. It validates the submission with the
+    CR-RH-001 validator, runs the CR-RH-002 deterministic checker against the
+    supplied context packet, and renders or writes the review_result_v0. It
+    executes nothing, calls no model, classifies no prose, and approves no
+    action. The only file it may write is the caller-supplied --output path.
+    """
+    import json
+    import os
+    import sys
+    from pathlib import Path
+
+    from triage_core.review_submission import (
+        load_review_submission,
+        validate_review_submission,
+    )
+    from triage_core.review_result import (
+        build_review_result,
+        render_review_result,
+        write_review_result,
+    )
+
+    if not os.path.exists(submission_path):
+        print(f"Error: Submission file not found: {submission_path}")
+        sys.exit(1)
+
+    try:
+        submission = load_review_submission(submission_path)
+    except (ValueError, json.JSONDecodeError):
+        print(f"Error: Could not parse submission JSON: {submission_path}")
+        sys.exit(1)
+
+    errors = validate_review_submission(submission)
+    if errors:
+        print("Error: Submission failed validation:")
+        for err in errors:
+            print(f"  - {err['path']}: {err['code']}")
+        sys.exit(1)
+
+    if not os.path.exists(context_packet_path):
+        print(f"Error: Context packet file not found: {context_packet_path}")
+        sys.exit(1)
+
+    context_packet = Path(context_packet_path).read_text(encoding="utf-8")
+
+    result = build_review_result(submission, context_packet, changed_paths or None)
+
+    if output_path:
+        written = write_review_result(result, output_path)
+        print(f"Success: Wrote review_result_v0 to {written}")
+    else:
+        print(render_review_result(result), end="")
+
+    if print_json:
+        print(json.dumps(result, indent=2, sort_keys=True))
+
+    if fail_on_gate and result["grounding_gate"] == "fail":
+        sys.exit(3)
+
+
 def tc_context_plan(input_path: str, model_profile: str) -> None:
     import os
     import sys
@@ -2123,6 +2192,44 @@ def main():
         help="The fixture case_id to match (e.g., forbidden_tool_call_001)"
     )
 
+    eval_review_parser = eval_subparsers.add_parser(
+        "review",
+        help="Validate a review submission and run the deterministic checker against a context packet",
+    )
+    eval_review_parser.add_argument(
+        "--submission",
+        required=True,
+        type=str,
+        help="Path to a review_submission_v0 JSON file",
+    )
+    eval_review_parser.add_argument(
+        "--context-packet",
+        required=True,
+        type=str,
+        help="Path to the context packet text file the review was performed against",
+    )
+    eval_review_parser.add_argument(
+        "--changed-path",
+        action="append",
+        type=str,
+        help="A repo-relative changed path for the scope check (repeatable)",
+    )
+    eval_review_parser.add_argument(
+        "--output",
+        type=str,
+        help="Optional path to write the review_result_v0 JSON file",
+    )
+    eval_review_parser.add_argument(
+        "--print-json",
+        action="store_true",
+        help="Also print the JSON result to stdout",
+    )
+    eval_review_parser.add_argument(
+        "--fail-on-gate",
+        action="store_true",
+        help="Exit non-zero (3) when grounding_gate is fail",
+    )
+
     # context
     context_parser = subparsers.add_parser("context", help="Manage and plan token context")
     context_subparsers = context_parser.add_subparsers(dest="context_command")
@@ -2440,8 +2547,17 @@ def main():
             tc_eval_export_privacy_smoke(args.output_dir, args.case_id)
         elif args.eval_command == "export-forbidden-tool-smoke":
             tc_eval_export_forbidden_tool_smoke(args.output_dir, args.case_id)
+        elif args.eval_command == "review":
+            tc_eval_review(
+                args.submission,
+                args.context_packet,
+                args.changed_path,
+                args.output,
+                args.print_json,
+                args.fail_on_gate,
+            )
         else:
-            eval_parser.error("eval requires a subcommand: export-smoke, export-privacy-smoke, or export-forbidden-tool-smoke")
+            eval_parser.error("eval requires a subcommand: export-smoke, export-privacy-smoke, export-forbidden-tool-smoke, or review")
     elif args.command == "context":
         if args.context_command == "plan":
             tc_context_plan(args.input, args.model)

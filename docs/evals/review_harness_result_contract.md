@@ -108,9 +108,15 @@ gate when a `context-supported` citation does not mechanically resolve. Because
 the gate fails, `next_safe_action` is `null` even though an
 `authorized-next-action` claim is present.
 
+## CLI
+
+The checker is exposed read-only via `tc eval review` — see the
+[`tc eval review` CLI](../operations/review-harness-cli.md). The CLI adds no
+checking logic; it validates a submission, runs `build_review_result`, and
+renders or writes the result.
+
 ## What This Does Not Do
 
-- No CLI (the `tc eval review` name remains reserved for a later slice).
 - No model calls, no command execution, no raw-prose classification.
 - No citation *quality* judgment beyond section-scoped anchor resolution.
 - No action approval and no correctness, safety, certification, or

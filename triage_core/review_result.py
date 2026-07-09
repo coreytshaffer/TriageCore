@@ -26,8 +26,10 @@ echoing claim or action text.
 
 from __future__ import annotations
 
+import json
 import re
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 SCHEMA_VERSION = "review_result_v0"
 
@@ -262,3 +264,20 @@ def _path_in_scope(path: str, scope: Sequence[str]) -> bool:
             if normalized == candidate or normalized.startswith(candidate + "/"):
                 return True
     return False
+
+
+def write_review_result(
+    result: Dict[str, Any], output_path: Union[str, Path]
+) -> Path:
+    """Write a ``review_result_v0`` to a JSON file (deterministic, sorted keys).
+
+    Pure I/O helper mirroring ``eval_outcome_contract.write_actual_outcome``. It
+    only writes the caller-supplied path; it touches no ledger, identity, or
+    other runtime state.
+    """
+    path = Path(output_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump(result, handle, indent=2, sort_keys=True)
+        handle.write("\n")
+    return path

@@ -129,10 +129,11 @@ values carry no claim text or file paths. Stable codes include:
   human-review routing, next-safe-action selection) — see the
   [Review Harness Result Contract](review_harness_result_contract.md).
 
-## Reserved (Not Yet Implemented)
+## CLI
 
-- The `tc eval review` CLI subcommand (name reserved under the existing `eval`
-  family).
+- `tc eval review` validates a submission and runs the checker against a
+  supplied context packet — see the
+  [`tc eval review` CLI](../operations/review-harness-cli.md).
 
 ## Related
 
