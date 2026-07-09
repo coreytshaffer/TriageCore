@@ -108,7 +108,9 @@ well-formed if it is either:
   `FILE: tests/test_identity_cli.py#test_identity_init_creates_key_and_public_metadata`).
 
 Whether the referenced artifact actually appears in the context packet is a
-resolution check reserved for a later slice.
+resolution check performed by the checker core, not this validator. See the
+[Review Harness Result Contract](review_harness_result_contract.md) for
+section-scoped citation resolution.
 
 ## Validator Errors
 
@@ -120,12 +122,15 @@ values carry no claim text or file paths. Stable codes include:
 `invalid_citation_format`, `missing_unsupported_category`,
 `invalid_unsupported_category`.
 
-## Reserved (Not In This Slice)
+## Delivered By Later Slices
 
-- `review_result_v0` output contract (reviewer note, grounding-gate pass/fail,
-  unsupported-claim list, evidence/citation map, next safe action).
-- The deterministic checker core (citation resolution, severe-contamination
-  gate, scope check).
+- `review_result_v0` output contract and the deterministic checker core
+  (section-scoped citation resolution, severe-contamination gate, scope check,
+  human-review routing, next-safe-action selection) — see the
+  [Review Harness Result Contract](review_harness_result_contract.md).
+
+## Reserved (Not Yet Implemented)
+
 - The `tc eval review` CLI subcommand (name reserved under the existing `eval`
   family).
 
