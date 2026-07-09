@@ -16,9 +16,16 @@ and privacy rules agreed before any probe code is written.
 
 ## Status
 
-Design brief only. No telemetry code, CLI surface, schema module, or fixture
-exists for this lane yet. Nothing in this document describes current
-behavior; every statement below is future design intent.
+Partially implemented. **CR-114 implements the read-only metadata probe slice**
+only: the `triage_core/local_backend_probe.py` module and the `tc probe` command
+produce metadata-only records against the endpoints below, with the closed
+failure vocabulary, tiered evidence, and `base_url` redaction described here.
+
+Routing wiring, route-input population (`ResilienceRouteInput`), circuit
+breakers, degraded modes, and any daily-driver enforcement **remain future
+work** and are out of scope for CR-114. This document still describes the full
+telemetry design; only the read-only probe slice is built. Nothing here should
+be read as implying the whole telemetry design is implemented.
 
 ## Supported Future Sources
 
