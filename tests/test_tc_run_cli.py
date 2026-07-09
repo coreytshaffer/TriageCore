@@ -20,6 +20,7 @@ import requests
 from triage_core import tc_cli
 from triage_core.backends import BackendResponse
 from triage_core.client import TriageClient
+from triage_core.task_packet import PrivacyMetadata
 
 
 class RecordingBackend:
@@ -62,6 +63,7 @@ def _args(prompt, **overrides):
         files=[],
         data=None,
         privacy="local_only",
+        allow_cloud=False,
         ledger_dir=None,
         task_id=None,
         output=None,
@@ -78,6 +80,19 @@ def _event_types(ledger_path):
         for line in ledger_path.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
+
+
+class RecordingClient:
+    def __init__(self):
+        self.packet = None
+
+    def run_task(self, task_packet, ledger=None, task_id=None):
+        self.packet = task_packet
+        return {
+            "status": "success",
+            "output": "CLIENT_RAN",
+            "selected_route": "local_fast",
+        }
 
 
 def test_local_success_exits_zero_and_records_governed_evidence(tmp_path, capsys):
@@ -167,3 +182,52 @@ def test_output_written_and_printed(tmp_path, capsys):
 
     assert out_file.read_text(encoding="utf-8") == "LOCAL_RAN"
     assert "LOCAL_RAN" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("privacy", ["external_safe", "public"])
+def test_non_local_privacy_defaults_cloud_disabled_without_allow_flag(tmp_path, privacy):
+    client = RecordingClient()
+    args = _args(
+        "Summarize this text",
+        privacy=privacy,
+        ledger_dir=str(tmp_path),
+        allow_cloud=False,
+    )
+
+    tc_cli.tc_run(args, client=client)
+
+    assert isinstance(client.packet.privacy_metadata, PrivacyMetadata)
+    assert client.packet.privacy_metadata.external_model_allowed is False
+
+
+@pytest.mark.parametrize("privacy", ["external_safe", "public"])
+def test_non_local_privacy_can_enable_cloud_with_allow_flag(tmp_path, privacy):
+    client = RecordingClient()
+    args = _args(
+        "Summarize this text",
+        privacy=privacy,
+        ledger_dir=str(tmp_path),
+        allow_cloud=True,
+    )
+
+    tc_cli.tc_run(args, client=client)
+
+    assert isinstance(client.packet.privacy_metadata, PrivacyMetadata)
+    assert client.packet.privacy_metadata.external_model_allowed is True
+
+
+def test_local_only_with_allow_cloud_exits_1_before_run(tmp_path, capsys):
+    client = RecordingClient()
+    args = _args(
+        "Summarize this text",
+        privacy="local_only",
+        ledger_dir=str(tmp_path),
+        allow_cloud=True,
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        tc_cli.tc_run(args, client=client)
+
+    assert exc.value.code == 1
+    assert client.packet is None
+    assert "--allow-cloud cannot be used with --privacy local_only" in capsys.readouterr().out

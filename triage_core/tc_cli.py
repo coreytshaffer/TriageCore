@@ -1028,12 +1028,21 @@ def tc_run(args, client=None) -> None:
         data_parts.append(args.data)
     data = "".join(data_parts)
 
-    # 2. Map --privacy to packet metadata. Default local_only forbids egress.
+    # 2. Map --privacy to packet metadata. Privacy class alone does not
+    # authorize cloud execution; that requires explicit operator intent.
+    if args.privacy == "local_only" and args.allow_cloud:
+        print("Error: --allow-cloud cannot be used with --privacy local_only.")
+        sys.exit(1)
+
+    allow_external_model = (
+        args.privacy in {"external_safe", "public"} and args.allow_cloud
+    )
     if args.privacy == "local_only":
         privacy_metadata = PrivacyMetadata(external_model_allowed=False)
     else:  # external_safe or public
         privacy_metadata = PrivacyMetadata(
-            data_class="public", external_model_allowed=True
+            data_class="public",
+            external_model_allowed=allow_external_model,
         )
 
     # 3. Ledger wiring (enabled by default; --no-ledger warns).
@@ -1968,6 +1977,10 @@ def main():
         "--privacy", choices=["local_only", "external_safe", "public"],
         default="local_only",
         help="Privacy class for the packet (default: local_only; forbids external egress)",
+    )
+    run_parser.add_argument(
+        "--allow-cloud", action="store_true",
+        help="Allow the existing bounded cloud path for external_safe/public tasks",
     )
     run_parser.add_argument(
         "--ledger-dir", type=str, default=None,
