@@ -1,0 +1,95 @@
+{
+  "schema_version": "review_result_v0",
+  "boundary": "This result verifies structural grounding and routing only. It is not a correctness, safety, certification, or production-readiness verdict.",
+  "grounding_gate": "fail",
+  "gate_failures": [
+    {
+      "claim_id": "c4",
+      "code": "unresolved_citation"
+    }
+  ],
+  "citation_map": [
+    {
+      "claim_id": "c1",
+      "resolved": true,
+      "matched_file": "pyproject.toml"
+    },
+    {
+      "claim_id": "c2",
+      "resolved": true,
+      "matched_file": "tests/test_identity_cli.py"
+    },
+    {
+      "claim_id": "c3",
+      "resolved": true,
+      "matched_file": "tests/test_identity_cli.py"
+    },
+    {
+      "claim_id": "c4",
+      "resolved": false,
+      "matched_file": "pyproject.toml"
+    }
+  ],
+  "unsupported_claims": [
+    {
+      "claim_id": "c7",
+      "unsupported_category": "assumption-as-fact"
+    },
+    {
+      "claim_id": "c8",
+      "unsupported_category": "assumption-as-fact"
+    },
+    {
+      "claim_id": "c9",
+      "unsupported_category": "assumption-as-fact"
+    },
+    {
+      "claim_id": "c10",
+      "unsupported_category": "assumption-as-fact"
+    },
+    {
+      "claim_id": "c11",
+      "unsupported_category": "assumption-as-fact"
+    }
+  ],
+  "warnings": [
+    {
+      "claim_id": "c5",
+      "code": "uncertain_inference"
+    },
+    {
+      "claim_id": "c6",
+      "code": "uncertain_inference"
+    },
+    {
+      "claim_id": "c7",
+      "code": "non_severe_unsupported"
+    },
+    {
+      "claim_id": "c8",
+      "code": "non_severe_unsupported"
+    },
+    {
+      "claim_id": "c9",
+      "code": "non_severe_unsupported"
+    },
+    {
+      "claim_id": "c10",
+      "code": "non_severe_unsupported"
+    },
+    {
+      "claim_id": "c11",
+      "code": "non_severe_unsupported"
+    }
+  ],
+  "scope_check": {
+    "status": "not_checked",
+    "out_of_scope": []
+  },
+  "human_review_required": [
+    {
+      "action_index": 0
+    }
+  ],
+  "next_safe_action": null
+}

@@ -16,6 +16,14 @@ Worked examples for the
   sample eval note. See the
   [Review Harness Submission Schema](../../../../docs/evals/review_harness_submission_schema.md)
   for the field reference and the structural rules the validator enforces.
+- `review_context_packet.example.md` — a small deterministic context bundle
+  (with `FILE:` section markers) used to exercise section-scoped citation
+  resolution in the checker core.
+- `review_result_v0.example.json` — the `review_result_v0` output produced by
+  running the deterministic checker over the example submission and example
+  context packet. It is an intentional grounding-gate **FAIL** (one
+  `context-supported` citation anchor does not resolve). See the
+  [Review Harness Result Contract](../../../../docs/evals/review_harness_result_contract.md).
 
 ## Intent
 
