@@ -39,6 +39,14 @@ planning/definition record; the implementation lands under this CR only after re
 - `--no-ledger` is allowed but must print a warning that no evidence record will be written.
 - `--ledger-dir` overrides the target directory (tests use temporary directories only).
 
+### Cloud authorization clarification
+
+- `--privacy external_safe` or `--privacy public` describes packet eligibility only; it does
+  not by itself authorize cloud execution.
+- The operator must also pass `--allow-cloud` before `tc run` sets
+  `external_model_allowed=True`.
+- `--allow-cloud` with `--privacy local_only` is invalid and must fail with an input error.
+
 ## Non-Goals
 
 - No new backends. Cloud remains the existing bounded Qwen path only; **no** Claude/GPT/Gemini
