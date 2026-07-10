@@ -16,8 +16,9 @@ linked from here.
 - **Regression suite:** 803 passed / 2 skipped at `f8bf33c` (the commit
   under `74260b3`); CI green on Python 3.10/3.11/3.12 at `88c9cfb`.
 - **CR ledger:** CR-100 → CR-115 complete. **CR-114 = the evidence
-  checkpoint. CR-115 = this extraction package. CR-116+ = the telemetry
-  lane** (the numbering marks the boundary between deterministic evidence
+  checkpoint. CR-115 = this extraction package. CR-117 = the task-show
+  signature-verification slice. CR-118+ = the telemetry lane** (the
+  numbering marks the boundary between deterministic evidence
   work and the lane's first non-deterministic slice).
 
 ## Reading Order
@@ -26,17 +27,16 @@ linked from here.
 2. [control-plane-invariant-checklist.md](control-plane-invariant-checklist.md) — what must never break
 3. [fable-exit-audit-2026-07-07.md](fable-exit-audit-2026-07-07.md) — ranked evidence, gaps, and slice plan
 4. [../current_backlog.md](../current_backlog.md) — work lanes
-5. [local-backend-telemetry.md](local-backend-telemetry.md) — the CR-116+ boundary brief
+5. [local-backend-telemetry.md](local-backend-telemetry.md) — the CR-118+ boundary brief
 6. [fable-final-capability-note-2026-07-07.md](fable-final-capability-note-2026-07-07.md) — how to weigh model-authored artifacts
 
 ## Next Slices, In Order
 
 | Order | Slice | Risk class |
 |---|---|---|
-| 1 | Review-queue residue disposition note (the ~100 pending `tc review list` items in local state are deliberate early-June experiment residue, not abandoned approvals) | docs-only |
-| 2 | `tc task show --verify-signatures` opt-in, reusing CR-097 fail-closed categories | runtime-safe |
-| 3 | Telemetry schema + `synthetic_fixture` validation only — no probe code (CR-116 candidate) | test-only |
-| 4 | Telemetry probe, exactly within the CR-113 brief: opt-in, explicit endpoint, `probe_disabled` default, closed failure vocabulary (CR-117+ candidate) | runtime-risky |
+| 1 | ~~`tc task show --verify-signatures` opt-in, reusing CR-097 fail-closed categories~~ — done (CR-117, runtime-safe): [task-show-signature-verification.md](task-show-signature-verification.md) | runtime-safe |
+| 2 | Telemetry schema + `synthetic_fixture` validation only — no probe code (CR-118 candidate) | test-only |
+| 3 | Telemetry probe, exactly within the CR-113 brief: opt-in, explicit endpoint, `probe_disabled` default, closed failure vocabulary (CR-119+ candidate) | runtime-risky |
 
 Deferred deliberately (do not start without a dedicated approved CR):
 Issue #73 key rotation; signed-event expansion to new event types;
@@ -55,7 +55,7 @@ capture; any new execution surface.
 - **Claim CR numbers at commit time**, not draft time (parallel sessions
   have collided before).
 - **Boundary crossings get a docs-only brief first** (the CR-113 →
-  CR-116+ pattern), then a schema/fixture slice, then implementation.
+  CR-118+ pattern), then a schema/fixture slice, then implementation.
 - **Docs-only validation:** `git diff --check`. Code-bearing validation:
   `python -m pytest -q`.
 

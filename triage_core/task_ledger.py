@@ -916,6 +916,153 @@ def verify_ledger_event_signatures_in_ledger(
     return summary
 
 
+def verify_task_event_signatures(
+    ledger_path: str | Path,
+    task_id: str,
+) -> LedgerSignatureVerificationSummary:
+    """Verify signatures of the signed ledger events belonging to one task.
+
+    Task-scoped counterpart to ``verify_ledger_event_signatures_in_ledger``:
+    it reuses the same per-event verifiers and the shared finding/summary
+    types, but restricts attention to events whose ``task_id`` matches the
+    requested task and covers all three signed event types in a single pass.
+
+    This helper never calls ``sys.exit``; the caller decides exit behaviour
+    from the returned summary (fail-closed when ``invalid_signed`` or
+    ``malformed`` is greater than zero). An unparseable ledger line cannot be
+    attributed to a task, so it is counted as ``malformed`` fail-closed rather
+    than silently ignored. Whole-ledger audit behaviour is left unchanged.
+    """
+    signed_event_verifiers = {
+        "route_audit": verify_route_audit_event_signature,
+        "validation_result": verify_validation_result_event_signature,
+        "route_decision": verify_route_decision_event_signature,
+    }
+
+    summary = LedgerSignatureVerificationSummary()
+    ledger_path = Path(ledger_path)
+    registry = AgentIdentityRegistry(ledger_dir=ledger_path.parent)
+    registry.load()
+    target_task_id = str(task_id)
+
+    with ledger_path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            line = line.strip()
+            if not line:
+                continue
+
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                summary.malformed += 1
+                summary.findings.append(
+                    LedgerSignatureVerificationFinding(
+                        status="FAIL",
+                        event_type="unknown",
+                        task_id="unknown",
+                        failure_reason="malformed_json",
+                    )
+                )
+                continue
+
+            if str(event.get("task_id", "")) != target_task_id:
+                continue
+
+            event_type = event.get("event_type")
+            verifier = signed_event_verifiers.get(event_type)
+            if verifier is None:
+                summary.skipped_non_target += 1
+                continue
+
+            signature_metadata = event.get("signature_metadata")
+            if not signature_metadata:
+                summary.unsigned += 1
+                continue
+
+            agent_id = ""
+            if isinstance(signature_metadata, dict):
+                agent_id = str(signature_metadata.get("agent_id", ""))
+            try:
+                if verifier(event, registry):
+                    summary.valid_signed += 1
+                    summary.findings.append(
+                        LedgerSignatureVerificationFinding(
+                            status="PASS",
+                            event_type=event_type,
+                            task_id=target_task_id,
+                            agent_id=agent_id,
+                        )
+                    )
+                else:
+                    summary.invalid_signed += 1
+                    summary.findings.append(
+                        LedgerSignatureVerificationFinding(
+                            status="FAIL",
+                            event_type=event_type,
+                            task_id=target_task_id,
+                            agent_id=agent_id,
+                            failure_reason="signature_mismatch",
+                        )
+                    )
+            except UnknownAgentError:
+                summary.invalid_signed += 1
+                summary.findings.append(
+                    LedgerSignatureVerificationFinding(
+                        status="FAIL",
+                        event_type=event_type,
+                        task_id=target_task_id,
+                        agent_id=agent_id,
+                        failure_reason="unknown_agent",
+                    )
+                )
+            except RevokedAgentError:
+                summary.invalid_signed += 1
+                summary.findings.append(
+                    LedgerSignatureVerificationFinding(
+                        status="FAIL",
+                        event_type=event_type,
+                        task_id=target_task_id,
+                        agent_id=agent_id,
+                        failure_reason="revoked_agent",
+                    )
+                )
+            except UnauthorizedCapabilityError:
+                summary.invalid_signed += 1
+                summary.findings.append(
+                    LedgerSignatureVerificationFinding(
+                        status="FAIL",
+                        event_type=event_type,
+                        task_id=target_task_id,
+                        agent_id=agent_id,
+                        failure_reason="unauthorized_capability",
+                    )
+                )
+            except UnsupportedKeyAlgorithmError:
+                summary.invalid_signed += 1
+                summary.findings.append(
+                    LedgerSignatureVerificationFinding(
+                        status="FAIL",
+                        event_type=event_type,
+                        task_id=target_task_id,
+                        agent_id=agent_id,
+                        failure_reason="unsupported_key_algorithm",
+                    )
+                )
+            except Exception:
+                summary.invalid_signed += 1
+                summary.findings.append(
+                    LedgerSignatureVerificationFinding(
+                        status="FAIL",
+                        event_type=event_type,
+                        task_id=target_task_id,
+                        agent_id=agent_id,
+                        failure_reason="verification_error",
+                    )
+                )
+
+    return summary
+
+
 def verify_route_audit_signatures_in_ledger(
     ledger_path: str | Path,
 ) -> LedgerSignatureVerificationSummary:
