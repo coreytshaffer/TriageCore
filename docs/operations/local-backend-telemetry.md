@@ -20,6 +20,9 @@ Partially implemented. **CR-114 implements the read-only metadata probe slice**
 only: the `triage_core/local_backend_probe.py` module and the `tc probe` command
 produce metadata-only records against the endpoints below, with the closed
 failure vocabulary, tiered evidence, and `base_url` redaction described here.
+**CR-118 pins the serialized record contract** with
+`schemas/local_backend_probe_record.schema.json` and a pure strict mapping
+validator for synthetic fixtures and recorded metadata.
 
 Routing wiring, route-input population (`ResilienceRouteInput`), circuit
 breakers, degraded modes, and any daily-driver enforcement **remain future
@@ -64,7 +67,7 @@ Candidate record fields, all metadata-only:
 
 | Field | Design intent | Privacy consideration |
 |---|---|---|
-| `source_type` | Closed vocabulary above. | None; closed vocabulary. |
+| `source_type` | Closed serialized vocabulary: `ollama`, `lm_studio`, `llama_cpp`, or the normalized `unsupported` sentinel. | None; arbitrary backend identifiers are not serialized. `unsupported_backend` records must use `source_type: "unsupported"` rather than preserving the raw requested backend. |
 | `base_url` | The operator-supplied endpoint, stored for display only after a redaction check. | Store scheme, host, and port only. Reject or redact userinfo (`user:pass@`), query strings, and path segments beyond the documented endpoint path, so an endpoint URL cannot smuggle a token or private path into evidence. |
 | `reachable` | `true`/`false` for the single metadata probe. | None; boolean. |
 | `model_count` | Number of models the backend reported. | Preferred default: a count leaks less than names. |
@@ -74,10 +77,10 @@ Candidate record fields, all metadata-only:
 | `error_category` | Closed failure vocabulary below; present only when the probe did not succeed. | None; closed vocabulary, no raw error text with embedded paths or hosts. |
 | `evidence_tier` | One of `synthetic_fixture`, `local_metadata_probe`, `operator_recorded`. | Keeps deterministic fixtures, actual probe output, and operator-typed claims distinguishable in every downstream report. |
 
-Exact schema, field names, and validation rules are decided by the
-implementation CR, which should route the record through the same strict
-mapping/validation pattern as runtime strategy evidence (unknown fields
-rejected, persistent privacy invariant enforced).
+The CR-118 schema and pure validator define the exact v1 serialized contract:
+unknown fields are rejected, the persistent privacy invariant is enforced,
+`synthetic_fixture` records carry no timestamp, and `source_type:
+"unsupported"` is reserved for `error_category: "unsupported_backend"`.
 
 ## Failure Categories
 
@@ -89,7 +92,7 @@ error text:
 | `endpoint_unreachable` | Connection refused or no route to the endpoint. |
 | `timeout` | The metadata request exceeded its bounded timeout. |
 | `malformed_response` | The endpoint answered but the body did not match the expected metadata shape. |
-| `unsupported_backend` | The requested `source_type` is outside the closed vocabulary. |
+| `unsupported_backend` | The requested backend is outside the supported probe vocabulary; serialized records use `source_type: "unsupported"` and do not persist the raw requested backend identifier. |
 | `permission_or_policy_blocked` | A local permission or policy prevented the probe (e.g. an application-control or firewall block). |
 | `probe_disabled` | Probing is disabled in the current configuration; the default posture is disabled until explicitly invoked. |
 
@@ -127,8 +130,8 @@ privacy invariant as every other persisted evidence record.
 What a future reviewer should be able to verify without running a model:
 
 - **Record shape.** Deterministic `synthetic_fixture`-tier examples validate
-  through the strict mapping path and render through whatever report surface
-  the implementation CR adds, with no backend present at all.
+  through the strict mapping path and schema contract, with no backend
+  present at all.
 - **Fail-closed behavior.** Each failure category is reachable in tests
   without a live backend (unsupported source type, disabled probe, and
   malformed fixture responses need no network; unreachable/timeout can use a
