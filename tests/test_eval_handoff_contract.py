@@ -9,6 +9,7 @@ CONTRACT_DOC = REPO_ROOT / "docs" / "evals" / "evaluation_handoff_contract.md"
 ACTUAL_OUTCOME_DOC = REPO_ROOT / "docs" / "evals" / "actual_outcome_export.md"
 FIXTURE_SCHEMA_DOC = REPO_ROOT / "docs" / "research" / "eval_fixture_schema.md"
 BRIDGE_DOC = REPO_ROOT / "docs" / "evals" / "eval_integration_bridge.md"
+FIXTURE_README = REPO_ROOT / "tests" / "fixtures" / "evals" / "README.md"
 
 
 def _read(path: Path) -> str:
@@ -67,3 +68,13 @@ def test_existing_eval_docs_link_to_handoff_contract():
     assert "evaluation_handoff_contract.md" in _read(ACTUAL_OUTCOME_DOC)
     assert "Evaluation Handoff Contract" in _read(FIXTURE_SCHEMA_DOC)
     assert "evaluation_handoff_contract.md" in _read(BRIDGE_DOC)
+
+
+def test_eval_research_docs_do_not_drift_back_to_internal_scoring():
+    fixture_readme = _read(FIXTURE_README)
+    taxonomy_doc = _read(FIXTURE_SCHEMA_DOC.parent / "eval_taxonomy.md")
+
+    assert "CR-123 defined the file-based handoff boundary" in fixture_readme
+    assert "scoring remains external to TriageCore" in fixture_readme
+    assert "score fixture outcomes through a separate reviewed evaluator path" not in taxonomy_doc
+    assert "score fixture outcomes outside TriageCore" in taxonomy_doc

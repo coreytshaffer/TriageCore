@@ -19,6 +19,7 @@ These fixtures exist to define what a future evaluator will consume. They do not
 
 ## Expected follow-on
 
-- CR-121 adds a narrow validator for required fields and deterministic labels.
-- CR-122 exposes that validator through `tc eval validate-fixtures --input <path>`.
-- A future CR can add scoring only after the validation CLI is stable.
+- CR-121 added a narrow validator for required fields and deterministic labels.
+- CR-122 exposed that validator through `tc eval validate-fixtures --input <path>`.
+- CR-123 defined the file-based handoff boundary to the external evaluator suite.
+- Future TriageCore slices may package or validate the handoff bundle, but scoring remains external to TriageCore.
