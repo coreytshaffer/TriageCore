@@ -100,6 +100,10 @@ Planned follow-on sequence:
 
 1. CR-121: validate the fixture schema and enforce deterministic required fields
 2. CR-122: expose fixture validation through a narrow `tc eval validate-fixtures` surface
-3. Future CR: score fixture outcomes through a separate reviewed evaluator path
+3. CR-123: define the file-based handoff boundary to an external evaluator suite
+4. Future CR: package validated fixtures and exported actual outcomes into a deterministic handoff bundle
+5. Future external evaluator suite work: score fixture outcomes outside TriageCore
 
-That order matters. TriageCore should define the cases before validating them, and validate them before claiming to execute them.
+That order matters. TriageCore should define the cases before validating them,
+validate them before packaging them, and preserve the boundary that scoring and
+score interpretation happen outside TriageCore.

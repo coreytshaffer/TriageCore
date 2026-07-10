@@ -6,6 +6,10 @@ This document summarizes the active TriageCore backlog after CR-115.
 
 ## Active GitHub Backlog
 
+- CR-124: Eval Handoff Hygiene, Bug, and Drift Slice
+  - Status: complete via CR-124
+  - Purpose: Fix the generator/single-pass iterable bug in actual outcome export writing and clean up stale eval sequencing docs so they point from CR-123 toward bundle/manifest work while preserving the rule that scoring remains external to TriageCore.
+
 - CR-123: Evaluation Handoff Contract
   - Status: complete via CR-123 (contract-only)
   - Purpose: Define the file-contract boundary between TriageCore and the external evaluator suite, including required fixture and actual-outcome inputs, contract/version identifiers, deterministic future bundle path vocabulary, and TriageCore-side exit-code expectations, while keeping scoring, evaluator execution, model/backend calls, routing/admission integration, ledger writes, result import/display, and score interpretation out of scope.

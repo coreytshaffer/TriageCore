@@ -171,6 +171,26 @@ class TestEvalOutcomeContract(unittest.TestCase):
             self.assertTrue((Path(tmpdir) / "test_mult_001.json").exists())
             self.assertTrue((Path(tmpdir) / "test_mult_002.json").exists())
 
+    def test_write_multiple_outcomes_accepts_single_pass_iterable(self):
+        outcomes = (
+            build_actual_outcome(
+                case_id=f"generator_{index:03d}",
+                decision="allow",
+                boundary_family="none",
+                reasons=[],
+                audit_required=False,
+                human_approval_required=False
+            )
+            for index in range(2)
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            paths = write_actual_outcomes(outcomes, tmpdir)
+
+            self.assertEqual(len(paths), 2)
+            self.assertTrue((Path(tmpdir) / "generator_000.json").exists())
+            self.assertTrue((Path(tmpdir) / "generator_001.json").exists())
+
     def test_duplicate_case_id(self):
         outcomes = [
             build_actual_outcome(
