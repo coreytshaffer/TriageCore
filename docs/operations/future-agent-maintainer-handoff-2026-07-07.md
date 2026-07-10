@@ -1,5 +1,10 @@
 # Future Agent / Maintainer Handoff — 2026-07-07
 
+> **Post-handoff note (2026-07-10):** CR-117, CR-118, and CR-119 have merged.
+> CR-120 is a docs-only release-hygiene slice that freezes that lane, corrects
+> stale CR-114 telemetry wording, and does not add runtime behavior. See
+> [telemetry-lane-release-hygiene-2026-07-10.md](telemetry-lane-release-hygiene-2026-07-10.md).
+
 ## Purpose
 
 The single entry point for whoever continues TriageCore work — a human
@@ -17,9 +22,9 @@ linked from here.
   under `74260b3`); CI green on Python 3.10/3.11/3.12 at `88c9cfb`.
 - **CR ledger:** CR-100 → CR-115 complete. **CR-114 = the evidence
   checkpoint. CR-115 = this extraction package. CR-117 = the task-show
-  signature-verification slice. CR-118+ = the telemetry lane** (the
-  numbering marks the boundary between deterministic evidence
-  work and the lane's first non-deterministic slice).
+  signature-verification slice. CR-118 = telemetry schema. CR-119 =
+  telemetry probe validation gate. CR-120 = telemetry lane release hygiene.**
+  Future telemetry behavior still requires a new explicit CR.
 
 ## Reading Order
 
@@ -27,16 +32,18 @@ linked from here.
 2. [control-plane-invariant-checklist.md](control-plane-invariant-checklist.md) — what must never break
 3. [fable-exit-audit-2026-07-07.md](fable-exit-audit-2026-07-07.md) — ranked evidence, gaps, and slice plan
 4. [../current_backlog.md](../current_backlog.md) — work lanes
-5. [local-backend-telemetry.md](local-backend-telemetry.md) — the CR-118+ boundary brief
-6. [fable-final-capability-note-2026-07-07.md](fable-final-capability-note-2026-07-07.md) — how to weigh model-authored artifacts
+5. [local-backend-telemetry.md](local-backend-telemetry.md) — the CR-118/CR-119 telemetry brief
+6. [telemetry-lane-release-hygiene-2026-07-10.md](telemetry-lane-release-hygiene-2026-07-10.md) — post-merge CR-117 through CR-120 hygiene
+7. [fable-final-capability-note-2026-07-07.md](fable-final-capability-note-2026-07-07.md) — how to weigh model-authored artifacts
 
 ## Next Slices, In Order
 
 | Order | Slice | Risk class |
 |---|---|---|
 | 1 | ~~`tc task show --verify-signatures` opt-in, reusing CR-097 fail-closed categories~~ — done (CR-117, runtime-safe): [task-show-signature-verification.md](task-show-signature-verification.md) | runtime-safe |
-| 2 | Telemetry schema + `synthetic_fixture` validation only — no probe code (CR-118 candidate) | test-only |
-| 3 | Telemetry probe, exactly within the CR-113 brief: opt-in, explicit endpoint, `probe_disabled` default, closed failure vocabulary (CR-119+ candidate) | runtime-risky |
+| 2 | ~~Telemetry schema + `synthetic_fixture` validation only — no probe code~~ — done (CR-118): strict record contract and pure validator | test-only |
+| 3 | ~~Telemetry probe, exactly within the CR-113 brief: opt-in, explicit endpoint, `probe_disabled` default, closed failure vocabulary~~ — done (CR-119): emitted probe records validate against the CR-118 contract before success | runtime-risky |
+| 4 | ~~Reviewer checkpoint or release-hygiene slice~~ — done (CR-120): post-merge docs-only hygiene and stale-numbering correction | docs-only |
 
 Deferred deliberately (do not start without a dedicated approved CR):
 Issue #73 key rotation; signed-event expansion to new event types;
@@ -55,7 +62,7 @@ capture; any new execution surface.
 - **Claim CR numbers at commit time**, not draft time (parallel sessions
   have collided before).
 - **Boundary crossings get a docs-only brief first** (the CR-113 →
-  CR-118+ pattern), then a schema/fixture slice, then implementation.
+  CR-118/CR-119 pattern), then a schema/fixture slice, then implementation.
 - **Docs-only validation:** `git diff --check`. Code-bearing validation:
   `python -m pytest -q`.
 
