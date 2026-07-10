@@ -19,5 +19,5 @@ These fixtures exist to define what a future evaluator will consume. They do not
 
 ## Expected follow-on
 
-- CR-078 should add a narrow validator for required fields and deterministic labels.
-- CR-079 can add a small evaluator CLI only after the schema is stable.
+- CR-121 adds a narrow validator for required fields and deterministic labels.
+- A future CR can add a small evaluator CLI only after the schema is stable.
