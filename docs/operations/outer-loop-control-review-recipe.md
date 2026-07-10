@@ -85,7 +85,7 @@ Use this structure (the format of the 2026-07-07 exit audit):
 is a docs-only checkpoint that freezes the current verified state; the
 last slices are anything that crosses a determinism, autonomy, or
 enforcement boundary. A boundary crossing should always be preceded by a
-docs-only brief that defines it (the CR-113 → CR-116+ pattern).
+docs-only brief that defines it (the CR-113 → CR-118+ pattern).
 
 ## Stop Conditions
 

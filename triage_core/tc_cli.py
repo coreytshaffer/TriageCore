@@ -16,6 +16,7 @@ from triage_core.backends import LocalBackend
 from triage_core.task_ledger import (
     TaskLedger,
     verify_ledger_event_signatures_in_ledger,
+    verify_task_event_signatures,
 )
 from triage_core.demo_dry_run import format_demo_dry_run, run_demo_dry_run
 from triage_core.agent_authority import (
@@ -1949,7 +1950,7 @@ def tc_runtime_strategy_recorded_report(
     print(format_recorded_strategy_delta_report(report))
 
 
-def tc_task_show(task_id: str) -> None:
+def tc_task_show(task_id: str, verify_signatures: bool = False) -> None:
     from triage_core.task_ledger import TaskLedger
 
     from pathlib import Path
@@ -1986,7 +1987,37 @@ def tc_task_show(task_id: str) -> None:
         timestamp = event.get("timestamp", "not_recorded")
         etype = event.get("event_type", "unknown")
         print(f"- {timestamp} | {etype}")
-    print("Signature verification: not checked by this command; run tc audit --verify-signatures")
+
+    if not verify_signatures:
+        print("Signature verification: not checked by this command; run tc audit --verify-signatures")
+        return
+
+    try:
+        summary = verify_task_event_signatures(ledger_path, task_id)
+    except AgentIdentityError as e:
+        if _handle_registry_load_failure(_identity_registry().registry_path, e):
+            return
+        raise
+
+    print("Signature verification:")
+    print(
+        f"  valid_signed={summary.valid_signed} "
+        f"invalid_signed={summary.invalid_signed} "
+        f"unsigned={summary.unsigned} "
+        f"malformed={summary.malformed} "
+        f"skipped_non_target={summary.skipped_non_target}"
+    )
+    for finding in summary.findings:
+        line = (
+            f"  {finding.status} event_type={finding.event_type} "
+            f"task_id={finding.task_id} agent_id={finding.agent_id or 'unknown'}"
+        )
+        if finding.failure_reason:
+            line += f" reason={finding.failure_reason}"
+        print(line)
+
+    if summary.should_fail(strict=False):
+        sys.exit(1)
 
 
 def main():
@@ -2350,6 +2381,14 @@ def main():
     task_subparsers = task_parser.add_subparsers(dest="task_command")
     task_show_parser = task_subparsers.add_parser("show", help="Show task evidence timeline")
     task_show_parser.add_argument("task_id", type=str, help="The ID of the task to show")
+    task_show_parser.add_argument(
+        "--verify-signatures",
+        action="store_true",
+        help=(
+            "Verify signatures of this task's signed ledger events "
+            "(fail-closed: exits 1 on invalid or malformed signatures)"
+        ),
+    )
 
     # task-envelope
     task_envelope_parser = subparsers.add_parser("task-envelope", help="Manage task envelopes")
@@ -2797,7 +2836,7 @@ def main():
             )
     elif args.command == "task":
         if args.task_command == "show":
-            tc_task_show(args.task_id)
+            tc_task_show(args.task_id, verify_signatures=args.verify_signatures)
         else:
             task_parser.error("task requires a subcommand: show")
     elif args.command == "task-envelope":

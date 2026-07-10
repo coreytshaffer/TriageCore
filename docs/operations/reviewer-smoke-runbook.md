@@ -106,6 +106,22 @@ Expected interpretation:
 python -m pytest -q
 ```
 
+### `tc task show <task-id> --verify-signatures`
+
+Expected interpretation:
+
+- Without the flag, `tc task show` prints the task's metadata and event
+  timeline and does not check signatures (unchanged behavior).
+- With `--verify-signatures`, the command verifies the signed ledger
+  events (`route_audit`, `validation_result`, `route_decision`) belonging
+  to that task and prints a `valid_signed / invalid_signed / unsigned /
+  malformed / skipped_non_target` summary plus per-event findings.
+- It is **fail-closed**: any invalid or malformed signature, or an
+  identity-registry load failure, exits 1. Unsigned signed-type events are
+  informational and exit 0; there is no `--strict` in this slice.
+- A valid signature is evidence that an event was signed by a known,
+  authorized identity — not evidence of approval, safety, or correctness.
+
 ## What This Smoke Runbook Does Not Claim
 
 - It does not prove production readiness.
