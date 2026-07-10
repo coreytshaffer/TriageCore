@@ -23,6 +23,9 @@ failure vocabulary, tiered evidence, and `base_url` redaction described here.
 **CR-118 pins the serialized record contract** with
 `schemas/local_backend_probe_record.schema.json` and a pure strict mapping
 validator for synthetic fixtures and recorded metadata.
+**CR-119 gates probe emission through that contract**: every probe result is
+validated against the CR-118 mapper before the probe returns, renders, or
+writes it as an observation.
 
 Routing wiring, route-input population (`ResilienceRouteInput`), circuit
 breakers, degraded modes, and any daily-driver enforcement **remain future
@@ -132,6 +135,9 @@ What a future reviewer should be able to verify without running a model:
 - **Record shape.** Deterministic `synthetic_fixture`-tier examples validate
   through the strict mapping path and schema contract, with no backend
   present at all.
+- **Probe emission gate.** Every emitted probe result, including fail-closed
+  observations, round-trips through the CR-118 validator before it is treated
+  as a successful observation.
 - **Fail-closed behavior.** Each failure category is reachable in tests
   without a live backend (unsupported source type, disabled probe, and
   malformed fixture responses need no network; unreachable/timeout can use a

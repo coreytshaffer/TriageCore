@@ -321,7 +321,7 @@ def _record(
     response_latency_ms: Optional[int] = None,
     observed_at: Optional[str] = None,
 ) -> LocalBackendProbeRecord:
-    return LocalBackendProbeRecord(
+    record = LocalBackendProbeRecord(
         source_type=source_type,
         base_url=base_url,
         reachable=reachable,
@@ -332,6 +332,19 @@ def _record(
         error_category=error_category,
         observed_at=observed_at,
     )
+    return _validate_emitted_probe_record(record)
+
+
+def _validate_emitted_probe_record(
+    record: LocalBackendProbeRecord,
+) -> LocalBackendProbeRecord:
+    """Fail closed unless the emitted probe record satisfies the CR-118 contract."""
+    try:
+        return local_backend_probe_record_from_mapping(record.to_dict())
+    except (ProbeInputError, ValueError) as exc:
+        raise ProbeInputError(
+            "probe result failed CR-118 record-contract validation"
+        ) from exc
 
 
 def probe_local_backend(

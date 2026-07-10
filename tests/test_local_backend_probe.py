@@ -10,10 +10,12 @@ import socket
 import pytest
 import requests
 
+import triage_core.local_backend_probe as local_backend_probe
 from triage_core.local_backend_probe import (
     ERROR_CATEGORIES,
     LocalBackendProbeRecord,
     ProbeInputError,
+    local_backend_probe_record_from_mapping,
     probe_local_backend,
     redact_base_url,
     render_probe_record,
@@ -71,6 +73,31 @@ def test_reachable_ollama_counts_models_no_names_by_default():
     assert rec.evidence_tier == "local_metadata_probe"
 
 
+def test_successful_probe_result_is_validated_against_record_contract(monkeypatch):
+    observed_payloads = []
+
+    def spy(payload):
+        observed_payloads.append(dict(payload))
+        return local_backend_probe_record_from_mapping(payload)
+
+    monkeypatch.setattr(
+        local_backend_probe,
+        "local_backend_probe_record_from_mapping",
+        spy,
+    )
+
+    rec = probe_local_backend(
+        source_type="ollama",
+        base_url="http://localhost:11434",
+        transport=_ollama_ok,
+    )
+
+    assert rec.reachable is True
+    assert observed_payloads
+    assert observed_payloads[0]["schema_version"] == "local_backend_probe_record.v1"
+    assert observed_payloads[0]["source_type"] == "ollama"
+
+
 def test_openai_shape_backends_use_v1_models():
     rec = probe_local_backend(
         source_type="lm_studio",
@@ -123,6 +150,49 @@ def test_timeout_category():
     )
     assert rec.reachable is False
     assert rec.error_category == "timeout"
+
+
+def test_failed_probe_result_is_validated_against_record_contract(monkeypatch):
+    observed_payloads = []
+
+    def spy(payload):
+        observed_payloads.append(dict(payload))
+        return local_backend_probe_record_from_mapping(payload)
+
+    monkeypatch.setattr(
+        local_backend_probe,
+        "local_backend_probe_record_from_mapping",
+        spy,
+    )
+
+    rec = probe_local_backend(
+        source_type="ollama",
+        base_url="http://localhost:11434",
+        transport=_timeout,
+    )
+
+    assert rec.reachable is False
+    assert rec.error_category == "timeout"
+    assert observed_payloads
+    assert observed_payloads[0]["error_category"] == "timeout"
+
+
+def test_probe_result_contract_validation_failure_fails_closed(monkeypatch):
+    def reject(payload):
+        raise ValueError("schema drift")
+
+    monkeypatch.setattr(
+        local_backend_probe,
+        "local_backend_probe_record_from_mapping",
+        reject,
+    )
+
+    with pytest.raises(ProbeInputError, match="CR-118 record-contract"):
+        probe_local_backend(
+            source_type="ollama",
+            base_url="http://localhost:11434",
+            transport=_ollama_ok,
+        )
 
 
 def test_endpoint_unreachable_category():
