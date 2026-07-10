@@ -16,8 +16,8 @@ and privacy rules agreed before any probe code is written.
 
 ## Status
 
-Partially implemented. **CR-114 implements the read-only metadata probe slice**
-only: the `triage_core/local_backend_probe.py` module and the `tc probe` command
+Partially implemented. The current read-only metadata probe surface is the
+`triage_core/local_backend_probe.py` module and the `tc probe` command. They
 produce metadata-only records against the endpoints below, with the closed
 failure vocabulary, tiered evidence, and `base_url` redaction described here.
 **CR-118 pins the serialized record contract** with
@@ -26,12 +26,17 @@ validator for synthetic fixtures and recorded metadata.
 **CR-119 gates probe emission through that contract**: every probe result is
 validated against the CR-118 mapper before the probe returns, renders, or
 writes it as an observation.
+**CR-120 records the post-merge release hygiene** for this lane and corrects
+stale numbering: CR-114 is the July 7 reviewer checkpoint, not the probe
+validation anchor.
 
 Routing wiring, route-input population (`ResilienceRouteInput`), circuit
 breakers, degraded modes, and any daily-driver enforcement **remain future
-work** and are out of scope for CR-114. This document still describes the full
-telemetry design; only the read-only probe slice is built. Nothing here should
-be read as implying the whole telemetry design is implemented.
+work** and are out of scope for the implemented telemetry contract and
+probe-validation work. This document still describes the full telemetry
+design; only the read-only probe and validation-contract slices are built.
+Nothing here should be read as implying the whole telemetry design is
+implemented.
 
 ## Supported Future Sources
 
@@ -52,7 +57,7 @@ side effect of any other command.
 
 ## Non-Goals
 
-The future telemetry slice, and this brief, exclude:
+The implemented telemetry lane, and this brief, exclude:
 
 - no live benchmark execution
 - no model generation calls (no completions, chat, or embedding requests)
@@ -158,7 +163,8 @@ reviewable.
 
 ## Non-Claims
 
-- This document adds no runtime behavior, CLI surface, schema, or fixture.
+- This brief is not a routing, ledger, or enforcement switch; docs-only hygiene
+  updates to it add no runtime behavior, CLI surface, schema, or fixture.
 - A future telemetry record proves only that a metadata endpoint answered at
   one moment; it is not a benchmark, an availability guarantee, a quality
   claim, or a safety claim.
