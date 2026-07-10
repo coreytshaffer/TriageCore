@@ -102,6 +102,7 @@ def test_unsupported_backend_is_a_record_not_an_error():
         transport=_openai_ok,
     )
     assert rec.reachable is False
+    assert rec.source_type == "unsupported"
     assert rec.error_category == "unsupported_backend"
 
 

@@ -20,7 +20,7 @@ import re
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 from urllib.parse import urlsplit
 
 from .privacy_invariants import assert_persistent_privacy_safe
@@ -28,6 +28,7 @@ from .privacy_invariants import assert_persistent_privacy_safe
 SCHEMA_VERSION = "local_backend_probe_record.v1"
 
 SOURCE_TYPES = frozenset({"ollama", "lm_studio", "llama_cpp"})
+SERIALIZED_SOURCE_TYPES = SOURCE_TYPES | frozenset({"unsupported"})
 EVIDENCE_TIERS = frozenset(
     {"synthetic_fixture", "local_metadata_probe", "operator_recorded"}
 )
@@ -48,6 +49,21 @@ METADATA_PATHS = {
     "lm_studio": "/v1/models",
     "llama_cpp": "/v1/models",
 }
+
+RECORD_FIELDS = frozenset(
+    {
+        "schema_version",
+        "source_type",
+        "base_url",
+        "reachable",
+        "evidence_tier",
+        "model_count",
+        "observed_models",
+        "response_latency_ms",
+        "error_category",
+        "observed_at",
+    }
+)
 
 DEFAULT_TIMEOUT_SECONDS = 3.0
 
@@ -81,6 +97,10 @@ class LocalBackendProbeRecord:
     schema_version: str = SCHEMA_VERSION
 
     def __post_init__(self) -> None:
+        if self.schema_version != SCHEMA_VERSION:
+            raise ValueError(f"schema_version must be {SCHEMA_VERSION}")
+        if self.source_type not in SERIALIZED_SOURCE_TYPES:
+            raise ValueError(f"invalid source_type: {self.source_type}")
         if self.evidence_tier not in EVIDENCE_TIERS:
             raise ValueError(f"invalid evidence_tier: {self.evidence_tier}")
         if (
@@ -88,11 +108,37 @@ class LocalBackendProbeRecord:
             and self.error_category not in ERROR_CATEGORIES
         ):
             raise ValueError(f"invalid error_category: {self.error_category}")
+        if (
+            self.error_category == "unsupported_backend"
+            and self.source_type != "unsupported"
+        ):
+            raise ValueError(
+                "unsupported_backend records must use source_type=unsupported"
+            )
+        if (
+            self.source_type == "unsupported"
+            and self.error_category != "unsupported_backend"
+        ):
+            raise ValueError(
+                "source_type=unsupported is reserved for unsupported_backend records"
+            )
         # Determinism: fixture-tier records must carry no timestamp.
         if self.evidence_tier == "synthetic_fixture" and self.observed_at is not None:
             raise ValueError("synthetic_fixture records must not carry observed_at")
         if self.model_count is not None and self.model_count < 0:
             raise ValueError("model_count must be non-negative")
+        if self.response_latency_ms is not None and self.response_latency_ms < 0:
+            raise ValueError("response_latency_ms must be non-negative")
+        if self.observed_models is not None:
+            if not isinstance(self.observed_models, Sequence) or isinstance(
+                self.observed_models, (str, bytes, bytearray)
+            ):
+                raise ValueError("observed_models must be a list of strings")
+            for model_id in self.observed_models:
+                if not isinstance(model_id, str) or not model_id.strip():
+                    raise ValueError("observed_models must be a list of strings")
+                if _PATH_LIKE.search(model_id):
+                    raise ValueError("observed_models must not contain path-like ids")
 
     def to_dict(self) -> Dict[str, Any]:
         record = {
@@ -162,6 +208,101 @@ def _extract_models(source_type: str, payload: Any) -> Optional[List[str]]:
     return [str(n) for n in names if n is not None]
 
 
+def local_backend_probe_record_from_mapping(
+    payload: Mapping[str, Any],
+) -> LocalBackendProbeRecord:
+    """Load a serialized local backend probe record through the strict contract.
+
+    This is a pure validator/mapper for already-recorded metadata. It does not
+    probe endpoints, write artifacts, route tasks, or call a model.
+    """
+    assert_persistent_privacy_safe(
+        dict(payload),
+        artifact_name="local backend probe record",
+    )
+    _reject_unknown_record_fields(payload)
+
+    return LocalBackendProbeRecord(
+        schema_version=_mapping_text(payload, "schema_version"),
+        source_type=_mapping_text(payload, "source_type"),
+        base_url=_mapping_optional_base_url(payload, "base_url"),
+        reachable=_mapping_bool(payload, "reachable"),
+        evidence_tier=_mapping_text(payload, "evidence_tier"),
+        model_count=_mapping_optional_int(payload, "model_count"),
+        observed_models=_mapping_optional_string_list(payload, "observed_models"),
+        response_latency_ms=_mapping_optional_int(payload, "response_latency_ms"),
+        error_category=_mapping_optional_text(payload, "error_category"),
+        observed_at=_mapping_optional_text(payload, "observed_at"),
+    )
+
+
+def _reject_unknown_record_fields(payload: Mapping[str, Any]) -> None:
+    for key in payload:
+        key_text = str(key)
+        if key_text not in RECORD_FIELDS:
+            raise ValueError(f"unknown field: {key_text}")
+    for key in sorted(RECORD_FIELDS):
+        if key not in payload:
+            raise ValueError(f"missing field: {key}")
+
+
+def _mapping_text(payload: Mapping[str, Any], key: str) -> str:
+    value = payload.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{key} must be a non-empty string")
+    return value
+
+
+def _mapping_optional_text(payload: Mapping[str, Any], key: str) -> Optional[str]:
+    value = payload.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{key} must be null or a non-empty string")
+    return value
+
+
+def _mapping_bool(payload: Mapping[str, Any], key: str) -> bool:
+    value = payload.get(key)
+    if not isinstance(value, bool):
+        raise ValueError(f"{key} must be a boolean")
+    return value
+
+
+def _mapping_optional_int(payload: Mapping[str, Any], key: str) -> Optional[int]:
+    value = payload.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ValueError(f"{key} must be null or an integer")
+    return value
+
+
+def _mapping_optional_string_list(
+    payload: Mapping[str, Any], key: str
+) -> Optional[List[str]]:
+    value = payload.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes, bytearray)):
+        raise ValueError(f"{key} must be null or a list of strings")
+    result: List[str] = []
+    for item in value:
+        if not isinstance(item, str) or not item.strip():
+            raise ValueError(f"{key} must be null or a list of strings")
+        result.append(item)
+    return result
+
+
+def _mapping_optional_base_url(payload: Mapping[str, Any], key: str) -> Optional[str]:
+    value = _mapping_optional_text(payload, key)
+    if value is None:
+        return None
+    if redact_base_url(value) != value:
+        raise ValueError("base_url must be normalized as scheme://host[:port]")
+    return value
+
+
 def _default_transport(url: str, timeout: float) -> Tuple[int, Any]:
     import requests
 
@@ -215,20 +356,20 @@ def probe_local_backend(
     # Validate/redact the URL first so a bad URL never reaches the network.
     redacted = redact_base_url(base_url)
 
+    if source_type not in SOURCE_TYPES:
+        return _record(
+            source_type="unsupported",
+            base_url=redacted,
+            reachable=False,
+            error_category="unsupported_backend",
+        )
+
     if not enabled:
         return _record(
             source_type=source_type,
             base_url=redacted,
             reachable=False,
             error_category="probe_disabled",
-        )
-
-    if source_type not in SOURCE_TYPES:
-        return _record(
-            source_type=source_type,
-            base_url=redacted,
-            reachable=False,
-            error_category="unsupported_backend",
         )
 
     url = redacted.rstrip("/") + METADATA_PATHS[source_type]
