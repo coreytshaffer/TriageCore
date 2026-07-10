@@ -129,7 +129,7 @@ If a future case needs those capabilities, it should trigger a new CR rather tha
 
 ## Validation intent
 
-CR-078 should treat this document as the contract for a narrow validator. The validator should fail closed on:
+CR-121 treats this document as the contract for a narrow validator. The validator fails closed on:
 
 - missing required fields
 - unknown decision labels
@@ -138,4 +138,5 @@ CR-078 should treat this document as the contract for a narrow validator. The va
 - duplicate `case_id` values within one file
 - malformed JSONL input
 
-Until that validator exists, these fixtures remain research-facing examples rather than executable truth.
+The validator checks fixture integrity only. These fixtures still are not scored
+or executed until a separate evaluator CLI slice exists.
