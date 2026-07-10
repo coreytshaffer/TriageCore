@@ -99,6 +99,7 @@ CR-077 defines the benchmark surface only.
 Planned follow-on sequence:
 
 1. CR-121: validate the fixture schema and enforce deterministic required fields
-2. Future CR: run the fixture suite through a narrow `tc eval` surface
+2. CR-122: expose fixture validation through a narrow `tc eval validate-fixtures` surface
+3. Future CR: score fixture outcomes through a separate reviewed evaluator path
 
 That order matters. TriageCore should define the cases before validating them, and validate them before claiming to execute them.

@@ -1706,6 +1706,32 @@ def tc_eval_export_forbidden_tool_smoke(output_dir: str, case_id: str) -> None:
     print(f"Success: Wrote eval export-forbidden-tool-smoke contract file to {file_path}")
 
 
+def tc_eval_validate_fixtures(input_path: str) -> None:
+    from triage_core.eval_fixture_validator import (
+        EvalFixtureValidationError,
+        load_eval_fixture_jsonl,
+    )
+
+    try:
+        cases = load_eval_fixture_jsonl(input_path)
+    except FileNotFoundError:
+        print(f"Error: eval fixture file not found: {input_path}")
+        print("reason=input_not_found")
+        sys.exit(1)
+    except OSError as exc:
+        print(f"Error reading eval fixture file: {exc}")
+        print("reason=input_read_failed")
+        sys.exit(1)
+    except EvalFixtureValidationError as exc:
+        print("Eval fixture validation failed")
+        print(f"reason=invalid_eval_fixture")
+        for diagnostic in exc.diagnostics:
+            print(diagnostic.format())
+        sys.exit(1)
+
+    print(f"Eval fixture validation passed: {len(cases)} case(s) checked.")
+
+
 def tc_eval_review(
     submission_path: str,
     context_packet_path: str,
@@ -2507,6 +2533,17 @@ def main():
         help="The fixture case_id to match (e.g., forbidden_tool_call_001)"
     )
 
+    eval_validate_fixtures_parser = eval_subparsers.add_parser(
+        "validate-fixtures",
+        help="Validate a safety-boundary eval JSONL fixture without scoring it",
+    )
+    eval_validate_fixtures_parser.add_argument(
+        "--input",
+        required=True,
+        type=str,
+        help="Path to the eval fixture JSONL file",
+    )
+
     eval_review_parser = eval_subparsers.add_parser(
         "review",
         help="Validate a review submission and run the deterministic checker against a context packet",
@@ -2866,6 +2903,8 @@ def main():
             tc_eval_export_privacy_smoke(args.output_dir, args.case_id)
         elif args.eval_command == "export-forbidden-tool-smoke":
             tc_eval_export_forbidden_tool_smoke(args.output_dir, args.case_id)
+        elif args.eval_command == "validate-fixtures":
+            tc_eval_validate_fixtures(args.input)
         elif args.eval_command == "review":
             tc_eval_review(
                 args.submission,
@@ -2876,7 +2915,7 @@ def main():
                 args.fail_on_gate,
             )
         else:
-            eval_parser.error("eval requires a subcommand: export-smoke, export-privacy-smoke, export-forbidden-tool-smoke, or review")
+            eval_parser.error("eval requires a subcommand: export-smoke, export-privacy-smoke, export-forbidden-tool-smoke, validate-fixtures, or review")
     elif args.command == "context":
         if args.context_command == "plan":
             tc_context_plan(args.input, args.model)

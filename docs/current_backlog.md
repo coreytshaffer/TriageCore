@@ -6,6 +6,10 @@ This document summarizes the active TriageCore backlog after CR-115.
 
 ## Active GitHub Backlog
 
+- CR-122: Eval Fixture Validation CLI
+  - Status: complete via CR-122 (validator CLI only)
+  - Purpose: Expose the CR-121 safety-boundary eval fixture validator through `tc eval validate-fixtures --input <path>`, with bounded pass output and fail-closed line-aware diagnostics, while keeping scoring, observed-behavior comparison, model/backend calls, routing/admission integration, ledger writes, runtime behavior, and adversarial/tampering expansion out of scope.
+
 - CR-121: Eval Fixture Validator
   - Status: complete via CR-121 (validator-only)
   - Purpose: Add a pure deterministic JSONL validator for the CR-077 safety-boundary eval fixture contract, with line-aware diagnostics and fail-closed checks for malformed JSON, missing required fields, empty/duplicate `case_id`, and closed-vocabulary violations, while keeping `tc eval`, scoring, model calls, routing/admission integration, ledger writes, and adversarial tampering tests out of scope.
@@ -116,7 +120,7 @@ This document summarizes the active TriageCore backlog after CR-115.
 
 - Empirical AI safety evaluation track
   - Source: CR-076 and CR-077 research framing/eval taxonomy docs
-  - Status: research question, threat model, eval taxonomy, fixture schema, toy boundary fixtures, **TC-EVAL-001 (Export Actual Outcome Contract Files)**, **TC-EVAL-002 (Actual Outcome Export CLI Smoke)**, **[x] TC-EVAL-003 (Map One Real Internal Decision Path Into the Export Contract)**, **[x] TC-EVAL-004 (Export One Real Privacy Scanner Actual)**, **[x] TC-EVAL-005 / 006 / 007 (Privacy Reason Normalization)** documented; fixture validator complete via CR-121; evaluator CLI, adversarial tests, toy audit tampering eval, behavioral route diffing, **[x] TC-EVAL-008 (Structured Privacy Scanner Finding Codes)**, **[x] TC-EVAL-009 (Shared Internal Reason-Code Constants for Privacy Findings)**, **[x] TC-EVAL-010 (Export One Forbidden Tool-Call Actual)** and technical report remain future slices
+  - Status: research question, threat model, eval taxonomy, fixture schema, toy boundary fixtures, **TC-EVAL-001 (Export Actual Outcome Contract Files)**, **TC-EVAL-002 (Actual Outcome Export CLI Smoke)**, **[x] TC-EVAL-003 (Map One Real Internal Decision Path Into the Export Contract)**, **[x] TC-EVAL-004 (Export One Real Privacy Scanner Actual)**, **[x] TC-EVAL-005 / 006 / 007 (Privacy Reason Normalization)** documented; fixture validator complete via CR-121; fixture validation CLI complete via CR-122; scoring/evaluator execution, adversarial tests, toy audit tampering eval, behavioral route diffing, **[x] TC-EVAL-008 (Structured Privacy Scanner Finding Codes)**, **[x] TC-EVAL-009 (Shared Internal Reason-Code Constants for Privacy Findings)**, **[x] TC-EVAL-010 (Export One Forbidden Tool-Call Actual)** and technical report remain future slices
   - Purpose: make TriageCore legible as a reproducible local-first AI control and evaluation harness for testing privacy, routing, identity, provenance, audit, and human-approval boundaries under controlled adversarial pressure.
 
 - Operator UX implementation path
@@ -208,7 +212,7 @@ Keep three work lanes distinct:
 
 For signed ledger coverage, the reviewer-facing `validation_result` path and the signed `route_decision` path are now in place, including a smoke example, a capability-targeted doctor check, and a consolidated reviewer checkpoint for the latter. The current safe lane is packaging/stabilization, reviewer entrypoint maintenance, smoke-runbook clarity, video-first submission packaging, and release-readiness documentation. Deeper signing, cryptographic lifecycle work, and Issue #73 runtime key rotation should remain separate CRs. Do not treat a valid signature as approval, safety, or correctness.
 
-For the empirical AI safety evaluation track, CR-121 completes fixture validation. Keep the next slices sequential: evaluator CLI second, and broader adversarial/tampering studies only after the fixture contract is stable and the CLI remains narrow.
+For the empirical AI safety evaluation track, CR-121 completes fixture validation and CR-122 exposes it through a narrow CLI. Keep the next slices sequential: scoring/evaluator execution only after the validation CLI remains stable, and broader adversarial/tampering studies only after scoring is separately reviewed.
 
 For external runtime interoperability, the next approved slice should be policy tests or execution-path validation for the bounded adapter path.
 
