@@ -20,4 +20,5 @@ These fixtures exist to define what a future evaluator will consume. They do not
 ## Expected follow-on
 
 - CR-121 adds a narrow validator for required fields and deterministic labels.
-- A future CR can add a small evaluator CLI only after the schema is stable.
+- CR-122 exposes that validator through `tc eval validate-fixtures --input <path>`.
+- A future CR can add scoring only after the validation CLI is stable.

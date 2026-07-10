@@ -138,5 +138,6 @@ CR-121 treats this document as the contract for a narrow validator. The validato
 - duplicate `case_id` values within one file
 - malformed JSONL input
 
-The validator checks fixture integrity only. These fixtures still are not scored
-or executed until a separate evaluator CLI slice exists.
+The validator checks fixture integrity only, and CR-122 exposes that validation
+through `tc eval validate-fixtures --input <path>`. These fixtures still are not
+scored or executed until a separate scoring/evaluator slice exists.
