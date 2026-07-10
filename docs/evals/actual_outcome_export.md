@@ -7,9 +7,11 @@ By exporting evidence as files:
 - TriageCore does not need to self-score.
 - There are no cross-repository Python imports, preventing tight coupling.
 
-> **Reviewer Note:** For the conceptual explanation of how these actual outcome exports can be scored by an independent harness without importing TriageCore, see [Eval Integration Bridge](eval_integration_bridge.md).
+> **Reviewer Note:** For the conceptual explanation of how these actual outcome exports can be scored by an independent harness without importing TriageCore, see [Eval Integration Bridge](eval_integration_bridge.md). For the CR-123 file handoff boundary, required inputs/outputs, deterministic path vocabulary, and exit-code expectations, see [Evaluation Handoff Contract](evaluation_handoff_contract.md).
 
 ## JSON Contract Shape
+
+Contract identifier: `actual_outcome_export.v0`
 
 TriageCore generates one JSON file per evaluation scenario. The exported file must match the following shape:
 

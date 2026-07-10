@@ -3,6 +3,8 @@
 ## Purpose
 This document provides a reviewer-facing explanation of how TriageCore interfaces with the independent `agent-control-evals` repository. It clarifies how actual outcome exports produced by TriageCore can be deterministically scored by an external harness without importing or coupling the repositories.
 
+The normative CR-123 handoff boundary is documented in [Evaluation Handoff Contract](evaluation_handoff_contract.md). This bridge remains a conceptual integration note.
+
 ## Integration Boundary
 The integration between TriageCore and the evaluation harness is strictly **file-contract-based**.
 There are no shared runtime dependencies, no cross-repository Python imports, and no hidden coupling. The boundary is entirely maintained by writing static JSON files to disk, which are then independently read and scored.
