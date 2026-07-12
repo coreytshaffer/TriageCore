@@ -165,7 +165,7 @@ class TriageClient:
             signing_registry=route_decision_signing_registry,
             signing_agent_id=route_decision_signing_agent_id,
         )
-        
+
         steward = ProjectSteward()
         steward_eval = steward.evaluate(task_prompt=prompt, target_files=[], completed_orders=[])
         if steward_eval["local_result_status"] == "insufficient":
@@ -183,6 +183,37 @@ class TriageClient:
                 "credit_allowance_used": steward_eval.get("credit_allowance_used", 0),
                 "credit_allowance_remaining": steward_eval.get("credit_allowance_remaining", 0),
                 "credit_allowance_exhausted": steward_eval.get("credit_allowance_exhausted", False),
+                "worker_result_status": "not_attempted",
+                "failure_type": "safety_handoff",
+                "failure_stage": "router",
+            }
+            self._append_optional_event(
+                ledger=ledger,
+                task_id=task_id,
+                event_type="worker_result",
+                payload=build_worker_result_payload(route_payload, result),
+            )
+            return self._merge_route_fields(result, route_payload)
+
+        if selected_route in {"human_handoff", "deterministic"}:
+            if selected_route == "human_handoff":
+                reason = (
+                    "Human handoff required by the resilience route"
+                    f": {resilience_decision.reason}"
+                )
+            else:
+                reason = (
+                    "Deterministic route selected, but no deterministic executor is "
+                    f"wired into the governed loop: {resilience_decision.reason}"
+                )
+            result = {
+                "status": "handoff_required",
+                "source": "router",
+                "reason": reason,
+                "handoff_reason": reason,
+                "backend_name": getattr(self.engine.backend, "name", None),
+                "model": getattr(self.engine.backend, "model", None),
+                "timeout_seconds": use_timeout,
                 "worker_result_status": "not_attempted",
                 "failure_type": "safety_handoff",
                 "failure_stage": "router",

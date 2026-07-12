@@ -2,9 +2,13 @@
 
 ## Status
 
-This document summarizes the active TriageCore backlog after CR-115.
+This document summarizes the active TriageCore backlog after CR-124.
 
 ## Active GitHub Backlog
+
+- CR-124: Honor Terminal Resilience Routes
+  - Status: complete via CR-124
+  - Purpose: Make `human_handoff` and the currently unimplemented `deterministic` resilience routes terminal at `TriageClient.run_task`: record the route decision and a `worker_result` with `not_attempted`, return `handoff_required`, and ensure `tc run` exits 3 without invoking any backend. This slice does not add an approval-and-resume workflow or make every `human_review_required` flag pre-execution blocking.
 
 - CR-123: Eval Scoring Scope Boundary
   - Status: complete via CR-123 (docs-only scope)
@@ -216,7 +220,7 @@ Keep three work lanes distinct:
 
 For signed ledger coverage, the reviewer-facing `validation_result` path and the signed `route_decision` path are now in place, including a smoke example, a capability-targeted doctor check, and a consolidated reviewer checkpoint for the latter. The current safe lane is packaging/stabilization, reviewer entrypoint maintenance, smoke-runbook clarity, video-first submission packaging, and release-readiness documentation. Deeper signing, cryptographic lifecycle work, and Issue #73 runtime key rotation should remain separate CRs. Do not treat a valid signature as approval, safety, or correctness.
 
-For the empirical AI safety evaluation track, CR-121 completes fixture validation, CR-122 exposes it through a narrow CLI, and CR-123 scopes the first safe scoring follow-on. Keep the next slices sequential: the next scoring implementation should be deterministic explicit-file comparison only, and broader adversarial/tampering studies should wait until that static comparison path is separately reviewed.
+For the empirical AI safety evaluation track, CR-121 completes fixture validation, CR-122 exposes it through a narrow CLI, and CR-123 scopes a future safe scoring follow-on. Defer any in-repository comparison implementation until the governed path produces real exported actuals and an external harness run can assess them; broader adversarial/tampering studies remain separately reviewed work.
 
 For external runtime interoperability, the next approved slice should be policy tests or execution-path validation for the bounded adapter path.
 
@@ -229,4 +233,5 @@ For operator UX, future slices should focus on reviewability, export polish, and
 - **[done] Local backend telemetry probe validation gate (CR-119)**: Every emitted local backend probe result now validates against the CR-118 record contract before it is treated as an observation; validation failure raises a fail-closed `ProbeInputError`, with no generation calls, routing integration, or ledger writes.
 - **[done] Reviewer checkpoint or release-hygiene slice (CR-120, docs-only)**: Froze the completed CR-117 through CR-119 lane in a concise operations note, corrected stale CR-114 telemetry wording, and kept future telemetry work behind a new explicit scope pass instead of adding more features.
 - **[done] Eval scoring scope boundary (CR-123, docs-only)**: Scoped the first future scoring-capable eval slice as deterministic explicit-file comparison between validated fixtures and already-exported actual-outcome records, with no model/backend calls, routing, admission, ledger writes, approval state changes, adversarial expansion, or self-certification claims.
-- **Next slice TBD by scope pass**: Do not start routing integration, ledger integration, circuit breakers, automatic discovery, background polling, daily-driver enforcement, or additional telemetry behavior without a new approved CR.
+- **[done] Honor terminal resilience routes (CR-124)**: `human_handoff` and currently unimplemented `deterministic` routes now return a governed handoff before backend execution, recording `worker_result_status=not_attempted`; `tc run` reports the valid handoff with exit code 3. Approval-and-resume behavior, broader `human_review_required` semantics, and other execution seams remain future work.
+- **Next slice TBD by scope pass**: Do not start approval-and-resume behavior, routing integration beyond the governed path, ledger integration, circuit breakers, automatic discovery, background polling, or additional telemetry behavior without a new approved CR.
