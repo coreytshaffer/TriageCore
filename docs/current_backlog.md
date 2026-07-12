@@ -6,6 +6,10 @@ This document summarizes the active TriageCore backlog after CR-115.
 
 ## Active GitHub Backlog
 
+- CR-123: Eval Scoring Scope Boundary
+  - Status: complete via CR-123 (docs-only scope)
+  - Purpose: Define the first safe scoring-capable follow-on after CR-121 and CR-122: deterministic explicit-file comparison between validated `eval_case_v0` fixtures and already-exported actual-outcome contract records, while keeping model/backend calls, endpoint probing, routing, admission, ledger writes, approval state, adversarial expansion, and self-certification claims out of scope.
+
 - CR-122: Eval Fixture Validation CLI
   - Status: complete via CR-122 (validator CLI only)
   - Purpose: Expose the CR-121 safety-boundary eval fixture validator through `tc eval validate-fixtures --input <path>`, with bounded pass output and fail-closed line-aware diagnostics, while keeping scoring, observed-behavior comparison, model/backend calls, routing/admission integration, ledger writes, runtime behavior, and adversarial/tampering expansion out of scope.
@@ -120,7 +124,7 @@ This document summarizes the active TriageCore backlog after CR-115.
 
 - Empirical AI safety evaluation track
   - Source: CR-076 and CR-077 research framing/eval taxonomy docs
-  - Status: research question, threat model, eval taxonomy, fixture schema, toy boundary fixtures, **TC-EVAL-001 (Export Actual Outcome Contract Files)**, **TC-EVAL-002 (Actual Outcome Export CLI Smoke)**, **[x] TC-EVAL-003 (Map One Real Internal Decision Path Into the Export Contract)**, **[x] TC-EVAL-004 (Export One Real Privacy Scanner Actual)**, **[x] TC-EVAL-005 / 006 / 007 (Privacy Reason Normalization)** documented; fixture validator complete via CR-121; fixture validation CLI complete via CR-122; scoring/evaluator execution, adversarial tests, toy audit tampering eval, behavioral route diffing, **[x] TC-EVAL-008 (Structured Privacy Scanner Finding Codes)**, **[x] TC-EVAL-009 (Shared Internal Reason-Code Constants for Privacy Findings)**, **[x] TC-EVAL-010 (Export One Forbidden Tool-Call Actual)** and technical report remain future slices
+  - Status: research question, threat model, eval taxonomy, fixture schema, toy boundary fixtures, **TC-EVAL-001 (Export Actual Outcome Contract Files)**, **TC-EVAL-002 (Actual Outcome Export CLI Smoke)**, **[x] TC-EVAL-003 (Map One Real Internal Decision Path Into the Export Contract)**, **[x] TC-EVAL-004 (Export One Real Privacy Scanner Actual)**, **[x] TC-EVAL-005 / 006 / 007 (Privacy Reason Normalization)** documented; fixture validator complete via CR-121; fixture validation CLI complete via CR-122; first scoring scope boundary complete via CR-123; static explicit-file scoring comparison, adversarial tests, toy audit tampering eval, behavioral route diffing, **[x] TC-EVAL-008 (Structured Privacy Scanner Finding Codes)**, **[x] TC-EVAL-009 (Shared Internal Reason-Code Constants for Privacy Findings)**, **[x] TC-EVAL-010 (Export One Forbidden Tool-Call Actual)** and technical report remain future slices
   - Purpose: make TriageCore legible as a reproducible local-first AI control and evaluation harness for testing privacy, routing, identity, provenance, audit, and human-approval boundaries under controlled adversarial pressure.
 
 - Operator UX implementation path
@@ -212,7 +216,7 @@ Keep three work lanes distinct:
 
 For signed ledger coverage, the reviewer-facing `validation_result` path and the signed `route_decision` path are now in place, including a smoke example, a capability-targeted doctor check, and a consolidated reviewer checkpoint for the latter. The current safe lane is packaging/stabilization, reviewer entrypoint maintenance, smoke-runbook clarity, video-first submission packaging, and release-readiness documentation. Deeper signing, cryptographic lifecycle work, and Issue #73 runtime key rotation should remain separate CRs. Do not treat a valid signature as approval, safety, or correctness.
 
-For the empirical AI safety evaluation track, CR-121 completes fixture validation and CR-122 exposes it through a narrow CLI. Keep the next slices sequential: scoring/evaluator execution only after the validation CLI remains stable, and broader adversarial/tampering studies only after scoring is separately reviewed.
+For the empirical AI safety evaluation track, CR-121 completes fixture validation, CR-122 exposes it through a narrow CLI, and CR-123 scopes the first safe scoring follow-on. Keep the next slices sequential: the next scoring implementation should be deterministic explicit-file comparison only, and broader adversarial/tampering studies should wait until that static comparison path is separately reviewed.
 
 For external runtime interoperability, the next approved slice should be policy tests or execution-path validation for the bounded adapter path.
 
@@ -224,4 +228,5 @@ For operator UX, future slices should focus on reviewability, export polish, and
 - **[done] Telemetry schema and synthetic-fixture validation (CR-118)**: Hardened the existing local backend probe's serialized record contract before any further probe work — strict schema, pure validator, synthetic fixtures only, no endpoint calls, no routing integration, no ledger writes, and no CLI behavior changes.
 - **[done] Local backend telemetry probe validation gate (CR-119)**: Every emitted local backend probe result now validates against the CR-118 record contract before it is treated as an observation; validation failure raises a fail-closed `ProbeInputError`, with no generation calls, routing integration, or ledger writes.
 - **[done] Reviewer checkpoint or release-hygiene slice (CR-120, docs-only)**: Froze the completed CR-117 through CR-119 lane in a concise operations note, corrected stale CR-114 telemetry wording, and kept future telemetry work behind a new explicit scope pass instead of adding more features.
+- **[done] Eval scoring scope boundary (CR-123, docs-only)**: Scoped the first future scoring-capable eval slice as deterministic explicit-file comparison between validated fixtures and already-exported actual-outcome records, with no model/backend calls, routing, admission, ledger writes, approval state changes, adversarial expansion, or self-certification claims.
 - **Next slice TBD by scope pass**: Do not start routing integration, ledger integration, circuit breakers, automatic discovery, background polling, daily-driver enforcement, or additional telemetry behavior without a new approved CR.

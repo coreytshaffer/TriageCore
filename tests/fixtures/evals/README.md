@@ -21,4 +21,8 @@ These fixtures exist to define what a future evaluator will consume. They do not
 
 - CR-121 adds a narrow validator for required fields and deterministic labels.
 - CR-122 exposes that validator through `tc eval validate-fixtures --input <path>`.
-- A future CR can add scoring only after the validation CLI is stable.
+- CR-123 scopes the first safe scoring-capable follow-on as explicit-file
+  comparison between validated fixtures and already-exported actual-outcome
+  records.
+- A future implementation CR can add that static comparison only after the
+  boundary remains stable.

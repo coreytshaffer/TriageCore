@@ -140,4 +140,10 @@ CR-121 treats this document as the contract for a narrow validator. The validato
 
 The validator checks fixture integrity only, and CR-122 exposes that validation
 through `tc eval validate-fixtures --input <path>`. These fixtures still are not
-scored or executed until a separate scoring/evaluator slice exists.
+scored or executed by the validator path.
+
+CR-123 scopes the first safe scoring-capable follow-on as deterministic
+explicit-file comparison between validated fixtures and already-exported
+actual-outcome records. That future implementation must remain offline,
+read-only, and separate from model/backend execution, routing, ledger writes,
+approval state, and external evaluator authority.
