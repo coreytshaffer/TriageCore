@@ -2,9 +2,13 @@
 
 ## Status
 
-This document summarizes the active TriageCore backlog after CR-124.
+This document summarizes the active TriageCore backlog after CR-125.
 
 ## Active GitHub Backlog
+
+- CR-125: Preflight Privacy Before Ledger Persistence
+  - Status: complete via CR-125
+  - Purpose: Preflight the complete `tc run` packet before any ledger write, replace persisted prompt/data text with fixed metadata and lengths, and extend the persistent-artifact audit to reject forbidden keys plus high-confidence PII, credential, and precise-location value patterns. Historical records are not rewritten, and arbitrary free-text safety classification remains out of scope.
 
 - CR-124: Honor Terminal Resilience Routes
   - Status: complete via CR-124
@@ -234,4 +238,5 @@ For operator UX, future slices should focus on reviewability, export polish, and
 - **[done] Reviewer checkpoint or release-hygiene slice (CR-120, docs-only)**: Froze the completed CR-117 through CR-119 lane in a concise operations note, corrected stale CR-114 telemetry wording, and kept future telemetry work behind a new explicit scope pass instead of adding more features.
 - **[done] Eval scoring scope boundary (CR-123, docs-only)**: Scoped the first future scoring-capable eval slice as deterministic explicit-file comparison between validated fixtures and already-exported actual-outcome records, with no model/backend calls, routing, admission, ledger writes, approval state changes, adversarial expansion, or self-certification claims.
 - **[done] Honor terminal resilience routes (CR-124)**: `human_handoff` and currently unimplemented `deterministic` routes now return a governed handoff before backend execution, recording `worker_result_status=not_attempted`; `tc run` reports the valid handoff with exit code 3. Approval-and-resume behavior, broader `human_review_required` semantics, and other execution seams remain future work.
+- **[done] Preflight privacy before ledger persistence (CR-125)**: `tc run` now scans its complete packet before opening the ledger, persists only metadata and input lengths, and extends the persistent artifact audit with high-confidence sensitive-value detection. Historical records remain unchanged; arbitrary free-text safety classification and a full DLP engine remain out of scope.
 - **Next slice TBD by scope pass**: Do not start approval-and-resume behavior, routing integration beyond the governed path, ledger integration, circuit breakers, automatic discovery, background polling, or additional telemetry behavior without a new approved CR.

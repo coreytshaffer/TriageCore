@@ -407,7 +407,8 @@ def tc_audit_privacy_invariants() -> None:
                         f"task={record.get('task_id', 'unknown')} "
                         f"event_type={record.get('event_type', 'unknown')} "
                         f"path={violation.path} "
-                        f"key={violation.key}"
+                        f"key={violation.key} "
+                        f"reason={violation.reason}"
                     )
     except Exception as e:
         print(f"Error reading {ledger_path}: {e}")
@@ -1011,6 +1012,7 @@ def tc_run(args, client=None) -> None:
     from triage_core.safe_task_packet import (
         LocalRouteUnavailableError,
         UnsafePacketError,
+        verify_packet,
     )
 
     # 1. Assemble task data from --files (repeatable), then --data.
@@ -1046,7 +1048,21 @@ def tc_run(args, client=None) -> None:
             external_model_allowed=allow_external_model,
         )
 
-    # 3. Ledger wiring (enabled by default; --no-ledger warns).
+    # 3. Build and preflight the packet before any evidence is persisted.
+    task_id = args.task_id or str(uuid.uuid4())
+    packet = TaskPacket(
+        prompt=args.prompt,
+        data=data,
+        task_id=task_id,
+        privacy_metadata=privacy_metadata,
+    )
+    try:
+        verify_packet(packet)
+    except PrivacyViolationError as exc:
+        print(f"Blocked (privacy fail-closed): {exc}")
+        sys.exit(2)
+
+    # 4. Ledger wiring (enabled by default; --no-ledger warns).
     ledger = None
     if args.no_ledger:
         print(
@@ -1061,22 +1077,23 @@ def tc_run(args, client=None) -> None:
             print(f"Error: could not open ledger at '{ledger_dir}': {exc}")
             sys.exit(1)
 
-    # 4. Task identity + evidence scaffolding (mirrors the pipeline runner).
-    task_id = args.task_id or str(uuid.uuid4())
+    # 5. Task identity + evidence scaffolding (mirrors the pipeline runner).
     if ledger is not None:
         if not args.task_id or not ledger.get_task(task_id):
             ledger.append_event(
                 task_id,
                 "task_created",
                 {
-                    "title": f"tc run: {args.prompt[:40]}",
-                    "description": args.prompt,
+                    "title": "tc run task",
+                    "description": "Prompt content withheld from ledger.",
+                    "prompt_length": len(args.prompt),
+                    "data_length": len(data),
                     "target_files": args.files,
                 },
             )
         ledger.append_event(task_id, "runner_selected", {"runner": "tc_run"})
 
-    # 5. Build the client from config unless one was injected (tests inject).
+    # 6. Build the client from config unless one was injected (tests inject).
     if client is None:
         from triage_core.client import TriageClient
 
@@ -1090,14 +1107,7 @@ def tc_run(args, client=None) -> None:
             print(f"Error: could not initialize backend: {exc}")
             sys.exit(1)
 
-    packet = TaskPacket(
-        prompt=args.prompt,
-        data=data,
-        task_id=task_id,
-        privacy_metadata=privacy_metadata,
-    )
-
-    # 6. Governed loop. Privacy/safety failures fail closed (exit 2).
+    # 7. Governed loop. Privacy/safety failures fail closed (exit 2).
     try:
         result = client.run_task(task_packet=packet, ledger=ledger, task_id=task_id)
     except PrivacyViolationError as exc:
@@ -1110,7 +1120,7 @@ def tc_run(args, client=None) -> None:
         print(f"Blocked (unsafe packet, failing closed): {exc}")
         sys.exit(2)
 
-    # 7. Interpret outcome.
+    # 8. Interpret outcome.
     route = result.get("selected_route")
     if result.get("status") == "success":
         output = result.get("output", "")

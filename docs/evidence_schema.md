@@ -19,7 +19,7 @@ The schema supports two project goals:
 | `created_at` | Timestamp when the task entered the ledger. |
 | `updated_at` | Timestamp of the most recent ledger event applied to the task record. |
 | `title` | Human-readable task title. |
-| `description` | Prompt or task summary. |
+| `description` | Operator-safe task summary. `tc run` stores a fixed content-withheld marker rather than prompt text. |
 | `target_files` | Files or artifacts in scope. |
 | `runner` | Execution path, such as `local_benchmark`, `local_llm`, `council`, `codex`, or `antigravity`. |
 | `status` | Current state: `pending`, `local_draft_generated`, `handoff_generated`, `reviewed`, or `blocked`. |
