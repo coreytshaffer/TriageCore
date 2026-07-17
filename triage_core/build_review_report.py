@@ -1,0 +1,334 @@
+"""Deterministic human-readable views for build-review packets."""
+
+from __future__ import annotations
+
+import html
+from pathlib import Path
+from typing import Any, Dict, Optional
+
+
+def _escape(value: Any) -> str:
+    return html.escape(str(value), quote=True)
+
+
+def _display_count(value: Any) -> str:
+    return "—" if value is None else str(value)
+
+
+def _fenced(value: str) -> str:
+    return value.replace("```", "``\u200b`")
+
+
+def render_markdown(
+    payload: Dict[str, Any],
+    packet_path: Optional[Path] = None,
+) -> str:
+    summary = payload["change_summary"]
+    decision = payload["decision"]
+    packet_arg = str(packet_path or Path("review.json"))
+    lines = [
+        "# TriageCore Build Review",
+        "",
+        f"**Packet:** `{payload['packet_id']}`",
+        f"**Recommendation:** `{payload['recommendation']}`",
+        f"**Decision:** `{decision['status']}`",
+        f"**Evidence SHA-256:** `{payload['evidence_sha256']}`",
+        "",
+        "## Requested change",
+        "",
+        payload["request"]["text"].strip(),
+        "",
+        "## Review boundary",
+        "",
+        f"- Repository: `{payload['repository']}`",
+        (
+            f"- Base: `{payload['comparison']['base_ref']}` "
+            f"(`{payload['comparison']['base_commit']}`)"
+        ),
+        (
+            f"- Head: `{payload['comparison']['head_ref']}` "
+            f"(`{payload['comparison']['head_commit']}`)"
+        ),
+        (
+            "- Expected scope: "
+            + (
+                ", ".join(f"`{item}`" for item in payload["expected_scope"])
+                or "_not declared_"
+            )
+        ),
+        f"- Working tree clean: `{payload['working_tree_clean']}`",
+        "",
+        "## Actual changes",
+        "",
+        f"- {summary['files_changed']} files changed",
+        f"- +{summary['additions']} / -{summary['deletions']}",
+        "",
+        "| Status | File | Additions | Deletions |",
+        "|---|---|---:|---:|",
+    ]
+    for item in payload["changed_files"]:
+        lines.append(
+            f"| {item['status']} | `{item['path']}` | "
+            f"{_display_count(item['additions'])} | "
+            f"{_display_count(item['deletions'])} |"
+        )
+    if not payload["changed_files"]:
+        lines.append("| — | _No changes_ | — | — |")
+
+    lines.extend(
+        [
+            "",
+            "## Findings",
+            "",
+            "| Severity | Finding | Detail | Files / commands |",
+            "|---|---|---|---|",
+        ]
+    )
+    for finding in payload["findings"]:
+        related = "<br>".join(
+            f"`{item}`" for item in finding["files"]
+        ) or "—"
+        lines.append(
+            f"| {finding['severity'].upper()} | {finding['title']} "
+            f"(`{finding['code']}`) | {finding['detail']} | {related} |"
+        )
+    if not payload["findings"]:
+        lines.append(
+            "| — | No findings | Change matches the declared boundary. | — |"
+        )
+
+    lines.extend(["", "## Validation evidence", ""])
+    for validation in payload["validations"]:
+        state = "PASS" if validation["passed"] else "FAIL"
+        lines.extend(
+            [
+                f"### {state}: `{validation['command']}`",
+                "",
+                (
+                    f"Exit: `{validation['exit_code']}` · "
+                    f"Duration: `{validation['duration_seconds']}s`"
+                ),
+                "",
+                "```text",
+                _fenced(
+                    validation["stdout"]
+                    or validation["stderr"]
+                    or "(no output)"
+                ),
+                "```",
+                "",
+            ]
+        )
+    if not payload["validations"]:
+        lines.extend(["_No validation commands were supplied._", ""])
+
+    lines.extend(["## Human decision", ""])
+    if decision["status"] == "pending":
+        lines.extend(
+            [
+                "Decision is pending. Record an explicit decision:",
+                "",
+                "```powershell",
+                (
+                    f'tc build-review decide "{packet_arg}" approved '
+                    '--reviewer "Your name"'
+                ),
+                (
+                    f'tc build-review decide "{packet_arg}" rejected '
+                    '--reviewer "Your name" --note "Reason"'
+                ),
+                (
+                    f'tc build-review decide "{packet_arg}" needs_revision '
+                    '--reviewer "Your name" --note "Required follow-up"'
+                ),
+                "```",
+            ]
+        )
+    else:
+        lines.extend(
+            [
+                f"- Status: **{decision['status'].upper()}**",
+                f"- Reviewer: {decision['reviewer']}",
+                f"- Time: {decision['decided_at']}",
+                f"- Note: {decision['note'] or '—'}",
+            ]
+        )
+    lines.extend(
+        [
+            "",
+            "---",
+            "",
+            f"Generated by TriageCore at {payload['created_at']}.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def render_html(
+    payload: Dict[str, Any],
+    packet_path: Optional[Path] = None,
+) -> str:
+    decision = payload["decision"]
+    summary = payload["change_summary"]
+    scopes = "".join(
+        f"<li><code>{_escape(item)}</code></li>"
+        for item in payload["expected_scope"]
+    ) or "<li>Not declared</li>"
+    changes = "".join(
+        "<tr>"
+        f"<td>{_escape(item['status'])}</td>"
+        f"<td><code>{_escape(item['path'])}</code></td>"
+        f"<td>{_escape(_display_count(item['additions']))}</td>"
+        f"<td>{_escape(_display_count(item['deletions']))}</td>"
+        "</tr>"
+        for item in payload["changed_files"]
+    ) or '<tr><td colspan="4">No changed files.</td></tr>'
+    findings = "".join(
+        f'<article class="finding {item["severity"]}">'
+        f"<p><strong>{_escape(item['severity'].upper())}</strong> "
+        f"<code>{_escape(item['code'])}</code></p>"
+        f"<h3>{_escape(item['title'])}</h3>"
+        f"<p>{_escape(item['detail'])}</p>"
+        + (
+            "<ul>"
+            + "".join(f"<li><code>{_escape(path)}</code></li>" for path in item["files"])
+            + "</ul>"
+            if item["files"]
+            else ""
+        )
+        + "</article>"
+        for item in payload["findings"]
+    ) or "<p>No findings. The change matches the declared boundary.</p>"
+    validations = "".join(
+        '<article class="validation">'
+        f'<p class="{"pass" if item["passed"] else "fail"}">'
+        f"<strong>{'PASS' if item['passed'] else 'FAIL'}</strong> "
+        f"<code>{_escape(item['command'])}</code></p>"
+        f"<p>Exit {_escape(item['exit_code'])}; "
+        f"{_escape(item['duration_seconds'])} seconds</p>"
+        f"<pre>{_escape(item['stdout'] or item['stderr'] or '(no output)')}</pre>"
+        "</article>"
+        for item in payload["validations"]
+    ) or "<p>No validation commands were supplied.</p>"
+    if decision["status"] == "pending":
+        decision_view = (
+            "<p><strong>Pending human decision.</strong></p>"
+            "<p>Use the command shown in <code>review.md</code> to record "
+            "approved, rejected, or needs_revision.</p>"
+        )
+    else:
+        decision_view = (
+            f'<p class="decision {decision["status"]}">'
+            f"<strong>{_escape(decision['status'].upper())}</strong><br>"
+            f"Reviewer: {_escape(decision['reviewer'])}<br>"
+            f"Time: {_escape(decision['decided_at'])}<br>"
+            f"Note: {_escape(decision['note'] or '—')}</p>"
+        )
+
+    page = f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TriageCore Build Review · {_escape(payload["packet_id"])}</title>
+  <style>
+    :root {{
+      color-scheme: light;
+      --ink: #17201d;
+      --muted: #61706a;
+      --paper: #f3f0e8;
+      --card: #fffdf7;
+      --line: #d9d5ca;
+      --green: #176a50;
+      --amber: #9b6117;
+      --red: #9f3a35;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font: 16px/1.55 system-ui, sans-serif;
+    }}
+    main {{ width: min(1080px, calc(100% - 32px)); margin: 32px auto 72px; }}
+    header, section {{
+      margin-bottom: 18px;
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--card);
+    }}
+    header {{ color: #f8f4e8; background: #16372e; }}
+    h1, h2, h3 {{ line-height: 1.15; }}
+    h1 {{ margin: 0 0 8px; font-size: clamp(2rem, 5vw, 3.5rem); }}
+    h2 {{ margin-top: 0; }}
+    .meta {{ color: #c8ded5; }}
+    .metrics {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }}
+    .metric {{ padding: 16px; border: 1px solid var(--line); border-radius: 10px; }}
+    .metric strong {{ display: block; font-size: 1.6rem; }}
+    table {{ width: 100%; border-collapse: collapse; }}
+    th, td {{ padding: 10px; border-bottom: 1px solid var(--line); text-align: left; }}
+    code, pre {{ font-family: ui-monospace, monospace; }}
+    pre {{ overflow: auto; padding: 14px; color: white; background: #17201d; }}
+    .finding {{ padding: 14px; margin: 10px 0; border-left: 5px solid var(--amber); }}
+    .finding.high, .finding.critical {{ border-left-color: var(--red); }}
+    .finding.low {{ border-left-color: var(--green); }}
+    .pass {{ color: var(--green); }}
+    .fail, .rejected {{ color: var(--red); }}
+    .needs_revision {{ color: var(--amber); }}
+    .hash {{ overflow-wrap: anywhere; color: var(--muted); }}
+    @media (max-width: 640px) {{
+      .metrics {{ grid-template-columns: 1fr; }}
+      header, section {{ padding: 18px; }}
+    }}
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <p>TriageCore / Evidence-bound software review</p>
+      <h1>Build Review</h1>
+      <p class="meta">Packet {_escape(payload["packet_id"])}</p>
+    </header>
+    <section class="metrics" aria-label="Review summary">
+      <div class="metric">Recommendation<strong>{_escape(payload["recommendation"])}</strong></div>
+      <div class="metric">Changed files<strong>{summary["files_changed"]}</strong></div>
+      <div class="metric">Decision<strong>{_escape(decision["status"])}</strong></div>
+    </section>
+    <section>
+      <h2>Requested change</h2>
+      <p>{_escape(payload["request"]["text"])}</p>
+      <h3>Declared scope</h3>
+      <ul>{scopes}</ul>
+    </section>
+    <section>
+      <h2>Actual changes</h2>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>Status</th><th>File</th><th>Added</th><th>Removed</th></tr></thead>
+          <tbody>{changes}</tbody>
+        </table>
+      </div>
+    </section>
+    <section>
+      <h2>Findings</h2>
+      {findings}
+    </section>
+    <section>
+      <h2>Validation evidence</h2>
+      {validations}
+    </section>
+    <section>
+      <h2>Human decision</h2>
+      {decision_view}
+    </section>
+    <section>
+      <h2>Evidence integrity</h2>
+      <p class="hash">{_escape(payload["evidence_sha256"])}</p>
+    </section>
+  </main>
+</body>
+</html>
+"""
+    return "\n".join(line.rstrip() for line in page.splitlines()) + "\n"

@@ -19,6 +19,65 @@ TriageCore is an observable, traceable, data-driven control-plane harness for ev
 - Supports local benchmark fixtures and benchmark reports without hiding the evidence trail.
 - Enforces local-only privacy boundaries before any optional external-safe Qwen Cloud path is considered.
 
+## Evidence-Bound Build Review
+
+Build Review turns a development request and Git comparison into a local,
+reviewable evidence packet. It compares declared scope with actual changed
+files, runs trusted operator-supplied validations, flags missing or failed
+evidence, and keeps the system recommendation separate from the named human
+decision.
+
+Create a packet:
+
+```powershell
+tc build-review create `
+  --request-file docs/change/requests/CR-BW-001-evidence-bound-build-review.md `
+  --base main `
+  --head HEAD `
+  --validate "python -m pytest -q"
+```
+
+Record one non-overwriting decision:
+
+```powershell
+tc build-review decide `
+  .triagecore/build-reviews/<review-id> `
+  approved `
+  --reviewer "Your name" `
+  --note "Scope and validation evidence reviewed."
+```
+
+Independently verify the packet and optional decision:
+
+```powershell
+tc build-review verify .triagecore/build-reviews/<review-id>
+```
+
+Verification exits `0` only for an internally intact packet, `1` with a
+specific integrity or operation diagnostic, and `2` for malformed command use.
+It rejects missing or symlinked artifacts, malformed or duplicate-key JSON,
+hash drift, derived-view drift, and decisions referencing different evidence.
+Packet and decision content also pass the persistent privacy invariant before
+write.
+
+Two portable packets demonstrate the distinction between integrity and
+acceptability:
+
+```powershell
+tc build-review verify examples/build-week/clean-self-review
+tc build-review verify examples/build-week/adversarial-scope-drift
+```
+
+The clean packet recommends approval while its human decision remains pending.
+The adversarial packet is internally intact but documents undeclared scope,
+missing validation, a rejection recommendation, and a `needs_revision`
+decision.
+
+SHA-256 establishes internal consistency here, not authorship or protection
+against an actor able to replace every artifact and recompute every digest.
+See [the artifact contract](docs/build-review-contract.md) and
+[Build Week scope](BUILD_WEEK_SCOPE.md).
+
 ## Why It Matters
 
 - It makes local vs cloud execution explicit instead of burying that decision inside an agent loop.

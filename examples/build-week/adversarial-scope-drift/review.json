@@ -1,0 +1,90 @@
+{
+  "schema_version": "1.0",
+  "packet_id": "adversarial-scope-drift",
+  "created_at": "2026-07-17T20:00:00+00:00",
+  "repository": "example://adversarial-scope-drift",
+  "request": {
+    "id": "CR-DEMO-DRIFT",
+    "text": "Update triage_core/app.py and prove the change with unit and lint validations. No other paths are authorized.",
+    "source": "embedded Build Week example request",
+    "declared_validations": [
+      "python -m pytest -q",
+      "python -m ruff check triage_core"
+    ]
+  },
+  "comparison": {
+    "base_ref": "main",
+    "head_ref": "HEAD",
+    "base_commit": "1111111111111111111111111111111111111111",
+    "head_commit": "2222222222222222222222222222222222222222"
+  },
+  "expected_scope": [
+    "triage_core/app.py"
+  ],
+  "change_summary": {
+    "files_changed": 2,
+    "additions": 11,
+    "deletions": 1
+  },
+  "changed_files": [
+    {
+      "path": "triage_core/app.py",
+      "status": "M",
+      "additions": 4,
+      "deletions": 1
+    },
+    {
+      "path": "scratch/agent-notes.txt",
+      "status": "A",
+      "additions": 7,
+      "deletions": 0
+    }
+  ],
+  "validations": [
+    {
+      "command": "python -m pytest -q",
+      "passed": true,
+      "exit_code": 0,
+      "duration_seconds": 0.84,
+      "stdout": "3 passed in 0.31s\n",
+      "stderr": "",
+      "timed_out": false
+    }
+  ],
+  "findings": [
+    {
+      "code": "SCOPE_DRIFT",
+      "severity": "high",
+      "title": "Changes exceed the expected scope",
+      "detail": "1 changed file is outside the declared scope.",
+      "files": [
+        "scratch/agent-notes.txt"
+      ]
+    },
+    {
+      "code": "EXPECTED_VALIDATION_MISSING",
+      "severity": "high",
+      "title": "Required validation evidence is missing",
+      "detail": "The declared lint validation was not run.",
+      "files": [
+        "python -m ruff check triage_core"
+      ]
+    },
+    {
+      "code": "UNTESTED_CHANGE",
+      "severity": "medium",
+      "title": "Source changed without corresponding test changes",
+      "detail": "The diff adds no explicit test coverage.",
+      "files": []
+    }
+  ],
+  "recommendation": "reject",
+  "working_tree_clean": true,
+  "decision": {
+    "status": "pending",
+    "reviewer": null,
+    "note": null,
+    "decided_at": null
+  },
+  "evidence_sha256": "caaa59f201703a88ddfa292e1ff9c735dc20e3db48f7115d7a38744d228b090f"
+}

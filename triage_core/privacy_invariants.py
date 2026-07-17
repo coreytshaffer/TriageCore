@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -41,6 +42,11 @@ FORBIDDEN_PERSISTENT_KEYS = frozenset(
         "secret",
         "token",
     }
+)
+
+UUID_IDENTIFIER_REGEX = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    re.IGNORECASE,
 )
 
 
@@ -114,6 +120,10 @@ def find_forbidden_persistent_fields(
 
 
 def _sensitive_persistent_value_reason(value: str) -> str | None:
+    # UUID identifiers can contain 13-19 decimal digits separated by hyphens,
+    # which occasionally form a Luhn-valid false positive.
+    if UUID_IDENTIFIER_REGEX.fullmatch(value):
+        return None
     if SSN_REGEX.search(value):
         return "ssn_pattern"
     if EMAIL_REGEX.search(value):
