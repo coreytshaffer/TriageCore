@@ -2,9 +2,17 @@
 
 ## Status
 
-This document summarizes the active TriageCore backlog after CR-115.
+This document summarizes the active TriageCore backlog after CR-126.
 
 ## Active GitHub Backlog
+
+- CR-126: Preflight Privacy Before Ledger Persistence
+  - Status: complete via CR-126
+  - Purpose: Preflight the complete `tc run` packet before any ledger write, replace persisted prompt/data text with fixed metadata and lengths, and extend the persistent-artifact audit to reject forbidden keys plus high-confidence PII, credential, and precise-location value patterns. Historical records are not rewritten, and arbitrary free-text safety classification remains out of scope.
+
+- CR-125: Honor Terminal Resilience Routes
+  - Status: complete via CR-125
+  - Purpose: Make `human_handoff` and the currently unimplemented `deterministic` resilience routes terminal at `TriageClient.run_task`: record the route decision and a `worker_result` with `not_attempted`, return `handoff_required`, and ensure `tc run` exits 3 without invoking any backend. This slice does not add an approval-and-resume workflow or make every `human_review_required` flag pre-execution blocking.
 
 - CR-124: Eval Handoff Hygiene, Bug, and Drift Slice
   - Status: complete via CR-124
@@ -232,4 +240,8 @@ For operator UX, future slices should focus on reviewability, export polish, and
 - **[done] Telemetry schema and synthetic-fixture validation (CR-118)**: Hardened the existing local backend probe's serialized record contract before any further probe work — strict schema, pure validator, synthetic fixtures only, no endpoint calls, no routing integration, no ledger writes, and no CLI behavior changes.
 - **[done] Local backend telemetry probe validation gate (CR-119)**: Every emitted local backend probe result now validates against the CR-118 record contract before it is treated as an observation; validation failure raises a fail-closed `ProbeInputError`, with no generation calls, routing integration, or ledger writes.
 - **[done] Reviewer checkpoint or release-hygiene slice (CR-120, docs-only)**: Froze the completed CR-117 through CR-119 lane in a concise operations note, corrected stale CR-114 telemetry wording, and kept future telemetry work behind a new explicit scope pass instead of adding more features.
-- **Next slice TBD by scope pass**: Do not start routing integration, ledger integration, circuit breakers, automatic discovery, background polling, daily-driver enforcement, or additional telemetry behavior without a new approved CR.
+- **[done] Evaluation handoff contract (CR-123, contract-only)**: Defined the file-based boundary between TriageCore-produced fixtures/actuals and external scoring, including deterministic future bundle path vocabulary.
+- **[done] Eval handoff hygiene (CR-124)**: Fixed generator-backed actual-outcome writing and removed stale language that implied internal TriageCore scoring.
+- **[done] Honor terminal resilience routes (CR-125)**: `human_handoff` and currently unimplemented `deterministic` routes now return a governed handoff before backend execution, recording `worker_result_status=not_attempted`; `tc run` reports the valid handoff with exit code 3. Approval-and-resume behavior, broader `human_review_required` semantics, and other execution seams remain future work.
+- **[done] Preflight privacy before ledger persistence (CR-126)**: `tc run` now scans its complete packet before opening the ledger, persists only metadata and input lengths, and extends the persistent artifact audit with high-confidence sensitive-value detection. Historical records remain unchanged; arbitrary free-text safety classification and a full DLP engine remain out of scope.
+- **Next slice requires a new approved CR**: The eval lane's next bounded candidate is a deterministic bundle/manifest builder for already-validated fixtures and already-exported actuals. Do not add scoring or score interpretation inside TriageCore, and do not start approval-and-resume behavior, routing integration beyond the governed path, ledger integration, circuit breakers, automatic discovery, background polling, or additional telemetry behavior without a new approved CR.

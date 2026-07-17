@@ -559,6 +559,33 @@ def test_audit_privacy_invariants_fails_without_echoing_sensitive_values(tmp_pat
     assert sensitive_value not in out
 
 
+def test_audit_privacy_invariants_flags_sensitive_value_without_echoing_it(tmp_path, capsys):
+    ledger_path = tmp_path / "ledger.jsonl"
+    sensitive_value = "Contact jane@example.com"
+    ledger_path.write_text(
+        json.dumps(
+            {
+                "timestamp": "2026-06-12T00:00:00+00:00",
+                "task_id": "unsafe-task",
+                "event_type": "task_created",
+                "payload": {"description": sensitive_value},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with patch("triage_core.tc_cli._ledger_path", return_value=ledger_path):
+        with pytest.raises(SystemExit) as exc:
+            tc_audit_privacy_invariants()
+
+    assert exc.value.code == 1
+    out = capsys.readouterr().out
+    assert "$.payload.description" in out
+    assert "reason=email_pattern" in out
+    assert sensitive_value not in out
+
+
 def test_audit_privacy_invariants_flags_malformed_json(tmp_path, capsys):
     ledger_path = tmp_path / "ledger.jsonl"
     ledger_path.write_text("{not json\n", encoding="utf-8")

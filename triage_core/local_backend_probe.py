@@ -216,16 +216,19 @@ def local_backend_probe_record_from_mapping(
     This is a pure validator/mapper for already-recorded metadata. It does not
     probe endpoints, write artifacts, route tasks, or call a model.
     """
+    _reject_unknown_record_fields(payload)
+    base_url = _mapping_optional_base_url(payload, "base_url")
+    normalized_payload = dict(payload)
+    normalized_payload["base_url"] = base_url
     assert_persistent_privacy_safe(
-        dict(payload),
+        normalized_payload,
         artifact_name="local backend probe record",
     )
-    _reject_unknown_record_fields(payload)
 
     return LocalBackendProbeRecord(
         schema_version=_mapping_text(payload, "schema_version"),
         source_type=_mapping_text(payload, "source_type"),
-        base_url=_mapping_optional_base_url(payload, "base_url"),
+        base_url=base_url,
         reachable=_mapping_bool(payload, "reachable"),
         evidence_tier=_mapping_text(payload, "evidence_tier"),
         model_count=_mapping_optional_int(payload, "model_count"),

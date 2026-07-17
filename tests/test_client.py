@@ -40,7 +40,8 @@ def test_high_risk_task_is_handed_off_before_backend_runs():
 
     assert result["status"] == "handoff_required"
     assert result["source"] == "router"
-    assert "Risk level high" in result["reason"]
+    assert "Human handoff required by the resilience route" in result["reason"]
+    assert result["route_reason"] == "sensitivity_requires_human_review"
     assert backend.called is False
 
 

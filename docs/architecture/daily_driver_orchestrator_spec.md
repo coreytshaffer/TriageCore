@@ -31,7 +31,7 @@ privacy, routing, and evidence layers.
 
 | Dimension | Readiness | Basis |
 |---|---|---|
-| Local-first daily driver | ~60% | Governed loop exists in the library (`TriageClient.run_task`); no operator run surface, live probe, or enforced budgets. |
+| Local-first daily driver | ~60% | Governed loop is available through `tc run`; live capability signals and enforced budgets remain absent. |
 | Frontier-cloud orchestrator | ~35% | Only live cloud backend is `QwenCloudBackend`; Claude/GPT/Gemini exist solely as after-the-fact file handoffs (Codex/Antigravity). |
 | Token efficiency | Measured, not enforced | `context_budget.py` / context packs record usage; budgets are advisory, no pre-send compaction is bound into the run path. |
 
@@ -40,11 +40,12 @@ after M0 (below) produces daily-use evidence. See **Evidence Requirements**.
 
 ## What Already Works (verified in-repo)
 
-- `TriageClient.run_task` runs a full governed loop: verify packet → privacy scan
+- `TriageClient.run_task` runs a governed loop: verify packet → privacy scan
   (fail-closed) → external-safe packet gate → classify → specialist route → resilience
-  route (6-way) → local execute, with a real cloud branch (`_execute_cloud_task`) that
-  executes `QwenCloudBackend` when the route is `cloud_primary/secondary` and the packet is
-  external-safe.
+  route. `local_heavy` and `local_fast` execute locally; `cloud_primary/secondary` use the
+  real cloud branch (`_execute_cloud_task`) only for external-safe packets; `human_handoff`
+  and the currently unimplemented `deterministic` route return `handoff_required` without
+  model execution.
 - `routing/resilience_router.py` encodes local-first ordering: deterministic → local_fast /
   local_heavy → cloud, with high-sensitivity forced to human handoff and cloud blocked for
   local-only privacy.
@@ -54,8 +55,8 @@ after M0 (below) produces daily-use evidence. See **Evidence Requirements**.
 
 ## Gaps (planning targets)
 
-- **G1 — No unified operator run surface.** `run_task` is library-only; `tc` has no
-  `run`/`orchestrate`; `triagecore run-pipeline` is local-only and bypasses the router.
+- **G1 — No unified operator run surface.** `tc run` exposes the governed loop, but
+  `triagecore run-pipeline` remains local-only and bypasses the router.
 - **G2 — Cloud is Qwen, not frontier.** No live Claude/GPT/Gemini backends, no provider
   abstraction beyond OpenAI-compatible, no per-provider cost/credit model.
 - **G3 — Route decisions outrun execution bindings.** `local_heavy`/`local_fast` and

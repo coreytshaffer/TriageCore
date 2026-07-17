@@ -13,6 +13,7 @@ contract:
 
 import json
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 import requests
@@ -20,6 +21,7 @@ import requests
 from triage_core import tc_cli
 from triage_core.backends import BackendResponse
 from triage_core.client import TriageClient
+from triage_core.routing.resilience_router import ResilienceRouteDecision
 from triage_core.task_packet import PrivacyMetadata
 
 
@@ -82,6 +84,14 @@ def _event_types(ledger_path):
     ]
 
 
+def _ledger_events(ledger_path):
+    return [
+        json.loads(line)
+        for line in ledger_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+
 class RecordingClient:
     def __init__(self):
         self.packet = None
@@ -114,6 +124,47 @@ def test_local_success_exits_zero_and_records_governed_evidence(tmp_path, capsys
     assert "Success: task ran locally" in capsys.readouterr().out
 
 
+def test_tc_run_persists_metadata_without_prompt_or_data_content(tmp_path):
+    prompt = "PROMPT_SENTINEL_ONLY_FOR_PRIVACY_TEST"
+    data = "DATA_SENTINEL_ONLY_FOR_PRIVACY_TEST"
+    backend = RecordingBackend()
+    client = TriageClient(backend=backend)
+    args = _args(prompt, data=data, ledger_dir=str(tmp_path))
+
+    tc_cli.tc_run(args, client=client)
+
+    ledger_file = tmp_path / "ledger.jsonl"
+    ledger_text = ledger_file.read_text(encoding="utf-8")
+    assert prompt not in ledger_text
+    assert data not in ledger_text
+
+    task_created = next(
+        event
+        for event in _ledger_events(ledger_file)
+        if event["event_type"] == "task_created"
+    )
+    assert task_created["payload"] == {
+        "title": "tc run task",
+        "description": "Prompt content withheld from ledger.",
+        "prompt_length": len(prompt),
+        "data_length": len(data),
+        "target_files": [],
+    }
+
+
+def test_tc_run_privacy_block_leaves_no_ledger_event(tmp_path):
+    backend = FailingBackend()
+    client = TriageClient(backend=backend)
+    args = _args("Process this record", data="123-45-6789", ledger_dir=str(tmp_path))
+
+    with pytest.raises(SystemExit) as exc:
+        tc_cli.tc_run(args, client=client)
+
+    assert exc.value.code == 2
+    assert backend.called is False
+    assert not (tmp_path / "ledger.jsonl").exists()
+
+
 def test_handoff_required_exits_3(tmp_path):
     client = TriageClient(backend=ErrorBackend())
     args = _args("Summarize this text", ledger_dir=str(tmp_path))
@@ -122,6 +173,57 @@ def test_handoff_required_exits_3(tmp_path):
         tc_cli.tc_run(args, client=client)
 
     assert exc.value.code == 3
+
+
+@pytest.mark.parametrize(
+    ("selected_route", "reason"),
+    [
+        ("human_handoff", "sensitivity_requires_human_review"),
+        ("deterministic", "deterministic_tool_available_for_task_class"),
+    ],
+)
+def test_terminal_routes_exit_3_without_backend_execution(
+    tmp_path, selected_route, reason
+):
+    backend = FailingBackend()
+    client = TriageClient(backend=backend)
+    args = _args(
+        "Summarize public text",
+        privacy="public",
+        allow_cloud=True,
+        ledger_dir=str(tmp_path),
+    )
+    decision = ResilienceRouteDecision(
+        selected_route=selected_route,
+        reason=reason,
+        fallback_depth=0,
+        human_review_required=selected_route == "human_handoff",
+    )
+
+    with patch("triage_core.classifier.TaskClassifier.classify", return_value="general"):
+        with patch(
+            "triage_core.client.choose_resilience_route", return_value=decision
+        ):
+            with patch.object(
+                client.router.specialist,
+                "route_task",
+                return_value={"offload_recommended": False},
+            ):
+                with pytest.raises(SystemExit) as exc:
+                    tc_cli.tc_run(args, client=client)
+
+    assert exc.value.code == 3
+    assert backend.called is False
+
+    events = [
+        json.loads(line)
+        for line in (tmp_path / "ledger.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    worker_result = next(event for event in events if event["event_type"] == "worker_result")
+    assert worker_result["payload"]["selected_route"] == selected_route
+    assert worker_result["payload"]["worker_result_status"] == "not_attempted"
+    assert worker_result["payload"]["failure_type"] == "safety_handoff"
 
 
 def test_high_risk_local_only_fails_closed_exit_2(tmp_path):

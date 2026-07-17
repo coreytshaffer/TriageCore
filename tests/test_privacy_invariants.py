@@ -62,6 +62,24 @@ def test_rejects_raw_content_inside_list():
 
 
 @pytest.mark.parametrize(
+    ("value", "reason"),
+    [
+        ("Contact jane@example.com", "email_pattern"),
+        ("SSN 123-45-6789", "ssn_pattern"),
+        ("token=super-secret-value", "secret_pattern"),
+    ],
+)
+def test_rejects_sensitive_persistent_values_without_echoing_them(value, reason):
+    with pytest.raises(PersistentPrivacyInvariantError) as exc:
+        assert_persistent_privacy_safe({"description": value})
+
+    violation = exc.value.violations[0]
+    assert violation.path == "$.description"
+    assert violation.reason == reason
+    assert value not in str(exc.value)
+
+
+@pytest.mark.parametrize(
     "key",
     [
         "api_key",

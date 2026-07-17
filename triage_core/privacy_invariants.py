@@ -4,6 +4,16 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from triage_core.privacy_scanner import (
+    CC_CANDIDATE_REGEX,
+    EMAIL_REGEX,
+    LAT_LON_REGEX,
+    PHONE_REGEX,
+    SECRET_KEYS_REGEX,
+    SSN_REGEX,
+    is_valid_luhn,
+)
+
 
 FORBIDDEN_PERSISTENT_KEYS = frozenset(
     {
@@ -38,6 +48,7 @@ FORBIDDEN_PERSISTENT_KEYS = frozenset(
 class PrivacyInvariantViolation:
     path: str
     key: str
+    reason: str = "forbidden_key"
 
 
 class PersistentPrivacyInvariantError(ValueError):
@@ -88,8 +99,34 @@ def find_forbidden_persistent_fields(
             violations.extend(
                 find_forbidden_persistent_fields(child, path=f"{path}[{index}]")
             )
+    elif isinstance(value, str):
+        reason = _sensitive_persistent_value_reason(value)
+        if reason:
+            violations.append(
+                PrivacyInvariantViolation(
+                    path=path,
+                    key="<sensitive_value>",
+                    reason=reason,
+                )
+            )
 
     return violations
+
+
+def _sensitive_persistent_value_reason(value: str) -> str | None:
+    if SSN_REGEX.search(value):
+        return "ssn_pattern"
+    if EMAIL_REGEX.search(value):
+        return "email_pattern"
+    if PHONE_REGEX.search(value):
+        return "phone_pattern"
+    if SECRET_KEYS_REGEX.search(value):
+        return "secret_pattern"
+    if LAT_LON_REGEX.search(value):
+        return "precise_location_pattern"
+    if any(is_valid_luhn(match.group()) for match in CC_CANDIDATE_REGEX.finditer(value)):
+        return "credit_card_pattern"
+    return None
 
 
 def assert_persistent_privacy_safe(

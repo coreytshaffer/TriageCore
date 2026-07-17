@@ -165,7 +165,7 @@ Expected outputs:
 - `tc audit --self-test` writes one privacy-safe `route_audit` event.
 - `tc audit --kind route_audit --last 10` shows routing metadata without raw prompt/data leakage.
 - `tc audit --kind demo_dry_run --last 5` shows the deterministic demo evidence without raw request or proposed-output content.
-- `tc audit --privacy-invariants` scans the persistent ledger for forbidden raw-content keys and confirms the CR-021 invariant still holds.
+- `tc audit --privacy-invariants` scans the persistent ledger for forbidden raw-content keys and high-confidence PII, credential, and precise-location value patterns; it does not classify arbitrary free text.
 - `triagecore benchmark --list-only` shows the benchmark fixture set without contacting a backend.
 - `tc model check` validates the documented manifest example locally.
 - `tc model warn` provides warning-only route/manifest comparison visibility and

@@ -14,17 +14,17 @@ A completed trace shows that the recorded evidence is present, linked by `task_i
 
 ## The Trace Chain
 
-1. **Input.** A task enters as a `TaskPacket` ([task_packet.py](../../triage_core/task_packet.py)) with explicit privacy metadata, or as a task envelope ([task_envelope.py](../../triage_core/task_envelope.py)). Raw prompt and data content are never persisted to the ledger.
+1. **Input.** A task enters as a `TaskPacket` ([task_packet.py](../../triage_core/task_packet.py)) with explicit privacy metadata, or as a task envelope ([task_envelope.py](../../triage_core/task_envelope.py)). `tc run` preflights the packet before opening the ledger and persists prompt/data lengths rather than their contents.
 2. **Route decision and evidence record.** `TriageClient.run_task` ([client.py](../../triage_core/client.py)) privacy-scans the packet and appends metadata-only events to the append-only ledger at `.triagecore/ledger.jsonl` via `TaskLedger` ([task_ledger.py](../../triage_core/task_ledger.py)): a `route_audit` event for the allow/block outcome, a `route_decision` event for the routing choice (optionally signed), then `worker_result` and `validator_completed` events for execution and validation outcomes.
 3. **Reduced record.** `TaskLedger._apply_event` folds all events for one `task_id` into a single `TaskRecord`. The field meanings are documented in [evidence_schema.md](../evidence_schema.md).
 4. **Approval or rejection state.** When classification, routing, or a handoff sets `human_review_required`, the task appears in the review queue ([review_queue.py](../../triage_core/review_queue.py), `tc review list`) until a `review_completed` event records `review_decision` (`accepted`, `accepted_with_minor_edits`, or `rejected`) and `task_outcome`.
-5. **Verification and test evidence.** `tc audit --privacy-invariants` checks that persisted events contain no forbidden raw-content keys; `tc audit --verify-signatures` checks signed event provenance; the pytest suite (including the traceability regression test below) is the repeatable test evidence.
+5. **Verification and test evidence.** `tc audit --privacy-invariants` checks persisted events for forbidden raw-content keys and high-confidence PII, credential, and precise-location value patterns; it does not prove that arbitrary free text is safe. `tc audit --verify-signatures` checks signed event provenance; the pytest suite (including the traceability regression test below) is the repeatable test evidence.
 
 ## Ledger Event Types That Carry the Trace
 
 | Event type | Typically appended by | Trace evidence it contributes |
 | --- | --- | --- |
-| `task_created` | `TriageClient.run_task`, benchmark/pipeline runners | `created_at`, `title`, `description`, `target_files` |
+| `task_created` | `TriageClient.run_task`, benchmark/pipeline runners | `created_at`, metadata-only title/description, prompt/data lengths, `target_files` |
 | `task_classified` | classification step in `run_task` | `risk_level`, `permission_profile`; medium/high risk sets `human_review_required` |
 | `route_audit` | privacy/route gate in `run_task` ([route_audit.py](../../triage_core/route_audit.py)) | allow/block `decision` and `reason_code`; inspected as raw events via `tc audit --kind route_audit`, not reduced into named `TaskRecord` fields |
 | `route_decision` | `run_task` via [routing/route_events.py](../../triage_core/routing/route_events.py); optionally signed | `selected_route`, `route_reason`, `route_source`, `fallback_depth`, `selected_backend`, model; can set `human_review_required` |
@@ -61,7 +61,7 @@ tc audit --kind route_decision --last 10     # routing choices and route source
 tc audit --kind worker_result --last 10      # execution outcome metadata
 tc audit --kind review_completed --last 10   # recorded approval/rejection state
 tc review list                               # tasks still awaiting a review decision
-tc audit --privacy-invariants                # persisted evidence contains no raw content
+tc audit --privacy-invariants                # checks prohibited keys and high-confidence sensitive values
 tc audit --verify-signatures --kind route_decision   # provenance check for signed events, when present
 tc task show <task_id>                       # show one task's complete evidence chain (displays ledger evidence, does not verify signatures)
 ```
