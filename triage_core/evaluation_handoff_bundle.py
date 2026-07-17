@@ -26,7 +26,7 @@ FIXTURE_CONTRACT = "eval_case_v0"
 ACTUAL_CONTRACT = "actual_outcome_export.v0"
 FIXTURE_BUNDLE_PATH = "fixtures/safety_boundaries_v0.jsonl"
 MANIFEST_BUNDLE_PATH = "manifest/evaluation_handoff_manifest.json"
-_SAFE_CASE_ID = re.compile(r"^[A-Za-z0-9_-]+$")
+SAFE_CASE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 _ACTUAL_REQUIRED_FIELDS = (
     "case_id",
     "decision",
@@ -91,7 +91,7 @@ def build_evaluation_handoff_bundle(
         raise EvaluationHandoffBundleError("privacy_invariant_failed") from exc
 
     if any(
-        not _SAFE_CASE_ID.fullmatch(str(case["case_id"]))
+        not is_safe_case_id(str(case["case_id"]))
         for case in fixture_cases
     ):
         raise EvaluationHandoffBundleError("unsafe_case_id")
@@ -228,9 +228,9 @@ def _load_actuals(
         except (UnicodeError, json.JSONDecodeError) as exc:
             raise EvaluationHandoffBundleError("actual_invalid_json") from exc
 
-        _validate_actual_contract(payload)
+        validate_actual_outcome_contract(payload)
         case_id = payload["case_id"]
-        if not _SAFE_CASE_ID.fullmatch(case_id):
+        if not is_safe_case_id(case_id):
             raise EvaluationHandoffBundleError("unsafe_case_id")
         if case_id in seen_case_ids:
             raise EvaluationHandoffBundleError("duplicate_case_id")
@@ -255,7 +255,13 @@ def _load_actuals(
     return tuple(sorted(loaded, key=lambda actual: actual.case_id))
 
 
-def _validate_actual_contract(payload: Any) -> None:
+def is_safe_case_id(case_id: str) -> bool:
+    return bool(SAFE_CASE_ID_PATTERN.fullmatch(case_id))
+
+
+def validate_actual_outcome_contract(payload: Any) -> None:
+    """Validate the CR-127 broad actual-outcome shape without adding enums."""
+
     if not isinstance(payload, Mapping):
         raise EvaluationHandoffBundleError("actual_invalid_contract")
     if any(field not in payload for field in _ACTUAL_REQUIRED_FIELDS):
