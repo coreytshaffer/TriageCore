@@ -140,10 +140,7 @@ CR-121 treats this document as the contract for a narrow validator. The validato
 
 The validator checks fixture integrity only, and CR-122 exposes that validation
 through `tc eval validate-fixtures --input <path>`. These fixtures still are not
-scored or executed by the validator path.
-
-CR-123 scopes the first safe scoring-capable follow-on as deterministic
-explicit-file comparison between validated fixtures and already-exported
-actual-outcome records. That future implementation must remain offline,
-read-only, and separate from model/backend execution, routing, ledger writes,
-approval state, and external evaluator authority.
+scored or executed by TriageCore. CR-123 defines the file-based
+[Evaluation Handoff Contract](../evals/evaluation_handoff_contract.md) for
+passing validated fixtures and actual outcome exports to an external evaluator
+suite, while scoring remains outside TriageCore.

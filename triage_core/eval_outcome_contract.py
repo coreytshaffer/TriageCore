@@ -105,15 +105,16 @@ def write_actual_outcomes(
     Writes multiple actual outcomes to the specified output directory.
     Raises ValueError if there are duplicate case_ids in the provided outcomes.
     """
+    outcome_list = list(outcomes)
     seen_ids = set()
-    for outcome in outcomes:
+    for outcome in outcome_list:
         case_id = outcome.get("case_id")
         if case_id in seen_ids:
             raise ValueError(f"Duplicate case_id '{case_id}' found in outcomes.")
         seen_ids.add(case_id)
         
     paths = []
-    for outcome in outcomes:
+    for outcome in outcome_list:
         paths.append(write_actual_outcome(outcome, output_dir))
         
     return paths
