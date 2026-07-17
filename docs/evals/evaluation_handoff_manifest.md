@@ -89,3 +89,8 @@ Hash agreement detects drift relative to the manifest. It does not authenticate
 the manifest, establish provenance, convey approval, certify safety, or prove
 semantic correctness. Scoring and score interpretation remain exclusively
 owned by the external evaluator.
+
+CR-129 documents the still-unimplemented external evaluator adapter boundary in
+`external_evaluator_adapter_contract.md`. Bundle integrity validation is a
+required pre-launch gate for any future adapter, but successful validation
+neither selects nor authorizes an evaluator.
