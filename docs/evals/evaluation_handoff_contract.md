@@ -103,6 +103,7 @@ TriageCore commands used before handoff must follow these expectations:
 | `tc eval export-privacy-smoke --output-dir <dir>` | Exit `0` after writing contract-shaped actual JSON. | Exit `1` for contract or write failures. | Exit `2` for argparse usage errors. |
 | `tc eval export-forbidden-tool-smoke --output-dir <dir>` | Exit `0` after writing contract-shaped actual JSON. | Exit `1` for contract or write failures. | Exit `2` for argparse usage errors. |
 | `tc eval build-handoff --fixture <path> --actuals-dir <dir> --out-dir <new-dir>` | Exit `0` after atomically publishing an unscored deterministic bundle. | Exit `1` with a stable closed reason for input, privacy, path, or write failures. | Exit `2` for argparse usage errors. |
+| `tc eval validate-handoff --bundle <bundle-root>` | Exit `0` when the closed manifest, inventory, hashes, file contracts, and privacy checks agree. | Exit `1` with one stable closed reason and no payload echo. | Exit `2` for argparse usage errors. |
 
 The external evaluator suite owns its own exit-code contract. TriageCore may
 document how to invoke that suite, but this CR does not add an evaluator runner
@@ -122,6 +123,7 @@ CR-123 explicitly excludes:
 - changes to `eval_case_v0` or actual outcome JSON fields
 - new fixture families or adversarial/tampering expansion
 
-CR-127 implements the deterministic bundle/manifest builder. The next safe
-slice is a deterministic integrity validator for an existing bundle, without
-executing or scoring the evaluator.
+CR-127 implements the deterministic bundle/manifest builder, and CR-128 adds
+read-only integrity validation. Hash agreement detects drift relative to the
+manifest; it does not prove authenticity, provenance, approval, safety, or
+correctness. Neither slice executes or scores the evaluator.

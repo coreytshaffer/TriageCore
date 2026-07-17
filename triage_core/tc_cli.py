@@ -1769,6 +1769,25 @@ def tc_eval_build_handoff(
     )
 
 
+def tc_eval_validate_handoff(bundle: str) -> None:
+    from triage_core.evaluation_handoff_validator import (
+        EvaluationHandoffValidationError,
+        validate_evaluation_handoff_bundle,
+    )
+
+    try:
+        result = validate_evaluation_handoff_bundle(bundle)
+    except EvaluationHandoffValidationError as exc:
+        print(f"reason={exc.reason}", file=sys.stderr)
+        sys.exit(1)
+
+    print(
+        "Evaluation handoff bundle valid: "
+        f"{result.fixture_count} fixture case(s), "
+        f"{result.actual_count} actual outcome(s)"
+    )
+
+
 def tc_eval_review(
     submission_path: str,
     context_packet_path: str,
@@ -2604,6 +2623,17 @@ def main():
         help="New directory where the handoff bundle will be written",
     )
 
+    eval_validate_handoff_parser = eval_subparsers.add_parser(
+        "validate-handoff",
+        help="Validate an existing evaluation handoff bundle without scoring",
+    )
+    eval_validate_handoff_parser.add_argument(
+        "--bundle",
+        required=True,
+        type=str,
+        help="Existing evaluation handoff bundle root",
+    )
+
     eval_review_parser = eval_subparsers.add_parser(
         "review",
         help="Validate a review submission and run the deterministic checker against a context packet",
@@ -2967,6 +2997,8 @@ def main():
             tc_eval_validate_fixtures(args.input)
         elif args.eval_command == "build-handoff":
             tc_eval_build_handoff(args.fixture, args.actuals_dir, args.out_dir)
+        elif args.eval_command == "validate-handoff":
+            tc_eval_validate_handoff(args.bundle)
         elif args.eval_command == "review":
             tc_eval_review(
                 args.submission,
@@ -2977,7 +3009,7 @@ def main():
                 args.fail_on_gate,
             )
         else:
-            eval_parser.error("eval requires a subcommand: export-smoke, export-privacy-smoke, export-forbidden-tool-smoke, validate-fixtures, build-handoff, or review")
+            eval_parser.error("eval requires a subcommand: export-smoke, export-privacy-smoke, export-forbidden-tool-smoke, validate-fixtures, build-handoff, validate-handoff, or review")
     elif args.command == "context":
         if args.context_command == "plan":
             tc_context_plan(args.input, args.model)

@@ -66,7 +66,26 @@ renames it only after all output is written; failures leave no bundle.
 
 ## Integrity Boundary
 
-SHA-256 fields describe the copied bytes and support external inspection. This
-builder does not validate an existing bundle after creation. A deterministic
-bundle integrity validator is a separate future scope. Scoring and score
-interpretation remain exclusively owned by the external evaluator.
+SHA-256 fields describe the copied bytes and support external inspection.
+CR-128 adds the read-only command:
+
+```text
+tc eval validate-handoff --bundle <bundle-root>
+```
+
+It requires the exact closed `evaluation_handoff_manifest.v0` schema, fixed
+paths, exact declared inventory, regular non-symlink/non-reparse files and
+directories, matching byte hashes and counts, valid fixture and actual
+contracts, fixture membership, and persistent privacy safety. Partial actual
+coverage remains valid, but a zero-actual bundle is invalid because the CR-127
+builder cannot produce one.
+
+Success exits `0` with a bounded fixture/actual count. Closed validation
+failures exit `1` and print only `reason=<reason>` to stderr; argparse usage
+errors exit `2`. Validation is read-only: it performs no normalization, repair,
+report write, ledger write, expected-vs-actual comparison, or evaluator call.
+
+Hash agreement detects drift relative to the manifest. It does not authenticate
+the manifest, establish provenance, convey approval, certify safety, or prove
+semantic correctness. Scoring and score interpretation remain exclusively
+owned by the external evaluator.
