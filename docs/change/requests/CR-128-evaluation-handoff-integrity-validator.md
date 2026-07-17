@@ -2,7 +2,7 @@
 
 ## Status
 
-Implemented locally; pending review.
+Implemented.
 
 ## Purpose
 

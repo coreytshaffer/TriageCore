@@ -127,3 +127,10 @@ CR-127 implements the deterministic bundle/manifest builder, and CR-128 adds
 read-only integrity validation. Hash agreement detects drift relative to the
 manifest; it does not prove authenticity, provenance, approval, safety, or
 correctness. Neither slice executes or scores the evaluator.
+
+CR-129 defines the contract-only boundary for a possible future external
+evaluator wrapper in
+`docs/evals/external_evaluator_adapter_contract.md`. The reserved
+`tc eval invoke-external` shape does not exist in CR-129. A code-bearing adapter
+requires a separately approved CR and an authoritative versioned closed
+evaluator profile.
