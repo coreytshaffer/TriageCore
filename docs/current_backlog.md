@@ -2,9 +2,13 @@
 
 ## Status
 
-This document summarizes the active TriageCore backlog after CR-126.
+This document summarizes the active TriageCore backlog after CR-127.
 
 ## Active GitHub Backlog
+
+- CR-127: Evaluation Handoff Bundle Builder
+  - Status: complete via CR-127
+  - Purpose: Package an explicit validated fixture and explicit actual-outcome directory into a deterministic, privacy-checked, unscored handoff bundle with byte-preserving copies and a SHA-256 manifest. External scoring remains authoritative; existing-bundle integrity validation is the next separately scoped slice.
 
 - CR-126: Preflight Privacy Before Ledger Persistence
   - Status: complete via CR-126
@@ -136,7 +140,7 @@ This document summarizes the active TriageCore backlog after CR-126.
 
 - Empirical AI safety evaluation track
   - Source: CR-076 and CR-077 research framing/eval taxonomy docs
-  - Status: research question, threat model, eval taxonomy, fixture schema, toy boundary fixtures, **TC-EVAL-001 (Export Actual Outcome Contract Files)**, **TC-EVAL-002 (Actual Outcome Export CLI Smoke)**, **[x] TC-EVAL-003 (Map One Real Internal Decision Path Into the Export Contract)**, **[x] TC-EVAL-004 (Export One Real Privacy Scanner Actual)**, **[x] TC-EVAL-005 / 006 / 007 (Privacy Reason Normalization)** documented; fixture validator complete via CR-121; fixture validation CLI complete via CR-122; external-evaluator handoff contract complete via CR-123; bundle/manifest building, bundle integrity validation, evaluator invocation, adversarial tests, toy audit tampering eval, behavioral route diffing, **[x] TC-EVAL-008 (Structured Privacy Scanner Finding Codes)**, **[x] TC-EVAL-009 (Shared Internal Reason-Code Constants for Privacy Findings)**, **[x] TC-EVAL-010 (Export One Forbidden Tool-Call Actual)** and technical report remain future slices
+  - Status: research question, threat model, eval taxonomy, fixture schema, toy boundary fixtures, **TC-EVAL-001 (Export Actual Outcome Contract Files)**, **TC-EVAL-002 (Actual Outcome Export CLI Smoke)**, **[x] TC-EVAL-003 (Map One Real Internal Decision Path Into the Export Contract)**, **[x] TC-EVAL-004 (Export One Real Privacy Scanner Actual)**, **[x] TC-EVAL-005 / 006 / 007 (Privacy Reason Normalization)** documented; fixture validator complete via CR-121; fixture validation CLI complete via CR-122; external-evaluator handoff contract complete via CR-123; deterministic bundle/manifest builder complete via CR-127; bundle integrity validation, evaluator invocation, adversarial tests, toy audit tampering eval, behavioral route diffing, **[x] TC-EVAL-008 (Structured Privacy Scanner Finding Codes)**, **[x] TC-EVAL-009 (Shared Internal Reason-Code Constants for Privacy Findings)**, **[x] TC-EVAL-010 (Export One Forbidden Tool-Call Actual)** and technical report remain future slices
   - Purpose: make TriageCore legible as a reproducible local-first AI control and evaluation harness for testing privacy, routing, identity, provenance, audit, and human-approval boundaries under controlled adversarial pressure.
 
 - Operator UX implementation path
@@ -228,7 +232,7 @@ Keep three work lanes distinct:
 
 For signed ledger coverage, the reviewer-facing `validation_result` path and the signed `route_decision` path are now in place, including a smoke example, a capability-targeted doctor check, and a consolidated reviewer checkpoint for the latter. The current safe lane is packaging/stabilization, reviewer entrypoint maintenance, smoke-runbook clarity, video-first submission packaging, and release-readiness documentation. Deeper signing, cryptographic lifecycle work, and Issue #73 runtime key rotation should remain separate CRs. Do not treat a valid signature as approval, safety, or correctness.
 
-For the empirical AI safety evaluation track, CR-121 completes fixture validation, CR-122 exposes it through a narrow CLI, and CR-123 defines the external-evaluator handoff contract. Keep the next slices sequential: bundle/manifest builder, bundle integrity validator, then a narrow external evaluator adapter. Scoring and score interpretation must remain external to TriageCore, and broader adversarial/tampering studies should wait until the handoff path is stable.
+For the empirical AI safety evaluation track, CR-121 completes fixture validation, CR-122 exposes it through a narrow CLI, CR-123 defines the external-evaluator handoff contract, and CR-127 builds the deterministic unscored bundle. Keep the next slices sequential: bundle integrity validator, then a narrow external evaluator adapter. Scoring and score interpretation must remain external to TriageCore, and broader adversarial/tampering studies should wait until the handoff path is stable.
 
 For external runtime interoperability, the next approved slice should be policy tests or execution-path validation for the bounded adapter path.
 
@@ -244,4 +248,5 @@ For operator UX, future slices should focus on reviewability, export polish, and
 - **[done] Eval handoff hygiene (CR-124)**: Fixed generator-backed actual-outcome writing and removed stale language that implied internal TriageCore scoring.
 - **[done] Honor terminal resilience routes (CR-125)**: `human_handoff` and currently unimplemented `deterministic` routes now return a governed handoff before backend execution, recording `worker_result_status=not_attempted`; `tc run` reports the valid handoff with exit code 3. Approval-and-resume behavior, broader `human_review_required` semantics, and other execution seams remain future work.
 - **[done] Preflight privacy before ledger persistence (CR-126)**: `tc run` now scans its complete packet before opening the ledger, persists only metadata and input lengths, and extends the persistent artifact audit with high-confidence sensitive-value detection. Historical records remain unchanged; arbitrary free-text safety classification and a full DLP engine remain out of scope.
-- **Next slice requires a new approved CR**: The eval lane's next bounded candidate is a deterministic bundle/manifest builder for already-validated fixtures and already-exported actuals. Do not add scoring or score interpretation inside TriageCore, and do not start approval-and-resume behavior, routing integration beyond the governed path, ledger integration, circuit breakers, automatic discovery, background polling, or additional telemetry behavior without a new approved CR.
+- **[done] Evaluation handoff bundle builder (CR-127)**: Builds the deterministic fixed-layout handoff and SHA-256 manifest from explicit inputs without scoring.
+- **Next slice requires a new approved CR**: The eval lane's next bounded candidate is a deterministic integrity validator for an existing handoff bundle. Do not add scoring or score interpretation inside TriageCore, and do not start approval-and-resume behavior, routing integration beyond the governed path, ledger integration, circuit breakers, automatic discovery, background polling, or additional telemetry behavior without a new approved CR.

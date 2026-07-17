@@ -1742,6 +1742,33 @@ def tc_eval_validate_fixtures(input_path: str) -> None:
     print(f"Eval fixture validation passed: {len(cases)} case(s) checked.")
 
 
+def tc_eval_build_handoff(
+    fixture: str,
+    actuals_dir: str,
+    out_dir: str,
+) -> None:
+    from triage_core.evaluation_handoff_bundle import (
+        EvaluationHandoffBundleError,
+        build_evaluation_handoff_bundle,
+    )
+
+    try:
+        result = build_evaluation_handoff_bundle(
+            fixture=fixture,
+            actuals_dir=actuals_dir,
+            out_dir=out_dir,
+        )
+    except EvaluationHandoffBundleError as exc:
+        print(f"reason={exc.reason}", file=sys.stderr)
+        sys.exit(1)
+
+    print(
+        "Evaluation handoff bundle built: "
+        f"{result.fixture_count} fixture case(s), "
+        f"{result.actual_count} actual outcome(s)."
+    )
+
+
 def tc_eval_review(
     submission_path: str,
     context_packet_path: str,
@@ -2554,6 +2581,29 @@ def main():
         help="Path to the eval fixture JSONL file",
     )
 
+    eval_build_handoff_parser = eval_subparsers.add_parser(
+        "build-handoff",
+        help="Build a deterministic unscored evaluation handoff bundle",
+    )
+    eval_build_handoff_parser.add_argument(
+        "--fixture",
+        required=True,
+        type=str,
+        help="Path to the validated eval fixture JSONL file",
+    )
+    eval_build_handoff_parser.add_argument(
+        "--actuals-dir",
+        required=True,
+        type=str,
+        help="Directory containing actual outcome JSON files",
+    )
+    eval_build_handoff_parser.add_argument(
+        "--out-dir",
+        required=True,
+        type=str,
+        help="New directory where the handoff bundle will be written",
+    )
+
     eval_review_parser = eval_subparsers.add_parser(
         "review",
         help="Validate a review submission and run the deterministic checker against a context packet",
@@ -2915,6 +2965,8 @@ def main():
             tc_eval_export_forbidden_tool_smoke(args.output_dir, args.case_id)
         elif args.eval_command == "validate-fixtures":
             tc_eval_validate_fixtures(args.input)
+        elif args.eval_command == "build-handoff":
+            tc_eval_build_handoff(args.fixture, args.actuals_dir, args.out_dir)
         elif args.eval_command == "review":
             tc_eval_review(
                 args.submission,
@@ -2925,7 +2977,7 @@ def main():
                 args.fail_on_gate,
             )
         else:
-            eval_parser.error("eval requires a subcommand: export-smoke, export-privacy-smoke, export-forbidden-tool-smoke, validate-fixtures, or review")
+            eval_parser.error("eval requires a subcommand: export-smoke, export-privacy-smoke, export-forbidden-tool-smoke, validate-fixtures, build-handoff, or review")
     elif args.command == "context":
         if args.context_command == "plan":
             tc_context_plan(args.input, args.model)
