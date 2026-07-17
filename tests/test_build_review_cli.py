@@ -50,7 +50,6 @@ def installed_tc(tmp_path_factory):
             "pip",
             "install",
             "--no-deps",
-            "--no-build-isolation",
             "-e",
             PROJECT_ROOT,
         ]

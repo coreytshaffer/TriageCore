@@ -24,6 +24,12 @@ def test_allows_safe_route_audit_payload():
     assert_persistent_privacy_safe(payload)
 
 
+def test_allows_uuid_identifier_that_is_luhn_valid():
+    assert_persistent_privacy_safe(
+        {"task_id": "70712236-1277-4833-a2d8-6ee1481c3162"}
+    )
+
+
 def test_rejects_top_level_raw_prompt_without_echoing_value():
     sensitive_value = "secret user request"
 
