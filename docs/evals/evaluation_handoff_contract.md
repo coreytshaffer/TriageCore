@@ -36,8 +36,8 @@ actuals/triagecore_smoke/
 ```
 
 TriageCore must not infer default evaluator inputs from the ledger, route
-history, admission state, or local runtime state. The operator or a future
-bundle builder must pass file paths explicitly.
+history, admission state, or local runtime state. The operator passes all
+paths explicitly to the CR-127 bundle builder.
 
 ## Required TriageCore Outputs
 
@@ -76,8 +76,7 @@ scored report schema in this CR. TriageCore must treat evaluator findings as ext
 
 ## Deterministic Handoff Layout
 
-If a future CR materializes a handoff bundle, it should use these relative
-paths inside the bundle directory:
+CR-127 materializes a handoff bundle using these relative paths:
 
 ```text
 fixtures/safety_boundaries_v0.jsonl
@@ -85,9 +84,13 @@ actuals/<case_id>.json
 manifest/evaluation_handoff_manifest.json
 ```
 
-CR-123 does not create that bundle, manifest, or builder. These names reserve a
-stable path vocabulary so CR-124+ can package the same already-defined evidence
-without changing the scoring boundary.
+The builder is documented in
+`docs/evals/evaluation_handoff_manifest.md`. It copies the already-defined
+evidence byte-for-byte and records deterministic hashes without changing the
+scoring boundary.
+
+Historically, CR-123 does not create that bundle, manifest, or builder; CR-127
+is the separately approved implementation slice that now materializes them.
 
 ## Exit-Code Expectations
 
@@ -99,6 +102,7 @@ TriageCore commands used before handoff must follow these expectations:
 | `tc eval export-smoke --output-dir <dir>` | Exit `0` after writing contract-shaped actual JSON. | Exit `1` for contract or write failures. | Exit `2` for argparse usage errors. |
 | `tc eval export-privacy-smoke --output-dir <dir>` | Exit `0` after writing contract-shaped actual JSON. | Exit `1` for contract or write failures. | Exit `2` for argparse usage errors. |
 | `tc eval export-forbidden-tool-smoke --output-dir <dir>` | Exit `0` after writing contract-shaped actual JSON. | Exit `1` for contract or write failures. | Exit `2` for argparse usage errors. |
+| `tc eval build-handoff --fixture <path> --actuals-dir <dir> --out-dir <new-dir>` | Exit `0` after atomically publishing an unscored deterministic bundle. | Exit `1` with a stable closed reason for input, privacy, path, or write failures. | Exit `2` for argparse usage errors. |
 
 The external evaluator suite owns its own exit-code contract. TriageCore may
 document how to invoke that suite, but this CR does not add an evaluator runner
@@ -118,6 +122,6 @@ CR-123 explicitly excludes:
 - changes to `eval_case_v0` or actual outcome JSON fields
 - new fixture families or adversarial/tampering expansion
 
-The next safe slice after this contract is a deterministic bundle or manifest
-builder that packages already-validated fixtures and already-exported actuals
-without executing or scoring the evaluator.
+CR-127 implements the deterministic bundle/manifest builder. The next safe
+slice is a deterministic integrity validator for an existing bundle, without
+executing or scoring the evaluator.
