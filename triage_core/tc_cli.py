@@ -2686,6 +2686,14 @@ def main():
 
     review_list_parser = review_subparsers.add_parser("list", help="List reviewable/pending items")
 
+    # build-review
+    build_review_parser = subparsers.add_parser(
+        "build-review",
+        help="Create, decide, or verify evidence-bound software reviews",
+    )
+    from triage_core.build_review_cli import configure_parser as configure_build_review
+    configure_build_review(build_review_parser)
+
     # packet
     packet_parser = subparsers.add_parser("packet", help="Manage bounded handoff packets")
     packet_subparsers = packet_parser.add_subparsers(dest="packet_command")
@@ -3015,6 +3023,11 @@ def main():
             tc_context_plan(args.input, args.model)
         else:
             context_parser.error("context requires a subcommand: plan")
+    elif args.command == "build-review":
+        from triage_core.build_review_cli import run as run_build_review
+        exit_code = run_build_review(args)
+        if exit_code:
+            sys.exit(exit_code)
     elif args.command == "packet":
         if args.packet_command == "render":
             tc_packet_render(args.task, args.model, args.include, args.output, args.force)

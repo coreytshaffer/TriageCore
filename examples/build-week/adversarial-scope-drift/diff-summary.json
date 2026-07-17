@@ -1,0 +1,31 @@
+{
+  "review_id": "adversarial-scope-drift",
+  "comparison": {
+    "base_ref": "main",
+    "head_ref": "HEAD",
+    "base_commit": "1111111111111111111111111111111111111111",
+    "head_commit": "2222222222222222222222222222222222222222"
+  },
+  "expected_scope": [
+    "triage_core/app.py"
+  ],
+  "summary": {
+    "files_changed": 2,
+    "additions": 11,
+    "deletions": 1
+  },
+  "changed_files": [
+    {
+      "path": "triage_core/app.py",
+      "status": "M",
+      "additions": 4,
+      "deletions": 1
+    },
+    {
+      "path": "scratch/agent-notes.txt",
+      "status": "A",
+      "additions": 7,
+      "deletions": 0
+    }
+  ]
+}

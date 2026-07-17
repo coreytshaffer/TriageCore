@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0",
+  "decision_id": "3815013f51578fb4",
+  "review_packet_id": "adversarial-scope-drift",
+  "evidence_sha256": "caaa59f201703a88ddfa292e1ff9c735dc20e3db48f7115d7a38744d228b090f",
+  "status": "needs_revision",
+  "reviewer": "Build Week reviewer",
+  "note": "Remove the undeclared file and provide the missing lint evidence.",
+  "decided_at": "2026-07-17T20:15:00+00:00"
+}

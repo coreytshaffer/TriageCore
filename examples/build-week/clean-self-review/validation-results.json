@@ -1,0 +1,17 @@
+{
+  "review_id": "clean-self-review",
+  "declared_validations": [
+    "python -m pytest -q tests/test_build_review_cli.py"
+  ],
+  "results": [
+    {
+      "command": "python -m pytest -q tests/test_build_review_cli.py",
+      "passed": true,
+      "exit_code": 0,
+      "duration_seconds": 17.587,
+      "stdout": "..............                                                           [100%]\n14 passed in 16.89s\n",
+      "stderr": "",
+      "timed_out": false
+    }
+  ]
+}

@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TriageCore Build Review · adversarial-scope-drift</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17201d;
+      --muted: #61706a;
+      --paper: #f3f0e8;
+      --card: #fffdf7;
+      --line: #d9d5ca;
+      --green: #176a50;
+      --amber: #9b6117;
+      --red: #9f3a35;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font: 16px/1.55 system-ui, sans-serif;
+    }
+    main { width: min(1080px, calc(100% - 32px)); margin: 32px auto 72px; }
+    header, section {
+      margin-bottom: 18px;
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--card);
+    }
+    header { color: #f8f4e8; background: #16372e; }
+    h1, h2, h3 { line-height: 1.15; }
+    h1 { margin: 0 0 8px; font-size: clamp(2rem, 5vw, 3.5rem); }
+    h2 { margin-top: 0; }
+    .meta { color: #c8ded5; }
+    .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .metric { padding: 16px; border: 1px solid var(--line); border-radius: 10px; }
+    .metric strong { display: block; font-size: 1.6rem; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px; border-bottom: 1px solid var(--line); text-align: left; }
+    code, pre { font-family: ui-monospace, monospace; }
+    pre { overflow: auto; padding: 14px; color: white; background: #17201d; }
+    .finding { padding: 14px; margin: 10px 0; border-left: 5px solid var(--amber); }
+    .finding.high, .finding.critical { border-left-color: var(--red); }
+    .finding.low { border-left-color: var(--green); }
+    .pass { color: var(--green); }
+    .fail, .rejected { color: var(--red); }
+    .needs_revision { color: var(--amber); }
+    .hash { overflow-wrap: anywhere; color: var(--muted); }
+    @media (max-width: 640px) {
+      .metrics { grid-template-columns: 1fr; }
+      header, section { padding: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <p>TriageCore / Evidence-bound software review</p>
+      <h1>Build Review</h1>
+      <p class="meta">Packet adversarial-scope-drift</p>
+    </header>
+    <section class="metrics" aria-label="Review summary">
+      <div class="metric">Recommendation<strong>reject</strong></div>
+      <div class="metric">Changed files<strong>2</strong></div>
+      <div class="metric">Decision<strong>needs_revision</strong></div>
+    </section>
+    <section>
+      <h2>Requested change</h2>
+      <p>Update triage_core/app.py and prove the change with unit and lint validations. No other paths are authorized.</p>
+      <h3>Declared scope</h3>
+      <ul><li><code>triage_core/app.py</code></li></ul>
+    </section>
+    <section>
+      <h2>Actual changes</h2>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>Status</th><th>File</th><th>Added</th><th>Removed</th></tr></thead>
+          <tbody><tr><td>M</td><td><code>triage_core/app.py</code></td><td>4</td><td>1</td></tr><tr><td>A</td><td><code>scratch/agent-notes.txt</code></td><td>7</td><td>0</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+    <section>
+      <h2>Findings</h2>
+      <article class="finding high"><p><strong>HIGH</strong> <code>SCOPE_DRIFT</code></p><h3>Changes exceed the expected scope</h3><p>1 changed file is outside the declared scope.</p><ul><li><code>scratch/agent-notes.txt</code></li></ul></article><article class="finding high"><p><strong>HIGH</strong> <code>EXPECTED_VALIDATION_MISSING</code></p><h3>Required validation evidence is missing</h3><p>The declared lint validation was not run.</p><ul><li><code>python -m ruff check triage_core</code></li></ul></article><article class="finding medium"><p><strong>MEDIUM</strong> <code>UNTESTED_CHANGE</code></p><h3>Source changed without corresponding test changes</h3><p>The diff adds no explicit test coverage.</p></article>
+    </section>
+    <section>
+      <h2>Validation evidence</h2>
+      <article class="validation"><p class="pass"><strong>PASS</strong> <code>python -m pytest -q</code></p><p>Exit 0; 0.84 seconds</p><pre>3 passed in 0.31s
+</pre></article>
+    </section>
+    <section>
+      <h2>Human decision</h2>
+      <p class="decision needs_revision"><strong>NEEDS_REVISION</strong><br>Reviewer: Build Week reviewer<br>Time: 2026-07-17T20:15:00+00:00<br>Note: Remove the undeclared file and provide the missing lint evidence.</p>
+    </section>
+    <section>
+      <h2>Evidence integrity</h2>
+      <p class="hash">caaa59f201703a88ddfa292e1ff9c735dc20e3db48f7115d7a38744d228b090f</p>
+    </section>
+  </main>
+</body>
+</html>
