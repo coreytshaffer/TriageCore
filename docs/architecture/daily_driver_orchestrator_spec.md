@@ -26,13 +26,14 @@ the deterministic, non-executing run-plan preview. CR-DD-011 implements a durabl
 privacy-safe plan artifact, independent semantic and exact-byte digests, exact review
 confirmation, metadata-only ledger linkage, and read-only inspection. Confirmed execution
 remains blocked. CR-DD-012's shared-decision architecture is approved, but monolithic
-implementation is withheld. CR-DD-012A is now drafted as a proposal-only foundation. It
-distinguishes optional provenance source bytes, normalized component bytes under current
-UTF-8/text semantics, and authoritative assembled worker-execution bytes; it grants no
-implementation or integration authority. CR-DD-012B remains blocked behind a separately
-approved, reviewed, and landed CR-DD-012A. Plan v2, durable observation/execution schemas,
-and confirmed-plan execution remain deferred. The original scope basis and readiness
-percentages remain historical planning estimates, not current measurements.
+implementation is withheld. CR-DD-012A implementation is complete on its branch within
+the exact internal-foundation allowlist; validation and supervisor review passed, and
+merge is pending. It distinguishes optional provenance source bytes, normalized component
+bytes under current UTF-8/text semantics, and authoritative assembled worker-execution
+bytes, but grants no integration authority. CR-DD-012B remains blocked until CR-DD-012A
+lands and receives its own separate approval. Plan v2, durable observation/execution
+schemas, and confirmed-plan execution remain deferred. The original scope basis and
+readiness percentages remain historical planning estimates, not current measurements.
 
 ## Thesis
 
@@ -72,9 +73,10 @@ after M0 (below) produces daily-use evidence. See **Evidence Requirements**.
 - **G1 — No confirmed-plan execution linkage.** `tc run` exposes the governed loop,
   CR-DD-010 previews its deterministic planning inputs, and CR-DD-011 records exact
   artifact review linkage. Execution still does not consume that artifact or the same
-  immutable decision. CR-DD-012 approves the architecture only; neither CR-DD-012A nor
-  CR-DD-012B has implementation authority. The shared path must use one immutable input
-  snapshot so execution does not reopen or reconstruct governed inputs. Confirmed-artifact
+  immutable decision. CR-DD-012A's bounded internal, non-integrated foundation and focused
+  tests are complete and validated on the branch; merge is pending. CR-DD-012B has no
+  implementation authority. The future shared path must use one immutable input snapshot
+  so execution does not reopen or reconstruct governed inputs. Confirmed-artifact
   execution remains a later, separately gated CR; `triagecore run-pipeline` also remains
   local-only and bypasses the router.
 - **G2 — Cloud is Qwen, not frontier.** No live Claude/GPT/Gemini backends, no provider
@@ -108,15 +110,15 @@ backwards.
    execution still requires a separately approved later CR.
 4. **M0.3 — Shared governed run decision (architecture approved by CR-DD-012;
    monolithic implementation withheld).** Required sequence:
-   **M0.3a / CR-DD-012A**, proposal drafted with implementation withheld, pins the
-   immutable input snapshot around `SourceBytes`, `NormalizedComponentBytes`, and
-   authoritative `AssembledExecutionBytes`, plus the canonical decision, pure
-   normalizer/builder, identity, and focused tests with no CLI, ledger, worker, route, or
-   plan-v2 change; then **M0.3b / CR-DD-012B**, still blocked pending separate approval
-   after 012A lands, owns shared preview/execution consumption, envelope enforcement,
-   bounded decision-ID linkage, and parity/fail-closed tests. `governed_run_plan.v2`, durable
-   `RuntimeObservation`/`ExecutionRecord` contracts, and confirmed-plan execution remain
-   deferred.
+   **M0.3a / CR-DD-012A**, implementation complete and validated on the branch with merge
+   pending, establishes the immutable input snapshot around `SourceBytes`,
+   `NormalizedComponentBytes`, and authoritative `AssembledExecutionBytes`, plus the
+   canonical decision, pure normalizer/builder, identity, and focused tests with no CLI,
+   ledger, worker, route, or plan-v2 change; then **M0.3b / CR-DD-012B**, still blocked
+   until 012A lands and 012B receives separate approval, owns shared preview/execution
+   consumption, envelope enforcement, bounded decision-ID linkage, and parity/fail-closed
+   tests. `governed_run_plan.v2`, durable `RuntimeObservation`/`ExecutionRecord` contracts,
+   and confirmed-plan execution remain deferred.
 5. **M1 — Live capability probe + real route bindings + circuit breakers** (G3, G4, G6).
 6. **M2 — Frontier provider backends** (G2). *Future work; see boundary below.*
 7. **M3 — Budget enforcement + prefer-local economics** (G5).
