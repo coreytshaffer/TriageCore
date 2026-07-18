@@ -55,7 +55,11 @@ class TaskClassifier:
             except Exception:
                 pass # Fall back to regex classifier
 
-        # Fallback Heuristic Regex Classifier
+        return cls.classify_deterministic(prompt)
+
+    @classmethod
+    def classify_deterministic(cls, prompt: str) -> str:
+        """Classify without constructing or calling a model backend."""
         prompt_lower = prompt.lower()
         if any(word in prompt_lower for word in ["delete", "remove all", "wipe", "format"]):
             return "blocked_or_high_risk"

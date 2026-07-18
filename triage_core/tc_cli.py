@@ -204,7 +204,22 @@ def _repo_root_or_cwd() -> Path:
     return Path.cwd()
 
 
+def _repo_root_without_subprocess() -> Path:
+    """Locate an enclosing worktree for no-probe planning operations."""
+    cwd = Path.cwd().resolve()
+    for candidate in (cwd, *cwd.parents):
+        if (candidate / ".git").exists():
+            return candidate
+    return cwd
+
+
 def _ledger_path() -> Path:
+    cwd = Path.cwd().resolve()
+    if (cwd / ".triagecore").is_dir():
+        return cwd / ".triagecore" / "ledger.jsonl"
+    repo_root = _repo_root_without_subprocess()
+    if repo_root != cwd or (cwd / ".git").exists():
+        return repo_root / ".triagecore" / "ledger.jsonl"
     return _repo_root_or_cwd() / ".triagecore" / "ledger.jsonl"
 
 
@@ -1015,15 +1030,56 @@ def tc_run(args, client=None) -> None:
         verify_packet,
     )
 
+    from triage_core.run_plan import (
+        ContextSource,
+        RunPlanPrivacyError,
+        build_run_plan,
+        privacy_metadata_for_run,
+        render_run_plan,
+    )
+
+    planning = bool(getattr(args, "plan", False))
+    plan_output = getattr(args, "plan_output", None)
+    if plan_output and not planning:
+        print("Error: --plan-output requires --plan.")
+        sys.exit(1)
+    if planning:
+        ambiguous = [
+            flag
+            for flag, active in (
+                ("--output", bool(getattr(args, "output", None))),
+                ("--print", bool(getattr(args, "print_output", False))),
+                ("--ledger-dir", bool(getattr(args, "ledger_dir", None))),
+                ("--no-ledger", bool(getattr(args, "no_ledger", False))),
+            )
+            if active
+        ]
+        if ambiguous:
+            print(f"Error: --plan cannot be combined with {', '.join(ambiguous)}.")
+            sys.exit(1)
+        if not getattr(args, "model", None):
+            print("Error: --model is required with --plan.")
+            sys.exit(1)
+        if plan_output and not getattr(args, "task_id", None):
+            print("Error: --task-id is required with --plan-output.")
+            sys.exit(1)
+
     # 1. Assemble task data from --files (repeatable), then --data.
     data_parts: List[str] = []
+    context_sources = []
+    source_values = []
     for file_path in args.files:
         if not os.path.exists(file_path):
             print(f"Error: input file not found: {file_path}")
             sys.exit(1)
         try:
             with open(file_path, "r", encoding="utf-8") as handle:
-                data_parts.append(f"\n--- {file_path} ---\n{handle.read()}")
+                content = handle.read()
+                context_sources.append(
+                    ContextSource(path=file_path, characters=len(content))
+                )
+                source_values.append((file_path, content))
+                data_parts.append(f"\n--- {file_path} ---\n{content}")
         except OSError as exc:
             print(f"Error reading {file_path}: {exc}")
             sys.exit(1)
@@ -1037,16 +1093,62 @@ def tc_run(args, client=None) -> None:
         print("Error: --allow-cloud cannot be used with --privacy local_only.")
         sys.exit(1)
 
-    allow_external_model = (
-        args.privacy in {"external_safe", "public"} and args.allow_cloud
-    )
-    if args.privacy == "local_only":
-        privacy_metadata = PrivacyMetadata(external_model_allowed=False)
-    else:  # external_safe or public
-        privacy_metadata = PrivacyMetadata(
-            data_class="public",
-            external_model_allowed=allow_external_model,
-        )
+    if planning:
+        try:
+            plan = build_run_plan(
+                prompt=args.prompt,
+                data=data,
+                sources=context_sources,
+                inline_data_characters=len(args.data or ""),
+                privacy=args.privacy,
+                allow_cloud=args.allow_cloud,
+                model_profile=args.model,
+                task_id=args.task_id,
+            )
+        except KeyError:
+            print(f"Error: Unknown model profile: {args.model}")
+            sys.exit(1)
+        except RunPlanPrivacyError as exc:
+            print("Blocked (privacy fail-closed).")
+            print(f"finding_codes={','.join(exc.finding_codes)}")
+            sys.exit(2)
+        if plan_output:
+            from triage_core.run_plan_artifact import (
+                RunPlanArtifactError,
+                build_artifact,
+                publish_artifact,
+            )
+
+            try:
+                _, artifact_bytes, body_digest, artifact_digest = build_artifact(
+                    plan=plan,
+                    prompt=args.prompt,
+                    assembled_input=f"{args.prompt}\n{data}",
+                    inline_input=args.data or "",
+                    source_values=source_values,
+                )
+                written_path = publish_artifact(
+                    plan_output,
+                    artifact_bytes,
+                    protected_directories=(
+                        default_config.get_ledger_dir(),
+                        _repo_root_without_subprocess() / ".triagecore",
+                        default_config.get_tasks_dir(),
+                        default_config.get_codex_tasks_dir(),
+                    ),
+                )
+            except RunPlanArtifactError as exc:
+                print(f"Error: {exc}")
+                sys.exit(1)
+            print(render_run_plan(plan, artifact_written=True), end="")
+            print(f"Plan artifact: {written_path}")
+            print(f"plan_body_digest: {body_digest}")
+            print(f"artifact_byte_digest: {artifact_digest}")
+        else:
+            print(render_run_plan(plan), end="")
+        return
+
+    privacy_metadata = privacy_metadata_for_run(args.privacy, args.allow_cloud)
 
     # 3. Build and preflight the packet before any evidence is persisted.
     task_id = args.task_id or str(uuid.uuid4())
@@ -2032,11 +2134,74 @@ def tc_runtime_strategy_recorded_report(
     print(format_recorded_strategy_delta_report(report))
 
 
-def tc_task_show(task_id: str, verify_signatures: bool = False) -> None:
+def tc_run_plan_confirm(args) -> None:
+    from triage_core.run_plan_artifact import (
+        RunPlanArtifactError,
+        prepare_confirmation,
+        record_confirmation,
+        validate_ledger_file,
+    )
+
+    try:
+        task_id, payload = prepare_confirmation(
+            plan_path=args.plan,
+            expected_artifact_digest=args.artifact_digest,
+        )
+    except RunPlanArtifactError as exc:
+        print(f"Error: {exc}")
+        sys.exit(1)
+
+    ledger_dir = args.ledger_dir or default_config.get_ledger_dir()
+    try:
+        validate_ledger_file(Path(ledger_dir) / "ledger.jsonl")
+        ledger = TaskLedger(ledger_dir=ledger_dir)
+        result = record_confirmation(
+            task_id=task_id, payload=payload, ledger=ledger
+        )
+    except Exception as exc:
+        print(f"Error: could not record plan confirmation: {exc}")
+        sys.exit(1)
+    print(f"Run plan review linkage: {result}")
+    print(f"Task ID: {task_id}")
+    print(f"plan_body_digest: {payload['plan_body_digest']}")
+    print(f"artifact_byte_digest: {payload['artifact_byte_digest']}")
+    print("execution_authority: false")
+    print("execution_linkage: not_implemented")
+
+
+def tc_task_show(
+    task_id: str,
+    verify_signatures: bool = False,
+    ledger_dir: str | None = None,
+) -> None:
     from triage_core.task_ledger import TaskLedger
+    from triage_core.run_plan_artifact import (
+        RunPlanArtifactError,
+        validate_confirmation_payload,
+        validate_ledger_file,
+    )
 
     from pathlib import Path
-    ledger_path = Path(_ledger_path())
+    if ledger_dir is not None:
+        selected_dir = Path(ledger_dir)
+        if not selected_dir.exists() or not selected_dir.is_dir():
+            print("Error: ledger directory not found")
+            print("reason=ledger_directory_not_found")
+            sys.exit(1)
+        ledger_path = selected_dir / "ledger.jsonl"
+    else:
+        ledger_path = Path(_ledger_path())
+    if not ledger_path.exists():
+        print("Error: task not found")
+        print("reason=task_not_found")
+        sys.exit(1)
+    if not verify_signatures:
+        try:
+            validate_ledger_file(ledger_path)
+        except RunPlanArtifactError:
+            print("Error: invalid ledger")
+            print("reason=invalid_ledger")
+            sys.exit(1)
     ledger = TaskLedger(ledger_dir=str(ledger_path.parent))
     task = ledger.get_task(task_id)
 
@@ -2047,6 +2212,19 @@ def tc_task_show(task_id: str, verify_signatures: bool = False) -> None:
 
     events = ledger.get_events(task_id)
     has_review = any(e.get("event_type") == "review_completed" for e in events)
+
+    try:
+        confirmations = [
+            validate_confirmation_payload(
+                event.get("payload"), expected_task_id=task_id
+            )
+            for event in events
+            if event.get("event_type") == "run_plan_review_confirmed"
+        ]
+    except RunPlanArtifactError:
+        print("Error: invalid run plan review linkage")
+        print("reason=invalid_run_plan_review_linkage")
+        sys.exit(1)
 
     title = task.title if task.title else "N/A"
     status = task.status if task.status else "not_recorded"
@@ -2064,6 +2242,28 @@ def tc_task_show(task_id: str, verify_signatures: bool = False) -> None:
     print(f"Accepted: {accepted}")
     print(f"Review decision: {review_decision}")
     print(f"Ledger events: {len(events)}")
+    print("Run plan review linkage:")
+    if confirmations:
+        linkage = confirmations[-1]
+        print("  exact_plan_review_confirmation: present")
+        print(f"  plan_body_digest: {linkage.get('plan_body_digest', 'not_recorded')}")
+        print(
+            "  artifact_byte_digest: "
+            f"{linkage.get('artifact_byte_digest', 'not_recorded')}"
+        )
+        print(f"  route_posture: {linkage.get('route_posture', 'not_recorded')}")
+        print(
+            "  ethical_firewall_status: "
+            f"{linkage.get('ethical_firewall_status', 'not_recorded')}"
+        )
+    else:
+        print("  exact_plan_review_confirmation: absent")
+        print("  plan_body_digest: not_recorded")
+        print("  artifact_byte_digest: not_recorded")
+        print("  route_posture: not_recorded")
+        print("  ethical_firewall_status: not_recorded")
+    print("  execution_authority: false")
+    print("  execution_linkage: not_implemented")
     print("Timeline:")
     for event in events:
         timestamp = event.get("timestamp", "not_recorded")
@@ -2161,6 +2361,34 @@ def main():
     run_parser.add_argument(
         "--no-ledger", action="store_true",
         help="Do not write any evidence record to the ledger (prints a warning)",
+    )
+    run_parser.add_argument(
+        "--plan", action="store_true",
+        help="Preview governed planning without execution, probes, ledger access, or writes",
+    )
+    run_parser.add_argument(
+        "--model", type=str, default=None,
+        help="Token budget model profile (required with --plan)",
+    )
+    run_parser.add_argument(
+        "--plan-output", type=str, default=None,
+        help="Write a deterministic governed plan artifact (requires --plan, --model, and --task-id)",
+    )
+
+    # run-plan
+    run_plan_parser = subparsers.add_parser(
+        "run-plan", help="Manage exact governed run-plan review linkage"
+    )
+    run_plan_subparsers = run_plan_parser.add_subparsers(dest="run_plan_command")
+    run_plan_confirm_parser = run_plan_subparsers.add_parser(
+        "confirm", help="Confirm review of exact governed plan artifact bytes"
+    )
+    run_plan_confirm_parser.add_argument("--plan", required=True, type=str)
+    run_plan_confirm_parser.add_argument(
+        "--artifact-digest", required=True, type=str
+    )
+    run_plan_confirm_parser.add_argument(
+        "--ledger-dir", type=str, default=None
     )
 
     # probe
@@ -2470,6 +2698,12 @@ def main():
             "Verify signatures of this task's signed ledger events "
             "(fail-closed: exits 1 on invalid or malformed signatures)"
         ),
+    )
+    task_show_parser.add_argument(
+        "--ledger-dir",
+        type=str,
+        default=None,
+        help="Read task evidence from this ledger directory",
     )
 
     # task-envelope
@@ -2899,6 +3133,11 @@ def main():
         tc_status()
     elif args.command == "run":
         tc_run(args)
+    elif args.command == "run-plan":
+        if args.run_plan_command == "confirm":
+            tc_run_plan_confirm(args)
+        else:
+            run_plan_parser.error("run-plan requires a subcommand: confirm")
     elif args.command == "probe":
         tc_probe(args)
     elif args.command == "doctor":
@@ -2971,7 +3210,11 @@ def main():
             )
     elif args.command == "task":
         if args.task_command == "show":
-            tc_task_show(args.task_id, verify_signatures=args.verify_signatures)
+            tc_task_show(
+                args.task_id,
+                verify_signatures=args.verify_signatures,
+                ledger_dir=args.ledger_dir,
+            )
         else:
             task_parser.error("task requires a subcommand: show")
     elif args.command == "task-envelope":
