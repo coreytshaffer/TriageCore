@@ -22,11 +22,12 @@ treating any readiness claim as current.
 
 Current implementation note (2026-07-17): CR-DD-009 has since landed and `tc run` now
 provides the governed execution surface described as M0 below. CR-DD-010 now implements
-the deterministic, non-executing run-plan preview. CR-DD-011 proposes, but does not
-authorize, a durable privacy-safe plan artifact and exact review confirmation. Confirmed
-execution remains blocked until a later CR safely unifies or binds preview and execution
-decision paths. The original scope basis and readiness percentages remain historical
-planning estimates, not current measurements.
+the deterministic, non-executing run-plan preview. CR-DD-011 implements a durable
+privacy-safe plan artifact, independent semantic and exact-byte digests, exact review
+confirmation, metadata-only ledger linkage, and read-only inspection. Confirmed execution
+remains blocked until CR-DD-012 or another separately approved CR makes preview and
+execution consume one immutable governed decision. The original scope basis and readiness
+percentages remain historical planning estimates, not current measurements.
 
 ## Thesis
 
@@ -63,10 +64,10 @@ after M0 (below) produces daily-use evidence. See **Evidence Requirements**.
 
 ## Gaps (planning targets)
 
-- **G1 — No confirmed-plan execution linkage.** `tc run` exposes the governed loop and
-  CR-DD-010 previews its deterministic planning inputs, but there is no exact
-  artifact-byte-digest confirmation with independently validated plan-body linkage or
-  fail-closed execution binding. CR-DD-011 is proposal-only;
+- **G1 — No confirmed-plan execution linkage.** `tc run` exposes the governed loop,
+  CR-DD-010 previews its deterministic planning inputs, and CR-DD-011 records exact
+  artifact review linkage. Execution still does not consume that artifact or the same
+  immutable decision. CR-DD-012 is the next candidate for the shared governed decision;
   `triagecore run-pipeline` also remains local-only and bypasses the router.
 - **G2 — Cloud is Qwen, not frontier.** No live Claude/GPT/Gemini backends, no provider
   abstraction beyond OpenAI-compatible, no per-provider cost/credit model.
@@ -91,15 +92,18 @@ backwards.
 2. **M0.1 — Governed run-plan preview (implemented locally by CR-DD-010).** Show context budget,
    privacy/egress posture, a deterministic route forecast, escalation conditions, and
    expected verification without model calls, execution, or persistence.
-3. **M0.2 — Exact-plan artifact and review confirmation (proposed by CR-DD-011).** Bind an
+3. **M0.2 — Exact-plan artifact and review confirmation (implemented by CR-DD-011).** Bind an
    operator-named privacy-safe plan artifact and explicit exact artifact-byte-digest
    confirmation, with independent plan-body-digest validation, under one task ID.
    Confirmation is not approval or execution authority. Confirmed execution is blocked
-   pending a later shared-decision-path CR.
-4. **M1 — Live capability probe + real route bindings + circuit breakers** (G3, G4, G6).
-5. **M2 — Frontier provider backends** (G2). *Future work; see boundary below.*
-6. **M3 — Budget enforcement + prefer-local economics** (G5).
-7. **M4 — Actionable cockpit + interactive session** (G7, G8).
+   pending CR-DD-012 or another approved shared-decision-path CR.
+4. **M0.3 — Shared governed run decision (candidate CR-DD-012).** Make preview and
+   execution consume one immutable decision object before exposing confirmed-plan
+   execution. This milestone is not implemented or authorized by CR-DD-011.
+5. **M1 — Live capability probe + real route bindings + circuit breakers** (G3, G4, G6).
+6. **M2 — Frontier provider backends** (G2). *Future work; see boundary below.*
+7. **M3 — Budget enforcement + prefer-local economics** (G5).
+8. **M4 — Actionable cockpit + interactive session** (G7, G8).
 
 ## Frontier-Cloud Support Is Future Work
 

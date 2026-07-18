@@ -63,6 +63,8 @@ def build_run_plan(
         steward_evaluation.get("local_result_status") == "insufficient"
     )
     qwen_enabled = default_config.get_qwen_enabled()
+    qwen_model = default_config.get_qwen_model() if qwen_enabled else "not_enabled"
+    local_backend_type = default_config.get_backend_type()
     route_input = TriageClient._build_resilience_route_input(
         category=category, validator=None
     )
@@ -94,9 +96,9 @@ def build_run_plan(
         human_review_required = True
 
     selected_backend = (
-        "qwen:" + default_config.get_qwen_model()
+        "qwen:" + qwen_model
         if selected_route.startswith("cloud_")
-        else default_config.get_backend_type() + ":" + specialist_model
+        else local_backend_type + ":" + specialist_model
         if selected_route.startswith("local_")
         else "none"
     )
@@ -150,6 +152,9 @@ def build_run_plan(
         "fallback_depth": fallback_depth,
         "human_review_required": human_review_required,
         "backend_binding": selected_backend,
+        "cloud_backend_enabled": qwen_enabled,
+        "cloud_model_binding": qwen_model,
+        "local_backend_type": local_backend_type,
         "required_checks": tuple(decision.required_checks),
         "ethical_firewall_status": (
             "triggered" if firewall_triggered or steward_insufficient else "clear"
@@ -171,7 +176,7 @@ def _ascii(value: object) -> str:
     return str(value).encode("ascii", errors="backslashreplace").decode("ascii")
 
 
-def render_run_plan(plan: dict) -> str:
+def render_run_plan(plan: dict, *, artifact_written: bool = False) -> str:
     source_lines = [
         f"- source[{index}]: {_ascii(source.path)} ({source.characters} chars)"
         for index, source in enumerate(plan["sources"], 1)
@@ -245,7 +250,14 @@ def render_run_plan(plan: dict) -> str:
         "- backend_probe_performed: false",
         "- unobserved: availability, memory_headroom, recent_failures, cloud_credit_health",
         "- execution_performed: false",
-        "- ledger_or_artifact_written: false",
+        *(
+            [
+                "- ledger_written: false",
+                "- plan_artifact_written: true",
+            ]
+            if artifact_written
+            else ["- ledger_or_artifact_written: false"]
+        ),
         "- approval_granted: false",
     ]
     return "\n".join(lines) + "\n"

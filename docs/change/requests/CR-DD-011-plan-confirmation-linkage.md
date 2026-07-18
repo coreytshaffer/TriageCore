@@ -1,9 +1,9 @@
-# CR-DD-011: Governed Plan Artifact And Exact Confirmation Foundation
+# CR-DD-011: Governed Plan Artifact And Exact Confirmation Linkage
 
 ## Status
 
-Proposed — pending human approval. Documentation only. This CR grants no
-implementation or execution authority.
+Implemented locally after explicit human approval. Pending external review and
+merge. This CR grants no execution authority.
 
 ## Decision
 
@@ -17,27 +17,27 @@ currently no supported way to inject the reviewed route into
 `TriageClient.run_task` or prove that execution will use the same decision
 inputs without a larger shared-decision-path refactor.
 
-Therefore this CR proposes only:
+Therefore this CR implements only:
 
 1. a deterministic, privacy-safe, operator-named plan artifact;
 2. explicit confirmation of the exact reviewed artifact digest;
 3. metadata-only task-ledger linkage and read-only inspection.
 
-Execution of a confirmed plan is blocked and remains a future CR. This proposal
+Execution of a confirmed plan is blocked and remains a future CR. This CR
 does not add `--confirmed-plan`, execute after confirmation, route injection,
 approval-and-resume, or any model/backend call.
 
 ## Implementation Authority
 
-Only an explicit status change to `Approved` authorizes implementation. If
-approved, authority is limited to artifact creation, exact-digest confirmation,
-and read-only linkage display.
+The operator approved implementation after the required branch-state preflight.
+Authority remains limited to artifact creation, exact-digest confirmation, and
+read-only linkage display.
 
 Confirmation means only: “the operator reviewed this exact plan artifact.” It
 is not general approval, execution authority, cloud authorization, admission,
 acceptance, an authority grant, or satisfaction of a human-review gate.
 
-## Proposed Interface
+## Implemented Interface
 
 ### 1. Write The Reviewed Plan
 
@@ -56,10 +56,10 @@ tc run "<prompt>" --plan --model <profile> --task-id <id> \
   checked for symlink/reparse behavior where the platform exposes it; and the
   target must not resolve inside the configured ledger, identity/key storage,
   or any other protected TriageCore state directory. Violations fail closed.
-- Publication uses exclusive create (`xb` or an `O_EXCL` equivalent) after all
-  validation, then flush/fsync/close where supported. It never overwrites.
-  Publication is not claimed to be atomically invisible: a crash-partial file
-  is invalid, cannot be confirmed, and requires explicit operator removal.
+- Publication writes and fsyncs an exclusive same-directory staging file, then
+  atomically creates the absent destination with a hard link. It never
+  overwrites. Publication failure removes staging residue and leaves no
+  destination artifact.
 - No default plan directory is added.
 - The artifact is deterministic canonical JSON with no timestamp or random ID.
 - The command prints the complete `plan_body_digest` and
@@ -255,43 +255,43 @@ artifact can yet be executed faithfully.
 
 ## Acceptance Criteria
 
-- [ ] `--plan-output` requires `--plan`, `--model`, and explicit `--task-id`.
-- [ ] Existing stdout-only CR-DD-010 output remains unchanged without
+- [x] `--plan-output` requires `--plan`, `--model`, and explicit `--task-id`.
+- [x] Existing stdout-only CR-DD-010 output remains unchanged without
   `--plan-output`.
-- [ ] Artifact creation refuses an existing target, missing parent, a
+- [x] Artifact creation refuses an existing target, missing parent, a
   symlink/reparse in any existing parent path component where detectable, and
   targets inside configured ledger, identity/key, or other protected
   TriageCore state directories.
-- [ ] Publication uses exclusive create, never overwrites, and
-  flushes/fsyncs/closes where supported; crash-partial files are invalid,
-  unconfirmable, and require explicit operator removal.
-- [ ] The artifact is deterministic canonical JSON, closed-contract,
+- [x] Publication uses an exclusive same-directory staging file, fsyncs where
+  supported, atomically creates the absent destination, never overwrites, and
+  cleans staging residue on failure.
+- [x] The artifact is deterministic canonical JSON, closed-contract,
   metadata-only, and persistent-privacy-safe.
-- [ ] No raw task/context content or raw source path appears in the artifact.
-- [ ] Repeated creation from identical inputs/configuration is byte-identical.
-- [ ] Plan creation prints distinct lower-case `plan_body_digest` and
+- [x] No raw task/context content or raw source path appears in the artifact.
+- [x] Repeated creation from identical inputs/configuration is byte-identical.
+- [x] Plan creation prints distinct lower-case `plan_body_digest` and
   `artifact_byte_digest` values matching `sha256:[0-9a-f]{64}`.
-- [ ] `plan_body_digest` hashes only canonical `plan_body` bytes; the
+- [x] `plan_body_digest` hashes only canonical `plan_body` bytes; the
   non-embedded `artifact_byte_digest` hashes the complete final artifact bytes.
-- [ ] Confirmation requires the exact full `artifact_byte_digest` repeated by
+- [x] Confirmation requires the exact full `artifact_byte_digest` repeated by
   the operator and independently verifies the embedded `plan_body_digest`.
-- [ ] Invalid or mutated artifacts fail before ledger mutation.
-- [ ] Confirmation writes only minimal task scaffolding when needed and one
+- [x] Invalid or mutated artifacts fail before ledger mutation.
+- [x] Confirmation writes only minimal task scaffolding when needed and one
   metadata-only `run_plan_review_confirmed` event.
-- [ ] Identical confirmation is idempotent; conflicting confirmation for the
+- [x] Identical confirmation is idempotent; conflicting confirmation for the
   same task ID fails closed.
-- [ ] Confirmation creates no review, acceptance, approval, admission,
+- [x] Confirmation creates no review, acceptance, approval, admission,
   authority, execution, route, or worker-result evidence.
-- [ ] Ethical-firewall/human-only posture is preserved as bounded metadata and
+- [x] Ethical-firewall/human-only posture is preserved as bounded metadata and
   never becomes executable.
-- [ ] `tc task show`, including its matching read-only `--ledger-dir`
+- [x] `tc task show`, including its matching read-only `--ledger-dir`
   override, displays exact-plan review linkage and explicitly reports that
   execution linkage is not implemented.
-- [ ] Prompt/data/context values, raw paths, and matched sensitive terms never
+- [x] Prompt/data/context values, raw paths, and matched sensitive terms never
   appear in artifact, ledger event, or task-show output.
-- [ ] No model/backend/network/subprocess call occurs during plan writing,
+- [x] No model/backend/network/subprocess call occurs during plan writing,
   confirmation, or inspection.
-- [ ] Existing `tc run`, stdout-only `--plan`, review, admission, authority,
+- [x] Existing `tc run`, stdout-only `--plan`, review, admission, authority,
   signature, privacy, and ledger behavior remains unchanged.
 
 ## Required Tests
@@ -318,9 +318,9 @@ artifact can yet be executed faithfully.
 - traps for model, backend, socket/network, subprocess, and artifact overwrite;
 - existing CR-DD-010 and `tc run` regressions.
 
-## Allowed Files For A Future Approved Implementation
+## Approved Implementation Files
 
-- `docs/change/requests/CR-DD-011-plan-confirmation-execution-linkage.md`
+- `docs/change/requests/CR-DD-011-plan-confirmation-linkage.md`
 - `triage_core/tc_cli.py`
 - `triage_core/run_plan.py`
 - `triage_core/run_plan_artifact.py` — new closed artifact/confirmation module
@@ -337,7 +337,7 @@ artifact can yet be executed faithfully.
 `triage_core/task_ledger.py` reducer changes are not authorized by this CR.
 Changes outside the list require a separately approved scope amendment.
 
-## Verification For A Future Implementation
+## Verification
 
 - `python -m pytest -q tests/test_tc_run_plan_artifact_cli.py tests/test_tc_run_plan_cli.py tests/test_tc_run_cli.py tests/test_cr_098_task_show.py`
 - `python -m py_compile triage_core/run_plan_artifact.py triage_core/run_plan.py triage_core/tc_cli.py`

@@ -32,19 +32,48 @@ Start your work sessions by inspecting the state of your workspace and routing p
    ```
    Shows context size, token-budget posture, privacy and egress state, a deterministic route forecast, specialist and ethical-firewall conditions, and expected verification. It makes no model call, writes no ledger event or artifact, and grants no approval.
 
-5. **Execute after reviewing the preview**
+5. **Write an exact review artifact when durable linkage is needed**
+   ```powershell
+   python -m triage_core.tc_cli run "Summarize the current backlog" --files docs/current_backlog.md --privacy local_only --plan --model generic-32k --task-id backlog-summary --plan-output reviewed-plan.json
+   ```
+   Writes a deterministic canonical JSON artifact to a new explicit path and
+   prints both its semantic `plan_body_digest` and exact
+   `artifact_byte_digest`. It writes no ledger event and performs no model,
+   backend, network, or execution call.
+
+6. **Confirm review of the exact artifact bytes**
+   ```powershell
+   python -m triage_core.tc_cli run-plan confirm --plan reviewed-plan.json --artifact-digest sha256:<64-lower-case-hex>
+   ```
+   Records metadata-only `run_plan_review_confirmed` evidence under the
+   artifact task ID. Confirmation means only that the exact artifact was
+   reviewed; it is not approval, cloud authorization, artifact acceptance, or
+   execution authority.
+
+7. **Inspect the linkage**
+   ```powershell
+   python -m triage_core.tc_cli task show backlog-summary
+   ```
+   Shows the semantic and exact-byte digests, bounded route/firewall posture,
+   and `execution_linkage: not_implemented`. Use `--ledger-dir <dir>` when the
+   confirmation was written to an isolated ledger.
+
+8. **Execute as a separate operator decision**
    ```powershell
    python -m triage_core.tc_cli run "Summarize the current backlog" --files docs/current_backlog.md --privacy local_only --print
    ```
-   Runs a separate operator-initiated invocation through the governed execution path. The preview is advisory and is not cryptographically or persistently coupled to this execution.
+   Runs a separate operator-initiated invocation through the governed execution
+   path. Neither the preview nor CR-DD-011 confirmation is consumed by
+   execution. A future shared governed-decision contract is required before
+   confirmed-plan execution can be exposed.
 
-6. **Dry-run one-file context planning**
+9. **Dry-run one-file context planning**
    ```powershell
    python -m triage_core.tc_cli context plan --input docs/current_backlog.md --model generic-32k
    ```
    Evaluates an input file against a chosen token budget profile to ensure it fits safely before handing it off to an LLM.
 
-7. **Render bounded handoff packets**
+10. **Render bounded handoff packets**
    ```powershell
    python -m triage_core.tc_cli packet render --task tests/fixtures/packet_renderer/example-task.md --model generic-32k --include docs/current_backlog.md
    ```
@@ -73,6 +102,7 @@ TriageCore enforces strict boundaries to preserve trust:
 * **Read-only diagnostics**: Commands like `status`, `doctor`, and `review list` only read state and do not mutate the file system or ledger.
 * **Dry-run context planning**: The `context plan` command strictly estimates limits; it does not truncate or rewrite your files.
 * **Governed run preview**: `tc run --plan` performs privacy and policy checks but makes no model call, executes nothing, and writes no ledger or artifact.
+* **Exact plan review linkage**: `--plan-output` atomically creates a new canonical artifact without overwriting, and `tc run-plan confirm` records exact-byte review evidence only. No CR-DD-011 command executes that artifact or grants approval.
 * **Deterministic packet rendering**: The `packet render` command always produces exactly what is expected from the inputs, with no hidden summarization or LLM calls.
 * **Human approval remains external and explicit**: The review queue highlights work to be done, but you must manually resolve it. There is no automated approval bypass.
 
