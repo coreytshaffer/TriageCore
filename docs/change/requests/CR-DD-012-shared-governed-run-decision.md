@@ -10,6 +10,13 @@ own explicit human implementation approval and bounded file allowlist. This
 approval changes no runtime, CLI, ledger, artifact, approval, or cloud
 behavior. Current CR-DD-009 through CR-DD-011 behavior remains unchanged.
 
+The CR-DD-012A foundation is now drafted as a separate proposal at
+`CR-DD-012A-governed-decision-foundation.md`. It resolves “exact bytes” as the
+established normalized worker-facing execution representation, not raw
+filesystem or backend transport bytes. CR-DD-012A implementation authority
+remains withheld, and CR-DD-012B remains blocked until 012A is separately
+approved, implemented, reviewed, and landed.
+
 ## Decision
 
 Introduce one immutable `GovernedRunInputSnapshot` and one immutable
@@ -743,8 +750,9 @@ and disclosed; it is not rewritten during rollback.
   does not consume confirmed artifacts.
 - Preserves CR-125 terminal resilience routes and CR-126
   privacy-before-persistence behavior.
-- CR-DD-012A must land and pass focused review before CR-DD-012B may receive
-  implementation approval.
+- The proposal in `CR-DD-012A-governed-decision-foundation.md` must receive
+  explicit implementation approval, land, and pass focused review before
+  CR-DD-012B may receive implementation approval.
 - CR-DD-012B must land and prove preview/execution parity before any
   confirmed-plan execution proposal.
 - Plan-artifact v2 and durable runtime-observation/execution-record schemas are
