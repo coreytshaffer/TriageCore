@@ -5,6 +5,15 @@
 Implemented locally after explicit human approval. Pending external review and
 merge. This CR grants no execution authority.
 
+## Implementation Incident Record
+
+During validation, an intermediate ledger-root selection defect unintentionally
+appended five privacy-safe `audit-self-test` events to the pre-existing
+user-level ledger. No prompt, context, secret, or sensitive task content was
+written. The root-selection defect was fixed before release validation, and
+the events were preserved unchanged to respect the ledger's append-only
+integrity semantics.
+
 ## Decision
 
 CR-DD-011 is intentionally smaller than confirmed-plan execution.
