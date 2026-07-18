@@ -20,6 +20,12 @@ merge; this document supersedes that wording.)
 If this spec is revisited later, re-pin the commit and re-verify with `merge-base` before
 treating any readiness claim as current.
 
+Current implementation note (2026-07-17): CR-DD-009 has since landed and `tc run` now
+provides the governed execution surface described as M0 below. CR-DD-010 now implements
+the next integration slice: a deterministic, non-executing run-plan preview. The original
+scope basis and readiness percentages remain historical planning estimates, not current
+measurements.
+
 ## Thesis
 
 TriageCore stops being *only* a governance harness and becomes the **governed execution
@@ -55,8 +61,9 @@ after M0 (below) produces daily-use evidence. See **Evidence Requirements**.
 
 ## Gaps (planning targets)
 
-- **G1 — No unified operator run surface.** `tc run` exposes the governed loop, but
-  `triagecore run-pipeline` remains local-only and bypasses the router.
+- **G1 — No unified plan-preview and execution experience.** `tc run` now exposes the
+  governed loop, but context planning and route preview remain separate from execution;
+  `triagecore run-pipeline` also remains local-only and bypasses the router.
 - **G2 — Cloud is Qwen, not frontier.** No live Claude/GPT/Gemini backends, no provider
   abstraction beyond OpenAI-compatible, no per-provider cost/credit model.
 - **G3 — Route decisions outrun execution bindings.** `local_heavy`/`local_fast` and
@@ -74,13 +81,16 @@ The order is load-bearing. Observed local routing and live health signals must e
 **before** cloud escalation can be trusted. Going straight to frontier integrations would be
 backwards.
 
-1. **M0 — Unified run surface (next implementation candidate).** One governed `tc run`
-   command wrapping `run_task`, using `choose_resilience_route`, producing route/worker/token
+1. **M0 — Unified run surface (implemented by CR-DD-009).** One governed `tc run`
+   command wrapping `run_task`, using `choose_resilience_route`, and producing route/worker
    evidence. Converts hidden library capability into daily-use evidence. Tracked as CR-DD-009.
-2. **M1 — Live capability probe + real route bindings + circuit breakers** (G3, G4, G6).
-3. **M2 — Frontier provider backends** (G2). *Future work; see boundary below.*
-4. **M3 — Budget enforcement + prefer-local economics** (G5).
-5. **M4 — Actionable cockpit + interactive session** (G7, G8).
+2. **M0.1 — Governed run-plan preview (implemented locally by CR-DD-010).** Show context budget,
+   privacy/egress posture, a deterministic route forecast, escalation conditions, and
+   expected verification without model calls, execution, or persistence.
+3. **M1 — Live capability probe + real route bindings + circuit breakers** (G3, G4, G6).
+4. **M2 — Frontier provider backends** (G2). *Future work; see boundary below.*
+5. **M3 — Budget enforcement + prefer-local economics** (G5).
+6. **M4 — Actionable cockpit + interactive session** (G7, G8).
 
 ## Frontier-Cloud Support Is Future Work
 
@@ -95,8 +105,9 @@ backends.
 ## Evidence Requirements
 
 No readiness claim in this document is canonical until backed by ledger/artifact evidence.
-Each claim maps to a concrete, inspectable check. Most require M0 to exist first, because
-today the governed loop is not exercised by an operator command.
+Each claim maps to a concrete, inspectable check. M0 now provides the operator command, but
+the token/context evidence linkage and a sufficient daily-use evidence window remain
+incomplete.
 
 | Claim to verify | Required evidence | Where |
 |---|---|---|
@@ -107,8 +118,9 @@ today the governed loop is not exercised by an operator command.
 | Operator actually used it daily | frequency/recency of `tc run` task events across days | ledger task feed |
 | Readiness % is real, not estimated | the four checks above computed over the usage window via TriageLab stats | `triagecore stats` / `tc lab report` |
 
-Until `tc run` (CR-DD-009) exists and writes these events, the readiness percentages remain
-planning estimates and should be cited as such.
+Until daily-use `tc run` records are evaluated against these checks, the readiness
+percentages remain planning estimates and should be cited as such. CR-DD-010 previews are
+not execution evidence and do not satisfy these requirements.
 
 ## Invariants Preserved
 

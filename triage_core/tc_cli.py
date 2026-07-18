@@ -1015,15 +1015,47 @@ def tc_run(args, client=None) -> None:
         verify_packet,
     )
 
+    from triage_core.run_plan import (
+        ContextSource,
+        RunPlanPrivacyError,
+        build_run_plan,
+        privacy_metadata_for_run,
+        render_run_plan,
+    )
+
+    planning = bool(getattr(args, "plan", False))
+    if planning:
+        ambiguous = [
+            flag
+            for flag, active in (
+                ("--output", bool(getattr(args, "output", None))),
+                ("--print", bool(getattr(args, "print_output", False))),
+                ("--ledger-dir", bool(getattr(args, "ledger_dir", None))),
+                ("--no-ledger", bool(getattr(args, "no_ledger", False))),
+            )
+            if active
+        ]
+        if ambiguous:
+            print(f"Error: --plan cannot be combined with {', '.join(ambiguous)}.")
+            sys.exit(1)
+        if not getattr(args, "model", None):
+            print("Error: --model is required with --plan.")
+            sys.exit(1)
+
     # 1. Assemble task data from --files (repeatable), then --data.
     data_parts: List[str] = []
+    context_sources = []
     for file_path in args.files:
         if not os.path.exists(file_path):
             print(f"Error: input file not found: {file_path}")
             sys.exit(1)
         try:
             with open(file_path, "r", encoding="utf-8") as handle:
-                data_parts.append(f"\n--- {file_path} ---\n{handle.read()}")
+                content = handle.read()
+                context_sources.append(
+                    ContextSource(path=file_path, characters=len(content))
+                )
+                data_parts.append(f"\n--- {file_path} ---\n{content}")
         except OSError as exc:
             print(f"Error reading {file_path}: {exc}")
             sys.exit(1)
@@ -1037,16 +1069,29 @@ def tc_run(args, client=None) -> None:
         print("Error: --allow-cloud cannot be used with --privacy local_only.")
         sys.exit(1)
 
-    allow_external_model = (
-        args.privacy in {"external_safe", "public"} and args.allow_cloud
-    )
-    if args.privacy == "local_only":
-        privacy_metadata = PrivacyMetadata(external_model_allowed=False)
-    else:  # external_safe or public
-        privacy_metadata = PrivacyMetadata(
-            data_class="public",
-            external_model_allowed=allow_external_model,
-        )
+    if planning:
+        try:
+            plan = build_run_plan(
+                prompt=args.prompt,
+                data=data,
+                sources=context_sources,
+                inline_data_characters=len(args.data or ""),
+                privacy=args.privacy,
+                allow_cloud=args.allow_cloud,
+                model_profile=args.model,
+                task_id=args.task_id,
+            )
+        except KeyError:
+            print(f"Error: Unknown model profile: {args.model}")
+            sys.exit(1)
+        except RunPlanPrivacyError as exc:
+            print("Blocked (privacy fail-closed).")
+            print(f"finding_codes={','.join(exc.finding_codes)}")
+            sys.exit(2)
+        print(render_run_plan(plan), end="")
+        return
+
+    privacy_metadata = privacy_metadata_for_run(args.privacy, args.allow_cloud)
 
     # 3. Build and preflight the packet before any evidence is persisted.
     task_id = args.task_id or str(uuid.uuid4())
@@ -2161,6 +2206,14 @@ def main():
     run_parser.add_argument(
         "--no-ledger", action="store_true",
         help="Do not write any evidence record to the ledger (prints a warning)",
+    )
+    run_parser.add_argument(
+        "--plan", action="store_true",
+        help="Preview governed planning without execution, probes, ledger access, or writes",
+    )
+    run_parser.add_argument(
+        "--model", type=str, default=None,
+        help="Token budget model profile (required with --plan)",
     )
 
     # probe

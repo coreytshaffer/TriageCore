@@ -6,8 +6,12 @@ This document summarizes the active TriageCore backlog after CR-129.
 
 ## Active GitHub Backlog
 
+- CR-DD-010: Governed Run Plan Preview
+  - Status: implemented on branch; supervisor approved; pending external review/merge
+  - Purpose: Add a deterministic, stdout-only `tc run --plan` preview that combines current packet preflight, privacy, deterministic classification, logical routing, configured backend binding, and context-budget logic to show context sources, token posture, privacy/egress posture, escalation conditions, and expected verification without model calls, backend probes, ledger mutation, file writes, confirmation, execution, resume, reporting, or TriageDesk changes.
+
 - CR-129: External Evaluator Adapter Contract
-  - Status: implemented locally; pending review
+  - Status: complete via CR-129 (PR #102)
   - Purpose: Define the closed-profile, pre-launch validation, process safety, exit, output, network, and trust boundaries required before a future external evaluator wrapper can be implemented. CR-129 adds no CLI or subprocess.
 
 - CR-128: Evaluation Handoff Integrity Validator
@@ -244,6 +248,8 @@ For the empirical AI safety evaluation track, CR-121 completes fixture validatio
 
 For external runtime interoperability, the next approved slice should be policy tests or execution-path validation for the bounded adapter path.
 
+For the daily-driver lane, CR-DD-009 established the governed `tc run` execution surface and CR-DD-010 now implements the deterministic, non-executing plan preview locally. The next candidate should be a separately approved confirmation/execution-linkage slice. Do not combine that future slice with persistence/resume, efficiency claims, live probes, circuit breakers, provider expansion, or TriageDesk authority.
+
 For operator UX, future slices should focus on reviewability, export polish, and dashboard/TUI surfaces only after artifact contracts remain stable. Avoid re-opening completed wizard or Markdown renderer work unless there is a concrete regression or usability gap.
 
 ## Next Candidate Slices
@@ -259,4 +265,5 @@ For operator UX, future slices should focus on reviewability, export polish, and
 - **[done] Evaluation handoff bundle builder (CR-127)**: Builds the deterministic fixed-layout handoff and SHA-256 manifest from explicit inputs without scoring.
 - **[done] Evaluation handoff integrity validator (CR-128)**: Validates the closed manifest, exact inventory, hashes, contracts, membership, and privacy without mutating or scoring the bundle.
 - **[done] External evaluator adapter contract (CR-129)**: Defines the closed-profile and process-safety prerequisites without adding a CLI or subprocess.
-- **Next slice requires a new approved CR**: A code-bearing adapter requires an authoritative versioned external evaluator profile and separate approval; adversarial expansion also remains separate. Do not add arbitrary executable/argv forwarding, scoring or score interpretation inside TriageCore, approval-and-resume behavior, routing integration beyond the governed path, ledger integration, circuit breakers, automatic discovery, background polling, or additional telemetry behavior without a new approved CR.
+- **[implemented locally] Governed run plan preview (CR-DD-010)**: Integrates existing context-budget and governed-routing components into a non-executing `tc run --plan` preview. Confirmation/execution coupling, persistence/resume, combined evidence reporting, live capability signals, and TriageDesk actions remain separately gated.
+- **The next evaluator-adapter slice requires a new approved CR**: A code-bearing adapter requires an authoritative versioned external evaluator profile and separate approval; adversarial expansion also remains separate. Do not add arbitrary executable/argv forwarding, scoring or score interpretation inside TriageCore, approval-and-resume behavior, routing integration beyond the governed path, ledger integration, circuit breakers, automatic discovery, background polling, or additional telemetry behavior without a new approved CR.
