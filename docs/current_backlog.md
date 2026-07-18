@@ -2,16 +2,21 @@
 
 ## Status
 
-This document summarizes the active TriageCore backlog after CR-129.
+This document summarizes the active TriageCore backlog after CR-DD-010/011
+merged through PR #104 and CR-DD-012 entered proposal review.
 
 ## Active GitHub Backlog
 
+- CR-DD-012: Shared Governed Run Decision
+  - Status: proposed; pending human implementation approval; documentation only
+  - Purpose: Define one canonical immutable `GovernedDecision` and decision ID consumed by both preview generation and ordinary `tc run`, with identical normalized input bindings and shared privacy, context-budget, classification, logical-route, fallback-envelope, escalation, and verification posture. Volatile backend health remains separate `RuntimeObservation` evidence, and execution evidence links both identities. The proposal adds no runtime behavior and does not authorize saved-plan execution, `--confirmed-plan`, route injection, new cloud authority, resume, acceptance, or quality scoring.
+
 - CR-DD-011: Governed Plan Artifact And Exact Confirmation Linkage
-  - Status: implemented locally after explicit human approval; pending external review/merge
+  - Status: complete via CR-DD-011 (PR #104)
   - Purpose: Provide the smallest safe foundation after CR-DD-010: an operator-named privacy-safe canonical plan artifact, independent semantic and exact-byte SHA-256 digests, explicit exact-digest review confirmation, metadata-only task-ID linkage, and task-show inspection including isolated/custom ledgers. Confirmed execution remains explicitly blocked because preview and execution do not yet share one enforceable decision path; confirmation is not approval or execution authority.
 
 - CR-DD-010: Governed Run Plan Preview
-  - Status: implemented on branch; supervisor approved; pending external review/merge
+  - Status: complete via CR-DD-010 (PR #104)
   - Purpose: Add a deterministic, stdout-only `tc run --plan` preview that combines current packet preflight, privacy, deterministic classification, logical routing, configured backend binding, and context-budget logic to show context sources, token posture, privacy/egress posture, escalation conditions, and expected verification without model calls, backend probes, ledger mutation, file writes, confirmation, execution, resume, reporting, or TriageDesk changes.
 
 - CR-129: External Evaluator Adapter Contract
@@ -252,7 +257,7 @@ For the empirical AI safety evaluation track, CR-121 completes fixture validatio
 
 For external runtime interoperability, the next approved slice should be policy tests or execution-path validation for the bounded adapter path.
 
-For the daily-driver lane, CR-DD-009 established the governed `tc run` execution surface, CR-DD-010 implements the deterministic non-executing preview, and CR-DD-011 implements the exact-plan artifact and review-confirmation foundation. Confirmed execution remains blocked. The next candidate is CR-DD-012, Shared Governed Run Decision, which must make preview and execution consume one immutable decision before any confirmed-plan execution surface is proposed. Do not combine that work with general approval, persistence/resume, efficiency claims, live probes, circuit breakers, provider expansion, or TriageDesk authority.
+For the daily-driver lane, CR-DD-009 established the governed `tc run` execution surface, and CR-DD-010/011 landed the deterministic preview plus exact-plan artifact and review-confirmation foundation through PR #104. Confirmed execution remains blocked. CR-DD-012 now proposes one immutable governed decision for preview and ordinary execution, with volatile runtime health kept in separate observations; it grants no implementation authority until human approval. Do not combine that work with saved-plan execution, general approval, persistence/resume, efficiency claims, live probes, circuit breakers, provider expansion, or TriageDesk authority.
 
 For operator UX, future slices should focus on reviewability, export polish, and dashboard/TUI surfaces only after artifact contracts remain stable. Avoid re-opening completed wizard or Markdown renderer work unless there is a concrete regression or usability gap.
 
@@ -269,7 +274,7 @@ For operator UX, future slices should focus on reviewability, export polish, and
 - **[done] Evaluation handoff bundle builder (CR-127)**: Builds the deterministic fixed-layout handoff and SHA-256 manifest from explicit inputs without scoring.
 - **[done] Evaluation handoff integrity validator (CR-128)**: Validates the closed manifest, exact inventory, hashes, contracts, membership, and privacy without mutating or scoring the bundle.
 - **[done] External evaluator adapter contract (CR-129)**: Defines the closed-profile and process-safety prerequisites without adding a CLI or subprocess.
-- **[implemented locally] Governed run plan preview (CR-DD-010)**: Integrates existing context-budget and governed-routing components into a non-executing `tc run --plan` preview. Confirmation/execution coupling, persistence/resume, combined evidence reporting, live capability signals, and TriageDesk actions remain separately gated.
-- **[implemented locally] Exact-plan artifact and confirmation linkage (CR-DD-011)**: Adds an operator-named metadata-only canonical plan artifact, independent semantic and exact-byte digests, exact artifact-byte-digest review confirmation, and task-show linkage including isolated/custom-ledger inspection. It grants no execution authority. Confirmed execution requires CR-DD-012 or another approved shared-decision-path CR because current preview and execution classification/specialist behavior can diverge.
-- **[candidate] Shared governed run decision (CR-DD-012)**: Make preview and execution consume one immutable governed decision object. Do not expose `--confirmed-plan` or execute CR-DD-011 artifacts until this contract is separately proposed, approved, implemented, and reviewed.
+- **[done] Governed run plan preview (CR-DD-010)**: Integrates existing context-budget and governed-routing components into a non-executing `tc run --plan` preview. Confirmation/execution coupling, persistence/resume, combined evidence reporting, live capability signals, and TriageDesk actions remain separately gated.
+- **[done] Exact-plan artifact and confirmation linkage (CR-DD-011)**: Adds an operator-named metadata-only canonical plan artifact, independent semantic and exact-byte digests, exact artifact-byte-digest review confirmation, and task-show linkage including isolated/custom-ledger inspection. It grants no execution authority. Confirmed execution requires CR-DD-012 or another approved shared-decision-path CR because current preview and execution classification/specialist behavior can diverge.
+- **[proposed] Shared governed run decision (CR-DD-012)**: Define one canonical immutable decision and decision ID for preview and ordinary execution, with runtime health captured separately. The proposal is documentation only and awaits human implementation approval. Do not expose `--confirmed-plan` or execute CR-DD-011 artifacts in this slice.
 - **The next evaluator-adapter slice requires a new approved CR**: A code-bearing adapter requires an authoritative versioned external evaluator profile and separate approval; adversarial expansion also remains separate. Do not add arbitrary executable/argv forwarding, scoring or score interpretation inside TriageCore, approval-and-resume behavior, routing integration beyond the governed path, ledger integration, circuit breakers, automatic discovery, background polling, or additional telemetry behavior without a new approved CR.

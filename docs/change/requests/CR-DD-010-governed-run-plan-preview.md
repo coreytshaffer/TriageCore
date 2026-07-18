@@ -2,7 +2,8 @@
 
 ## Status
 
-Implemented on branch; supervisor approved. Pending external review/merge.
+Implemented and merged through PR #104 on 2026-07-17 at merge commit
+`1275819bd10a13dd572a74bac0a88f0d9d70b1d0`.
 
 Human implementation approval was provided on 2026-07-17. The implementation
 passed focused, full-suite, and persistent-privacy validation.
