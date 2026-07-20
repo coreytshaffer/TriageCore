@@ -1,0 +1,71 @@
+name: Feedback on TriageCore
+description: Share a short, bounded review to help improve TriageCore.
+title: "[Feedback] "
+labels:
+  - feedback
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking a look at TriageCore. Honest reactions, including confusion and criticism, are welcome.
+
+        **Privacy:** Do not post prompts, credentials, personal data, sensitive locations or geospatial context, or local-only artifacts in this issue.
+
+  - type: dropdown
+    id: perspective
+    attributes:
+      label: Reviewer perspective
+      description: Which perspective best describes you?
+      options:
+        - Classmate or peer
+        - Software developer
+        - Researcher or practitioner
+        - Potential user
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: reviewed
+    attributes:
+      label: Review capsule
+      description: Which bounded review did you complete?
+      options:
+        - Two-minute first impression (no install)
+        - Ten-minute workflow check
+        - Design challenge
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: clear
+    attributes:
+      label: What was clear?
+      placeholder: What made sense quickly?
+    validations:
+      required: true
+
+  - type: textarea
+    id: confusing
+    attributes:
+      label: What was confusing or failed?
+      placeholder: Where did you hesitate, get stuck, or see something break?
+    validations:
+      required: true
+
+  - type: textarea
+    id: priority
+    attributes:
+      label: One highest-priority improvement
+      placeholder: If TriageCore changed one thing next, what should it be?
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: privacy_acknowledgement
+    attributes:
+      label: Privacy acknowledgement
+      options:
+        - label: I have not included prompts, credentials, personal data, sensitive locations or geospatial context, or local-only artifacts.
+          required: true

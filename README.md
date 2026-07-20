@@ -9,6 +9,16 @@ TriageCore is an observable, traceable, data-driven control-plane harness for ev
 > **Status**
 > TriageCore is active as a local-first prototype/workbench. Current capabilities, supporting docs, tests, and demo paths are in-repo now. Broader governance, release polish, and long-term environmental-edge integrations should be treated as ongoing work, not completed product claims.
 
+## Feedback Wanted
+
+TriageCore is early, and specific criticism is useful. Choose one bounded review capsule:
+
+1. **Two-minute first impression (no install):** Read this opening through **What It Does Today**. In two or three sentences, explain what you think TriageCore does, who it is for, and what remains unclear.
+2. **Ten-minute workflow check:** Follow the **5-Minute Reviewer Path** and run only `tc doctor` and `tc demo --dry-run`. Report the first command, output, or instruction that creates friction or uncertainty.
+3. **Design challenge (15–20 minutes):** Inspect [claim boundaries](docs/submission/claim_boundaries.md), the [agent authority model](docs/security/agent_authority_manifest.md), or [reviewer traceability](docs/operations/reviewer-traceability.md). Identify one place where the evidence does not fully support a privacy, governance, or human-authority claim.
+
+Share feedback in [GitHub Discussions](https://github.com/coreytshaffer/TriageCore/discussions). Please do not include private prompts, credentials, personal data, or sensitive locations.
+
 ## What It Does Today
 
 - Verifies operator environment and local repo state with `tc doctor`.
@@ -197,6 +207,13 @@ Then run:
 ```powershell
 tc doctor
 tc demo --dry-run
+```
+
+These two commands are the complete first-pass review. Report the first unclear instruction, unexpected output, or missing prerequisite.
+
+Optional evidence tour:
+
+```powershell
 tc preflight CR-017
 tc handoff latest --print
 tc audit --self-test
@@ -204,11 +221,6 @@ tc audit --kind route_audit --last 10
 tc audit --kind demo_dry_run --last 5
 tc audit --privacy-invariants
 triagecore benchmark --list-only
-```
-
-Optional deeper verification:
-
-```powershell
 tc model check --manifest docs\security\examples\model_route_manifest_local_ollama.json
 tc model warn --manifest docs\security\examples\model_route_manifest_local_ollama.json --route docs\security\examples\route_payload_local_ollama.json
 tc model warn --manifest docs\security\examples\model_route_manifest_cloud_qwen.json --route docs\security\examples\route_payload_local_ollama.json
