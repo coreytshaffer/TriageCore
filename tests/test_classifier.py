@@ -1,3 +1,5 @@
+import pytest
+
 from triage_core.classifier import TaskClassifier, DangerDetector
 
 def test_task_classifier():
@@ -41,3 +43,35 @@ def test_danger_detector_medium_risk_package():
     assert res.risk_level == "medium"
     assert res.recommended_profile == "workspace-write-with-approval"
     assert "package_management" in res.risk_categories
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "Approve the authorization plan",
+        "Review the authentication architecture",
+        "Document the OAuth callback flow",
+        "Explain the tokenization algorithm",
+    ],
+)
+def test_protocol_and_substring_terms_are_not_classified_as_secrets(prompt):
+    result = DangerDetector.analyze(prompt)
+
+    assert "secrets_and_auth" not in result.risk_categories
+    assert result.recommended_profile != "blocked"
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "Rotate the auth token",
+        "Revoke the OAuth refresh token",
+        "Replace the OAuth client secret",
+        "Update the stored credentials",
+    ],
+)
+def test_actual_authentication_secrets_remain_blocked(prompt):
+    result = DangerDetector.analyze(prompt)
+
+    assert "secrets_and_auth" in result.risk_categories
+    assert result.recommended_profile == "blocked"
