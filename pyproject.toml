@@ -36,6 +36,9 @@ mobile = [
     "pydantic>=2.0.0",
     "httpx2>=0.28.0"
 ]
+authz = [
+    "fido2>=2.0,<3"
+]
 
 [project.scripts]
 triagecore = "triage_core.cli:main"
