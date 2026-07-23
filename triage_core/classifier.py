@@ -91,7 +91,7 @@ class DangerDetector:
     
     DESTRUCTIVE_OPS = [r"rm\s+-rf", r"delete all", r"wipe"]
     SYSTEM_MODS = [r"sudo", r"/etc", r"\~/\.bashrc", r"\~/\.zshrc"]
-    SECRETS_AUTH = [r"\.env", r"secret", r"password", r"token", r"auth", r"credentials"]
+    SECRETS_AUTH = [r"\.env", r"secret", r"password", r"\btokens?\b", r"\bauth\b", r"credentials"]
     PACKAGE_MGMT = [r"pip install", r"npm install", r"apt-get", r"poetry add"]
     DEPLOYMENT_CONFIG = [r"deploy", r"docker-compose", r"k8s", r"terraform", r"aws"]
 
