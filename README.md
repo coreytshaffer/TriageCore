@@ -29,6 +29,25 @@ Share feedback in [GitHub Discussions](https://github.com/coreytshaffer/TriageCo
 - Supports local benchmark fixtures and benchmark reports without hiding the evidence trail.
 - Enforces local-only privacy boundaries before any optional external-safe Qwen Cloud path is considered.
 
+### Experimental WebAuthn Authorization
+
+CR-YK-001 prototypes request-bound WebAuthn authorization receipts. Two
+independently enrolled physical YubiKeys are the optimal production and
+recovery posture. When a second hardware key is unavailable, TriageCore
+supports a separately enrolled and labeled cross-device phone WebAuthn
+passkey as a bounded secondary pathway. The phone passkey signs the same
+request-bound WebAuthn challenge and can be verified offline, but it is not a
+second hardware security key and must not be described as
+assurance-equivalent. Google Authenticator/TOTP codes are not a substitute
+for either WebAuthn pathway.
+
+Primary YubiKey enrollment and assertion ceremonies verified on Windows. A phone passkey was also validated as a secondary cross-device pathway. Redundant backup-YubiKey enrollment remains unverified.
+
+This feature remains experimental: execution integration and atomic
+capability consumption are not complete. See
+[CR-YK-001](docs/change/requests/CR-YK-001-hardware-authorization-receipts.md)
+for evidence and limitations.
+
 ## Evidence-Bound Build Review
 
 Build Review turns a development request and Git comparison into a local,

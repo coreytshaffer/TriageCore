@@ -28,9 +28,11 @@ and the signature over ``authenticatorData || SHA256(clientDataJSON)``. It
 does not enforce signature counters; zero counters (common on current keys)
 are therefore accepted, deliberately.
 
-Hardware status: the ceremony functions follow the verified 2.x API surface
-but remain UNVERIFIED against a physical YubiKey until the CR-YK-001 manual
-checklist is executed on Windows hardware.
+Hardware status: primary YubiKey enrollment and assertion ceremonies were
+physically verified on 2026-07-24 through Windows native WebAuthn. A bounded
+secondary cross-device phone passkey path was also verified. Redundant
+backup-YubiKey enrollment remains unverified. Execution integration remains
+out of scope for CR-YK-001.
 """
 
 from __future__ import annotations
@@ -145,7 +147,7 @@ def _make_client():  # pragma: no cover - requires hardware or Windows API
     return Fido2Client(devices[0], client_data_collector=collector)
 
 
-# --- Ceremonies (HARDWARE-UNVERIFIED until the manual checklist runs) ---------
+# --- Ceremonies (primary YubiKey + phone paths verified, backup unverified) ---
 
 def enroll_credential(
     human_id: str,
@@ -161,6 +163,8 @@ def enroll_credential(
 
     fido2 = _import_fido2()
     from fido2.webauthn import (
+        AuthenticatorAttachment,
+        AuthenticatorSelectionCriteria,
         PublicKeyCredentialCreationOptions,
         PublicKeyCredentialParameters,
         PublicKeyCredentialRpEntity,
@@ -184,6 +188,9 @@ def enroll_credential(
                 type=PublicKeyCredentialType.PUBLIC_KEY, alg=-7  # ES256
             )
         ],
+        authenticator_selection=AuthenticatorSelectionCriteria(
+            authenticator_attachment=AuthenticatorAttachment.CROSS_PLATFORM,
+        ),
     )
     registration = client.make_credential(options)
     credential_data = registration.response.attestation_object.auth_data.credential_data
@@ -229,7 +236,7 @@ def get_assertion_receipt(
         user_verification=(
             UserVerificationRequirement.REQUIRED
             if request.user_verification_required
-            else UserVerificationRequirement.PREFERRED
+            else UserVerificationRequirement.DISCOURAGED
         ),
     )
     selection = client.get_assertion(options)
@@ -296,7 +303,7 @@ def verify_receipt(
         "user_verification": (
             UserVerificationRequirement.REQUIRED
             if receipt.request.user_verification_required
-            else UserVerificationRequirement.PREFERRED
+            else UserVerificationRequirement.DISCOURAGED
         ),
     }
     registered = AttestedCredentialData.create(

@@ -2,20 +2,30 @@
 
 ## Status
 
-Hardened scaffold, 2026-07-18, targeting the YubiKey hackathon on 2026-08-05.
-Separate lane (CR-YK-*) so it cannot entangle the CR-DD sequence, mirroring
-how Build Week ran as its own bounded slice.
+Primary-path hardware verification completed 2026-07-24, targeting the
+YubiKey hackathon on 2026-08-05.
+
+Primary YubiKey enrollment and assertion ceremonies verified on Windows. A phone passkey was also validated as a secondary cross-device pathway. Redundant backup-YubiKey enrollment remains unverified.
+
+Verification ran on Microsoft Windows 11 Pro 64-bit, version
+10.0.26200, build 26200, with `fido2` 2.2.1 through Windows native WebAuthn
+on branch `cr-yk-001-hardware-authz` at `0424442`, which is patch-identical
+to the previously recorded `295a119`. Separate lane (CR-YK-*) so it cannot
+entangle the CR-DD sequence, mirroring how Build Week ran as its own bounded
+slice.
 
 Component states (kept honest and separate):
 
 | # | Component | State |
 |---|-----------|-------|
 | 1 | Deterministic authorization core (`triage_core/authz.py`) | **Implemented and tested** (challenge derivation, receipts, tamper detection, capability lane, credential store with revocation) |
-| 2 | WebAuthn adapter (`triage_core/fido2_adapter.py`) | **Implemented against python-fido2 2.2.x**; offline verification exercised with real fido2 data structures and a synthetic software credential |
-| 3 | Physical YubiKey enrollment ceremony | **UNVERIFIED** — code follows the inspected 2.x API; no physical-key test has run |
-| 4 | Physical YubiKey assertion ceremony | **UNVERIFIED** — same condition; see manual checklist |
-| 5 | CR-DD-012B execution integration (`tc run --confirmed-plan`) | **Explicitly out of scope** for this CR |
-| 6 | Atomic capability consumption | **Not implemented**; documented limitation with a strict expected-failure test; required before 012B integration |
+| 2 | WebAuthn adapter (`triage_core/fido2_adapter.py`) | **Implemented and tested against python-fido2 2.2.1**; offline verification exercised with real fido2 data structures, a synthetic software credential, and the physical ceremonies below |
+| 3 | Primary physical YubiKey enrollment ceremony | **Verified 2026-07-24** through Windows native WebAuthn with explicit cross-platform authenticator selection |
+| 4 | Primary physical YubiKey assertion ceremony | **Verified 2026-07-24** for both PIN-required UV and corrected touch-only operation; offline verification passed |
+| 5 | Secondary cross-device phone WebAuthn passkey | **Verified 2026-07-24** as the bounded hackathon-lane secondary credential; it is not a second hardware security key |
+| 6 | Redundant backup-YubiKey enrollment | **UNVERIFIED** — a second physical YubiKey was unavailable; the phone passkey is not assurance-equivalent |
+| 7 | CR-DD-012B execution integration (`tc run --confirmed-plan`) | **Explicitly out of scope** for this CR and not modified during hardware smoke testing |
+| 8 | Atomic capability consumption | **Not implemented**; documented limitation with a strict expected-failure test; required before 012B integration |
 
 ## Decision (bounded allowlist)
 
@@ -68,9 +78,9 @@ AuthorizationRequest (schema v2)       versioned canonical JSON binding:
         ▼
 challenge = SHA-256(canonical_json(request))
         ▼
-WebAuthn get-assertion (security key)  user presence always; user
-        │                              verification (PIN) required when the
-        │                              request says so
+WebAuthn get-assertion                user presence always; user
+(YubiKey or bounded phone secondary) verification required when the request
+        │                             says so
         ▼
 HumanAuthorizationReceipt (schema v2)  request + standard WebAuthn JSON
         │                              wire-format assertion; sidecar file
@@ -152,16 +162,22 @@ detection closes the loop: the ledger event stores the receipt digest, and
 
 ### Evidence honesty
 
-A verified receipt is *FIDO2 security-key-backed authorization*:
-hardware-backed evidence of possession and user interaction with an
-enrolled credential, over exactly one request digest. "User verification
-confirmed" is claimed only when UV was required and the flag was verified.
+Primary YubiKey enrollment and assertion ceremonies verified on Windows. A phone passkey was also validated as a secondary cross-device pathway. Redundant backup-YubiKey enrollment remains unverified.
 
-Not claimed: non-repudiation; proof of a specific YubiKey model
-(attestation is not validated); comprehension of what was approved (which
-is why the approval flow must render `render_run_plan` output, never a bare
-digest); any hardware ceremony success prior to the physical-key checklist
-passing.
+A verified receipt is *WebAuthn-backed authorization*: evidence of
+possession and user interaction with an enrolled credential, over exactly
+one request digest. A receipt from the primary YubiKey is additionally
+security-key-backed. A receipt from the bounded secondary phone credential
+is a cross-device passkey receipt and must not be described as coming from a
+second hardware security key. "User verification confirmed" is claimed only
+when UV was required and the flag was verified.
+
+Not claimed: non-repudiation; cryptographic proof of the YubiKey model or
+firmware (attestation was not requested or validated); comprehension of what
+was approved (which is why the approval flow must render `render_run_plan`
+output, never a bare digest). The operator reports that the tested primary is
+a developer early-release firmware 5.8 YubiKey and that only one unit will be
+provided. No serial is recorded.
 
 ### Threat-model limitations (explicit)
 
@@ -218,8 +234,11 @@ ever contains PINs, private keys, or secrets.
 ## Planned CLI surface (hackathon day)
 
 - `tc authz enroll --human <id> --label <text>` — make-credential ceremony;
-  appends to `.triagecore/authz/credentials.json`. Enroll at least two keys
-  (backup is part of the architecture).
+  appends to `.triagecore/authz/credentials.json`. For this bounded hackathon
+  lane, enroll the one available developer YubiKey and a separately labeled
+  cross-device phone WebAuthn passkey as the secondary credential. The phone
+  credential is not a second hardware security key. Google Authenticator TOTP
+  is not accepted as a substitute.
 - `tc authz approve --plan-artifact <path>` — render plan, build request
   (UV required for high risk), get assertion, record receipt, issue
   capability.
@@ -230,22 +249,59 @@ ever contains PINs, private keys, or secrets.
   capability then invokes the existing governed run path. Demo scope only;
   the durable integration point is CR-DD-012B's `--confirmed-plan`.
 
-## Manual hardware verification checklist (required before any "verified" claim)
+## Hardware verification checklist (executed 2026-07-24)
 
-On the Windows hackathon machine with a physical YubiKey:
+On the Windows verification machine with the physical YubiKey and the
+separately labeled phone passkey:
 
-1. `pip install -e ".[authz]"`; confirm `fido2` reports a 2.x version.
+1. `pip install -e ".[authz]"`; confirm `fido2` reports version 2.2.1.
 2. `python -c "from triage_core.fido2_adapter import ceremony_support; print(ceremony_support())"`
    → expect `windows_native`, available.
-3. Enrollment ceremony for two keys; confirm both entries in
-   `credentials.json` contain credential ID, COSE key, AAGUID — and nothing
-   secret.
+3. Enroll the primary YubiKey and the bounded secondary cross-device phone
+   passkey as separately labeled credentials; confirm entries contain
+   credential ID, COSE key, AAGUID, and nothing secret. This one-YubiKey-plus-
+   phone policy is a bounded amendment for this lane, not a claim that the
+   phone is a backup hardware security key.
 4. Assertion ceremony over a real run-plan request with UV required (PIN
-   prompt must appear) and with UV not required (touch only).
+   plus touch for the YubiKey) and with UV not required (YubiKey touch only,
+   with no PIN).
 5. `verify_receipt` passes on both; then repeat all failure paths from the
    demo script (tamper, expiry, replay, revoked key, wrong key).
-6. Only after 1–5 pass may states 3 and 4 in the Status table be flipped to
-   "verified", with the date and machine noted here.
+6. Exercise the phone credential with REQUIRED UV through Windows QR/
+   cross-device WebAuthn and confirm device unlock, `user_verified == true`,
+   and offline verification.
+
+### Hardware verification record
+
+- The first registration selected Windows Hello because the creation options
+  did not constrain authenticator attachment. It enrolled AAGUID
+  `08987058-cadc-4b81-b6e1-30de50dcbe96`, was quarantined in the isolated
+  `.triagecore/hardware-smoke` store, and did not count as YubiKey enrollment.
+- Enrollment was corrected to require
+  `AuthenticatorAttachment.CROSS_PLATFORM`. Primary YubiKey enrollment then
+  succeeded in the isolated `.triagecore/hardware-smoke-yubikey` store.
+- The high-risk YubiKey assertion used REQUIRED UV. PIN and touch were
+  observed, `user_verified` was true, and offline verification passed.
+- The initial non-required assertion used PREFERRED, still prompted for a
+  PIN, and did not count as the touch-only result. The false UV policy was
+  corrected to DISCOURAGED in both the live assertion request and the
+  reconstructed verifier state.
+- The corrected touch-only YubiKey assertion presented no PIN prompt. Touch
+  was observed, `user_verified` was false, and offline verification passed.
+- Because only one developer YubiKey is available, a separately labeled
+  cross-device phone WebAuthn passkey is accepted as the secondary credential
+  for this bounded hackathon lane. Phone enrollment through the Windows QR/
+  cross-device flow succeeded. Its high-risk REQUIRED-UV assertion succeeded
+  with device unlock, `user_verified` true, and offline verification passed.
+  This is not a second hardware security key; Google Authenticator TOTP is
+  not an accepted substitute.
+- The offline rejection matrix passed for artifact tamper, request expiry,
+  wrong public key, a revoked credential copy, sequential replay denial, and
+  capability expiry.
+- Focused tests: **64 passed, 1 skipped, 1 xfailed**. Full suite:
+  **1151 passed, 5 skipped, 1 xfailed**.
+- The main `.triagecore/authz` credential store and execution integration were
+  not modified. All smoke artifacts remain isolated.
 
 Pre-hackathon note: audit finding F1 (DangerDetector substring `auth`/
 `token`) still blocks demo prompts about authorization from reaching the
@@ -278,8 +334,12 @@ approval gate; fix it first.
   positive/negative matrix: zero counter accepted, missing UP, missing
   required UV, UP-only when UV not required, wrong RP-ID hash, altered
   authenticator data, altered signature, wrong key, unknown credential,
-  revoked credential).
-- Hardware: the manual checklist above; unverified until executed.
+  revoked credential). Latest focused result: **64 passed, 1 skipped,
+  1 xfailed**.
+- Full suite: **1151 passed, 5 skipped, 1 xfailed**.
+- Hardware: the checklist above passed on 2026-07-24 through Windows native
+  WebAuthn with the primary YubiKey and bounded secondary cross-device phone
+  passkey.
 
 ## Non-goals
 

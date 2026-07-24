@@ -18,6 +18,7 @@ import os
 import stat
 import sys
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 import pytest
 
@@ -408,6 +409,86 @@ def test_invalid_identity_rejected_at_enrollment():
 
 # --- Adapter availability (dependency / platform) -----------------------------
 
+def test_enrollment_requires_cross_platform_authenticator(monkeypatch):
+    pytest.importorskip("fido2")
+    from fido2.webauthn import (
+        AuthenticatorAttachment,
+        PublicKeyCredentialCreationOptions,
+    )
+
+    captured = {}
+    credential_data = SimpleNamespace(
+        credential_id=b"security-key-credential",
+        public_key={1: 2},
+        aaguid=bytes(16),
+    )
+    registration = SimpleNamespace(
+        response=SimpleNamespace(
+            attestation_object=SimpleNamespace(
+                auth_data=SimpleNamespace(credential_data=credential_data)
+            )
+        )
+    )
+
+    class FakeClient:
+        def make_credential(self, options):
+            captured["options"] = options
+            return registration
+
+    monkeypatch.setattr(fido2_adapter, "_make_client", lambda: FakeClient())
+
+    fido2_adapter.enroll_credential(
+        human_id="human-corey",
+        label="Corey primary YubiKey",
+    )
+
+    options = captured["options"]
+    assert isinstance(options, PublicKeyCredentialCreationOptions)
+    assert (
+        options.authenticator_selection.authenticator_attachment
+        == AuthenticatorAttachment.CROSS_PLATFORM
+    )
+
+
+@pytest.mark.parametrize(
+    "required,expected_name",
+    [(False, "DISCOURAGED"), (True, "REQUIRED")],
+)
+def test_assertion_options_apply_requested_uv_policy(
+    monkeypatch, required, expected_name
+):
+    pytest.importorskip("fido2")
+    from fido2.webauthn import UserVerificationRequirement
+
+    captured = {}
+
+    class FakeAssertionResponse(dict):
+        raw_id = b"cred-1"
+        response = SimpleNamespace(
+            authenticator_data=SimpleNamespace(
+                is_user_verified=lambda: required
+            )
+        )
+
+    class FakeClient:
+        def get_assertion(self, options):
+            captured["options"] = options
+            return SimpleNamespace(
+                get_response=lambda _index: FakeAssertionResponse()
+            )
+
+    monkeypatch.setattr(fido2_adapter, "_make_client", lambda: FakeClient())
+
+    fido2_adapter.get_assertion_receipt(
+        _request(user_verification_required=required),
+        _credential(),
+    )
+
+    assert captured["options"].user_verification == getattr(
+        UserVerificationRequirement, expected_name
+    )
+
+
 def test_missing_dependency_yields_controlled_unavailability(monkeypatch):
     def _raise():
         raise AuthzHardwareUnavailable("python-fido2 >= 2.0 is required")
@@ -516,6 +597,40 @@ def _store_with(tmp_path, enrolled) -> CredentialStore:
     store = CredentialStore(ledger_dir=str(tmp_path))
     store.add(enrolled)
     return store
+
+
+@pytest.mark.parametrize(
+    "required,expected_name",
+    [(False, "DISCOURAGED"), (True, "REQUIRED")],
+)
+def test_offline_verification_reconstructs_requested_uv_policy(
+    tmp_path, monkeypatch, required, expected_name
+):
+    pytest.importorskip("fido2")
+    import fido2.server as fido2_server
+    from fido2.webauthn import UserVerificationRequirement
+
+    captured = {}
+
+    class FakeServer:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def authenticate_complete(self, state, _credentials, _response):
+            captured["state"] = state
+
+    monkeypatch.setattr(fido2_server, "Fido2Server", FakeServer)
+    receipt, enrolled = _synthetic(
+        _request(user_verification_required=required),
+        uv=required,
+    )
+    store = _store_with(tmp_path, enrolled)
+
+    fido2_adapter.verify_receipt(receipt, store, now=NOW)
+
+    assert captured["state"]["user_verification"] == getattr(
+        UserVerificationRequirement, expected_name
+    )
 
 
 def test_full_verification_passes_with_zero_counter(tmp_path):
