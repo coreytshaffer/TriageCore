@@ -2,20 +2,23 @@
 
 ## Status
 
-Architecture approved; implementation authority withheld.
+Architecture approved; monolithic implementation authority withheld.
 
 This is a documentation-only architectural milestone. Implementation is
-decomposed into CR-DD-012A and CR-DD-012B below, and each slice requires its
-own explicit human implementation approval and bounded file allowlist. This
-approval changes no runtime, CLI, ledger, artifact, approval, or cloud
-behavior. Current CR-DD-009 through CR-DD-011 behavior remains unchanged.
+decomposed into CR-DD-012A and CR-DD-012B below. CR-DD-012A has received
+separate bounded implementation approval and is complete and validated on its
+branch as an internal, non-integrated foundation; merge is pending.
+CR-DD-012B still requires its own explicit human implementation approval and
+bounded file allowlist. Current CR-DD-009 through CR-DD-011 behavior remains
+unchanged.
 
-The CR-DD-012A foundation is now drafted as a separate proposal at
+The CR-DD-012A foundation is specified in
 `CR-DD-012A-governed-decision-foundation.md`. It resolves “exact bytes” as the
 established normalized worker-facing execution representation, not raw
 filesystem or backend transport bytes. CR-DD-012A implementation authority
-remains withheld, and CR-DD-012B remains blocked until 012A is separately
-approved, implemented, reviewed, and landed.
+is limited to its exact internal module, focused test, and documentation
+allowlist. CR-DD-012B remains blocked until 012A lands and 012B receives its
+own separate approval.
 
 ## Decision
 
@@ -76,7 +79,7 @@ separately-approved implementation slices.
 
 ### CR-DD-012A — Governed Decision Foundation
 
-Subject to a separate human implementation approval, CR-DD-012A is limited to:
+Under its separate bounded implementation approval, CR-DD-012A is limited to:
 
 - an immutable `GovernedRunInputSnapshot` containing exact execution bytes,
   privacy-safe bindings, and normalized operator declarations;
@@ -721,16 +724,16 @@ may produce a new snapshot and decision.
 
 ## Rollout And Rollback
 
-This proposal changes documentation only, so rollback is removal or revision of
-this file before implementation approval.
+This parent CR changed documentation only, so rollback of its architecture is
+revision of this file. Each child implementation is separately governed.
 
-A future implementation must be delivered as two separately approved,
-reviewable slices:
+Implementation is delivered as two separately approved, reviewable slices:
 
-1. **CR-DD-012A:** introduce the immutable input snapshot, canonical decision
-   contract, pure builder, domain-separated identity, and focused
-   contract/privacy/determinism tests. Stop for review with no CLI, ledger,
-   plan, preview, or execution behavior change.
+1. **CR-DD-012A:** the immutable input snapshot, canonical decision contract,
+   pure builder, domain-separated identity, and focused
+   contract/privacy/determinism tests are complete and validated on the branch.
+   Merge is pending, with no CLI, ledger, plan, preview, or execution behavior
+   change.
 2. **CR-DD-012B:** after separate human approval, make preview and ordinary
    execution consume the completed decision and same snapshot, enforce the
    runtime fallback envelope, add bounded `decision_id` linkage to existing
@@ -750,9 +753,9 @@ and disclosed; it is not rewritten during rollback.
   does not consume confirmed artifacts.
 - Preserves CR-125 terminal resilience routes and CR-126
   privacy-before-persistence behavior.
-- The proposal in `CR-DD-012A-governed-decision-foundation.md` must receive
-  explicit implementation approval, land, and pass focused review before
-  CR-DD-012B may receive implementation approval.
+- The implementation in `CR-DD-012A-governed-decision-foundation.md` has
+  received bounded approval and passed validation and focused review; it must
+  land before CR-DD-012B may receive implementation approval.
 - CR-DD-012B must land and prove preview/execution parity before any
   confirmed-plan execution proposal.
 - Plan-artifact v2 and durable runtime-observation/execution-record schemas are
@@ -778,6 +781,6 @@ alignment in:
 
 `docs/change/change_log.md` must remain untouched. No code, tests, runtime
 behavior, CLI surface, artifact schema, ledger behavior, or other documentation
-change is authorized by this milestone. CR-DD-012A and CR-DD-012B each require
-their own explicit human implementation approval and separate bounded file
-allowlist.
+change is authorized by this milestone. CR-DD-012A received its own explicit
+human implementation approval and separate bounded file allowlist. CR-DD-012B
+still requires both.

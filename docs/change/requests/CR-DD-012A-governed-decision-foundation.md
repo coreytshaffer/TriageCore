@@ -2,18 +2,20 @@
 
 ## Status
 
-Proposed. Architecture scope is approved for documentation, but implementation
-authority is withheld.
+Implementation complete on the branch within the bounded allowlist below.
+Validation and supervisor review passed; merge is pending.
 
-This is a proposal-only child of CR-DD-012. It changes no code, tests, runtime,
-CLI, ledger, artifact, routing, cloud, or worker behavior. A separate explicit
-human decision and an implementation-specific file allowlist are required
-before any implementation begins.
+This remains an internal, non-integrated child of CR-DD-012. The approved
+implementation may add only the two foundation modules, three focused test
+files, and bounded documentation updates named below. It changes no existing
+runtime, CLI, ledger, artifact, routing, cloud, or worker path. CR-DD-012B
+remains blocked until this implementation lands and CR-DD-012B receives its
+own separate approval.
 
 ## Decision
 
-Subject to later implementation approval, introduce internal immutable value
-types and pure construction functions for:
+The bounded implementation approval authorizes internal immutable value types
+and pure construction functions for:
 
 1. one `GovernedRunInputSnapshot` that distinguishes source bytes, normalized
    component bytes, and the exact application-level bytes supplied as the
@@ -50,7 +52,8 @@ bytes as interchangeable would silently change current execution semantics.
 Likewise, leaving mutability, limits, canonicalization, or dependency
 boundaries to coding time would make compatibility choices invisible.
 
-This proposal closes those choices before implementation authority is granted.
+The merged proposal closed those choices before the bounded implementation
+authority was granted.
 
 ## Existing Run Contract To Preserve
 
@@ -159,7 +162,7 @@ them never changes which bytes are execution-authoritative.
 
 ## Scope
 
-### A later implementation approval may authorize
+### Approved implementation authority
 
 - frozen immutable snapshot and source-component value types;
 - frozen immutable canonical-decision value types;
@@ -522,7 +525,7 @@ remain available only in the attempt-local immutable value.
 
 ## No-Premature-Integration Boundary
 
-A future CR-DD-012A implementation may expose internal library types and pure
+The CR-DD-012A implementation may expose internal library types and pure
 functions for tests and later consumption. It may not modify an existing
 public command, parser, engine, client, worker, backend, ledger, renderer, or
 artifact path to call them.
@@ -540,9 +543,9 @@ In particular:
 CR-DD-012B alone may propose replacing current preview and execution decision
 seams with these completed internal values.
 
-## Proposed Implementation Categories
+## Approved Implementation Categories
 
-If separately approved, implementation should remain limited to:
+The separately approved implementation remains limited to:
 
 - one internal module for immutable snapshot types, byte normalization,
   assembly, limit validation, and profile resolution;
@@ -552,46 +555,61 @@ If separately approved, implementation should remain limited to:
 - bounded property-style tests using existing test dependencies or
   deterministic generated cases.
 
-These are categories, not an implementation allowlist. Exact paths must be
-named in the later approval. No existing CLI, client, engine, router, backend,
-ledger, artifact, or plan module is implied by this section.
+The exact implementation paths are listed below. No existing CLI, client,
+engine, router, backend, ledger, artifact, or plan module is implied by this
+section.
 
-## Acceptance Criteria For A Separately Approved Implementation
+## Implementation Acceptance Criteria
 
-- [ ] Frozen values, bytes, and tuples provide recursive immutability without
+- [x] Frozen values, bytes, and tuples provide recursive immutability without
   retained caller-owned mutable values or path objects.
-- [ ] The exact SourceBytes, NormalizedComponentBytes, and
+- [x] The exact SourceBytes, NormalizedComponentBytes, and
   AssembledExecutionBytes taxonomy is implemented without conflation.
-- [ ] `AssembledExecutionBytes` equals strict UTF-8 encoding of
+- [x] `AssembledExecutionBytes` equals strict UTF-8 encoding of
   `prompt + "\n\nDATA:\n" + data` under the existing data assembly rules.
-- [ ] File order, duplicate sources, verbatim path headers, strict UTF-8,
+- [x] File order, duplicate sources, verbatim path headers, strict UTF-8,
   universal-newline translation, BOM preservation, source separators, inline
   truthiness, and absent-value behavior match current `tc run`.
-- [ ] The current plan-only `prompt + "\n" + data` representation is not
+- [x] The current plan-only `prompt + "\n" + data` representation is not
   labeled or bound as execution bytes.
-- [ ] Explicit finite construction bounds cover every retained/full-size
+- [x] Explicit finite construction bounds cover every retained/full-size
   representation and are validated before allocation; absent, unbounded, or
   exceeded bounds fail closed, and no advisory token budget is silently
   converted into a hard byte limit.
-- [ ] No public CLI acceptance, error, file-read, or assembly behavior changes.
-- [ ] Snapshot digests, lengths, ordered bindings, and assembled bytes are
+- [x] No public CLI acceptance, error, file-read, or assembly behavior changes.
+- [x] Snapshot digests, lengths, ordered bindings, and assembled bytes are
   internally consistent and fail closed on mismatch.
-- [ ] One deterministic resolver uses only an explicit closed profile map.
-- [ ] One pure builder uses only the immutable snapshot and explicit immutable
+- [x] One deterministic resolver uses only an explicit closed profile map.
+- [x] One pure builder uses only the immutable snapshot and explicit immutable
   policy/configuration facts.
-- [ ] The canonical decision uses one closed primitive structure, the pinned
+- [x] The canonical decision uses one closed primitive structure, the pinned
   JSON profile, and the pinned domain-separated identity envelope.
-- [ ] Duplicate keys, floats, unknown or missing fields, malformed digests,
+- [x] Duplicate keys, floats, unknown or missing fields, malformed digests,
   unsupported versions, noncanonical bytes, and decision-ID mismatch fail
   closed.
-- [ ] Ordered sources and fallback/check arrays preserve order and duplicates.
-- [ ] Canonical decisions contain only bounded privacy-safe bindings and pass
+- [x] Ordered sources and fallback/check arrays preserve order and duplicates.
+- [x] Canonical decisions contain only bounded privacy-safe bindings and pass
   supplied-prompt/path/sensitive-value/secret absence tests.
-- [ ] Tests trap model, network, socket, subprocess, filesystem reopen, clock,
+- [x] Tests trap model, network, socket, subprocess, filesystem reopen, clock,
   randomness, environment, ledger, backend, and artifact access.
-- [ ] No existing command imports or calls the foundation.
-- [ ] No ledger, plan artifact, runtime observation, execution record, route
+- [x] No existing command imports or calls the foundation.
+- [x] No ledger, plan artifact, runtime observation, execution record, route
   enforcement, fallback enforcement, or cloud authority behavior changes.
+
+## Validation Record
+
+- Focused CR-DD-012A suite: 103 passed.
+- Full suite: 1167 passed, 4 skipped.
+- Privacy-invariant audit: 698 records.
+- Both foundation modules passed `py_compile`.
+- The external ledger SHA-256 remained unchanged, and no artifact file
+  changed.
+- The existing ignored `.triagecore/triagecore.log` received one metadata-only
+  `supervisor usage scan` line from the full suite. The line was preserved
+  transparently; no cleanup or history rewrite was performed.
+- Staged diff and exact scope checks passed: the cached diff check was clean,
+  the cached name list exactly matched the allowlist, and prohibited seams and
+  the changelog had zero cached diff.
 
 ## Required Focused Tests
 
@@ -694,14 +712,12 @@ service or heavy infrastructure.
 
 ## Rollout And Rollback
 
-This proposal changes documentation only. Rollback is revision or removal of
-the proposal before implementation approval.
-
-If CR-DD-012A later receives implementation approval, it lands as an internal,
-non-integrated foundation with focused tests and stops for review. It does not
-ship a new operator capability. A failure in byte compatibility,
-canonicalization, purity, privacy, immutability, or scope validation prevents
-that implementation from landing.
+The approved implementation is complete and validated as an internal,
+non-integrated foundation and now stops pending merge. It does not ship a new
+operator capability. A failure in final staged scope or diff verification
+prevents the implementation from landing. Rollback before merge is removal of
+the two new modules and three new tests plus restoration of these bounded
+status updates; no runtime, ledger, or artifact state requires rollback.
 
 CR-DD-012B may be proposed only after CR-DD-012A lands and is reviewed. It must
 start from the then-current `main`, on a new branch, with separate authority.
@@ -711,24 +727,30 @@ start from the then-current `main`, on a new branch, with separate authority.
 - Depends on the merged CR-DD-012 architecture.
 - Preserves the merged CR-DD-010 preview and CR-DD-011 exact-confirmation
   contracts.
-- Requires separate human implementation approval after this proposal review.
-- Must land and pass focused review before CR-DD-012B may receive
-  implementation approval.
+- Received separate human implementation approval with the exact bounded
+  allowlist below; implementation, validation, and supervisor review passed.
+- Must land before CR-DD-012B may receive implementation approval.
 - CR-DD-012B owns preview/execution consumption, runtime observations, fallback
   envelope enforcement, and bounded existing-evidence linkage.
 - A later separately approved CR owns any decision-bearing plan schema or
   confirmed-plan execution.
 
-## Proposal File Allowlist
+## Implementation File Allowlist
 
-This proposal-only branch may change exactly:
+The approved implementation branch may change exactly:
 
+- `triage_core/governed_run_snapshot.py`
+- `triage_core/governed_decision.py`
+- `tests/test_governed_run_snapshot.py`
+- `tests/test_governed_decision.py`
+- `tests/test_governed_decision_integration_absence.py`
 - `docs/change/requests/CR-DD-012A-governed-decision-foundation.md`
 - `docs/current_backlog.md`
 - `docs/architecture/daily_driver_orchestrator_spec.md`
 - `docs/change/requests/CR-DD-012-shared-governed-run-decision.md` —
   status/sequencing only
 
-`docs/change/change_log.md` remains intentionally untouched. No code, tests,
-runtime, CLI, ledger, artifact contract, or other documentation change is
-authorized by this proposal.
+`docs/change/change_log.md` remains intentionally untouched. No existing code
+or test file, runtime integration, CLI, ledger, artifact contract, or other
+documentation change is authorized. Implementation and validation stop before
+CR-DD-012B.
