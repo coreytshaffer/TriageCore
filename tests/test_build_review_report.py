@@ -12,6 +12,10 @@ from triage_core.build_review_report import render_html, render_markdown
 EM_DASH = chr(0x2014)
 ZERO_WIDTH_SPACE = chr(0x200B)
 INJECTION = "<script>alert('xss')</script>"
+# Breaks out of an HTML attribute without relying on angle brackets.
+ATTRIBUTE_BREAKER = '" onmouseover="alert(1)'
+ESCAPED_ATTRIBUTE_BREAKER = "&quot; onmouseover=&quot;alert(1)"
+RAW_ATTRIBUTE_ESCAPE = '" onmouseover="'
 PACKET_PATH = Path("packets/review-42.json")
 
 APPROVED_DECISION = {
@@ -242,3 +246,61 @@ def test_completed_decision_without_note_renders_em_dash():
 
     assert f"- Note: {EM_DASH}" in render_markdown(payload, PACKET_PATH)
     assert f"Note: {EM_DASH}</p>" in render_html(payload, PACKET_PATH)
+
+
+def test_render_html_escapes_finding_severity_in_class_attribute():
+    payload = _payload(
+        findings=[
+            {
+                "code": "RISK",
+                "severity": ATTRIBUTE_BREAKER,
+                "title": "Hostile severity",
+                "detail": "Severity reaches a class attribute.",
+                "files": [],
+            }
+        ]
+    )
+
+    page = render_html(payload, PACKET_PATH)
+
+    assert RAW_ATTRIBUTE_ESCAPE not in page
+    assert "onmouseover=" not in page.replace(ESCAPED_ATTRIBUTE_BREAKER, "")
+    assert f'<article class="finding {ESCAPED_ATTRIBUTE_BREAKER}">' in page
+
+
+def test_render_html_escapes_completed_decision_status_in_class_attribute():
+    payload = _payload(decision={**APPROVED_DECISION, "status": ATTRIBUTE_BREAKER})
+
+    page = render_html(payload, PACKET_PATH)
+
+    assert RAW_ATTRIBUTE_ESCAPE not in page
+    assert "onmouseover=" not in page.replace(ESCAPED_ATTRIBUTE_BREAKER, "")
+    assert f'<p class="decision {ESCAPED_ATTRIBUTE_BREAKER}">' in page
+
+
+def test_render_html_escapes_change_summary_files_changed():
+    hostile_count = '<img src=x onerror="alert(1)">'
+    payload = _payload(
+        change_summary={
+            "files_changed": hostile_count,
+            "additions": 12,
+            "deletions": 3,
+        }
+    )
+
+    page = render_html(payload, PACKET_PATH)
+
+    assert "<img" not in page
+    assert 'onerror="alert(1)"' not in page
+    assert (
+        "Changed files<strong>"
+        "&lt;img src=x onerror=&quot;alert(1)&quot;&gt;</strong>"
+    ) in page
+
+
+def test_ordinary_severity_status_and_counts_render_unchanged():
+    page = render_html(_payload(decision=APPROVED_DECISION), PACKET_PATH)
+
+    assert '<article class="finding low">' in page
+    assert '<p class="decision approved">' in page
+    assert "Changed files<strong>1</strong>" in page
