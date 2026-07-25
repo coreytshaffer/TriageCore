@@ -7,21 +7,23 @@ complete and merged through PR #110 as `52dccd3`; its physically tested,
 request-bound WebAuthn authorization evidence and offline verification are now
 the baseline, and no CR-YK-001 lineage, validation, or cleanup work remains.
 
-CR-YK-002's requirements contract is approved, but implementation remains
-unauthorized. Requirements approval grants no code, test, schema, runtime, or
-integration authority. CR-DD-012B remains separately blocked pending an
-implemented and reviewed CR-YK-002 atomic-claiming foundation plus explicit
-CR-DD-012B approval.
+CR-YK-002's atomic-claiming foundation is implemented on branch
+`cr-yk-002-atomic-capability-claiming` and is not merged. Claim ownership and
+lifecycle state now live in a local SQLite registry; the ledger remains durable
+evidence and is no longer the concurrency lock. CLI surfaces, `tc run`
+integration, `--confirmed-plan`, backend calls, routing/worker changes, and
+FIDO2 changes remain unauthorized. CR-DD-012B remains separately blocked
+pending review and merge of this foundation plus explicit CR-DD-012B approval.
 
 ## Active GitHub Backlog
 
 - CR-YK-002: Atomic Execution-Capability Claiming
-  - Status: requirements approved; implementation and execution remain unauthorized
-  - Purpose: Specify a future local SQLite registry for atomic, irrevocable capability claiming while retaining the task ledger as durable evidence. The conservative invariant is that crashes burn authorization. Requirements approval grants no code, tests, schema, CLI, runtime integration, execution path, or CR-DD-012B authority.
+  - Status: foundation implemented on branch `cr-yk-002-atomic-capability-claiming`, not merged; CLI, runtime integration, and execution remain unauthorized
+  - Purpose: Provide a local SQLite registry for atomic, irrevocable capability claiming while retaining the task ledger as durable evidence. The conservative invariant holds: a crash or a post-commit evidence-write failure burns the authorization rather than risking duplicate execution. The former strict concurrency `xfail` is replaced by passing multi-threaded atomicity tests over independent SQLite connections. `triage_core/authz.py` is the sole authorized module permitted to import the claim store; no CLI, run path, router, worker, or backend consumes it. Implementation grants no execution or CR-DD-012B authority.
 
 - CR-YK-001: FIDO2 Security-Key-Backed Human Authorization Receipts
   - Status: complete and merged through PR #110 as `52dccd3`; feature refs cleaned up; recovery branches retained
-  - Purpose: Provide physically tested, request-bound WebAuthn authorization evidence with offline verification and explicit assurance limits. Atomic capability claiming is deferred to the approved-requirements, implementation-unauthorized CR-YK-002 contract.
+  - Purpose: Provide physically tested, request-bound WebAuthn authorization evidence with offline verification and explicit assurance limits. Atomic capability claiming is delivered by the CR-YK-002 foundation, implemented on its branch and pending review and merge.
 
 - CR-DD-012A: Governed Decision Foundation
   - Status: complete and merged through PR #107 as `bccaaad`; no public integration
@@ -277,7 +279,7 @@ For the empirical AI safety evaluation track, CR-121 completes fixture validatio
 
 For external runtime interoperability, the next approved slice should be policy tests or execution-path validation for the bounded adapter path.
 
-For the daily-driver lane, CR-DD-009 established the governed `tc run` execution surface, and CR-DD-010/011 landed the deterministic preview plus exact-plan artifact and review-confirmation foundation through PR #104. CR-DD-012's architecture is approved, but monolithic implementation is withheld. CR-DD-012A is complete and merged through PR #107 as `bccaaad`; it distinguishes source bytes, normalized component bytes, and authoritative assembled worker-execution bytes while preserving existing reading and assembly behavior. CR-DD-012B remains separately blocked pending an implemented and reviewed CR-YK-002 atomic-claiming foundation plus explicit CR-DD-012B approval. CR-YK-002 requirements are approved, but its implementation remains unauthorized. Confirmed-plan execution, `governed_run_plan.v2`, and durable observation/execution schemas require later CRs. Do not combine either slice with general approval, persistence/resume, efficiency claims, live probes, circuit breakers, provider expansion, or TriageDesk authority.
+For the daily-driver lane, CR-DD-009 established the governed `tc run` execution surface, and CR-DD-010/011 landed the deterministic preview plus exact-plan artifact and review-confirmation foundation through PR #104. CR-DD-012's architecture is approved, but monolithic implementation is withheld. CR-DD-012A is complete and merged through PR #107 as `bccaaad`; it distinguishes source bytes, normalized component bytes, and authoritative assembled worker-execution bytes while preserving existing reading and assembly behavior. CR-DD-012B remains separately blocked pending an implemented and reviewed CR-YK-002 atomic-claiming foundation plus explicit CR-DD-012B approval. CR-YK-002's atomic-claiming foundation is implemented on its branch and awaits review and merge; its CLI, runtime-integration, and execution surfaces remain unauthorized. Confirmed-plan execution, `governed_run_plan.v2`, and durable observation/execution schemas require later CRs. Do not combine either slice with general approval, persistence/resume, efficiency claims, live probes, circuit breakers, provider expansion, or TriageDesk authority.
 
 For operator UX, future slices should focus on reviewability, export polish, and dashboard/TUI surfaces only after artifact contracts remain stable. Avoid re-opening completed wizard or Markdown renderer work unless there is a concrete regression or usability gap.
 

@@ -20,12 +20,17 @@ Evidence-honesty vocabulary used throughout:
   who already controls this host or its clock. See the threat-model section
   of CR-YK-001.
 
-Known limitation (documented, not yet solved): capability consumption reads
-then appends over a shared JSONL ledger. Two concurrent consumers can both
-observe "unconsumed" before either records consumption, so single-use is
-enforced only against sequential use. Atomic claiming (e.g. SQLite
-``BEGIN IMMEDIATE``) is a CR-DD-012B integration requirement; see
-``consume_capability`` and the expected-failure concurrency test.
+Concurrency (CR-YK-002): capability claiming is atomic. The former
+read-then-append sequence over a shared JSONL ledger allowed two concurrent
+consumers to each observe "unconsumed" before either recorded consumption.
+Claim ownership and lifecycle state now live in the local SQLite registry in
+``triage_core.capability_claims``, which takes a ``BEGIN IMMEDIATE`` write
+lock before any decision is read. The ledger remains the durable evidence
+history and is never the concurrency lock.
+
+This module is the sole authorized compatibility boundary permitted to import
+and invoke the claim store. No CLI, run path, router, worker, or backend
+module consumes it in this slice.
 """
 
 from __future__ import annotations
@@ -41,6 +46,24 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from triage_core.capability_claims import (
+    CLAIM_ALREADY_CLAIMED,
+    CLAIM_ARTIFACT_DIGEST_MISMATCH,
+    CLAIM_BINDING_MISMATCH,
+    CLAIM_EVIDENCE_WRITE_FAILED,
+    CLAIM_EXPIRED,
+    CLAIM_LEGACY_UNCLAIMABLE,
+    CLAIM_NOT_FOUND,
+    CLAIM_OK,
+    CLAIM_SCOPE_DIGEST_MISMATCH,
+    CLAIM_STORE_BUSY,
+    CLAIM_STORE_UNAVAILABLE,
+    TERMINAL_EVIDENCE_WRITE_FAILED,
+    CapabilityBinding,
+    CapabilityClaimStore,
+    CapabilityStoreError,
+    default_db_path,
+)
 from triage_core.privacy_invariants import assert_persistent_privacy_safe
 from triage_core.task_ledger import TaskLedger
 
@@ -62,7 +85,14 @@ DEFAULT_CAPABILITY_TTL_SECONDS = 600
 EVENT_RECEIPT_RECORDED = "human_authorization_receipt"
 EVENT_CAPABILITY_ISSUED = "execution_capability_issued"
 EVENT_CAPABILITY_CONSUMED = "execution_capability_consumed"
+EVENT_CAPABILITY_CLAIMED = "execution_capability_claimed"
+EVENT_CAPABILITY_TERMINAL = "execution_capability_terminal"
 EVENT_CAPABILITY_DENIED = "execution_capability_denied"
+
+# CR-YK-002 versions the issuance payload. Events lacking this schema (or the
+# bindings it guarantees) are legacy and permanently unclaimable; historical
+# capabilities are never migrated or upgraded into executable authority.
+CAPABILITY_SCHEMA = "triagecore.execution_capability.v2"
 
 # Closed reason vocabularies (house style: no free-text reasons in evidence).
 REASON_OK = "ok"
@@ -70,6 +100,42 @@ REASON_NOT_FOUND = "capability_not_found"
 REASON_ALREADY_CONSUMED = "capability_already_consumed"
 REASON_EXPIRED = "capability_expired"
 REASON_DIGEST_MISMATCH = "artifact_digest_mismatch"
+
+# CR-YK-002 adds four compatibility reasons for genuinely new failure classes.
+# Collapsing them into the five legacy values above would misreport an
+# operational store failure as a lifecycle or binding decision, so the
+# persisted ``execution_capability_denied`` vocabulary widens from five values
+# to nine. These four carry the precise claim-API value unchanged.
+REASON_LEGACY_UNCLAIMABLE = CLAIM_LEGACY_UNCLAIMABLE
+REASON_STORE_BUSY = CLAIM_STORE_BUSY
+REASON_STORE_UNAVAILABLE = CLAIM_STORE_UNAVAILABLE
+REASON_EVIDENCE_WRITE_FAILED = CLAIM_EVIDENCE_WRITE_FAILED
+
+# Claim-API result -> legacy ``consume_capability`` reason.
+#
+# Known reporting limitation (deliberate, not redesigned in this slice):
+# artifact, scope, and immutable-binding mismatches all collapse to the single
+# legacy REASON_DIGEST_MISMATCH value. A caller reading only
+# ``consume_capability`` output cannot tell them apart; ``claim_capability``
+# retains the precise reason.
+CLAIM_TO_LEGACY_REASON = {
+    CLAIM_OK: REASON_OK,
+    CLAIM_NOT_FOUND: REASON_NOT_FOUND,
+    CLAIM_EXPIRED: REASON_EXPIRED,
+    CLAIM_ARTIFACT_DIGEST_MISMATCH: REASON_DIGEST_MISMATCH,
+    CLAIM_SCOPE_DIGEST_MISMATCH: REASON_DIGEST_MISMATCH,
+    CLAIM_BINDING_MISMATCH: REASON_DIGEST_MISMATCH,
+    CLAIM_ALREADY_CLAIMED: REASON_ALREADY_CONSUMED,
+    CLAIM_LEGACY_UNCLAIMABLE: REASON_LEGACY_UNCLAIMABLE,
+    CLAIM_STORE_BUSY: REASON_STORE_BUSY,
+    CLAIM_STORE_UNAVAILABLE: REASON_STORE_UNAVAILABLE,
+    CLAIM_EVIDENCE_WRITE_FAILED: REASON_EVIDENCE_WRITE_FAILED,
+}
+
+# Fixed identifier for the legacy-compatible consumption path. It is NOT an
+# authenticated human or agent identity and is not evidence of who initiated
+# execution.
+COMPATIBILITY_CLAIMANT_ID = "compatibility-consumer"
 
 STRUCTURAL_FAIL_EXPIRED = "request_expired"
 STRUCTURAL_FAIL_MALFORMED = "client_data_malformed"
@@ -485,11 +551,15 @@ def issue_capability(
     capability_id = str(uuid.uuid4())
     expires = (now or _utc_now()).timestamp() + ttl_seconds
     payload = {
+        "schema": CAPABILITY_SCHEMA,
         "capability_id": capability_id,
         "receipt_digest": receipt.receipt_digest(),
         "decision_id": receipt.request.decision_id,
         "artifact_byte_digest": receipt.request.artifact_byte_digest,
+        "plan_body_digest": receipt.request.plan_body_digest,
+        "scope_digest": receipt.request.scope_digest,
         "approver_identity_id": receipt.request.approver_identity_id,
+        "issued_at": _isoformat(now or _utc_now()),
         "expires_at": _isoformat(datetime.fromtimestamp(expires, tz=timezone.utc)),
         "single_use": True,
     }
@@ -500,53 +570,302 @@ def issue_capability(
     return capability_id
 
 
+@dataclass(frozen=True)
+class CapabilityClaim:
+    """Claim outcome carrying the precise CR-YK-002 reason vocabulary."""
+
+    allowed: bool
+    reason_code: str
+    capability_id: str = ""
+    claimant_id: str = ""
+    execution_attempt_id: str = ""
+
+
+# The task binding comes from the ledger event envelope (events are read via
+# ``get_events(task_id)``), not from a duplicated payload field. CR-YK-002
+# allows either; the envelope avoids re-persisting an identifier that the
+# privacy scanner must then re-inspect.
+_REQUIRED_ISSUANCE_FIELDS = (
+    "capability_id",
+    "decision_id",
+    "receipt_digest",
+    "artifact_byte_digest",
+    "plan_body_digest",
+    "scope_digest",
+    "approver_identity_id",
+    "issued_at",
+    "expires_at",
+)
+
+
+def _claim_store(
+    ledger: TaskLedger,
+    db_path: Optional[str] = None,
+) -> CapabilityClaimStore:
+    """Claim registry for this ledger; the DB lives beside the ledger data."""
+    return CapabilityClaimStore(db_path or default_db_path(ledger.ledger_dir))
+
+
+def _find_issuance(
+    ledger: TaskLedger,
+    task_id: str,
+    capability_id: str,
+) -> Optional[Dict[str, Any]]:
+    """Locate exactly one compatible issuance event, or ``None``."""
+    found: Optional[Dict[str, Any]] = None
+    for event in ledger.get_events(task_id):
+        if event.get("event_type") != EVENT_CAPABILITY_ISSUED:
+            continue
+        payload = event.get("payload", {})
+        if payload.get("capability_id") != capability_id:
+            continue
+        if found is not None:
+            return None  # ambiguous issuance history: fail closed
+        found = payload
+    return found
+
+
+def _binding_from_issuance(
+    payload: Dict[str, Any],
+    task_id: str,
+) -> Optional[CapabilityBinding]:
+    """Build immutable bindings, or ``None`` when the event is legacy."""
+    if payload.get("schema") != CAPABILITY_SCHEMA:
+        return None
+    if any(field not in payload for field in _REQUIRED_ISSUANCE_FIELDS):
+        return None
+    try:
+        return CapabilityBinding(
+            capability_id=payload["capability_id"],
+            task_id=task_id,
+            decision_id=payload["decision_id"],
+            receipt_digest=payload["receipt_digest"],
+            artifact_byte_digest=payload["artifact_byte_digest"],
+            plan_body_digest=payload["plan_body_digest"],
+            scope_digest=payload["scope_digest"],
+            approver_identity_id=payload["approver_identity_id"],
+            expires_at=payload["expires_at"],
+        )
+    except (CapabilityStoreError, TypeError, ValueError):
+        return None
+
+
+def _run_claim(
+    ledger: TaskLedger,
+    task_id: str,
+    capability_id: str,
+    artifact_byte_digest: str,
+    scope_digest: Optional[str],
+    *,
+    claimant_id: str,
+    execution_attempt_id: str,
+    db_path: Optional[str],
+    now: Optional[datetime],
+    success_event: str,
+) -> CapabilityClaim:
+    """Validate against the ledger, claim atomically, then record evidence.
+
+    Ordering is deliberate: SQLite commits *before* the success event is
+    appended. If the append then fails the capability stays irreversibly
+    claimed and the caller is told the evidence write failed rather than that
+    execution may proceed. That burns one authorization instead of risking
+    duplicate execution.
+    """
+    moment = now or _utc_now()
+
+    issued = _find_issuance(ledger, task_id, capability_id)
+    if issued is None:
+        return CapabilityClaim(False, CLAIM_NOT_FOUND, capability_id)
+
+    binding = _binding_from_issuance(issued, task_id)
+    if binding is None:
+        return CapabilityClaim(False, CLAIM_LEGACY_UNCLAIMABLE, capability_id)
+
+    if moment > datetime.fromisoformat(binding.expires_at):
+        return CapabilityClaim(False, CLAIM_EXPIRED, capability_id)
+    if binding.artifact_byte_digest != artifact_byte_digest:
+        return CapabilityClaim(False, CLAIM_ARTIFACT_DIGEST_MISMATCH, capability_id)
+    if scope_digest is not None and binding.scope_digest != scope_digest:
+        return CapabilityClaim(False, CLAIM_SCOPE_DIGEST_MISMATCH, capability_id)
+
+    result = _claim_store(ledger, db_path).claim(
+        binding,
+        claimant_id=claimant_id,
+        execution_attempt_id=execution_attempt_id,
+        now=moment,
+    )
+    if not result.allowed:
+        return CapabilityClaim(False, result.reason_code, capability_id)
+
+    # Committed. The capability is irreversibly claimed from this point on.
+    payload = {
+        "capability_id": capability_id,
+        "artifact_byte_digest": artifact_byte_digest,
+        "scope_digest": binding.scope_digest,
+        "claimant_id": claimant_id,
+        "execution_attempt_id": execution_attempt_id,
+        "claimed_at": _isoformat(moment),
+        "reason_code": REASON_OK,
+    }
+    try:
+        assert_persistent_privacy_safe(
+            payload, artifact_name=f"{success_event} payload"
+        )
+        ledger.append_event(task_id, success_event, payload)
+    except Exception:
+        return CapabilityClaim(
+            False,
+            CLAIM_EVIDENCE_WRITE_FAILED,
+            capability_id,
+            claimant_id,
+            execution_attempt_id,
+        )
+    return CapabilityClaim(
+        True, CLAIM_OK, capability_id, claimant_id, execution_attempt_id
+    )
+
+
+def claim_capability(
+    ledger: TaskLedger,
+    task_id: str,
+    capability_id: str,
+    artifact_byte_digest: str,
+    scope_digest: str,
+    *,
+    claimant_id: str,
+    execution_attempt_id: Optional[str] = None,
+    db_path: Optional[str] = None,
+    now: Optional[datetime] = None,
+) -> CapabilityClaim:
+    """Atomically claim a capability, returning the precise reason code.
+
+    Exactly one concurrent claimer can succeed. A claim is irrevocable: a
+    failed, abandoned, or crashed attempt never restores usability, and
+    recovery requires new human authorization and a new capability.
+    """
+    attempt = execution_attempt_id or str(uuid.uuid4())
+    outcome = _run_claim(
+        ledger,
+        task_id,
+        capability_id,
+        artifact_byte_digest,
+        scope_digest,
+        claimant_id=claimant_id,
+        execution_attempt_id=attempt,
+        db_path=db_path,
+        now=now,
+        success_event=EVENT_CAPABILITY_CLAIMED,
+    )
+    _record_denial(ledger, task_id, capability_id, outcome)
+    return outcome
+
+
+def finalize_capability(
+    ledger: TaskLedger,
+    task_id: str,
+    capability_id: str,
+    outcome: str,
+    *,
+    claimant_id: str,
+    execution_attempt_id: str,
+    db_path: Optional[str] = None,
+    now: Optional[datetime] = None,
+) -> CapabilityClaim:
+    """Record a terminal ``completed``/``failed`` transition.
+
+    This records lifecycle completion only. It does not decide whether an
+    execution result is acceptable, correct, safe, or high quality, and a
+    terminal failure never restores capability usability.
+    """
+    moment = now or _utc_now()
+    result = _claim_store(ledger, db_path).finalize(
+        capability_id,
+        claimant_id=claimant_id,
+        execution_attempt_id=execution_attempt_id,
+        outcome=outcome,
+        now=moment,
+    )
+    if not result.applied:
+        return CapabilityClaim(False, result.reason_code, capability_id)
+
+    payload = {
+        "capability_id": capability_id,
+        "terminal_outcome": outcome,
+        "claimant_id": claimant_id,
+        "execution_attempt_id": execution_attempt_id,
+        "terminal_at": _isoformat(moment),
+        "reason_code": REASON_OK,
+    }
+    try:
+        assert_persistent_privacy_safe(
+            payload, artifact_name=f"{EVENT_CAPABILITY_TERMINAL} payload"
+        )
+        ledger.append_event(task_id, EVENT_CAPABILITY_TERMINAL, payload)
+    except Exception:
+        return CapabilityClaim(False, TERMINAL_EVIDENCE_WRITE_FAILED, capability_id)
+    return CapabilityClaim(
+        True, REASON_OK, capability_id, claimant_id, execution_attempt_id
+    )
+
+
 def consume_capability(
     ledger: TaskLedger,
     task_id: str,
     capability_id: str,
     artifact_byte_digest: str,
     now: Optional[datetime] = None,
+    *,
+    claimant_id: str = COMPATIBILITY_CLAIMANT_ID,
+    execution_attempt_id: Optional[str] = None,
+    db_path: Optional[str] = None,
 ) -> CapabilityDecision:
-    """Consume the capability; every outcome is a ledger event.
+    """Legacy-compatible consumption; delegates to the atomic claim store.
 
-    CONCURRENCY LIMITATION (documented, unresolved in this slice): this is a
-    read-then-append sequence over a shared JSONL file with no lock. Two
-    concurrent consumers can both observe the capability as unconsumed and
-    both record consumption, so single-use holds against sequential use
-    only. The sequential unit tests do not demonstrate race safety, and an
-    expected-failure test in tests/test_authz.py encodes the gap. Atomic
-    claiming (single-writer lock or SQLite ``BEGIN IMMEDIATE`` claim table)
-    is required before CR-DD-012B wires this into execution.
+    Retained for existing callers. The old read-then-append race is gone: this
+    now performs a real atomic claim and simply reports the legacy reason
+    vocabulary. Scope is not independently checked here because the legacy
+    signature carries no expected scope digest; use ``claim_capability`` when
+    the caller can supply one.
 
-    Denials are evidence too: not_found, already_consumed, expired, and
-    digest_mismatch all append EVENT_CAPABILITY_DENIED with the reason code.
+    Known reporting limitation: artifact, scope, and immutable-binding
+    mismatches all surface as ``REASON_DIGEST_MISMATCH``. ``claim_capability``
+    retains the precise reason.
+
+    Denials are evidence too: every non-success outcome appends
+    EVENT_CAPABILITY_DENIED with the mapped reason code, except when the
+    ledger write itself is what failed.
     """
-    moment = now or _utc_now()
-    issued: Optional[Dict[str, Any]] = None
-    for event in ledger.get_events(task_id):
-        etype = event.get("event_type")
-        payload = event.get("payload", {})
-        if payload.get("capability_id") != capability_id:
-            continue
-        if etype == EVENT_CAPABILITY_ISSUED:
-            issued = payload
-        elif etype == EVENT_CAPABILITY_CONSUMED:
-            return _deny(ledger, task_id, capability_id, REASON_ALREADY_CONSUMED)
+    attempt = execution_attempt_id or str(uuid.uuid4())
+    outcome = _run_claim(
+        ledger,
+        task_id,
+        capability_id,
+        artifact_byte_digest,
+        None,
+        claimant_id=claimant_id,
+        execution_attempt_id=attempt,
+        db_path=db_path,
+        now=now,
+        success_event=EVENT_CAPABILITY_CONSUMED,
+    )
+    legacy_reason = CLAIM_TO_LEGACY_REASON.get(
+        outcome.reason_code, REASON_STORE_UNAVAILABLE
+    )
+    _record_denial(ledger, task_id, capability_id, outcome, legacy_reason)
+    return CapabilityDecision(outcome.allowed, legacy_reason, capability_id)
 
-    if issued is None:
-        return _deny(ledger, task_id, capability_id, REASON_NOT_FOUND)
-    if moment > datetime.fromisoformat(issued["expires_at"]):
-        return _deny(ledger, task_id, capability_id, REASON_EXPIRED)
-    if issued["artifact_byte_digest"] != artifact_byte_digest:
-        return _deny(ledger, task_id, capability_id, REASON_DIGEST_MISMATCH)
 
-    payload = {
-        "capability_id": capability_id,
-        "artifact_byte_digest": artifact_byte_digest,
-        "reason_code": REASON_OK,
-    }
-    ledger.append_event(task_id, EVENT_CAPABILITY_CONSUMED, payload)
-    return CapabilityDecision(True, REASON_OK, capability_id)
+def _record_denial(
+    ledger: TaskLedger,
+    task_id: str,
+    capability_id: str,
+    outcome: CapabilityClaim,
+    reason_code: Optional[str] = None,
+) -> None:
+    """Append denial evidence, unless the ledger write is what failed."""
+    if outcome.allowed or outcome.reason_code == CLAIM_EVIDENCE_WRITE_FAILED:
+        return
+    _deny(ledger, task_id, capability_id, reason_code or outcome.reason_code)
 
 
 def _deny(
