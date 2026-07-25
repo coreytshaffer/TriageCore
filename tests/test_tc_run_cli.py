@@ -12,6 +12,7 @@ contract:
 """
 
 import json
+import re
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -122,6 +123,28 @@ def test_local_success_exits_zero_and_records_governed_evidence(tmp_path, capsys
     assert "route_decision" in types
     assert "worker_result" in types
     assert "Success: task ran locally" in capsys.readouterr().out
+
+
+def test_route_and_worker_evidence_share_cli_reported_task_id(tmp_path, capsys):
+    client = TriageClient(backend=RecordingBackend())
+    # No --task-id, so the identifier is the one tc run generated for itself.
+    # Reading it back out of the success line is what proves the persisted
+    # evidence belongs to the run the operator was told about.
+    args = _args("Summarize this text", ledger_dir=str(tmp_path))
+
+    tc_cli.tc_run(args, client=client)
+
+    reported = re.search(r"task_id=([^)]+)\)", capsys.readouterr().out)
+    assert reported, "tc run must report the task_id it ran under."
+    reported_task_id = reported.group(1)
+
+    events = _ledger_events(tmp_path / "ledger.jsonl")
+    route_decision = next(e for e in events if e["event_type"] == "route_decision")
+    worker_result = next(e for e in events if e["event_type"] == "worker_result")
+
+    assert route_decision["task_id"] == worker_result["task_id"]
+    assert route_decision["task_id"] == reported_task_id
+    assert worker_result["task_id"] == reported_task_id
 
 
 def test_tc_run_persists_metadata_without_prompt_or_data_content(tmp_path):
