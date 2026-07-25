@@ -185,7 +185,7 @@ def render_html(
         for item in payload["changed_files"]
     ) or '<tr><td colspan="4">No changed files.</td></tr>'
     findings = "".join(
-        f'<article class="finding {item["severity"]}">'
+        f'<article class="finding {_escape(item["severity"])}">'
         f"<p><strong>{_escape(item['severity'].upper())}</strong> "
         f"<code>{_escape(item['code'])}</code></p>"
         f"<h3>{_escape(item['title'])}</h3>"
@@ -219,7 +219,7 @@ def render_html(
         )
     else:
         decision_view = (
-            f'<p class="decision {decision["status"]}">'
+            f'<p class="decision {_escape(decision["status"])}">'
             f"<strong>{_escape(decision['status'].upper())}</strong><br>"
             f"Reviewer: {_escape(decision['reviewer'])}<br>"
             f"Time: {_escape(decision['decided_at'])}<br>"
@@ -293,7 +293,7 @@ def render_html(
     </header>
     <section class="metrics" aria-label="Review summary">
       <div class="metric">Recommendation<strong>{_escape(payload["recommendation"])}</strong></div>
-      <div class="metric">Changed files<strong>{summary["files_changed"]}</strong></div>
+      <div class="metric">Changed files<strong>{_escape(summary["files_changed"])}</strong></div>
       <div class="metric">Decision<strong>{_escape(decision["status"])}</strong></div>
     </section>
     <section>
