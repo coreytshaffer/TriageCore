@@ -2,22 +2,34 @@
 
 ## Status
 
-This document summarizes the active TriageCore backlog after CR-DD-010/011
-merged through PR #104 and the CR-DD-012 architecture was approved for
-decomposition. CR-DD-012A implementation is complete on its branch within the
-exact internal-foundation allowlist; validation and supervisor review passed,
-and merge is pending. CR-DD-012B remains blocked until CR-DD-012A lands and
-receives its own separate approval.
+CR-DD-012A is complete and merged through PR #107 as `bccaaad`. CR-YK-001 is
+complete and merged through PR #110 as `52dccd3`; its physically tested,
+request-bound WebAuthn authorization evidence and offline verification are now
+the baseline, and no CR-YK-001 lineage, validation, or cleanup work remains.
+
+CR-YK-002's requirements contract is approved, but implementation remains
+unauthorized. Requirements approval grants no code, test, schema, runtime, or
+integration authority. CR-DD-012B remains separately blocked pending an
+implemented and reviewed CR-YK-002 atomic-claiming foundation plus explicit
+CR-DD-012B approval.
 
 ## Active GitHub Backlog
 
+- CR-YK-002: Atomic Execution-Capability Claiming
+  - Status: requirements approved; implementation and execution remain unauthorized
+  - Purpose: Specify a future local SQLite registry for atomic, irrevocable capability claiming while retaining the task ledger as durable evidence. The conservative invariant is that crashes burn authorization. Requirements approval grants no code, tests, schema, CLI, runtime integration, execution path, or CR-DD-012B authority.
+
+- CR-YK-001: FIDO2 Security-Key-Backed Human Authorization Receipts
+  - Status: complete and merged through PR #110 as `52dccd3`; feature refs cleaned up; recovery branches retained
+  - Purpose: Provide physically tested, request-bound WebAuthn authorization evidence with offline verification and explicit assurance limits. Atomic capability claiming is deferred to the approved-requirements, implementation-unauthorized CR-YK-002 contract.
+
 - CR-DD-012A: Governed Decision Foundation
-  - Status: implementation complete on branch; validation and supervisor review passed; merge pending; no public integration
+  - Status: complete and merged through PR #107 as `bccaaad`; no public integration
   - Purpose: Provide the immutable snapshot and canonical decision foundation without public integration. The contract distinguishes optional provenance `SourceBytes`, existing-behavior `NormalizedComponentBytes`, and authoritative worker-facing `AssembledExecutionBytes`. The latter is the UTF-8 strict encoding of the current worker user-message content, not raw filesystem or backend transport bytes. Implementation is limited to two internal foundation modules, bounded deterministic construction, pure decision building, canonical identity verification, and three focused test files; `tc run`, preview, existing file reading/assembly, workers, ledgers, artifacts, runtime observations, cloud authority, and route execution remain unchanged.
 
 - CR-DD-012: Shared Governed Run Decision
-  - Status: architecture approved; monolithic implementation withheld; CR-DD-012A complete on branch and pending merge; CR-DD-012B requires separate approval
-  - Purpose: Define the shared-decision architecture around one immutable `GovernedRunInputSnapshot` and one canonical `GovernedDecision` with a domain-separated decision ID. CR-DD-012A is complete on its branch as the no-CLI/no-ledger foundation and centers the binding on normalized worker-facing execution bytes rather than raw filesystem bytes. CR-DD-012B remains blocked and separately gated until 012A lands. `governed_run_plan.v2`, durable `RuntimeObservation`/`ExecutionRecord` schemas, saved-plan execution, `--confirmed-plan`, route injection, new cloud authority, resume, acceptance, and quality scoring remain deferred.
+  - Status: architecture approved; monolithic implementation withheld; CR-DD-012A complete and merged through PR #107 as `bccaaad`; CR-DD-012B separately blocked pending an implemented and reviewed CR-YK-002 atomic-claiming foundation plus explicit CR-DD-012B approval
+  - Purpose: Define the shared-decision architecture around one immutable `GovernedRunInputSnapshot` and one canonical `GovernedDecision` with a domain-separated decision ID. CR-DD-012A is the merged no-CLI/no-ledger foundation and centers the binding on normalized worker-facing execution bytes rather than raw filesystem bytes. CR-DD-012B remains separately gated by the CR-YK-002 implementation-and-review prerequisite and its own explicit approval. `governed_run_plan.v2`, durable `RuntimeObservation`/`ExecutionRecord` schemas, saved-plan execution, `--confirmed-plan`, route injection, new cloud authority, resume, acceptance, and quality scoring remain deferred.
 
 - CR-DD-011: Governed Plan Artifact And Exact Confirmation Linkage
   - Status: complete via CR-DD-011 (PR #104)
@@ -265,7 +277,7 @@ For the empirical AI safety evaluation track, CR-121 completes fixture validatio
 
 For external runtime interoperability, the next approved slice should be policy tests or execution-path validation for the bounded adapter path.
 
-For the daily-driver lane, CR-DD-009 established the governed `tc run` execution surface, and CR-DD-010/011 landed the deterministic preview plus exact-plan artifact and review-confirmation foundation through PR #104. CR-DD-012's architecture is approved, but monolithic implementation is withheld. CR-DD-012A implementation is complete on its branch within the internal foundation/test allowlist; it distinguishes source bytes, normalized component bytes, and authoritative assembled worker-execution bytes while preserving existing reading and assembly behavior. Validation and supervisor review passed, and merge is pending. CR-DD-012B remains blocked until CR-DD-012A lands and receives its own separate approval. Confirmed-plan execution, `governed_run_plan.v2`, and durable observation/execution schemas require later CRs. Do not combine either slice with general approval, persistence/resume, efficiency claims, live probes, circuit breakers, provider expansion, or TriageDesk authority.
+For the daily-driver lane, CR-DD-009 established the governed `tc run` execution surface, and CR-DD-010/011 landed the deterministic preview plus exact-plan artifact and review-confirmation foundation through PR #104. CR-DD-012's architecture is approved, but monolithic implementation is withheld. CR-DD-012A is complete and merged through PR #107 as `bccaaad`; it distinguishes source bytes, normalized component bytes, and authoritative assembled worker-execution bytes while preserving existing reading and assembly behavior. CR-DD-012B remains separately blocked pending an implemented and reviewed CR-YK-002 atomic-claiming foundation plus explicit CR-DD-012B approval. CR-YK-002 requirements are approved, but its implementation remains unauthorized. Confirmed-plan execution, `governed_run_plan.v2`, and durable observation/execution schemas require later CRs. Do not combine either slice with general approval, persistence/resume, efficiency claims, live probes, circuit breakers, provider expansion, or TriageDesk authority.
 
 For operator UX, future slices should focus on reviewability, export polish, and dashboard/TUI surfaces only after artifact contracts remain stable. Avoid re-opening completed wizard or Markdown renderer work unless there is a concrete regression or usability gap.
 
@@ -283,8 +295,8 @@ For operator UX, future slices should focus on reviewability, export polish, and
 - **[done] Evaluation handoff integrity validator (CR-128)**: Validates the closed manifest, exact inventory, hashes, contracts, membership, and privacy without mutating or scoring the bundle.
 - **[done] External evaluator adapter contract (CR-129)**: Defines the closed-profile and process-safety prerequisites without adding a CLI or subprocess.
 - **[done] Governed run plan preview (CR-DD-010)**: Integrates existing context-budget and governed-routing components into a non-executing `tc run --plan` preview. Confirmation/execution coupling, persistence/resume, combined evidence reporting, live capability signals, and TriageDesk actions remain separately gated.
-- **[done] Exact-plan artifact and confirmation linkage (CR-DD-011)**: Adds an operator-named metadata-only canonical plan artifact, independent semantic and exact-byte digests, exact artifact-byte-digest review confirmation, and task-show linkage including isolated/custom-ledger inspection. It grants no execution authority. Confirmed execution remains blocked until separately approved CR-DD-012A/B land and a later CR independently authorizes saved-artifact execution.
-- **[architecture approved; bounded A implementation pending merge] Shared governed run decision (CR-DD-012)**: Establishes the immutable input-snapshot and decision architecture, bounded runtime-observation separation, parity invariant, and A/B implementation sequence. It grants no runtime authority.
-- **[implementation complete; validation passed; merge pending] Governed decision foundation (CR-DD-012A)**: Implements immutable snapshot and decision contracts around the established worker-facing execution representation, with raw source bytes optional and non-authoritative. Work remains limited to the approved internal value types, deterministic bounded construction, pure building, canonical identity verification, and focused tests without CLI, ledger, runtime-observation persistence, plan-artifact, worker, or route-execution changes.
-- **[blocked until CR-DD-012A lands and separately approved] Shared preview/execution consumption (CR-DD-012B)**: After separate approval, make preview and ordinary execution consume the completed decision and exact immutable snapshot, enforce the fallback envelope, add bounded `decision_id` linkage to existing evidence, and prove parity/fail-closed behavior. No saved-artifact execution or `--confirmed-plan`.
+- **[done] Exact-plan artifact and confirmation linkage (CR-DD-011)**: Adds an operator-named metadata-only canonical plan artifact, independent semantic and exact-byte digests, exact artifact-byte-digest review confirmation, and task-show linkage including isolated/custom-ledger inspection. It grants no execution authority. Confirmed execution remains blocked pending an implemented and reviewed CR-YK-002 atomic-claiming foundation, explicit CR-DD-012B approval and implementation, and a later CR independently authorizing saved-artifact execution.
+- **[architecture approved; bounded A implementation merged] Shared governed run decision (CR-DD-012)**: Establishes the immutable input-snapshot and decision architecture, bounded runtime-observation separation, parity invariant, and A/B implementation sequence. CR-DD-012A is complete and merged through PR #107 as `bccaaad`; the architecture grants no runtime authority.
+- **[complete; merged through PR #107 as `bccaaad`] Governed decision foundation (CR-DD-012A)**: Implements immutable snapshot and decision contracts around the established worker-facing execution representation, with raw source bytes optional and non-authoritative. Work remains limited to the approved internal value types, deterministic bounded construction, pure building, canonical identity verification, and focused tests without CLI, ledger, runtime-observation persistence, plan-artifact, worker, or route-execution changes.
+- **[blocked pending atomic foundation and explicit approval] Shared preview/execution consumption (CR-DD-012B)**: Remains separately blocked pending an implemented and reviewed CR-YK-002 atomic-claiming foundation plus explicit CR-DD-012B approval. After those gates are satisfied, make preview and ordinary execution consume the completed decision and exact immutable snapshot, enforce the fallback envelope, add bounded `decision_id` linkage to existing evidence, and prove parity/fail-closed behavior. No saved-artifact execution or `--confirmed-plan`.
 - **The next evaluator-adapter slice requires a new approved CR**: A code-bearing adapter requires an authoritative versioned external evaluator profile and separate approval; adversarial expansion also remains separate. Do not add arbitrary executable/argv forwarding, scoring or score interpretation inside TriageCore, approval-and-resume behavior, routing integration beyond the governed path, ledger integration, circuit breakers, automatic discovery, background polling, or additional telemetry behavior without a new approved CR.
