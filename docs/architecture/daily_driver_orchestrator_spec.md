@@ -10,30 +10,37 @@ Every capability described as "future" remains future until its own implementati
 
 ## Scope Basis (repo-grounded)
 
-Assessment performed against `main` at commit `72c070f` (merge of PR #87,
-`cr-rh-003-eval-review-cli`). Verified with `git merge-base --is-ancestor`: CR-RH-003
-(`50f666c`, "Add tc eval review CLI wrapper") is an ancestor of `HEAD`, and `origin/main`
-also points at `72c070f`. So PR #87 is **merged** and CR-RH-003 is present on `main` at the
-time of assessment. (Earlier planning notes that described PR #87 as "open" predate this
-merge; this document supersedes that wording.)
+Assessment re-pinned against `main` at commit `ac851d5` (merge of PR #114,
+`test: bind tc run evidence to reported task id`). Verified with
+`git merge-base --is-ancestor`: CR-DD-012A (`bccaaad`, "feat(daily-driver): add governed
+decision foundation (#107)") is an ancestor of `HEAD`, and `origin/main` also points at
+`ac851d5`. So PR #107 is **merged** and the CR-DD-012A foundation is present on `main` at
+the time of this re-pin.
+
+The previous pin was `72c070f` (merge of PR #87, `cr-rh-003-eval-review-cli`). That basis
+is retained here only as history; it is superseded by the pin above.
 
 If this spec is revisited later, re-pin the commit and re-verify with `merge-base` before
 treating any readiness claim as current.
 
-Current implementation note (2026-07-17): CR-DD-009 has since landed and `tc run` now
+Current implementation note (2026-07-25): CR-DD-009 has landed and `tc run` now
 provides the governed execution surface described as M0 below. CR-DD-010 now implements
 the deterministic, non-executing run-plan preview. CR-DD-011 implements a durable
 privacy-safe plan artifact, independent semantic and exact-byte digests, exact review
 confirmation, metadata-only ledger linkage, and read-only inspection. Confirmed execution
 remains blocked. CR-DD-012's shared-decision architecture is approved, but monolithic
-implementation is withheld. CR-DD-012A implementation is complete on its branch within
-the exact internal-foundation allowlist; validation and supervisor review passed, and
-merge is pending. It distinguishes optional provenance source bytes, normalized component
+implementation is withheld. **CR-DD-012A is complete and merged through PR #107 as
+`bccaaad`.** It distinguishes optional provenance source bytes, normalized component
 bytes under current UTF-8/text semantics, and authoritative assembled worker-execution
-bytes, but grants no integration authority. CR-DD-012B remains blocked until CR-DD-012A
-lands and receives its own separate approval. Plan v2, durable observation/execution
-schemas, and confirmed-plan execution remain deferred. The original scope basis and
-readiness percentages remain historical planning estimates, not current measurements.
+bytes, but grants no integration authority; no public command consumes it. CR-DD-012B
+remains blocked pending an implemented and reviewed CR-YK-002 atomic-claiming foundation
+plus its own explicit approval. Plan v2, durable observation/execution schemas, and
+confirmed-plan execution remain deferred. The readiness percentages below remain
+historical planning estimates, not current measurements; this re-pin does not recompute
+them.
+
+An earlier revision of this note described CR-DD-012A as validated on its branch with
+"merge is pending." That wording predates PR #107 and is superseded here.
 
 ## Thesis
 
@@ -74,8 +81,8 @@ after M0 (below) produces daily-use evidence. See **Evidence Requirements**.
   CR-DD-010 previews its deterministic planning inputs, and CR-DD-011 records exact
   artifact review linkage. Execution still does not consume that artifact or the same
   immutable decision. CR-DD-012A's bounded internal, non-integrated foundation and focused
-  tests are complete and validated on the branch; merge is pending. CR-DD-012B has no
-  implementation authority. The future shared path must use one immutable input snapshot
+  tests are complete and merged through PR #107 as `bccaaad`; no public command consumes
+  them. CR-DD-012B has no implementation authority. The future shared path must use one immutable input snapshot
   so execution does not reopen or reconstruct governed inputs. Confirmed-artifact
   execution remains a later, separately gated CR; `triagecore run-pipeline` also remains
   local-only and bypasses the router.
@@ -83,8 +90,17 @@ after M0 (below) produces daily-use evidence. See **Evidence Requirements**.
   abstraction beyond OpenAI-compatible, no per-provider cost/credit model.
 - **G3 — Route decisions outrun execution bindings.** `local_heavy`/`local_fast` and
   `cloud_primary`/`cloud_secondary` collapse to one local backend and Qwen respectively.
-- **G4 — Health/capability signals are inputs, not observations.** Nothing populates
-  `lm_studio_ok`, `memory_headroom_mb`, `cloud_credit_state`, `recent_*_failures` live.
+- **G4 — Observed capability is not bound into route selection.** Observation itself now
+  exists: `triage_core/local_backend_probe.py`, surfaced as `tc probe`, produces a
+  read-only metadata-only capability record without invoking a model. The remaining gap is
+  that nothing consumes it. `TriageClient._build_resilience_route_input` still supplies
+  `lm_studio_ok=True`, `local_heavy_available=True`, and `local_fast_available=True` as
+  literals, omits `memory_headroom_mb` and every `recent_*_failures` value so the
+  dataclass defaults apply, and derives only the cloud flags from static configuration
+  rather than observation. Route selection therefore asserts local availability it has
+  never checked. That optimistic default — not the absence of a probe — is the risk to
+  retire, and it is optimistic rather than fail-closed, so a selected local route can be
+  one that cannot actually execute.
 - **G5 — Budgets warn but do not act.** `compression.py` is not bound into the send path.
 - **G6 — No circuit breakers / degraded modes** (backlog Story 13.6 open).
 - **G7 — TriageDesk cannot act** (read-only by invariant).
@@ -119,7 +135,14 @@ backwards.
    consumption, envelope enforcement, bounded decision-ID linkage, and parity/fail-closed
    tests. `governed_run_plan.v2`, durable `RuntimeObservation`/`ExecutionRecord` contracts,
    and confirmed-plan execution remain deferred.
-5. **M1 — Live capability probe + real route bindings + circuit breakers** (G3, G4, G6).
+5. **M1 — Capability binding + real route bindings + circuit breakers** (G3, G4, G6). The
+   live probe component of this milestone already exists (`tc probe` /
+   `local_backend_probe.py`), so M1's first slice is narrower than originally scoped: bind
+   an existing capability observation into `ResilienceRouteInput` so observed
+   unavailability and unknown state stop being reported as available. That first slice is
+   proposed as CR-DD-013 (documentation only; implementation unauthorized). Real per-route
+   backend bindings (G3) and circuit breakers (G6) remain separate, later work. Binding
+   capability does not depend on CR-DD-012A/012B and carries no CR-YK prerequisite.
 6. **M2 — Frontier provider backends** (G2). *Future work; see boundary below.*
 7. **M3 — Budget enforcement + prefer-local economics** (G5).
 8. **M4 — Actionable cockpit + interactive session** (G7, G8).

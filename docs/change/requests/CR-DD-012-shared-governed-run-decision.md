@@ -5,20 +5,22 @@
 Architecture approved; monolithic implementation authority withheld.
 
 This is a documentation-only architectural milestone. Implementation is
-decomposed into CR-DD-012A and CR-DD-012B below. CR-DD-012A has received
-separate bounded implementation approval and is complete and validated on its
-branch as an internal, non-integrated foundation; merge is pending.
-CR-DD-012B still requires its own explicit human implementation approval and
-bounded file allowlist. Current CR-DD-009 through CR-DD-011 behavior remains
-unchanged.
+decomposed into CR-DD-012A and CR-DD-012B below. CR-DD-012A received separate
+bounded implementation approval and is complete and merged through PR #107 as
+`bccaaad` as an internal, non-integrated foundation. CR-DD-012B remains
+blocked pending an implemented and reviewed CR-YK-002 atomic-claiming
+foundation, and still requires its own explicit human implementation approval
+and bounded file allowlist. Current CR-DD-009 through CR-DD-011 behavior
+remains unchanged.
 
 The CR-DD-012A foundation is specified in
 `CR-DD-012A-governed-decision-foundation.md`. It resolves “exact bytes” as the
 established normalized worker-facing execution representation, not raw
 filesystem or backend transport bytes. CR-DD-012A implementation authority
 is limited to its exact internal module, focused test, and documentation
-allowlist. CR-DD-012B remains blocked until 012A lands and 012B receives its
-own separate approval.
+allowlist. 012A has landed; CR-DD-012B remains blocked pending an implemented
+and reviewed CR-YK-002 atomic-claiming foundation plus its own separate
+approval.
 
 ## Decision
 

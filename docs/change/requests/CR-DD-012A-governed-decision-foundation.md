@@ -2,15 +2,16 @@
 
 ## Status
 
-Implementation complete on the branch within the bounded allowlist below.
-Validation and supervisor review passed; merge is pending.
+Complete and merged through PR #107 as `bccaaad`, within the bounded allowlist
+below. Validation and supervisor review passed.
 
-This remains an internal, non-integrated child of CR-DD-012. The approved
-implementation may add only the two foundation modules, three focused test
+This remains an internal, non-integrated child of CR-DD-012. The merged
+implementation added only the two foundation modules, three focused test
 files, and bounded documentation updates named below. It changes no existing
-runtime, CLI, ledger, artifact, routing, cloud, or worker path. CR-DD-012B
-remains blocked until this implementation lands and CR-DD-012B receives its
-own separate approval.
+runtime, CLI, ledger, artifact, routing, cloud, or worker path, and no public
+command consumes it. CR-DD-012B remains blocked pending an implemented and
+reviewed CR-YK-002 atomic-claiming foundation plus its own separate approval;
+this CR landing satisfies only one of those gates.
 
 ## Decision
 
@@ -713,11 +714,11 @@ service or heavy infrastructure.
 ## Rollout And Rollback
 
 The approved implementation is complete and validated as an internal,
-non-integrated foundation and now stops pending merge. It does not ship a new
-operator capability. A failure in final staged scope or diff verification
-prevents the implementation from landing. Rollback before merge is removal of
-the two new modules and three new tests plus restoration of these bounded
-status updates; no runtime, ledger, or artifact state requires rollback.
+non-integrated foundation and merged through PR #107 as `bccaaad`. It does not
+ship a new operator capability. Rollback is removal of the two modules and
+three tests plus restoration of these bounded status updates; because nothing
+public consumes the foundation, no runtime, ledger, or artifact state requires
+rollback.
 
 CR-DD-012B may be proposed only after CR-DD-012A lands and is reviewed. It must
 start from the then-current `main`, on a new branch, with separate authority.
