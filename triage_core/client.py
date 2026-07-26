@@ -48,6 +48,7 @@ class TriageClient:
         task_packet: Optional[Any] = None,
         route_decision_signing_registry: Optional[AgentIdentityRegistry] = None,
         route_decision_signing_agent_id: Optional[str] = None,
+        capability: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """
         Runs a given prompt and data through the execution engine.
@@ -116,7 +117,9 @@ class TriageClient:
         category = TaskClassifier.classify(prompt)
         route_decision = self.router.specialist.route_task(category, prompt, data)
         use_timeout = route_decision.get("timeout", self.engine.timeout)
-        resilience_input = self._build_resilience_route_input(category=category, validator=validator)
+        resilience_input = self._build_resilience_route_input(
+            category=category, validator=validator, capability=capability
+        )
         
         if is_local_only:
             resilience_input.privacy_level = "local_only"
@@ -405,6 +408,7 @@ class TriageClient:
         *,
         category: str,
         validator: Optional[Callable[[str], bool]],
+        capability: Optional[Any] = None,
     ) -> ResilienceRouteInput:
         task_class_map = {
             "docs_update": "docs_update",
@@ -436,6 +440,20 @@ class TriageClient:
             "architecture_planning": "medium",
             "blocked_or_high_risk": "high",
         }
+        # CR-DD-013: when a capability resolution is supplied (the ``tc run``
+        # path always supplies one), local availability comes from observation
+        # or an explicit declaration -- never from an unobserved literal. When
+        # it is absent, direct callers of ``run_task`` keep the previous
+        # behavior unchanged.
+        if capability is None:
+            lm_studio_ok = True
+            local_heavy_available = True
+            local_fast_available = True
+        else:
+            lm_studio_ok = capability.lm_studio_ok
+            local_heavy_available = capability.local_heavy_available
+            local_fast_available = capability.local_fast_available
+
         return ResilienceRouteInput(
             task_class=task_class_map.get(category, "general"),
             complexity=complexity_map.get(category, "medium"),
@@ -445,9 +463,10 @@ class TriageClient:
             cloud_primary_available=default_config.get_qwen_enabled(),
             cloud_secondary_available=False,
             cloud_credit_state="ok" if default_config.get_qwen_enabled() else "none",
-            lm_studio_ok=True,
-            local_heavy_available=True,
-            local_fast_available=True,
+            lm_studio_ok=lm_studio_ok,
+            local_heavy_available=local_heavy_available,
+            local_fast_available=local_fast_available,
             deterministic_tool_available=validator is not None,
             required_checks=["validator"] if validator is not None else [],
+            capability_evidence=capability,
         )

@@ -2,11 +2,98 @@
 
 ## Status
 
-Proposed. Documentation only. No implementation authority is granted by this
-document.
+Approved for implementation. The bounded implementation is complete on its
+branch; see **Implementation Amendment** below for the decisions that resolved
+the blockers found during implementation.
 
-This CR is scoped against `main` at `ac851d5`. It is the first slice of M1 in
+This CR was originally scoped against `main` at `ac851d5` and implemented
+against `cce1985`. It is the first slice of M1 in
 `docs/architecture/daily_driver_orchestrator_spec.md` and addresses gap G4.
+
+## Implementation Amendment
+
+Implementation surfaced two blockers that the proposal as written could not
+resolve, and supervisor decisions settled both. This section is authoritative
+where it differs from the original proposal text below.
+
+**The blocker.** A metadata probe proves runtime reachability, not route-class
+executability, so under the original rules every route class resolved to
+`Unknown`. With no probe-record store and no declaration surface, every
+`tc run` resolved to `Unknown`, and every local-only run would have been denied
+with no supported operator remedy.
+
+### Approved `[capability]` declaration surface
+
+A dedicated `triagecore.toml` section, read through the existing
+`Config.get_global` mechanism:
+
+```toml
+[capability]
+local_probe_record_path = "path/to/local-backend-probe.json"
+freshness_seconds = 300
+declare_local_fast = false
+declare_local_heavy = false
+```
+
+`declare_local_fast` and `declare_local_heavy` are **explicit operator
+capability declarations**. Ordinary backend configuration — an enabled backend
+entry, an endpoint, or a model name — does not qualify and resolves to
+`Unknown`. Both declarations default to `false`. The configuration reference is
+auditable and records no secrets; a digest is optional and unused in this slice.
+
+### Freshness
+
+The default is **300 seconds**, configurable via `freshness_seconds` and
+documented here. The threshold actually applied is recorded in capability and
+route-decision evidence, never silently defaulted. A stale observation becomes
+`Unknown`, never available.
+
+### Resolution precedence
+
+1. A fresh `observed_unavailable` runtime overrides declarations and suppresses
+   every route depending on that runtime.
+2. A fresh reachable runtime confirms **runtime reachability only**.
+3. Reachability, `model_count`, and generic `observed_models` do not prove
+   `local_fast` or `local_heavy`.
+4. Route-class availability requires an explicit `declare_local_fast` /
+   `declare_local_heavy` declaration unless the record carries genuinely
+   sufficient class-specific evidence.
+5. Missing, `probe_disabled`, stale, invalid, and insufficient-model evidence
+   resolve to `Unknown`.
+6. Declarations may support route consideration while observation is
+   `Unknown`, but the recorded state is `Configured`, never `ObservedAvailable`.
+7. With no usable observation and no declaration: local-only fails closed;
+   cloud-permitted may consider an explicitly configured, opted-in,
+   policy-permitted remote route; evidence and operator output state that local
+   capability was unknown.
+8. A fresh observed unavailability may not be overridden by a declaration.
+
+### First implementable binding
+
+Runtime-level observation plus explicit class declarations is the first
+implementable binding. `lm_studio_ok` carries runtime reachability and gates
+both `_local_heavy_ok` and `_local_fast_ok`, so a fresh negative observation
+suppresses every local route — the asymmetry requirement — while class
+availability comes from declarations. Separating class-to-model bindings
+remains G3's work.
+
+### Test-tier correction
+
+`operator_recorded` records may be used for deterministic freshness tests.
+`synthetic_fixture` remains appropriate for validation tests but **cannot
+establish freshness**, because the probe contract forbids fixture-tier records
+from carrying `observed_at`. This supersedes the original acceptance criterion
+that assumed `synthetic_fixture` throughout. In the implementation, a record
+without `observed_at` resolves to `Unknown` with reason `stale`, which covers
+both an expired observation and one whose freshness cannot be established.
+
+### Direct-caller compatibility as implemented
+
+The binding applies at the `tc run` construction boundary.
+`TriageClient.run_task` accepts an optional `capability`; when it is absent —
+every existing library caller — the previous route-input literals are preserved
+exactly. This keeps the change scoped to `tc run` rather than to every consumer
+of the client.
 
 CR-DD-013 is **not** part of the CR-DD-012 shared-decision lane. CR-DD-012B
 remains reserved for shared preview/execution consumption and retains its

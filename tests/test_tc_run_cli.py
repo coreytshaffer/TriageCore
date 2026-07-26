@@ -19,11 +19,33 @@ from unittest.mock import patch
 import pytest
 import requests
 
-from triage_core import tc_cli
+from triage_core import capability_evidence, tc_cli
 from triage_core.backends import BackendResponse
 from triage_core.client import TriageClient
 from triage_core.routing.resilience_router import ResilienceRouteDecision
 from triage_core.task_packet import PrivacyMetadata
+
+
+@pytest.fixture(autouse=True)
+def declared_local_capability(monkeypatch):
+    """Declare both local route classes for this module (CR-DD-013).
+
+    ``tc run`` no longer treats local capability as healthy without evidence,
+    so these tests state that assumption explicitly instead of relying on an
+    optimistic default. Tests needing a different posture patch
+    ``resolve_from_config`` themselves.
+    """
+    resolution = capability_evidence.resolve_capability(
+        record=None,
+        declare_local_fast=True,
+        declare_local_heavy=True,
+        config_reference="test:[capability]",
+        freshness_seconds=300,
+    )
+    monkeypatch.setattr(
+        capability_evidence, "resolve_from_config", lambda *a, **k: resolution
+    )
+    return resolution
 
 
 class RecordingBackend:
@@ -97,8 +119,9 @@ class RecordingClient:
     def __init__(self):
         self.packet = None
 
-    def run_task(self, task_packet, ledger=None, task_id=None):
+    def run_task(self, task_packet, ledger=None, task_id=None, capability=None):
         self.packet = task_packet
+        self.capability = capability
         return {
             "status": "success",
             "output": "CLIENT_RAN",
