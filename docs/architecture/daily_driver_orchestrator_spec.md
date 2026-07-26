@@ -197,3 +197,13 @@ milestone. No milestone relaxes an invariant to ship.
 A formatted long-form version of this assessment is maintained as
 `TriageCore_DailyDriver_Spec.docx` at the repo root for review/sharing. This markdown file is
 the repo-canonical, commit-pinned planning record.
+
+**Mirror drift (recorded 2026-07-25).** No reproducible generation path for the DOCX exists
+in this repository: there is no Makefile target, script, packaging entry point, or CI step
+that produces it, and no code references it. It was therefore not regenerated alongside this
+revision and was deliberately left unmodified rather than hand-edited. The DOCX currently
+lags this markdown by the `ac851d5` re-pin, the CR-DD-012A merged-status correction, the
+G4/M1 rewrite, and the CR-DD-013 pointer. It also lagged before this revision. Closing the
+drift — either by establishing a reproducible generation path or by retiring the mirror — is
+bounded follow-up work and is not authorized here. Until then, this markdown file remains
+authoritative wherever the two disagree.
