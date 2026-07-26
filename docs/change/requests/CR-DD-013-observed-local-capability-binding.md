@@ -448,37 +448,37 @@ recommendation grants no implementation authority.
 6. Local-only work with unknown local capability fails closed with a clear
    governed-denial reason: no cloud route, no worker execution, through the
    existing `LocalRouteUnavailableError` path.
-6a. A cloud-permitted task with unknown local capability may consider an
+7. A cloud-permitted task with unknown local capability may consider an
    explicitly configured and policy-permitted remote route, and both the route
    evidence and the operator-facing output state that local capability was
    unknown. No acknowledgement prompt or interactive confirmation is added.
-6b. The capability-evidence value is validated as a discriminated union:
+8. The capability-evidence value is validated as a discriminated union:
    semantically impossible combinations — a `Configured` variant carrying an
    `observed_at` or a probe evidence tier, an `Unknown` variant carrying a
    positive availability claim, an `ObservedAvailable` variant naming a route
    class the record does not support — are rejected at construction rather than
    merely unused. An invalid projection resolves to `Unknown` with
    `invalid_record`, never to an availability claim.
-7. A single reachability observation does not set both `local_fast` and
+9. A single reachability observation does not set both `local_fast` and
    `local_heavy` available unless the record carries model-specific evidence
    supporting both; otherwise unsupported classes remain unknown.
-8. An existing validated `LocalBackendProbeRecord` populates the route input
-   without a new probe system, endpoint, or record schema version.
-9. Route evidence identifies observation state, source/evidence tier,
-   observation time, and the applied freshness bound through the existing open
-   `route_decision` payload extension point, with no new ledger schema. If that
-   extension point proves unsuitable, provenance is recorded as a narrowly
-   scoped additive evidence change requiring later approval, and is not
-   silently omitted.
-10. Every focused test injects capability deterministically with no network,
+10. An existing validated `LocalBackendProbeRecord` populates the route input
+    without a new probe system, endpoint, or record schema version.
+11. Route evidence identifies observation state, source/evidence tier,
+    observation time, and the applied freshness bound through the existing open
+    `route_decision` payload extension point, with no new ledger schema. If that
+    extension point proves unsuitable, provenance is recorded as a narrowly
+    scoped additive evidence change requiring later approval, and is not
+    silently omitted.
+12. Every focused test injects capability deterministically with no network,
     socket, subprocess, model call, or real runtime, using the existing
     `synthetic_fixture` evidence tier.
-11. Absent memory, model, token, or health evidence remains unknown; no absent
+13. Absent memory, model, token, or health evidence remains unknown; no absent
     value is written as `0`, and no advisory or configured value is relabeled
     as an observation.
-12. The binding performs no model execution, and no metadata-only guarantee of
+14. The binding performs no model execution, and no metadata-only guarantee of
     the existing probe contract is weakened.
-13. No provider, authorization, reviewer-burden, session, GUI, or
+15. No provider, authorization, reviewer-burden, session, GUI, or
     circuit-breaker implementation is included; no readiness percentage is
     recalculated.
 
