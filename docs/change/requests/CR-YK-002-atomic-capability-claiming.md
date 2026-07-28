@@ -2,24 +2,28 @@
 
 ## Status
 
-- **Status:** Requirements approved. The standalone atomic-claiming foundation
-  is committed on branch `cr-yk-002-atomic-capability-claiming` and open for
-  review as PR #117. Test-verified and **not merged**. Precisely:
-  - **Recovered into the working tree:** yes. `triage_core/capability_claims.py`
-    and `tests/test_capability_claims.py` were untracked and lost; they were
-    reconstructed and restored on 2026-07-27. Fidelity evidence differs by file:
+- **Status:** Complete and merged through PR #117 as `5155bbb` on 2026-07-28.
+  Precisely:
+  - **Recovered:** yes. `triage_core/capability_claims.py` and
+    `tests/test_capability_claims.py` were untracked and lost; they were
+    reconstructed on 2026-07-27. Fidelity evidence differs by file:
     `capability_claims.py` compiles to bytecode byte-identical to the surviving
     cache built from the original, while `test_capability_claims.py` is
-    supported only by clean transcript replay and a source-length match.
+    supported only by clean transcript replay and a source-length match. That
+    asymmetry is a permanent property of the record, not a pending item.
   - **Verified by tests:** yes. Focused run
     (`tests/test_capability_claims.py`, `tests/test_authz.py`) 120 passed /
     1 platform skip; full suite 1353 passed / 5 environmental skips, no
-    failures, no errors, no `xfail`, no `xpass`. CI passes on Python 3.10,
-    3.11, and 3.12.
-  - **Committed to the branch:** yes, as `27fd869` (foundation), `eaf432d`
-    (schema hardening to v2), and `63a053b` (honest terminal store reasons),
-    with documentation recorded separately.
-  - **Merged:** no. Review through PR #117 is still required.
+    failures, no errors, no `xfail`, no `xpass`. CI passed on Python 3.10,
+    3.11, and 3.12 on the merge commit.
+  - **Merged:** yes, as a merge commit so that `27fd869` (foundation),
+    `e6fda4a`, `e8f9249`, `eaf432d` (schema hardening to v2), `63a053b`
+    (honest terminal store reasons), and `371838d` remain durable ancestors of
+    `main`. Squash and rebase were declined deliberately: this document cites
+    implementation commits by SHA.
+- **Grants no execution authority.** Merging this foundation authorizes no
+  runtime integration. No module outside `triage_core/authz.py` consumes the
+  claim store.
 - **Implementation authority:** Granted for the standalone claim foundation
   only, within the allowlist recorded below.
 - **Still unauthorized:** `tc authz` CLI surfaces, `tc authz exec`, `tc run`
@@ -427,11 +431,11 @@ change should be necessary. This candidate list is not implementation authority.
 
 ## Implementation Record
 
-Committed on branch `cr-yk-002-atomic-capability-claiming` across
+Merged into `main` through PR #117 as merge commit
+`5155bbb92992413c403e0c00cb54b7b532e2cdf7` on 2026-07-28, across
 `27fd86963f460fb6f19108a879f93176009f0832` (foundation),
 `eaf432dcd51054de524c71622a0bd78013874928` (schema hardening), and
-`63a053b7cf8b3c038735b7de09a501632af8905e` (honest terminal reasons).
-Test-verified and not merged:
+`63a053b7cf8b3c038735b7de09a501632af8905e` (honest terminal reasons):
 
 - `triage_core/capability_claims.py` — the standalone SQLite registry at
   schema version `triagecore.capability_claims.v2`: closed `CHECK` constraint
