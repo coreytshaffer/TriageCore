@@ -2,14 +2,20 @@
 
 ## Status
 
-- **Status:** Proposed / requirements proposal only.
-- **Implementation authority:** None.
-- **Approval gate:** Explicit human approval is required before any code, test,
-  schema, runtime, or integration change.
+- **Status:** Requirements approved and merged through PR #119 as `bfa1d6e`;
+  bounded implementation complete on branch and open for review; not merged.
+- **Implementation authority:** Granted only for the pure CR-OC-001A module,
+  tests, and documentation within the approved five-path allowlist.
+- **Still unauthorized:** CR-OC-001B through CR-OC-001E, runtime integration,
+  file mutation, persistence, IPC, capability issuance, and any runtime module
+  importing `triage_core.mediated_effect`.
+- **Approval gate:** Explicit human approval remains required before any change
+  beyond that allowlist.
 
-This document records requirements only. It does not authorize implementation,
-execution, IPC, persistence, file access, capability issuance, OpenClaw
-installation, or modification of any current path.
+This document records the requirements contract and the pure implementation
+written against it. It authorizes no execution, IPC, persistence, file access,
+capability issuance, or OpenClaw installation, and does not claim the
+implementation has been reviewed or merged.
 
 ## Scope
 
@@ -391,6 +397,48 @@ Every step from `request_digest` onward is downstream of the connection. This
 constrains CR-OC-001B and CR-OC-001D and should not be discovered during their
 implementation.
 
+## Cross-Object Binding
+
+Digests that are individually valid can still describe two different
+transitions. A linkage assembled from one effect and an unrelated request, or a
+capability bundle pairing one effect's `scope_digest` with another effect's
+`plan_body_digest`, must be rejected rather than produced.
+
+A request represents an effect only when all eight bound fields match exactly:
+
+```text
+client_request_id
+broker_connection_id
+target_file_id
+canonical_relpath
+expected_pre_digest
+expected_post_digest
+content_size_bytes
+declared_context_digest
+```
+
+A linkage binds that pair only when:
+
+```text
+linkage.task_id              == request.task_id
+linkage.client_request_id    == effect.client_request_id
+linkage.broker_connection_id == effect.broker_connection_id
+linkage.effect_digest        == effect.effect_digest()
+linkage.request_digest       == request.request_digest()
+```
+
+`build_plan_linkage` takes `(effect, request, *, decision_id)` and derives
+`task_id` from the request. A separate `task_id` input would be a second source
+for a value the request already carries, and therefore one more thing that can
+disagree. The final capability projection takes the whole trio,
+`capability_binding_fields(effect, request, linkage)`, and verifies it before
+projecting.
+
+**These mismatches raise `MediatedContractError`, not a validation reason.**
+Both objects have already been validated individually; a disagreement between
+them is a caller defect, and routing it through the closed vocabulary would
+misdescribe a bug as a decision about untrusted input.
+
 ## Request Replay Contract
 
 `request_digest` is the digest of `triagecore.mediated_client_request.v1` —
@@ -520,17 +568,29 @@ House style: no free-text reason enters evidence.
 
 ```text
 ok
-invalid_operation
-invalid_target_file_id
-invalid_client_request_id
+invalid_operation            operation is not "replace"
+invalid_schema               wrong discriminator, or non-conforming shape
+invalid_file_descriptor      encoding, relpath shape, or descriptor max size
+invalid_target_file_id       the target_file_id itself
+invalid_client_request_id    the client_request_id itself
+invalid_task_id
+invalid_decision_id
 invalid_digest
 invalid_declared_context
 invalid_broker_binding
+invalid_content_size         not a non-negative integer
 content_not_utf8
-content_size_exceeded
+content_size_exceeded        exact bytes exceed a valid positive limit
 post_digest_mismatch
 request_id_reuse_mismatch
 ```
+
+Each code is **reserved narrowly**. Reporting a real failure under a code that
+names a different condition is still a false report, and it repeats at small
+scale the failure mode corrected in CR-YK-002's terminal vocabulary. A
+descriptor problem must not surface as an operation problem; a malformed
+`task_id` must not surface as a malformed `client_request_id`; a non-integer
+size must not surface as an exceeded limit.
 
 Deliberately absent, because this module cannot detect them: path traversal,
 symlink and junction handling, alternate data streams, repository-boundary
@@ -671,6 +731,57 @@ CR-OC-001A may be considered implemented only when:
 
 Recording this proposal does not satisfy any acceptance item and does not claim
 that implementation occurred.
+
+## Implementation Record
+
+Implemented on branch `cr-oc-001a-effect-contract-implementation`, open for
+review, not merged. Two code paths, both new:
+
+- `triage_core/mediated_effect.py` — the five canonical objects, exact-byte
+  verification, digest construction, the privacy-safe projection,
+  `RequestBinding`, and pure `classify_request_replay`. Imports only `hashlib`,
+  `json`, `re`, `dataclasses`, and `typing`; no `os`, `socket`, `subprocess`,
+  `sqlite3`, `authz`, `capability_claims`, or `task_ledger`.
+- `tests/test_mediated_effect.py` — 86 tests covering all 18 contract items,
+  the cross-object binding rules, and the reserved reason codes.
+
+Canonical JSON is implemented locally rather than imported from another module,
+reusing the canonicalization *contract* without taking on another module's
+private helper or dependency graph. Every digest object carries its own
+`schema` discriminator inside the canonical input.
+
+Verification at this tree: focused 86 passed; full suite 1439 passed / 5
+environmental skips, no failures, errors, `xfail`, or `xpass`; `git diff
+--check` clean; only tests import the module; the three authority modules are
+unmodified; the persistent privacy invariant passes over the projection and the
+698-record repo audit still passes.
+
+A review round corrected two defects found after the first implementation
+commit. Cross-object transplants were possible — a linkage could be built from
+one effect and an unrelated request, and a capability bundle could pair one
+effect's `scope_digest` with another's `plan_body_digest`, each digest valid on
+its own. And seven reason codes named a different condition from the one that
+failed. Both were verified against the pre-fix head before being changed, and
+both are now covered by tests.
+
+All nine mutants were demonstrated failing against their defective versions and
+passing after restoration, with the module hash verified identical to its
+pristine value after each cycle. The four digest mutants are digest-level
+strips — the canonical dict keeps every field and only the digest ignores one —
+so each killer fails on a digest-equality assertion rather than a missing-key
+error, which is what makes the evidence about digest *sensitivity* rather than
+dict structure.
+
+Two limits on that evidence, recorded rather than glossed:
+
+- The M9 mutant remains the weakest. Its killer asserts the projection key set
+  and the absence of any accessor whose name contains "authenticated"; a
+  determined rename would defeat it. Reviewers, not tests, are the control.
+- Tests that pass against both the intended and mutated versions are controls,
+  not mutant evidence. `test_canonical_digest_is_deterministic_and_order_independent`,
+  `test_projection_keys_are_exactly_the_contract_set`, and
+  `test_classify_returns_new_request_for_absent_existing` all pass under several
+  mutants and are counted as controls only.
 
 ## Candidate Future Implementation Allowlist
 
