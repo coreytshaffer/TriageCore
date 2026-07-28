@@ -411,11 +411,13 @@ is to split comparison from storage: the comparison is pure and lives here, the
 storage is external and lives in CR-OC-001B.
 
 ```text
+RequestBinding
+    client_request_id
+    request_digest
+
 classify_request_replay(
-    existing_client_request_id,
-    existing_request_digest,
-    incoming_client_request_id,
-    incoming_request_digest,
+    existing: RequestBinding | None,
+    incoming: RequestBinding,
 ) -> new_request
    | idempotent_replay
    | request_id_reuse_mismatch
@@ -427,16 +429,50 @@ owns every decision about what to do with the classification. This keeps the
 reason code in A — where the comparison logic lives and can be tested — while
 leaving enforcement entirely in B.
 
+`RequestBinding` is a comparison input, **not** a sixth canonical digest
+object. It is never canonicalized, digested, or persisted by this module.
+
 Required rules:
 
-- Same `client_request_id`, same `request_digest` → `idempotent_replay`; the
-  existing recorded outcome may be returned.
-- Same `client_request_id`, different digest → `request_id_reuse_mismatch`.
-  Because the digest includes `broker_connection_id`, this covers a repeat on a
-  different connection.
-- No existing binding → `new_request`.
-- An interrupted reservation is never silently treated as new. Representing
-  that is CR-OC-001B's obligation, since it requires durable state.
+```text
+existing is None
+    -> new_request
+
+same client_request_id, same request_digest
+    -> idempotent_replay
+
+same client_request_id, different request_digest
+    -> request_id_reuse_mismatch
+```
+
+Because `request_digest` includes `broker_connection_id`, the third rule covers
+a repeat of the same client request on a different connection.
+
+An interrupted reservation is never silently treated as new. Representing that
+is CR-OC-001B's obligation, since it requires durable state.
+
+### Absence, and the one input that must not occur
+
+`None` is the explicit absence sentinel for `existing`. **The "optional values
+are forbidden, not omitted" rule governs the five canonical digest objects
+only** — it does not apply here, because `RequestBinding | None` is a
+comparison argument rather than a digest input, and absence is a real state the
+caller must be able to express. Within a `RequestBinding`, both fields remain
+required and non-null.
+
+CR-OC-001B performs its lookup **by the incoming `client_request_id`**, so a
+non-null `existing` whose ID differs from `incoming` cannot arise from a
+correct caller. That input is **invalid, and must raise** rather than return a
+classification.
+
+Returning a value would be worse than raising in both available directions: a
+`new_request` result would let a lookup bug hand back mismatched state and
+obtain fresh authority, while a `request_id_reuse_mismatch` result would report
+a reuse conflict that did not happen. Raising surfaces the caller defect where
+it can be fixed. This matches the existing house treatment of caller-contract
+violations, such as `CapabilityClaimStore.claim` raising
+`CapabilityStoreError` for a blank claimant rather than inventing a reason
+code.
 
 ### A requirement CR-OC-001A cannot represent
 
@@ -568,21 +604,24 @@ A separately approved implementation must demonstrate:
 8. `content_size_bytes` equals the original byte length, not that of any
    decoded or re-encoded form.
 9. A path cannot substitute for a `target_file_id`.
-10. `classify_request_replay` returns `new_request`, `idempotent_replay`, and
-    `request_id_reuse_mismatch` for the corresponding input pairs, and performs
-    no I/O.
+10. `classify_request_replay` returns `new_request` for `existing is None`,
+    `idempotent_replay` for a matching pair, and `request_id_reuse_mismatch`
+    for a same-ID digest difference, and performs no I/O.
 11. A repeated `client_request_id` on a different `broker_connection_id`
     classifies as `request_id_reuse_mismatch`, not `idempotent_replay`.
-12. Every one of the five canonical objects rejects unknown fields, missing
+12. `classify_request_replay` raises when `existing` is non-null and its
+    `client_request_id` differs from `incoming`, rather than returning any
+    classification.
+13. Every one of the five canonical objects rejects unknown fields, missing
     fields, and null values.
-13. Field-for-field identical payloads in two different schema domains produce
+14. Field-for-field identical payloads in two different schema domains produce
     different digests.
-14. The persistent projection contains no file content under any input,
+15. The persistent projection contains no file content under any input,
     including content crafted to resemble metadata.
-15. The projection passes the persistent privacy invariant.
-16. A malformed object never produces a partially valid effect; construction is
+16. The projection passes the persistent privacy invariant.
+17. A malformed object never produces a partially valid effect; construction is
     all-or-nothing.
-17. The module performs no file, network, subprocess, IPC, or database access,
+18. The module performs no file, network, subprocess, IPC, or database access,
     demonstrated by test rather than asserted.
 
 ### Mutant checks
@@ -600,7 +639,7 @@ the mutated version.
 | Accept `proposed_bytes` that mismatch the post-digest | post-digest verification test |
 | Normalize newlines or strip a BOM before hashing | exact-byte treatment test (item 7) |
 | Persist `proposed_bytes` in the projection | projection privacy test |
-| Drop `schema` from a canonical envelope | cross-domain distinctness test (item 13) |
+| Drop `schema` from a canonical envelope | cross-domain distinctness test (item 14) |
 | Treat declared session identity as authenticated | structural separation test |
 
 The last mutant is weaker than the others and this is recorded rather than
