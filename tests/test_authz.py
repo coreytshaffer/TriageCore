@@ -17,6 +17,7 @@ import json
 import os
 import stat
 import sys
+import threading
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
@@ -24,8 +25,11 @@ import pytest
 
 from triage_core import fido2_adapter
 from triage_core.authz import (
+    CAPABILITY_SCHEMA,
+    COMPATIBILITY_CLAIMANT_ID,
     EVENT_CAPABILITY_CONSUMED,
     EVENT_CAPABILITY_DENIED,
+    EVENT_CAPABILITY_ISSUED,
     EVENT_RECEIPT_RECORDED,
     ORIGIN,
     REASON_ALREADY_CONSUMED,
@@ -58,6 +62,7 @@ from triage_core.authz import (
     verify_receipt_structure,
     write_receipt_artifact,
 )
+from triage_core.capability_claims import CapabilityClaimStore, default_db_path
 from triage_core.privacy_invariants import assert_persistent_privacy_safe
 from triage_core.task_ledger import TaskLedger
 
@@ -325,31 +330,139 @@ def test_capability_denies_expired_missing_and_mismatched(tmp_path):
     assert not mismatched.allowed and mismatched.reason_code == REASON_DIGEST_MISMATCH
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Known limitation (CR-YK-001): read-then-append consumption is not "
-        "atomic; interleaved consumers can each observe 'unconsumed'. Atomic "
-        "claiming is required before CR-DD-012B execution integration."
-    ),
-)
-def test_concurrent_consume_race_documented(tmp_path, monkeypatch):
-    """Deterministically interleave two consumers; single-use SHOULD hold."""
+def _race_consumers(tmp_path, worker_count):
+    """Release ``worker_count`` real consumers simultaneously on one capability.
+
+    Each worker builds its own TaskLedger handle, and the claim store opens an
+    independent SQLite connection per operation, so this exercises genuine
+    cross-connection contention rather than a simulated interleaving. The
+    former CR-YK-001 expected-failure test faked the race by monkeypatching
+    ``get_events``; atomicity is now proven, not assumed.
+    """
     ledger = TaskLedger(ledger_dir=str(tmp_path))
     receipt = _receipt(_request())
     task_id = receipt.request.task_id
     digest = receipt.request.artifact_byte_digest
     capability_id = issue_capability(ledger, receipt, now=NOW)
 
-    # Freeze both consumers' reads at the pre-consumption snapshot, modeling
-    # two processes that each read the ledger before either appends.
-    snapshot = ledger.get_events(task_id)
-    monkeypatch.setattr(ledger, "get_events", lambda _tid: list(snapshot))
+    barrier = threading.Barrier(worker_count)
+    decisions = []
+
+    def worker():
+        own_ledger = TaskLedger(ledger_dir=str(tmp_path))
+        barrier.wait()
+        decisions.append(
+            consume_capability(own_ledger, task_id, capability_id, digest, now=NOW)
+        )
+
+    threads = [threading.Thread(target=worker) for _ in range(worker_count)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    return task_id, capability_id, decisions
+
+
+def _assert_ledger_parseable(tmp_path):
+    """Concurrent evidence appends must leave the JSONL readable."""
+    raw = (tmp_path / "ledger.jsonl").read_text(encoding="utf-8")
+    lines = [line for line in raw.splitlines() if line.strip()]
+    for line in lines:
+        json.loads(line)
+    return lines
+
+
+def test_concurrent_consume_yields_exactly_one_success(tmp_path):
+    """Two simultaneous consumers: exactly one claim commits."""
+    _, _, decisions = _race_consumers(tmp_path, 2)
+
+    assert sum(1 for decision in decisions if decision.allowed) == 1
+    assert sorted(decision.reason_code for decision in decisions) == sorted(
+        [REASON_OK, REASON_ALREADY_CONSUMED]
+    )
+    _assert_ledger_parseable(tmp_path)
+
+
+def test_concurrent_consume_under_higher_contention_yields_one_success(tmp_path):
+    """Higher contention does not widen the window: still exactly one success."""
+    task_id, _, decisions = _race_consumers(tmp_path, 8)
+
+    assert len(decisions) == 8
+    assert sum(1 for decision in decisions if decision.allowed) == 1
+    assert all(
+        decision.reason_code == REASON_ALREADY_CONSUMED
+        for decision in decisions
+        if not decision.allowed
+    )
+
+    _assert_ledger_parseable(tmp_path)
+    ledger = TaskLedger(ledger_dir=str(tmp_path))
+    events = ledger.get_events(task_id)
+    assert sum(e["event_type"] == EVENT_CAPABILITY_CONSUMED for e in events) == 1
+    assert sum(e["event_type"] == EVENT_CAPABILITY_DENIED for e in events) == 7
+
+
+def test_crashed_attempt_does_not_restore_capability(tmp_path):
+    """A claim that never reaches a terminal state still burns the capability."""
+    ledger = TaskLedger(ledger_dir=str(tmp_path))
+    receipt = _receipt(_request())
+    task_id = receipt.request.task_id
+    digest = receipt.request.artifact_byte_digest
+    capability_id = issue_capability(ledger, receipt, now=NOW)
 
     first = consume_capability(ledger, task_id, capability_id, digest, now=NOW)
-    second = consume_capability(ledger, task_id, capability_id, digest, now=NOW)
-    successes = sum(1 for d in (first, second) if d.allowed)
-    assert successes <= 1  # violated today: both consumers are allowed
+    assert first.allowed
+
+    # Simulate a crash: no terminal transition is ever recorded.
+    retry = consume_capability(ledger, task_id, capability_id, digest, now=NOW)
+    assert not retry.allowed and retry.reason_code == REASON_ALREADY_CONSUMED
+
+
+def test_issued_payload_is_versioned_and_binds_task_through_the_envelope(tmp_path):
+    """Production issuance: versioned fields present, task binding in envelope."""
+    ledger = TaskLedger(ledger_dir=str(tmp_path))
+    receipt = _receipt(_request())
+    task_id = receipt.request.task_id
+    capability_id = issue_capability(ledger, receipt, now=NOW)
+
+    event = next(
+        e for e in ledger.get_events(task_id)
+        if e["event_type"] == EVENT_CAPABILITY_ISSUED
+    )
+    payload = event["payload"]
+
+    assert payload["schema"] == CAPABILITY_SCHEMA
+    for field in ("plan_body_digest", "scope_digest", "issued_at"):
+        assert field in payload
+    assert payload["plan_body_digest"] == receipt.request.plan_body_digest
+    assert payload["scope_digest"] == receipt.request.scope_digest
+
+    # The task binding is authoritative in the envelope and is not duplicated.
+    assert "task_id" not in payload
+    assert event["task_id"] == task_id
+
+    # The database records the exact envelope value.
+    assert consume_capability(
+        ledger, task_id, capability_id, receipt.request.artifact_byte_digest, now=NOW
+    ).allowed
+    row = CapabilityClaimStore(default_db_path(str(tmp_path))).get_row(capability_id)
+    assert row["task_id"] == event["task_id"] == task_id
+
+
+def test_compatibility_path_records_fixed_non_identity_claimant(tmp_path):
+    """The default claimant is a fixed marker, not an authenticated identity."""
+    ledger = TaskLedger(ledger_dir=str(tmp_path))
+    receipt = _receipt(_request())
+    task_id = receipt.request.task_id
+    digest = receipt.request.artifact_byte_digest
+    capability_id = issue_capability(ledger, receipt, now=NOW)
+
+    assert consume_capability(ledger, task_id, capability_id, digest, now=NOW).allowed
+
+    store = CapabilityClaimStore(default_db_path(str(tmp_path)))
+    assert store.get_row(capability_id)["claimant_id"] == "compatibility-consumer"
+    assert COMPATIBILITY_CLAIMANT_ID == "compatibility-consumer"
 
 
 # --- Credential store ---------------------------------------------------------
