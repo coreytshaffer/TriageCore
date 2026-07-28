@@ -94,8 +94,8 @@ A component observing an unbound row cannot distinguish a crashed invocation
 from a live one. It never can — that is a property of the situation, not a gap
 in the design.
 
-The reservation therefore carries a durable ownership token, mirroring
-CR-YK-002's `execution_attempt_id`:
+The reservation therefore stores a durable **verifier** for an ephemeral
+ownership token, mirroring CR-YK-002's `execution_attempt_id`:
 
 ```text
 reservation_attempt_token    returned once, never persisted
@@ -111,8 +111,9 @@ reservation_attempt_digest   persisted, sha256(token)
 - A retry may **inspect** the row. It never receives the token and never
   advances the row.
 
-After a crash the attempt ID is lost, so the reservation is inert by
+After a crash the raw token is lost, so the reservation is inert by
 construction rather than by a policy decision taken on incomplete information.
+The verifier survives in the database and grants nothing on its own.
 
 #### The token is authority-bearing, not descriptive metadata
 
@@ -155,9 +156,16 @@ would be as widely held as the file. Hashing at rest keeps the earlier claim
 crash the raw token is gone while database disclosure alone grants nothing.
 
 The conditional-write requirement is the same discipline test 1 applies to the
-insert, extended to the two transitions out of `reserved`. Non-disclosure is
-exercised by tests 9 through 11, which fail if a retry can obtain or guess the
-token.
+insert, extended to all three guarded transitions:
+
+```text
+reserved -> issuing
+reserved -> denied
+issuing -> authorized
+```
+
+Non-disclosure is exercised by tests 9 through 11, which fail if a retry can
+obtain or guess the token.
 
 If the token were caller-supplied, predictable, or readable from a lookup, an
 observer of an in-flight reservation could bind or deny it — reintroducing
