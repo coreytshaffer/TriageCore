@@ -672,6 +672,11 @@ def verify_proposed_bytes(
     raw = bytes(proposed_bytes)
     size = len(raw)
     limit = _check_size(maximum_size_bytes, INVALID_FILE_DESCRIPTOR)
+    if limit <= 0:
+        # A zero limit would otherwise be accepted here for empty content, even
+        # though MediatedFileDescriptor rejects it. Every public entry point
+        # must agree on what a valid limit is.
+        raise MediatedValidationError(INVALID_FILE_DESCRIPTOR)
     if size > limit:
         raise MediatedValidationError(CONTENT_SIZE_EXCEEDED)
     try:
@@ -760,7 +765,10 @@ def build_client_request(
 ) -> MediatedClientRequest:
     """Request identity for ``effect``, carrying its connection binding."""
     if not isinstance(effect, AuthorizedContentEffect):
-        raise MediatedValidationError(INVALID_OPERATION)
+        # Passing the wrong type is a caller defect, not a decision about an
+        # operation field. Reporting it as invalid_operation would name a
+        # condition that never occurred.
+        raise MediatedContractError("effect must be an AuthorizedContentEffect")
     return MediatedClientRequest(
         task_id=task_id,
         client_request_id=effect.client_request_id,

@@ -60,6 +60,7 @@ from triage_core.mediated_effect import (
     capability_binding_fields,
     classify_request_replay,
     validate_replacement_proposal,
+    verify_proposed_bytes,
 )
 from triage_core.privacy_invariants import assert_persistent_privacy_safe
 
@@ -846,6 +847,29 @@ def test_operation_code_is_reserved_for_the_operation_field():
     with pytest.raises(MediatedValidationError) as error:
         _descriptor(encoding="utf-16")
     assert error.value.reason_code != INVALID_OPERATION
+
+
+@pytest.mark.parametrize("not_an_effect", [None, {"not": "an effect"}, 42, "effect"])
+def test_build_client_request_rejects_a_non_effect_as_a_caller_defect(not_an_effect):
+    """No operation field failed, so invalid_operation must not be borrowed."""
+    with pytest.raises(MediatedContractError):
+        build_client_request(not_an_effect, task_id=TASK_ID)
+
+
+def test_verify_proposed_bytes_rejects_a_non_positive_limit():
+    """Every public entry point must agree on what a valid limit is.
+
+    ``MediatedFileDescriptor`` rejects a zero maximum, so the helper must too --
+    otherwise empty content slips through a limit the descriptor would refuse.
+    """
+    empty_digest = "sha256:" + hashlib.sha256(b"").hexdigest()
+    for limit in (0, -1):
+        with pytest.raises(MediatedValidationError) as error:
+            verify_proposed_bytes(b"", empty_digest, limit)
+        assert error.value.reason_code == INVALID_FILE_DESCRIPTOR
+
+    # A valid positive limit still accepts empty content.
+    assert verify_proposed_bytes(b"", empty_digest, 1) == 0
 
 
 def test_every_emitted_reason_code_is_in_the_closed_vocabulary():
