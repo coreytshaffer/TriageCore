@@ -8,7 +8,8 @@ request-bound WebAuthn authorization evidence and offline verification are now
 the baseline, and no CR-YK-001 lineage, validation, or cleanup work remains.
 
 CR-YK-002's atomic-claiming foundation is committed on branch
-`cr-yk-002-atomic-capability-claiming` as `27fd869` and is not merged. Claim ownership and
+`cr-yk-002-atomic-capability-claiming` as `27fd869`, `eaf432d`, and `63a053b`,
+and is open for review as PR #117 but is not merged. Claim ownership and
 lifecycle state now live in a local SQLite registry; the ledger remains durable
 evidence and is no longer the concurrency lock. CLI surfaces, `tc run`
 integration, `--confirmed-plan`, backend calls, routing/worker changes, and
@@ -18,8 +19,8 @@ pending review and merge of this foundation plus explicit CR-DD-012B approval.
 ## Active GitHub Backlog
 
 - CR-YK-002: Atomic Execution-Capability Claiming
-  - Status: foundation committed on branch `cr-yk-002-atomic-capability-claiming` as `27fd869`, not merged; CLI, runtime integration, and execution remain unauthorized
-  - Purpose: Provide a local SQLite registry for atomic, irrevocable capability claiming while retaining the task ledger as durable evidence. The conservative invariant holds: a crash or a post-commit evidence-write failure burns the authorization rather than risking duplicate execution. The former strict concurrency `xfail` is replaced by passing multi-threaded atomicity tests over independent SQLite connections. `triage_core/authz.py` is the sole authorized module permitted to import the claim store; no CLI, run path, router, worker, or backend consumes it. Implementation grants no execution or CR-DD-012B authority.
+  - Status: foundation committed on branch `cr-yk-002-atomic-capability-claiming` as `27fd869`, `eaf432d`, and `63a053b`; open for review as PR #117, not merged; CLI, runtime integration, and execution remain unauthorized
+  - Purpose: Provide a local SQLite registry for atomic, irrevocable capability claiming while retaining the task ledger as durable evidence. The conservative invariant holds: a crash or a post-commit evidence-write failure burns the authorization rather than risking duplicate execution. The former strict concurrency `xfail` is replaced by passing multi-threaded atomicity tests over independent SQLite connections. The schema is at `triagecore.capability_claims.v2`, which enforces row shape per state, permits only legal transitions, and freezes claim ownership and terminal metadata at the proper lifecycle points; v1 databases fail closed rather than being migrated. Terminal store failures report `capability_store_busy` or `capability_store_unavailable` rather than falsely reporting an absent capability. `triage_core/authz.py` is the sole authorized module permitted to import the claim store; no CLI, run path, router, worker, or backend consumes it. Implementation grants no execution or CR-DD-012B authority.
 
 - CR-YK-001: FIDO2 Security-Key-Backed Human Authorization Receipts
   - Status: complete and merged through PR #110 as `52dccd3`; feature refs cleaned up; recovery branches retained

@@ -3,9 +3,8 @@
 ## Status
 
 - **Status:** Requirements approved. The standalone atomic-claiming foundation
-  is committed on branch `cr-yk-002-atomic-capability-claiming` at
-  `27fd86963f460fb6f19108a879f93176009f0832`. Test-verified and **not merged**.
-  Precisely:
+  is committed on branch `cr-yk-002-atomic-capability-claiming` and open for
+  review as PR #117. Test-verified and **not merged**. Precisely:
   - **Recovered into the working tree:** yes. `triage_core/capability_claims.py`
     and `tests/test_capability_claims.py` were untracked and lost; they were
     reconstructed and restored on 2026-07-27. Fidelity evidence differs by file:
@@ -13,12 +12,14 @@
     cache built from the original, while `test_capability_claims.py` is
     supported only by clean transcript replay and a source-length match.
   - **Verified by tests:** yes. Focused run
-    (`tests/test_capability_claims.py`, `tests/test_authz.py`) 102 passed /
-    1 platform skip; full suite 1291 passed / 5 environmental skips, no
-    failures, no errors, no `xfail`, no `xpass`.
-  - **Committed to the branch:** yes, as `27fd869` (implementation only; the
-    documentation status update is a separate commit).
-  - **Merged:** no. Review through the implementation PR is still required.
+    (`tests/test_capability_claims.py`, `tests/test_authz.py`) 120 passed /
+    1 platform skip; full suite 1353 passed / 5 environmental skips, no
+    failures, no errors, no `xfail`, no `xpass`. CI passes on Python 3.10,
+    3.11, and 3.12.
+  - **Committed to the branch:** yes, as `27fd869` (foundation), `eaf432d`
+    (schema hardening to v2), and `63a053b` (honest terminal store reasons),
+    with documentation recorded separately.
+  - **Merged:** no. Review through PR #117 is still required.
 - **Implementation authority:** Granted for the standalone claim foundation
   only, within the allowlist recorded below.
 - **Still unauthorized:** `tc authz` CLI surfaces, `tc authz exec`, `tc run`
@@ -138,6 +139,16 @@ Required constraints and operating posture:
 - `execution_attempt_id` is unique when non-null.
 - Immutable bindings cannot change after insertion.
 - Claimed and terminal rows cannot be deleted through the public API.
+- Row shape is bound to `state` by a table-level `CHECK`: an `issued` row
+  carries no lifecycle metadata; a `claimed` row carries `claimed_at`,
+  `claimant_id`, and `execution_attempt_id` but no terminal fields; a terminal
+  row carries all claim metadata plus `terminal_at` and
+  `terminal_outcome = state`.
+- Only `issued -> claimed` and `claimed -> completed|failed` are legal state
+  transitions. Every other change of `state` is rejected by the database.
+- `claimed_at`, `claimant_id`, and `execution_attempt_id` become immutable once
+  the row leaves `issued`; `terminal_at` and `terminal_outcome` become immutable
+  once the row is terminal.
 - Timestamps use canonical UTC ISO-8601 values.
 - Digests retain the existing `sha256:<64 lowercase hex>` contract.
 - Use Python's standard-library `sqlite3`; add no dependency.
@@ -282,6 +293,15 @@ Future terminal outcomes must use a bounded vocabulary such as:
 - `claimant_mismatch`
 - `execution_attempt_mismatch`
 - `terminal_evidence_write_failed`
+- `capability_store_busy`
+- `capability_store_unavailable`
+
+The last two mirror the claim-path values and are required for the same
+reason. `capability_not_found` asserts a lifecycle fact — the store was read
+and the row is genuinely absent. A busy or unusable store never observed
+lifecycle state at all, so reporting absence there would invite a caller to
+act on an absence it never saw. Terminal reporting must distinguish a
+capability that does not exist from one whose state is presently unknowable.
 
 CR-YK-002 does not decide whether an execution result is acceptable, correct,
 safe, or high quality. It records only lifecycle completion or failure.
@@ -407,13 +427,18 @@ change should be necessary. This candidate list is not implementation authority.
 
 ## Implementation Record
 
-Committed on branch `cr-yk-002-atomic-capability-claiming` at
-`27fd86963f460fb6f19108a879f93176009f0832`. Test-verified and not merged:
+Committed on branch `cr-yk-002-atomic-capability-claiming` across
+`27fd86963f460fb6f19108a879f93176009f0832` (foundation),
+`eaf432dcd51054de524c71622a0bd78013874928` (schema hardening), and
+`63a053b7cf8b3c038735b7de09a501632af8905e` (honest terminal reasons).
+Test-verified and not merged:
 
-- `triage_core/capability_claims.py` — the standalone SQLite registry:
-  versioned schema, closed `CHECK` constraint over the four lifecycle states,
-  partial unique index on `execution_attempt_id`, and triggers enforcing
-  immutable bindings, absorbing terminal states, and undeletable claimed rows.
+- `triage_core/capability_claims.py` — the standalone SQLite registry at
+  schema version `triagecore.capability_claims.v2`: closed `CHECK` constraint
+  over the four lifecycle states, a table-level `CHECK` binding row shape to
+  state, a partial unique index on `execution_attempt_id`, and triggers
+  enforcing immutable bindings, a legal-transition whitelist, immutable claim
+  ownership, immutable terminal metadata, and undeletable claimed rows.
   `BEGIN IMMEDIATE` is taken before any decision is read.
 - `triage_core/authz.py` — the sole authorized compatibility boundary. It
   versions the issuance payload to `triagecore.execution_capability.v2`, adds
@@ -435,6 +460,29 @@ Two deliberate reporting decisions, recorded rather than left to discovery:
   `REASON_DIGEST_MISMATCH` value.** A caller reading only that boundary cannot
   distinguish them; `claim_capability` retains the precise reason. This is a
   known reporting limitation and was not redesigned in this slice.
+
+### Schema version and the v1 → v2 migration posture
+
+The registry ships at `triagecore.capability_claims.v2`. The v1 schema declared
+SQLite authoritative for lifecycle state, claim ownership, and terminal
+transitions but did not enforce it: direct SQL could skip `issued -> completed`
+or `issued -> failed` past `claimed`, insert a `claimed` row with no owner or a
+terminal row that was never claimed, and rewrite `claimant_id`,
+`execution_attempt_id`, or `claimed_at` on an already claimed row while
+`PRAGMA integrity_check` still reported `ok`. The public Python API never
+performed those writes, so behavior was correct in practice, but the
+enforcement lived in the caller rather than in the schema.
+
+The version bump is required rather than cosmetic. `CREATE TABLE IF NOT EXISTS`
+cannot retrofit a table-level `CHECK` onto an existing table, so a v1 file
+would otherwise open, report healthy, and silently lack every guarantee above.
+
+**v1 databases fail closed as an unsupported version. They are not migrated,
+upgraded, or repaired.** No production claim database existed at the time of
+the bump — `.triagecore/authz/` was absent and no runtime module consumes the
+store — so nothing was stranded. Should a v1 file ever be encountered, the
+correct response is a new human authorization and a new capability, consistent
+with the conservative invariant that recovery is never automatic.
 
 Two implementation details worth a reviewer's attention:
 
