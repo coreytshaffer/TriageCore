@@ -111,6 +111,40 @@ reservation_attempt_id
 After a crash the attempt ID is lost, so the reservation is inert by
 construction rather than by a policy decision taken on incomplete information.
 
+#### The token is authority-bearing, not descriptive metadata
+
+Possession of `reservation_attempt_id` *is* the right to advance the row. It
+must therefore be specified with the care given to a credential rather than to
+a label:
+
+```text
+Generation
+    Opaque and internally generated, with at least 122 bits of OS-backed
+    randomness (UUIDv4 or equivalent). Never caller-selected, never derived
+    from client_request_id, request_digest, or any other request field.
+
+Disclosure
+    Returned only in the successful new-reservation result. Lookup, retry,
+    denial, error paths, logging, and the persistent projection never disclose
+    it. A retry learns that a reservation exists, never how to advance it.
+
+Enforcement
+    Binding and denial each use one atomic conditional write whose predicate
+    includes client_request_id, state = reserved, and the exact
+    reservation_attempt_id, requiring exactly one changed row. A prior read
+    followed by an unconditional update is non-conforming: two callers could
+    each read `reserved`, each compare successfully, and both proceed.
+```
+
+The conditional-write requirement is the same discipline test 1 applies to the
+insert, extended to the two transitions out of `reserved`. Non-disclosure is
+exercised by tests 9 through 11, which fail if a retry can obtain or guess the
+token.
+
+If the token were caller-supplied, predictable, or readable from a lookup, an
+observer of an in-flight reservation could bind or deny it — reintroducing
+exactly the sabotage and orphan-hijack failures this section exists to close.
+
 **Naming follows observability.** A code such as `reservation_burned` would
 assert that a crash occurred. No caller can know that — it may be looking at a
 live operation. The observable condition is that the row exists and is
@@ -227,6 +261,11 @@ reserved_at
 bound_at
 denied_at
 ```
+
+`reservation_attempt_id` is persisted because the conditional write must
+compare against it, but it is **never included in any projection, evidence
+record, log line, or error payload** — it is authority-bearing, and disclosing
+it would hand the right to advance the row to whoever reads the output.
 
 Never: `proposed_bytes` in any form, prompt or model text, tool arguments,
 credentials, file contents, or free-text reasons. The row must pass the
