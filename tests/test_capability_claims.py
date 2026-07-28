@@ -37,6 +37,7 @@ from triage_core.capability_claims import (
     STATE_CLAIMED,
     STATE_COMPLETED,
     STATE_FAILED,
+    STATE_ISSUED,
     TERMINAL_ALREADY_TERMINAL,
     TERMINAL_ATTEMPT_MISMATCH,
     TERMINAL_CLAIMANT_MISMATCH,
@@ -391,6 +392,210 @@ def test_database_triggers_block_binding_mutation_and_row_deletion(tmp_path):
                 "WHERE capability_id = ?",
                 (CAPABILITY_ID,),
             )
+
+
+# --- Schema-enforced lifecycle (direct SQL) -----------------------------------
+#
+# The module documents SQLite as authoritative for lifecycle state, claim
+# ownership, and terminal transitions. These tests hold the schema to that claim
+# by bypassing the Python API entirely: every write below goes straight to the
+# database, which is the only way to prove the enforcement lives in the schema
+# rather than in the caller.
+
+_RAW_COLUMNS = (
+    "capability_id, task_id, decision_id, receipt_digest, artifact_byte_digest, "
+    "plan_body_digest, scope_digest, approver_identity_id, expires_at, state"
+)
+_OTHER_CAPABILITY_ID = "9b2c4f18-6d0a-4e57-8c31-2f7a5b6d8e40"
+
+
+def _raw_row_values(capability_id=_OTHER_CAPABILITY_ID, state=STATE_ISSUED):
+    return (
+        capability_id,
+        TASK_ID,
+        "gd-1234567890abcdef",
+        RECEIPT_DIGEST,
+        ARTIFACT_DIGEST,
+        PLAN_DIGEST,
+        SCOPE_DIGEST,
+        "human-corey",
+        EXPIRES.isoformat(),
+        state,
+    )
+
+
+def _seeded_store(tmp_path, state=STATE_ISSUED):
+    """Store carrying one directly inserted row in ``state``."""
+    store = _store(tmp_path)
+    store.get_row(CAPABILITY_ID)  # materializes the schema
+    with sqlite3.connect(store.db_path) as conn:
+        conn.execute(
+            f"INSERT INTO capability_claims ({_RAW_COLUMNS}) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            _raw_row_values(state=state),
+        )
+    return store
+
+
+@pytest.mark.parametrize("target", [STATE_COMPLETED, STATE_FAILED])
+def test_database_rejects_forward_skip_past_claimed(tmp_path, target):
+    """``issued`` may only become ``claimed``; a terminal row was never claimed."""
+    store = _seeded_store(tmp_path)
+
+    with sqlite3.connect(store.db_path) as conn:
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                "UPDATE capability_claims SET state = ? WHERE capability_id = ?",
+                (target, _OTHER_CAPABILITY_ID),
+            )
+
+    assert store.get_row(_OTHER_CAPABILITY_ID)["state"] == STATE_ISSUED
+
+
+def test_database_rejects_claimed_row_without_an_owner(tmp_path):
+    """A ``claimed`` row must name its claimant and execution attempt."""
+    store = _store(tmp_path)
+    store.get_row(CAPABILITY_ID)
+
+    with sqlite3.connect(store.db_path) as conn:
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                f"INSERT INTO capability_claims ({_RAW_COLUMNS}) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                _raw_row_values(state=STATE_CLAIMED),
+            )
+
+    assert store.get_row(_OTHER_CAPABILITY_ID) is None
+
+
+def test_database_rejects_terminal_row_that_was_never_claimed(tmp_path):
+    store = _store(tmp_path)
+    store.get_row(CAPABILITY_ID)
+
+    with sqlite3.connect(store.db_path) as conn:
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                f"INSERT INTO capability_claims ({_RAW_COLUMNS}, terminal_outcome) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (*_raw_row_values(state=STATE_COMPLETED), STATE_COMPLETED),
+            )
+
+    assert store.get_row(_OTHER_CAPABILITY_ID) is None
+
+
+def test_database_rejects_issued_row_carrying_claim_metadata(tmp_path):
+    """An ``issued`` row must be empty of lifecycle metadata."""
+    store = _store(tmp_path)
+    store.get_row(CAPABILITY_ID)
+
+    with sqlite3.connect(store.db_path) as conn:
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                f"INSERT INTO capability_claims ({_RAW_COLUMNS}, claimant_id) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (*_raw_row_values(), "agent-a"),
+            )
+
+    assert store.get_row(_OTHER_CAPABILITY_ID) is None
+
+
+@pytest.mark.parametrize(
+    "column, value",
+    [
+        ("claimant_id", "agent-impostor"),
+        ("execution_attempt_id", "attempt-forged"),
+        ("claimed_at", "1999-01-01T00:00:00+00:00"),
+    ],
+)
+def test_database_blocks_claim_ownership_mutation(tmp_path, column, value):
+    """Claim ownership is immutable once the row leaves ``issued``."""
+    store = _store(tmp_path)
+    assert _claim(store).allowed
+    before = store.get_row(CAPABILITY_ID)
+
+    with sqlite3.connect(store.db_path) as conn:
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                f"UPDATE capability_claims SET {column} = ? WHERE capability_id = ?",
+                (value, CAPABILITY_ID),
+            )
+
+    assert store.get_row(CAPABILITY_ID)[column] == before[column]
+
+
+@pytest.mark.parametrize(
+    "column, value",
+    [
+        ("terminal_outcome", STATE_FAILED),
+        ("terminal_at", "1999-01-01T00:00:00+00:00"),
+    ],
+)
+def test_database_blocks_terminal_metadata_mutation(tmp_path, column, value):
+    store = _store(tmp_path)
+    assert _claim(store).allowed
+    assert store.finalize(
+        CAPABILITY_ID,
+        claimant_id="agent-a",
+        execution_attempt_id="attempt-1",
+        outcome=STATE_COMPLETED,
+        now=NOW,
+    ).applied
+    before = store.get_row(CAPABILITY_ID)
+
+    with sqlite3.connect(store.db_path) as conn:
+        with pytest.raises(sqlite3.IntegrityError):
+            conn.execute(
+                f"UPDATE capability_claims SET {column} = ? WHERE capability_id = ?",
+                (value, CAPABILITY_ID),
+            )
+
+    assert store.get_row(CAPABILITY_ID)[column] == before[column]
+
+
+def test_hardened_schema_leaves_the_ordinary_lifecycle_working(tmp_path):
+    """The constraints must not narrow the legitimate claim/finalize path."""
+    store = _store(tmp_path)
+
+    assert _claim(store).allowed
+    claimed = store.get_row(CAPABILITY_ID)
+    assert claimed["state"] == STATE_CLAIMED
+    assert claimed["terminal_at"] is None and claimed["terminal_outcome"] is None
+
+    for outcome in (STATE_COMPLETED, STATE_FAILED):
+        fresh = _store(tmp_path / outcome)
+        assert _claim(fresh).allowed
+        assert fresh.finalize(
+            CAPABILITY_ID,
+            claimant_id="agent-a",
+            execution_attempt_id="attempt-1",
+            outcome=outcome,
+            now=NOW,
+        ).applied
+        row = fresh.get_row(CAPABILITY_ID)
+        assert row["state"] == outcome and row["terminal_outcome"] == outcome
+        assert row["claimant_id"] == "agent-a"
+
+
+def test_v1_schema_database_fails_closed(tmp_path):
+    """A pre-hardening v1 file is unsupported, not silently reused.
+
+    ``CREATE TABLE IF NOT EXISTS`` cannot retrofit the v2 row-shape CHECK, so a
+    v1 file would otherwise keep the weak schema while reporting success.
+    """
+    store = _store(tmp_path)
+    assert _claim(store).allowed
+    with sqlite3.connect(store.db_path) as conn:
+        conn.execute(
+            "UPDATE schema_meta SET value = ? WHERE key = 'schema_version'",
+            ("triagecore.capability_claims.v1",),
+        )
+
+    result = _claim(
+        CapabilityClaimStore(store.db_path),
+        _binding(capability_id=_OTHER_CAPABILITY_ID),
+    )
+
+    assert not result.allowed and result.reason_code == CLAIM_STORE_UNAVAILABLE
 
 
 def test_empty_scope_digest_is_bound_literally_not_treated_as_wildcard(tmp_path):

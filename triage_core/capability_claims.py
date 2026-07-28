@@ -45,7 +45,13 @@ from typing import Any, Dict, Optional
 
 # --- Schema -------------------------------------------------------------------
 
-SCHEMA_VERSION = "triagecore.capability_claims.v1"
+# v2 hardens the lifecycle the module claims SQLite owns: legal-transition
+# whitelisting, per-state row shape, and immutable claim ownership. A table
+# level CHECK cannot be retrofitted onto an existing table by
+# ``CREATE TABLE IF NOT EXISTS``, so the version is bumped rather than left to
+# silently accept a v1 file that lacks the new guarantees. A v1 database now
+# fails closed as an unsupported version.
+SCHEMA_VERSION = "triagecore.capability_claims.v2"
 DEFAULT_DB_FILENAME = "capability_claims.sqlite3"
 DEFAULT_BUSY_TIMEOUT_MS = 5000
 
@@ -121,7 +127,37 @@ _CREATE_SQL = (
         terminal_at          TEXT,
         terminal_outcome     TEXT
             CHECK (terminal_outcome IS NULL
-                   OR terminal_outcome IN ('completed', 'failed'))
+                   OR terminal_outcome IN ('completed', 'failed')),
+        -- Row shape must match the state. Without this a direct SQL writer
+        -- could insert a 'claimed' row owned by nobody, or a terminal row that
+        -- was never claimed, and every lifecycle field the module treats as
+        -- authoritative would be unenforced.
+        CHECK (
+            (
+                state = 'issued'
+                AND claimed_at           IS NULL
+                AND claimant_id          IS NULL
+                AND execution_attempt_id IS NULL
+                AND terminal_at          IS NULL
+                AND terminal_outcome     IS NULL
+            )
+            OR (
+                state = 'claimed'
+                AND claimed_at           IS NOT NULL
+                AND claimant_id          IS NOT NULL
+                AND execution_attempt_id IS NOT NULL
+                AND terminal_at          IS NULL
+                AND terminal_outcome     IS NULL
+            )
+            OR (
+                state IN ('completed', 'failed')
+                AND claimed_at           IS NOT NULL
+                AND claimant_id          IS NOT NULL
+                AND execution_attempt_id IS NOT NULL
+                AND terminal_at          IS NOT NULL
+                AND terminal_outcome     = state
+            )
+        )
     )
     """,
     """
@@ -147,13 +183,40 @@ _CREATE_SQL = (
     END
     """,
     """
-    CREATE TRIGGER IF NOT EXISTS capability_terminal_is_absorbing
-    BEFORE UPDATE OF state ON capability_claims
+    CREATE TRIGGER IF NOT EXISTS capability_state_transition_legal
+    BEFORE UPDATE ON capability_claims
+    FOR EACH ROW
+    WHEN NEW.state <> OLD.state
+     AND NOT (
+              (OLD.state = 'issued'  AND NEW.state = 'claimed')
+           OR (OLD.state = 'claimed' AND NEW.state IN ('completed', 'failed'))
+         )
+    BEGIN
+        SELECT RAISE(ABORT, 'illegal capability state transition');
+    END
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS capability_claim_ownership_immutable
+    BEFORE UPDATE ON capability_claims
+    FOR EACH ROW
+    WHEN OLD.state <> 'issued'
+     AND (   IFNULL(OLD.claimed_at, '')           <> IFNULL(NEW.claimed_at, '')
+          OR IFNULL(OLD.claimant_id, '')          <> IFNULL(NEW.claimant_id, '')
+          OR IFNULL(OLD.execution_attempt_id, '')
+             <> IFNULL(NEW.execution_attempt_id, ''))
+    BEGIN
+        SELECT RAISE(ABORT, 'claim ownership is immutable once claimed');
+    END
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS capability_terminal_metadata_immutable
+    BEFORE UPDATE ON capability_claims
     FOR EACH ROW
     WHEN OLD.state IN ('completed', 'failed')
-      OR (OLD.state = 'claimed' AND NEW.state = 'issued')
+     AND (   IFNULL(OLD.terminal_at, '')      <> IFNULL(NEW.terminal_at, '')
+          OR IFNULL(OLD.terminal_outcome, '') <> IFNULL(NEW.terminal_outcome, ''))
     BEGIN
-        SELECT RAISE(ABORT, 'terminal transitions are absorbing');
+        SELECT RAISE(ABORT, 'terminal metadata is immutable');
     END
     """,
     """
