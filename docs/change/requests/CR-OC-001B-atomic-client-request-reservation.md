@@ -54,6 +54,7 @@ Reserve first, then issue, then bind.
 
 ```text
 reserve(client_request_id, request_digest, broker_connection_id)
+    -> begin_issuance      one-shot, owner-gated
     -> issue capability
     -> bind capability_id into the existing reservation
 ```
@@ -97,15 +98,17 @@ The reservation therefore carries a durable ownership token, mirroring
 CR-YK-002's `execution_attempt_id`:
 
 ```text
-reservation_attempt_id
+reservation_attempt_token    returned once, never persisted
+reservation_attempt_digest   persisted, sha256(token)
 ```
 
-- The insert winner receives it **once**, at reservation time.
-- Binding requires all three: matching `client_request_id`, state `reserved`,
-  and matching `reservation_attempt_id`.
-- Denying likewise requires the attempt ID, so a stranger cannot deny someone
-  else's live reservation. That would be the same sabotage vector.
-- A retry may **inspect** the row. It never receives the attempt ID and never
+- The insert winner receives the **raw token** once, at reservation time.
+- Advancing the row — beginning issuance, binding, or denying — requires
+  presenting the raw token, which is hashed internally and compared against the
+  stored digest.
+- Denying requires it too, so a stranger cannot deny someone else's live
+  reservation. That would be the same sabotage vector.
+- A retry may **inspect** the row. It never receives the token and never
   advances the row.
 
 After a crash the attempt ID is lost, so the reservation is inert by
@@ -113,7 +116,8 @@ construction rather than by a policy decision taken on incomplete information.
 
 #### The token is authority-bearing, not descriptive metadata
 
-Possession of `reservation_attempt_id` *is* the right to advance the row. It
+Possession of the raw `reservation_attempt_token` *is* the right to advance the
+row. It
 must therefore be specified with the care given to a credential rather than to
 a label:
 
@@ -124,17 +128,31 @@ Generation
     from client_request_id, request_digest, or any other request field.
 
 Disclosure
-    Returned only in the successful new-reservation result. Lookup, retry,
-    denial, error paths, logging, and the persistent projection never disclose
-    it. A retry learns that a reservation exists, never how to advance it.
+    The raw token is returned only in the successful new-reservation result.
+    Lookup, retry, denial, error paths, logging, and the persistent projection
+    never disclose it. A retry learns that a reservation exists, never how to
+    advance it.
+
+Storage
+    Only sha256(token) is persisted, as reservation_attempt_digest. The raw
+    token never enters SQLite, projections, evidence, logs, or errors. The
+    stored digest is never accepted as a substitute token.
 
 Enforcement
-    Binding and denial each use one atomic conditional write whose predicate
-    includes client_request_id, state = reserved, and the exact
-    reservation_attempt_id, requiring exactly one changed row. A prior read
+    begin_issuance, bind, and deny each accept the raw token, hash it, and
+    perform one atomic conditional write whose predicate includes
+    client_request_id, the required current state, and the exact
+    reservation_attempt_digest, requiring exactly one changed row. A prior read
     followed by an unconditional update is non-conforming: two callers could
-    each read `reserved`, each compare successfully, and both proceed.
+    each read the row, each compare successfully, and both proceed.
 ```
+
+Storing only the digest matters because the token is a bearer credential. If
+the raw value sat in the database, **anyone who could read the reservation
+store would obtain the right to bind or deny any live row** — the credential
+would be as widely held as the file. Hashing at rest keeps the earlier claim
+("credentials are never persisted") true rather than contradicted, and after a
+crash the raw token is gone while database disclosure alone grants nothing.
 
 The conditional-write requirement is the same discipline test 1 applies to the
 insert, extended to the two transitions out of `reserved`. Non-disclosure is
@@ -150,6 +168,43 @@ assert that a crash occurred. No caller can know that — it may be looking at a
 live operation. The observable condition is that the row exists and is
 unbound, so the code is `reservation_unbound`. The policy is unchanged:
 non-owner callers cannot resume it. Only the claim shrinks to what is true.
+
+### 2b. The right to issue must be consumed before issuing
+
+Owning the token is necessary but not sufficient. Two invocations holding the
+**same valid token** could each call `issue_capability` and only then race to
+bind. The uniqueness constraint permits just one binding — but by then the
+second capability already exists.
+
+That is not a harmless orphan. `issue_capability` mints the capability ID
+internally and appends the issuance to the ledger immediately, and the
+unchanged public claim path performs no reservation lookup. The unbound second
+capability therefore **remains claimable through direct
+`claim_capability`**, exactly as the narrowed gating boundary in decision 3
+honestly admits. A one-to-one constraint on binding does not bound the number
+of capabilities that exist.
+
+The right to issue must therefore be consumed *before* the issuance call, not
+reconciled after it:
+
+```text
+begin_issuance(client_request_id, reservation_attempt_token)
+    reserved -> issuing        one shot, atomic, owner-gated
+```
+
+Only the winner of that transition may call `issue_capability`. Once a row is
+`issuing`:
+
+- no second issuance may begin;
+- it never returns to `reserved`;
+- denial is no longer permitted — the decision has already been made;
+- a crash leaves the row permanently inert, as before;
+- binding transitions `issuing -> authorized`, requiring the same token and the
+  exact `capability_id`.
+
+This is still reservation coordination. It records who holds the one-shot right
+to obtain a capability for a client request, and it duplicates nothing in
+CR-YK-002's claim lifecycle.
 
 ### 3. Reservation gating applies to the mediated entry point only
 
@@ -197,8 +252,9 @@ constraints, exactly as the v2 claim-store lifecycle tests do.
 |---|---|
 | No record for this `client_request_id` | reserve it; `new_request` |
 | Same ID, same digest, reservation `authorized` | return the existing binding |
-| Same ID, same digest, reservation `reserved`, owner attempt ID | the owner may proceed to bind |
+| Same ID, same digest, reservation `reserved`, owner token | the owner may begin issuance |
 | Same ID, same digest, reservation `reserved`, non-owner | `reservation_unbound` |
+| Same ID, same digest, reservation `issuing`, any caller | `reservation_already_issuing` |
 | Same ID, different digest | `request_id_reuse_mismatch` |
 | Same ID, different `broker_connection_id` | `request_id_reuse_mismatch` |
 | Same ID, reservation `denied` | return the recorded denial |
@@ -251,21 +307,23 @@ Only:
 
 ```text
 client_request_id
-reservation_attempt_id
+reservation_attempt_digest    sha256 of the token; never the raw token
 request_digest
 broker_connection_id
-capability_id          (null until bound)
+capability_id                 (null until bound)
 task_id
 state
 reserved_at
+issuing_at
 bound_at
 denied_at
 ```
 
-`reservation_attempt_id` is persisted because the conditional write must
-compare against it, but it is **never included in any projection, evidence
-record, log line, or error payload** — it is authority-bearing, and disclosing
-it would hand the right to advance the row to whoever reads the output.
+Only `reservation_attempt_digest` is persisted. The raw token is
+authority-bearing, so it never enters the database, any projection, evidence
+record, log line, or error payload — disclosing it would hand the right to
+advance the row to whoever reads the output, and storing it would hand that
+right to whoever can read the file.
 
 Never: `proposed_bytes` in any form, prompt or model text, tool arguments,
 credentials, file contents, or free-text reasons. The row must pass the
@@ -274,7 +332,7 @@ existing persistent privacy invariant before it is treated as evidence-safe.
 ## State Model
 
 ```text
-reserved -> authorized
+reserved -> issuing -> authorized
 reserved -> denied
 ```
 
@@ -298,15 +356,19 @@ answers one question: which client request owns which capability.
 
 ### Rules
 
-- `reserved` carries no `capability_id` and no `bound_at`.
+- `reserved` carries no `capability_id`, no `issuing_at`, and no `bound_at`.
+- `issuing` records that the one-shot right to obtain a capability has been
+  consumed. It still carries no `capability_id`.
 - `authorized` carries exactly one `capability_id`, and it never changes.
 - `denied` carries no `capability_id`; it records that authorization was
   refused, which is distinct from an orphaned `reserved` row and is why the
   state exists at all. It is not a mirror of any claim-store state.
-- Both `authorized` and `denied` are absorbing.
-- No transition returns a reservation to `reserved`.
-- Advancing out of `reserved`, in either direction, requires the owner's
-  `reservation_attempt_id`.
+- `denied` is reachable only from `reserved`. Once issuance has begun the
+  decision is made, so `issuing -> denied` is illegal.
+- `authorized` and `denied` are absorbing.
+- No transition returns a reservation to `reserved` or to `issuing`.
+- Every transition out of `reserved` or `issuing` requires the owner's raw
+  `reservation_attempt_token`.
 
 Legal transitions must be enforced by a schema trigger, and row shape bound to
 state by a table-level `CHECK`, following the v2 claim-store pattern rather than
@@ -336,7 +398,9 @@ ok
 reservation_not_found            store read successfully, no row
 request_id_reuse_mismatch        same id, different digest or connection
 reservation_unbound              row exists, unbound, caller is not the owner
-reservation_attempt_mismatch     wrong reservation_attempt_id
+reservation_attempt_mismatch     token does not match the stored digest
+reservation_already_issuing      the one-shot issuance right is already consumed
+reservation_issuance_not_begun   bind attempted while the row is still reserved
 reservation_already_bound        a different capability is already bound
 capability_already_reserved      that capability is bound to another request
 reservation_binding_mismatch     effect/request/linkage are not one transition
@@ -377,7 +441,7 @@ form.
 9. A concurrent retry cannot sabotage the insert winner: the loser receives no
    attempt ID, cannot deny the row, and the winner can still bind afterwards.
 10. A later invocation cannot bind an orphaned row.
-11. A wrong `reservation_attempt_id` cannot bind, and cannot deny.
+11. A wrong `reservation_attempt_token` cannot begin issuance, bind, or deny.
 12. Individually valid request, reservation, and capability records from
     different operations cannot be combined.
 13. **Direct-SQL duplicate-insert tests** prove the schema itself rejects a
@@ -387,7 +451,19 @@ form.
     Python layer entirely, or removing a constraint would leave the suite green
     on Python-side checks alone.
 14. An expired capability does not release its reservation.
-15. The persisted row passes the persistent privacy invariant.
+15. The persisted row passes the persistent privacy invariant, **and the raw
+    `reservation_attempt_token` appears nowhere in the database, any
+    projection, evidence record, log line, or error payload, while
+    `reservation_attempt_digest` is present and equals `sha256(token)`.**
+16. **Transition race**, real threads over independent connections, covering at
+    minimum:
+    - `begin_issuance` versus `begin_issuance` — exactly one wins;
+    - `begin_issuance` versus `deny` — exactly one transition applies;
+    - bind capability A versus bind capability B from `issuing` — exactly one
+      capability becomes bound.
+
+    Test 1 proves the *insert* is atomic. It proves nothing about later
+    transitions, which is why this is separate rather than folded into it.
 
 ## Mutants
 
@@ -401,12 +477,14 @@ versions are identified as controls, not counted as evidence.
 | Remove the `capability_id` uniqueness constraint | **direct-SQL duplicate-binding test** (13) |
 | Drop `request_digest` from the reuse comparison | different-digest test (3) |
 | Drop `broker_connection_id` from the reuse comparison | independent connection test (4) |
-| Remove the `reservation_attempt_id` check from binding | orphaned-row and wrong-attempt tests (10, 11) |
+| Remove the token check from a transition | orphaned-row and wrong-token tests (10, 11) |
 | Allow a non-owner to deny a `reserved` row | sabotage test (9) |
 | Allow rebinding a second capability | already-bound test (6) |
 | Report store failure as `reservation_not_found` | store-condition tests (7) |
 | Skip the effect/request/linkage verification before binding | transplant test (12) |
 | Release a reservation on capability expiry | expiry test (14) |
+| Skip or weaken the one-shot `reserved -> issuing` gate | transition-race test (16) |
+| Persist the raw attempt token instead of only its digest | token-secrecy test (15) |
 
 The two uniqueness mutants point at direct-SQL tests deliberately. A
 concurrency or public-API test can stay green after the schema constraint is
@@ -473,6 +551,10 @@ used to support:
   attempt ID decides rather than a heuristic.
 - Reservation gating binds only the mediated entry point. Direct use of the
   existing capability API is unchanged, and this slice makes no claim about it.
+- The one-shot gate bounds how many capabilities this store will *cause* to be
+  issued for one client request. It cannot retract a capability that some other
+  path issues, because issuance appends to the ledger outside this store's
+  control.
 - Reserving a request proves nothing about who sent it. That remains
   CR-OC-001D's problem, and merging this slice must not be read as progress on
   it.
