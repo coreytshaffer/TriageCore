@@ -2,14 +2,35 @@
 
 ## Status
 
-- **Status:** Proposed / requirements proposal only.
-- **Implementation authority:** None.
-- **Approval gate:** Explicit human approval is required before any code, test,
-  schema, runtime, or integration change.
+- **Status:** Requirements approved. The standalone atomic-claiming foundation
+  is committed on branch `cr-yk-002-atomic-capability-claiming` at
+  `27fd86963f460fb6f19108a879f93176009f0832`. Test-verified and **not merged**.
+  Precisely:
+  - **Recovered into the working tree:** yes. `triage_core/capability_claims.py`
+    and `tests/test_capability_claims.py` were untracked and lost; they were
+    reconstructed and restored on 2026-07-27. Fidelity evidence differs by file:
+    `capability_claims.py` compiles to bytecode byte-identical to the surviving
+    cache built from the original, while `test_capability_claims.py` is
+    supported only by clean transcript replay and a source-length match.
+  - **Verified by tests:** yes. Focused run
+    (`tests/test_capability_claims.py`, `tests/test_authz.py`) 102 passed /
+    1 platform skip; full suite 1291 passed / 5 environmental skips, no
+    failures, no errors, no `xfail`, no `xpass`.
+  - **Committed to the branch:** yes, as `27fd869` (implementation only; the
+    documentation status update is a separate commit).
+  - **Merged:** no. Review through the implementation PR is still required.
+- **Implementation authority:** Granted for the standalone claim foundation
+  only, within the allowlist recorded below.
+- **Still unauthorized:** `tc authz` CLI surfaces, `tc authz exec`, `tc run`
+  integration, `--confirmed-plan`, backend or model invocation, routing and
+  worker changes, saved-plan execution, FIDO2 or YubiKey changes, and
+  CR-DD-012B integration.
+- **CR-DD-012B:** remains explicitly unauthorized and blocked pending its own
+  separate approval.
 
-This document records requirements only. It does not authorize implementation,
-execution, task integration, schema creation, test changes, or modification of
-any current capability path.
+This document records the requirements contract and the implementation written
+against it. It grants no execution or integration authority, and it does not
+claim that the implementation has been reviewed or merged.
 
 ## Scope
 
@@ -140,6 +161,32 @@ bindings required by the atomic registry, particularly:
 - `plan_body_digest`
 - `scope_digest`
 - `issued_at`
+
+**Amendment (implementation decision, approved after the fact).** Of the two
+permitted task bindings above, the implementation uses the **ledger event
+envelope**, and `task_id` is deliberately **not** duplicated into the issuance
+payload. The envelope is authoritative:
+
+- Issuance events are written with `append_event(task_id, ...)`, which always
+  populates the envelope `task_id`, and are read back through
+  `get_events(task_id)`, which matches the envelope value exactly. There is no
+  path that returns an event belonging to another task.
+- The value written into the claim database's immutable `task_id` column is
+  the envelope value, not a payload copy, so there is no second source that
+  could disagree with the first.
+- A missing, blank, or non-string envelope `task_id` fails closed: the
+  capability is unclaimable, and no row is ever materialized.
+- A conflicting envelope `task_id` for an already-claimed capability fails the
+  immutable-binding check and cannot rebind or hijack the row.
+
+This deviates from the implementation handoff, which directed that `task_id` be
+added to the payload. It was raised and approved as a deliberate amendment
+rather than a silent substitution. The practical trigger was that adding
+`task_id` to the payload broke two unchanged CR-YK-001 tests: the persistent
+privacy scanner is value-based, and the fixture's synthetic non-UUID task
+identifier matched its credit-card heuristic. Production task identifiers are
+UUIDs and would not have tripped it, so the deviation is justified by the
+single-source-of-truth argument above rather than by the test failure.
 
 The existing issuance path already records capability ID, receipt digest,
 decision ID, artifact digest, approver identity, expiry, and single-use status.
@@ -358,10 +405,59 @@ change should be necessary. This candidate list is not implementation authority.
 5. Require a new authorization before any recovery or retry policy is
    considered.
 
+## Implementation Record
+
+Committed on branch `cr-yk-002-atomic-capability-claiming` at
+`27fd86963f460fb6f19108a879f93176009f0832`. Test-verified and not merged:
+
+- `triage_core/capability_claims.py` — the standalone SQLite registry:
+  versioned schema, closed `CHECK` constraint over the four lifecycle states,
+  partial unique index on `execution_attempt_id`, and triggers enforcing
+  immutable bindings, absorbing terminal states, and undeletable claimed rows.
+  `BEGIN IMMEDIATE` is taken before any decision is read.
+- `triage_core/authz.py` — the sole authorized compatibility boundary. It
+  versions the issuance payload to `triagecore.execution_capability.v2`, adds
+  `claim_capability` and `finalize_capability`, and delegates the legacy
+  `consume_capability` to the atomic store.
+- `tests/test_capability_claims.py` and the replaced concurrency tests in
+  `tests/test_authz.py`.
+
+Two deliberate reporting decisions, recorded rather than left to discovery:
+
+- **The persisted `execution_capability_denied` reason vocabulary widens from
+  five values to nine**, adding `capability_legacy_unclaimable`,
+  `capability_store_busy`, `capability_store_unavailable`, and
+  `claim_evidence_write_failed`. Collapsing these into the five legacy values
+  would report an operational store failure as a lifecycle or binding
+  decision, which would be untrue.
+- **The `consume_capability` compatibility boundary intentionally maps
+  artifact, scope, and immutable-binding mismatches to the single legacy
+  `REASON_DIGEST_MISMATCH` value.** A caller reading only that boundary cannot
+  distinguish them; `claim_capability` retains the precise reason. This is a
+  known reporting limitation and was not redesigned in this slice.
+
+Two implementation details worth a reviewer's attention:
+
+- The task binding comes from the ledger event envelope and is not duplicated
+  into the payload. See the amendment recorded under *Issuance Contract*; the
+  four fail-closed properties it lists are covered by tests.
+- A denied claim rolls back the row it may have inserted, so only committed
+  claims persist. Committing denied attempts would let bogus bindings
+  materialize a row that permanently locks out the legitimate claimer.
+
 ## Limitations and Uncertainty
 
-- This proposal has not implemented or exercised SQLite locking, lifecycle
-  transitions, evidence ordering, privacy validation, or failure handling.
+- Concurrency is proven with threads over independent SQLite connections on a
+  local filesystem. Multi-process and cross-host behavior is not exercised.
+- Expiry is enforced in Python inside the same `BEGIN IMMEDIATE` transaction
+  rather than in the SQL predicate, because ISO-8601 text is not a reliable
+  total order across differing sub-second precision. The check is still inside
+  the write lock, so it is not a race, but it is not a database constraint
+  either.
+- The persistent-privacy scanner is value-based and can flag non-UUID synthetic
+  identifiers as false positives; production task identifiers are UUIDs.
+- Reconciliation of an evidence gap left by a burnt claim is still not
+  implemented and remains out of scope.
 - Local SQLite behavior does not establish safe distributed locking semantics.
 - A committed claim followed by a crash or evidence-write failure intentionally
   creates an unusable authorization and may leave an evidence gap.
