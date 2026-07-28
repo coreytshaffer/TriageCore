@@ -13,10 +13,13 @@ current path.
 
 ## Why This Slice Is Next
 
-CR-OC-001A produces trustworthy identities and digests. It does not reserve
-anything. `classify_request_replay` compares two bindings it is *handed*; it
-cannot discover that a prior binding exists, and nothing stops two callers from
-obtaining authority for the same logical operation.
+CR-OC-001A produces deterministic, syntactically validated, integrity-bound
+representations and digests. It authenticates nothing — not the broker
+connection, not the declared invocation context, not file-identifier
+provenance — and it reserves nothing. `classify_request_replay` compares two
+bindings it is *handed*; it cannot discover that a prior binding exists, and
+nothing stops two callers from obtaining authority for the same logical
+operation.
 
 CR-OC-001B closes that gap and nothing else. It is deliberately sequenced
 before the executor (CR-OC-001C) and the broker (CR-OC-001D), because an
@@ -69,23 +72,77 @@ lives in SQLite, so **no single transaction spans both**. A crash between
 issuance and binding is therefore possible and must be specified rather than
 wished away.
 
-Rule: such a reservation is **burned**. It cannot be advanced, and no second
-capability may be issued against it. A retry carrying the same digest does not
-resume it; it fails closed with a distinct reason. Recovery requires a new
-human authorization and a **new `client_request_id`**.
+Rule: such a reservation becomes permanently inert. It cannot be advanced by
+anyone, and no second capability may be issued against it. Recovery requires a
+new human authorization and a **new `client_request_id`**.
 
 This intentionally destroys one authorization to avoid ever issuing two.
 
-### 3. Claiming must be gated on the reservation
+### 2a. An unbound reservation must have an owner
 
-An issued-but-unbound capability must be unclaimable. CR-YK-002's claim path
-checks `scope_digest` and lifecycle state; it knows nothing about reservations,
-and **CR-OC-001B must not modify it**.
+The rule above is not implementable as stated without a way to tell the
+invocation that *created* the reservation from any other caller presenting the
+same `client_request_id`. Without one, both available behaviours are wrong:
 
-The gate therefore lives in a new mediating function that verifies the
-reservation is in `authorized` state with a matching `capability_id` *before*
-delegating to the existing claim API. `triage_core/authz.py` and
-`triage_core/capability_claims.py` remain unmodified.
+- a retry that marks the row inert **sabotages a legitimate in-flight issuer**
+  that is still between reserve and bind;
+- a retry that leaves the row alone permits a **later invocation to perform the
+  bind the crashed invocation was supposed to own**.
+
+A component observing an unbound row cannot distinguish a crashed invocation
+from a live one. It never can — that is a property of the situation, not a gap
+in the design.
+
+The reservation therefore carries a durable ownership token, mirroring
+CR-YK-002's `execution_attempt_id`:
+
+```text
+reservation_attempt_id
+```
+
+- The insert winner receives it **once**, at reservation time.
+- Binding requires all three: matching `client_request_id`, state `reserved`,
+  and matching `reservation_attempt_id`.
+- Denying likewise requires the attempt ID, so a stranger cannot deny someone
+  else's live reservation. That would be the same sabotage vector.
+- A retry may **inspect** the row. It never receives the attempt ID and never
+  advances the row.
+
+After a crash the attempt ID is lost, so the reservation is inert by
+construction rather than by a policy decision taken on incomplete information.
+
+**Naming follows observability.** A code such as `reservation_burned` would
+assert that a crash occurred. No caller can know that — it may be looking at a
+live operation. The observable condition is that the row exists and is
+unbound, so the code is `reservation_unbound`. The policy is unchanged:
+non-owner callers cannot resume it. Only the claim shrinks to what is true.
+
+### 3. Reservation gating applies to the mediated entry point only
+
+A tempting formulation is that an issued-but-unbound capability "must be
+unclaimable." That is not achievable under this slice's own constraints, and
+stating it would be a false claim.
+
+`issue_capability` mints the capability ID internally and appends the issuance
+directly to the JSONL ledger. `claim_capability` then locates that ledger
+issuance and delegates straight to the CR-YK-002 claim store, performing no
+reservation lookup. A new wrapper can refuse to delegate; it **cannot make the
+existing public API incapable of claiming** the capability.
+
+The honest boundary for this slice:
+
+> An issued-but-unbound capability is rejected by the CR-OC mediated claim
+> entry point. **CR-OC-001B does not alter or constrain direct callers of
+> `triage_core.authz.claim_capability`.**
+
+Every claim about gating is therefore scoped to the mediated reservation API,
+never to TriageCore globally.
+
+Making reservation authorization an enforced prerequisite for *all* claiming
+would require changing `authz.py` or the claim store. That is a materially
+larger authority change, it is not in this slice's candidate allowlist, and it
+must not be smuggled in under this one. If it is wanted, it needs its own
+proposal and its own approval.
 
 ### 4. One-to-one binding is enforced by the schema, not the caller
 
@@ -106,10 +163,11 @@ constraints, exactly as the v2 claim-store lifecycle tests do.
 |---|---|
 | No record for this `client_request_id` | reserve it; `new_request` |
 | Same ID, same digest, reservation `authorized` | return the existing binding |
-| Same ID, same digest, reservation `reserved` (unbound) | fail closed — burned |
+| Same ID, same digest, reservation `reserved`, owner attempt ID | the owner may proceed to bind |
+| Same ID, same digest, reservation `reserved`, non-owner | `reservation_unbound` |
 | Same ID, different digest | `request_id_reuse_mismatch` |
 | Same ID, different `broker_connection_id` | `request_id_reuse_mismatch` |
-| Same ID, terminal reservation | return the recorded terminal outcome |
+| Same ID, reservation `denied` | return the recorded denial |
 
 ### 6. Connection binding must be asserted independently
 
@@ -159,6 +217,7 @@ Only:
 
 ```text
 client_request_id
+reservation_attempt_id
 request_digest
 broker_connection_id
 capability_id          (null until bound)
@@ -166,8 +225,7 @@ task_id
 state
 reserved_at
 bound_at
-terminal_at
-terminal_outcome
+denied_at
 ```
 
 Never: `proposed_bytes` in any form, prompt or model text, tool arguments,
@@ -177,20 +235,44 @@ existing persistent privacy invariant before it is treated as evidence-safe.
 ## State Model
 
 ```text
-reserved -> authorized -> claimed -> completed
-                                  \-> failed
+reserved -> authorized
 reserved -> denied
 ```
 
-- `reserved` carries no `capability_id`.
-- `authorized` carries exactly one, and it never changes.
-- Terminal states are absorbing.
-- No transition returns a reservation to `reserved`.
-- A `reserved` row that is retried is burned, not resumed.
+That is the whole lifecycle. It stops at `authorized` deliberately.
 
-Legal transitions must be enforced by a schema trigger and row shape bound to
+### Why it stops there
+
+Continuing `authorized -> claimed -> completed | failed` with terminal fields
+would create a **second lifecycle authority** mirroring CR-YK-002's claim
+store, with no transaction spanning the two stores and no specified ordering
+for: claim-store commit versus reservation update, a crash between them,
+terminal commit versus reservation terminal update, or reconciliation when one
+store says `authorized` and the other says `claimed`.
+
+Answering all of that would mean a full two-store ordering and
+crash-reconciliation matrix — unnecessary complexity for the stated acceptance
+claim, and a second place for the truth about a claim to live.
+
+**Claim and execution lifecycle stay exclusively in CR-YK-002.** This store
+answers one question: which client request owns which capability.
+
+### Rules
+
+- `reserved` carries no `capability_id` and no `bound_at`.
+- `authorized` carries exactly one `capability_id`, and it never changes.
+- `denied` carries no `capability_id`; it records that authorization was
+  refused, which is distinct from an orphaned `reserved` row and is why the
+  state exists at all. It is not a mirror of any claim-store state.
+- Both `authorized` and `denied` are absorbing.
+- No transition returns a reservation to `reserved`.
+- Advancing out of `reserved`, in either direction, requires the owner's
+  `reservation_attempt_id`.
+
+Legal transitions must be enforced by a schema trigger, and row shape bound to
 state by a table-level `CHECK`, following the v2 claim-store pattern rather than
-repeating its v1 mistake.
+repeating its v1 mistake of documenting an invariant the schema did not
+enforce.
 
 ## Cross-Object Binding
 
@@ -212,19 +294,29 @@ being bound.
 
 ```text
 ok
-reservation_not_found          store read successfully, no row
-request_id_reuse_mismatch      same id, different digest or connection
-reservation_burned             unbound reservation retried after a crash window
-reservation_already_bound      a different capability is already bound
-capability_already_reserved    that capability is bound to another request
-reservation_binding_mismatch   effect/request/linkage do not describe one transition
+reservation_not_found            store read successfully, no row
+request_id_reuse_mismatch        same id, different digest or connection
+reservation_unbound              row exists, unbound, caller is not the owner
+reservation_attempt_mismatch     wrong reservation_attempt_id
+reservation_already_bound        a different capability is already bound
+capability_already_reserved      that capability is bound to another request
+reservation_binding_mismatch     effect/request/linkage are not one transition
+reservation_denied               authorization was refused for this request
 reservation_store_busy
 reservation_store_unavailable
-reservation_evidence_write_failed
 ```
 
-Each is reserved narrowly. Conditions this slice cannot observe — path safety,
-broker authenticity, execution outcomes — stay absent. A code naming a
+`reservation_evidence_write_failed` is deliberately absent. Such a code would
+have to name which evidence write it refers to, its ordering relative to the
+SQLite commit, and whether the committed reservation stays usable afterwards.
+**The SQLite row is itself the durable evidence for this slice**; no separate
+ledger event is specified, so no such failure arises. A
+code for a condition that cannot occur is as dishonest as one that names the
+wrong condition.
+
+Each remaining code is reserved narrowly. Conditions this slice cannot observe
+— path safety, broker authenticity, execution outcomes, claim lifecycle — stay
+absent. A code naming a
 condition the component cannot detect is a false capability claim in vocabulary
 form.
 
@@ -241,15 +333,22 @@ form.
 7. Store locked, corrupt, and unsupported-schema each report their own
    condition, never `reservation_not_found`.
 8. A crash after reservation but before capability evidence cannot produce a
-   second capability; the reservation is burned and a same-digest retry fails
-   closed.
-9. Individually valid request, reservation, and capability records from
-   different operations cannot be combined.
-10. Direct-SQL tests prove the schema itself enforces both uniqueness
-    directions, the legal-transition whitelist, row shape per state, and
-    undeletability — not the Python layer.
-11. An expired capability does not release its reservation.
-12. The persisted row passes the persistent privacy invariant.
+   second capability; the row stays unbound and a non-owner same-digest retry
+   fails closed as `reservation_unbound`.
+9. A concurrent retry cannot sabotage the insert winner: the loser receives no
+   attempt ID, cannot deny the row, and the winner can still bind afterwards.
+10. A later invocation cannot bind an orphaned row.
+11. A wrong `reservation_attempt_id` cannot bind, and cannot deny.
+12. Individually valid request, reservation, and capability records from
+    different operations cannot be combined.
+13. **Direct-SQL duplicate-insert tests** prove the schema itself rejects a
+    second row for the same `client_request_id` and a second binding of the same
+    `capability_id`. Separate direct-SQL tests prove the legal-transition
+    whitelist, row shape per state, and undeletability. These must bypass the
+    Python layer entirely, or removing a constraint would leave the suite green
+    on Python-side checks alone.
+14. An expired capability does not release its reservation.
+15. The persisted row passes the persistent privacy invariant.
 
 ## Mutants
 
@@ -259,15 +358,23 @@ versions are identified as controls, not counted as evidence.
 
 | Mutant | Must be killed by |
 |---|---|
-| Remove the `client_request_id` uniqueness constraint | concurrent-reserve test |
-| Remove the `capability_id` uniqueness constraint | one-capability-two-requests test |
-| Drop `request_digest` from the reuse comparison | different-digest test |
-| Drop `broker_connection_id` from the reuse comparison | independent connection test |
-| Allow a burned reservation to be resumed | crash-window test |
-| Allow rebinding a second capability | already-bound test |
-| Report store failure as `reservation_not_found` | store-condition tests |
-| Skip the effect/request/linkage verification before binding | transplant test |
-| Release a reservation on capability expiry | expiry test |
+| Remove the `client_request_id` uniqueness constraint | **direct-SQL duplicate-insert test** (13) |
+| Remove the `capability_id` uniqueness constraint | **direct-SQL duplicate-binding test** (13) |
+| Drop `request_digest` from the reuse comparison | different-digest test (3) |
+| Drop `broker_connection_id` from the reuse comparison | independent connection test (4) |
+| Remove the `reservation_attempt_id` check from binding | orphaned-row and wrong-attempt tests (10, 11) |
+| Allow a non-owner to deny a `reserved` row | sabotage test (9) |
+| Allow rebinding a second capability | already-bound test (6) |
+| Report store failure as `reservation_not_found` | store-condition tests (7) |
+| Skip the effect/request/linkage verification before binding | transplant test (12) |
+| Release a reservation on capability expiry | expiry test (14) |
+
+The two uniqueness mutants point at direct-SQL tests deliberately. A
+concurrency or public-API test can stay green after the schema constraint is
+removed, because the Python layer still refuses the duplicate — which would make
+the mutant look killed while the invariant the schema claims to enforce is gone.
+That is the exact CR-YK-002 v1 failure, and pointing the mutant at the wrong
+test would reproduce it in the evidence rather than in the code.
 
 ## Explicitly Out of Scope
 
@@ -296,13 +403,17 @@ This candidate list is not implementation authority.
 
 A completed CR-OC-001B may support only:
 
-> TriageCore can atomically reserve a client request, bind at most one
-> capability to it, recover an identical retry, and fail closed on any mismatch,
-> with the reservation lifecycle enforced by the database rather than by the
-> caller.
+> Through the CR-OC mediated reservation API, TriageCore can atomically reserve
+> a client request, bind at most one capability to it, recover an identical
+> retry by its owner, and fail closed on any mismatch, with the reservation
+> lifecycle enforced by the database rather than by the caller.
 
-It may **not** be used to support:
+The scoping to the mediated API is load-bearing, not hedging. It may **not** be
+used to support:
 
+- that direct callers of `triage_core.authz.claim_capability` are constrained
+  in any way;
+- that an issued-but-unbound capability is unclaimable in general;
 - that the broker connection is authenticated;
 - that the client request originated where it claims;
 - that any file was read, written, or protected;
@@ -317,8 +428,12 @@ It may **not** be used to support:
   The window is bounded by burning, not eliminated.
 - Local SQLite semantics establish nothing about distributed locking; local
   filesystems only.
-- A burned reservation is deliberately unrecoverable and may leave an evidence
-  gap, exactly as CR-YK-002 accepts for capabilities.
+- An unbound reservation whose owner is gone is deliberately unrecoverable and
+  may leave an evidence gap, exactly as CR-YK-002 accepts for capabilities. No
+  component can tell that case from a live in-flight one, which is why the
+  attempt ID decides rather than a heuristic.
+- Reservation gating binds only the mediated entry point. Direct use of the
+  existing capability API is unchanged, and this slice makes no claim about it.
 - Reserving a request proves nothing about who sent it. That remains
   CR-OC-001D's problem, and merging this slice must not be read as progress on
   it.
