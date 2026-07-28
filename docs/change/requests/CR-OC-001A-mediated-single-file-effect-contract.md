@@ -25,15 +25,15 @@ writes no file.
 
 Provide a deterministic, privacy-safe contract in which:
 
-1. A replacement is described by an allowlisted file identifier, not a
-   caller-supplied path.
+1. A replacement is described by a syntactically validated file identifier, not
+   a caller-supplied path.
 2. The intended transition is pinned to an exact pre-content digest and an
-   exact post-content digest.
-3. Client-declared invocation context is structurally separated from
-   broker-authenticated connection binding.
+   exact post-content digest over exact bytes.
+3. Client-declared invocation context is structurally separated from the
+   broker-connection identifier field.
 4. Every bound field participates in a single canonical effect digest.
-5. Replay semantics are defined in terms of a unique client request, not merely
-   a capability.
+5. Replay semantics are defined in terms of a unique client request on a
+   specific connection, not merely a capability.
 6. The persistent projection carries metadata only and never file content.
 
 ## What This Slice Can and Cannot Establish
@@ -43,35 +43,46 @@ This distinction is binding and belongs in the module docstring, not only here.
 A completed CR-OC-001A may support exactly this claim:
 
 > TriageCore can deterministically represent a single-file content-replacement
-> effect, bind it to exact pre- and post-content digests, a unique client
-> request, a client-declared invocation context, and a broker-generated
-> connection identifier, while producing a privacy-safe persistent projection.
+> effect and bind it to exact pre- and post-content digests, a unique client
+> request, a client-declared invocation context, and a distinct
+> broker-connection identifier field whose provenance and connection binding
+> are not established by this slice, while producing a privacy-safe persistent
+> projection.
 
 It may not be used to support any of:
 
 - that OpenClaw is contained;
 - that the invocation context is authenticated;
+- that the broker-connection identifier was broker-generated;
+- that the target file identifier came from a trusted allowlist;
 - that replay is prevented in practice;
 - that paths are safe;
 - that a capability was claimed;
 - that any file was actually changed;
 - that OS privilege separation exists.
 
-### The broker_connection_id honesty problem
+### Provenance is asserted, never established
 
-`broker_connection_id` is **defined** as broker-generated and later bound to an
-authenticated IPC connection. In this slice there is no broker, so the value is
-supplied by the caller like every other field. **A pure module cannot tell a
-broker-minted identifier from a forged one.**
+Three fields carry provenance that this slice validates *syntactically* and
+cannot validate *substantively*. The positive claim must match the limitation
+in every place both appear.
 
-CR-OC-001A therefore establishes only that `broker_connection_id` is a
-*separate field with separate provenance* that participates in the effect
-digest. Its trustworthiness is entirely a CR-OC-001D property. Any wording that
-implies this slice authenticates the connection is false and must be rejected
-in review.
+| Field | This slice establishes | This slice cannot establish |
+|---|---|---|
+| `broker_connection_id` | it is a distinct field participating in the effect digest | that it was broker-generated or bound to any connection |
+| `declared_invocation_context` | its canonical shape and digest | that any declared value is true |
+| `target_file_id` | its syntax and descriptor shape | that it came from the trusted allowlist |
 
-The same applies to `declared_invocation_context`. Digesting a value prevents
-later alteration; it does not make the value true when first supplied.
+**A pure module cannot tell a broker-minted identifier from a forged one**, and
+digesting a value makes it tamper-evident after the fact without making it true
+when first supplied.
+
+The terms **broker-generated** and **broker-authenticated** are reserved for
+CR-OC-001D and must not appear as properties of this slice. Wherever this
+document describes what CR-OC-001A achieves, the correct phrasing is *a
+distinct broker-connection identifier field whose provenance and connection
+binding are not established here*. Any wording implying otherwise is false and
+must be rejected in review.
 
 ## Allowlisted File Descriptor
 
@@ -86,13 +97,26 @@ maximum_size_bytes
 ```
 
 The descriptor is produced by a later trusted allowlist-enumeration phase.
-CR-OC-001A defines and validates only its canonical representation. It does not
-enumerate, resolve, or verify that the described file exists.
+CR-OC-001A defines and validates only its canonical representation and syntax.
+It does not enumerate, resolve, verify that the described file exists, or
+establish that `target_file_id` actually originated from the allowlist.
 
-`canonical_relpath` is carried for evidence legibility. It is **not** an input
-channel: no validation, authorization, or later resolution may key off it in
-place of `target_file_id`. A proposal presenting a path where a file ID belongs
-fails closed as `invalid_target_file_id`.
+### The canonical_relpath rule, stated precisely
+
+`canonical_relpath` **is** part of the authorized effect and therefore does
+affect `scope_digest`. It is integrity-bound so that evidence stays consistent
+and a later executor cannot silently disagree about which file was meant.
+
+What it must never be is a **resolution channel**:
+
+> `canonical_relpath` is integrity-bound for evidence consistency but must
+> never be used to select, resolve, or open the target file. Resolution is
+> exclusively through `target_file_id`.
+
+A proposal presenting a path where a file ID belongs fails closed as
+`invalid_target_file_id`. A later slice that opens a file by joining
+`canonical_relpath` onto a root, rather than resolving `target_file_id` through
+the allowlist, violates this contract even if the resulting path is identical.
 
 ## Replacement Proposal
 
@@ -101,7 +125,7 @@ task_id
 client_request_id
 target_file_id
 expected_pre_digest
-proposed_bytes          # transient; never persisted, never digested directly
+proposed_bytes          # transient; hashed in memory, never retained
 expected_post_digest
 declared_invocation_context
 ```
@@ -115,11 +139,40 @@ The contract must reject:
 - unknown operations;
 - path-like values where only a file ID is permitted.
 
-`proposed_bytes` is transient. It exists to be verified against
-`expected_post_digest` and is then never carried into any digest input,
-projection, or evidence structure. Because `expected_post_digest` is verified
-against the bytes, every digest that includes the post-digest transitively
-binds the content without ever handling it.
+### How proposed_bytes are handled
+
+`proposed_bytes` **are hashed transiently** to compute and verify:
+
+```text
+sha256(exact_proposed_bytes) == expected_post_digest
+```
+
+That verification necessarily digests the exact bytes; any claim that they are
+"never digested" is false. What holds instead is a retention rule: the raw
+bytes are never embedded in canonical JSON, the authorized-effect digest, the
+request digest, the persistent projection, or durable evidence. They exist in
+memory long enough to be verified and are then dropped.
+
+Downstream digests therefore bind the content transitively through
+`expected_post_digest`, which is why no later structure needs the bytes.
+
+### Exact-byte treatment is binding
+
+The byte sequence hashed is the byte sequence proposed. No transformation may
+occur between receipt and hashing:
+
+- UTF-8 validity is a **gate, not a normalization step** — invalid input is
+  rejected, valid input is passed through unchanged;
+- no Unicode normalization (NFC, NFD, NFKC, NFKD);
+- no newline conversion in either direction;
+- no BOM insertion or removal;
+- `content_size_bytes` is the length of the original exact byte sequence, not
+  of any decoded, re-encoded, or normalized form.
+
+Without this, two conforming implementations could hash different post-content
+from identical input and both claim compliance. A test must show that content
+differing only by newline style, BOM presence, or Unicode normal form produces
+different post-digests and is never silently reconciled.
 
 `expected_pre_digest` always describes existing content. File creation is out
 of scope, so there is no null or sentinel pre-state in this slice.
@@ -148,8 +201,9 @@ after the fact; it does not make them true.
 broker_connection_id
 ```
 
-Broker-generated, later bound to an authenticated IPC connection. See the
-honesty note above: in this slice its provenance is asserted, not proven.
+A distinct identifier field that CR-OC-001D will generate in the broker and
+bind to an authenticated IPC connection. In this slice its provenance is
+asserted by the caller, not established — see the provenance table above.
 
 The two must remain distinct fields in the effect, in the projection, and in
 the API. Collapsing them, or exposing any accessor that presents declared
@@ -190,6 +244,100 @@ file remains inside the repository workspace
 CR-OC-001A does not check any of those. It only fixes the vocabulary so that a
 later slice cannot quietly upgrade a content claim into a filesystem claim.
 
+## Canonical Objects
+
+Every digest above is taken over a versioned, closed-field object. Vague
+phrasing such as "digest of the canonical linkage" is not implementable and is
+replaced here with exact schemas.
+
+### Shared rules
+
+- **Canonical JSON** is the existing `canonical_json_bytes` form: sorted keys,
+  `(",", ":")` separators, `ensure_ascii=True`, `allow_nan=False`, ASCII-encoded.
+- **Domain separation follows the house pattern** established by
+  `triage_core/governed_decision.py`: the domain is a field *inside* the
+  canonicalized envelope, not a byte prefix. Each object carries a `schema`
+  field holding its versioned discriminator, and that field is part of the
+  digest input.
+- **Closed field sets.** Every object rejects unknown fields. No object accepts
+  free-form extension.
+- **Optional values are forbidden, not omitted.** Every field listed is
+  required and must be present and non-null. There is no implicit default, no
+  omitted-key form, and no `null` sentinel. Two proposals that differ only in
+  whether a key was omitted cannot exist, so they cannot digest differently.
+- **Digests** retain `sha256:<64 lowercase hex>`.
+
+### The five objects
+
+```text
+triagecore.mediated_file_descriptor.v1
+    schema
+    target_file_id
+    canonical_relpath
+    encoding                  # literal "utf-8"
+    maximum_size_bytes
+
+triagecore.mediated_declared_context.v1
+    schema
+    runtime_id
+    runtime_version
+    openclaw_config_digest
+    agent_id
+    session_id
+    tool_name
+    client_request_id
+        -> declared_context_digest
+
+triagecore.mediated_file_effect.v1
+    schema
+    operation                 # literal "replace"
+    target_file_id
+    canonical_relpath
+    expected_pre_digest
+    expected_post_digest
+    content_size_bytes
+    declared_context_digest
+    broker_connection_id
+    client_request_id
+        -> effect_digest, used as scope_digest
+
+triagecore.mediated_client_request.v1
+    schema
+    task_id
+    client_request_id
+    broker_connection_id
+    target_file_id
+    canonical_relpath
+    expected_pre_digest
+    expected_post_digest
+    content_size_bytes
+    declared_context_digest
+        -> request_digest        # every proposal field except raw bytes
+
+triagecore.mediated_plan_linkage.v1
+    schema
+    task_id
+    decision_id
+    client_request_id
+    broker_connection_id
+    effect_digest
+    request_digest
+        -> plan_body_digest
+```
+
+`triagecore.mediated_plan_linkage.v1` is what `plan_body_digest` digests. It
+binds the governed decision to the exact effect and the exact request, so an
+authorization cannot be transplanted onto a different effect, request, or
+connection while keeping its decision identity.
+
+### Cross-domain distinctness
+
+Because `schema` participates in each digest, two objects with coincidentally
+identical remaining fields still produce different digests. A test must prove
+this rather than assume it: construct payloads that are field-for-field equal
+across two schema domains and assert their digests differ. Without that check,
+domain separation is an intention rather than a property.
+
 ## Existing Capability Mapping
 
 The proposal maps onto the merged CR-YK-002 capability without changing
@@ -197,8 +345,10 @@ The proposal maps onto the merged CR-YK-002 capability without changing
 
 ```text
 artifact_byte_digest = expected_post_digest
-scope_digest         = sha256(canonical_json_bytes(authorized_effect))
-plan_body_digest     = digest of the canonical proposal/decision linkage
+scope_digest         = effect_digest
+                       (triagecore.mediated_file_effect.v1)
+plan_body_digest     = linkage digest
+                       (triagecore.mediated_plan_linkage.v1)
 task_id              = existing ledger-envelope binding
 ```
 
@@ -206,46 +356,101 @@ The existing canonical JSON and digest utilities are reused unchanged. No new
 capability schema is introduced. Digests retain the `sha256:<64 lowercase hex>`
 contract.
 
-### A sequencing consequence worth recording now
+### Connection binding runs through the whole sequence
 
 `scope_digest` covers the whole authorized effect, which includes
 `broker_connection_id`. CR-YK-002 binds `scope_digest` immutably at claim time
-and rejects a mismatch as `scope_digest_mismatch`.
+and rejects a mismatch as `scope_digest_mismatch`. **A capability is therefore
+bound to one broker connection** and cannot be claimed across a reconnect.
 
-Therefore **a capability is bound to one broker connection.** It cannot be
-claimed across a reconnect, and issuance must follow connection establishment
-rather than precede it. That is the intended containment property, but it is a
-real ordering constraint on CR-OC-001B and CR-OC-001D and should not be
-discovered during their implementation.
+`request_digest` must carry the same binding. If request identity omitted
+`broker_connection_id`, the same `client_request_id` and `request_digest` could
+recur unchanged after a reconnect while the effect and scope digest had
+changed — and a reservation store would report an idempotent replay for
+authority issued against a connection that no longer exists. That is why
+`triagecore.mediated_client_request.v1` includes `broker_connection_id`.
+
+**Consequence: a repeated `client_request_id` on a different connection is
+`request_id_reuse_mismatch`, not an idempotent replay.**
+
+The required ordering is therefore integrated, and reservation sits *after*
+connection establishment rather than merely issuance:
+
+```text
+connection established
+  -> broker_connection_id assigned
+  -> proposal/effect canonicalized
+  -> request_digest calculated
+  -> client request reserved
+  -> authorization/capability issued
+  -> capability claimed
+  -> effect executed
+```
+
+Every step from `request_digest` onward is downstream of the connection. This
+constrains CR-OC-001B and CR-OC-001D and should not be discovered during their
+implementation.
 
 ## Request Replay Contract
 
-Defined here, **persisted nowhere in this slice.**
+`request_digest` is the digest of `triagecore.mediated_client_request.v1` —
+every proposal field except raw `proposed_bytes`, and including
+`broker_connection_id`, `expected_post_digest`, and `content_size_bytes`.
 
 ```text
-request_digest = hash(canonical proposal
-                      excluding proposed_bytes,
-                      including expected_post_digest and content_size_bytes)
-
 reserved -> authorized -> claimed -> completed
                                   \-> failed
 reserved -> denied
 ```
 
+### A pure classification function, not a store
+
+A stateless module cannot both own `request_id_reuse_mismatch` and store
+nothing — it has no way to discover that a prior request exists. The resolution
+is to split comparison from storage: the comparison is pure and lives here, the
+storage is external and lives in CR-OC-001B.
+
+```text
+classify_request_replay(
+    existing_client_request_id,
+    existing_request_digest,
+    incoming_client_request_id,
+    incoming_request_digest,
+) -> new_request
+   | idempotent_replay
+   | request_id_reuse_mismatch
+```
+
+The function receives both bindings as arguments. It performs no lookup, no
+persistence, and no I/O. CR-OC-001B supplies the stored values atomically and
+owns every decision about what to do with the classification. This keeps the
+reason code in A — where the comparison logic lives and can be tested — while
+leaving enforcement entirely in B.
+
 Required rules:
 
-- The same `client_request_id` with the same `request_digest` may return the
-  existing recorded outcome.
-- The same `client_request_id` with a different digest is
-  `request_id_reuse_mismatch`.
-- An interrupted reservation is never silently treated as new.
-- The claim is **at most once per client request**, not merely once per
-  capability. A single capability must not be reachable through two distinct
-  client requests, and one client request must not yield two claims.
+- Same `client_request_id`, same `request_digest` → `idempotent_replay`; the
+  existing recorded outcome may be returned.
+- Same `client_request_id`, different digest → `request_id_reuse_mismatch`.
+  Because the digest includes `broker_connection_id`, this covers a repeat on a
+  different connection.
+- No existing binding → `new_request`.
+- An interrupted reservation is never silently treated as new. Representing
+  that is CR-OC-001B's obligation, since it requires durable state.
 
-CR-OC-001A provides the digest and the state vocabulary as pure values. The
-atomic SQLite reservation store, and any enforcement whatsoever, belong to
-CR-OC-001B. Nothing in this slice prevents replay in practice.
+### A requirement CR-OC-001A cannot represent
+
+The rule that *one capability must not be reachable through two distinct client
+requests* is **not representable in any structure defined here**, because
+`capability_id` appears nowhere in this slice's replay model — capability
+issuance is out of scope.
+
+It is therefore recorded as a CR-OC-001B obligation: **the reservation row must
+bind the assigned `capability_id` one-to-one with `client_request_id`**, with a
+uniqueness constraint in both directions. Stating the rule in A without the
+field to express it would be a contract that no implementation could satisfy.
+
+Nothing in this slice prevents replay in practice.
 
 ## Persistent Projection
 
@@ -316,9 +521,33 @@ CR-OC-001A must not implement:
 - unified diffs, patches, file creation, deletion, renaming, or multi-file
   effects.
 
-The named-pipe hardening redlines are recorded as **downstream requirements**
-under CR-OC-001D. They are not features of this pure module and must not be
-described as satisfied by it.
+### Recorded downstream requirements (CR-OC-001D)
+
+These are recorded so they are not lost, and are **not** features of this pure
+module. None is satisfied by CR-OC-001A or by any slice before D.
+
+Named-pipe hardening:
+
+- `PIPE_REJECT_REMOTE_CLIENTS` on creation;
+- an explicit security descriptor, never the default pipe security;
+- `FILE_FLAG_FIRST_PIPE_INSTANCE` with a cryptographically random per-run pipe
+  name, so a squatter cannot pre-create the expected name;
+- DACL permitting **only** Account A, Account B, and explicitly selected
+  operator or service identities;
+- no `Everyone` ACE and no anonymous-access ACE;
+- explicit denial of `NT AUTHORITY\NETWORK` and of anonymous access;
+- a broker-owned rendezvous artifact carrying the pipe name and the expected
+  broker identity;
+- shim-side verification of **both** the pipe-server process and its expected
+  account before any `proposed_bytes` are transmitted;
+- a negative test demonstrating that a remote-style client is rejected.
+
+The server-verification requirement matters for confidentiality even though the
+shim holds no mutation authority: a squatter that wins the pipe name would
+otherwise receive proposed file contents.
+
+CR-OC-001D is also where `broker_connection_id` acquires the provenance this
+slice only asserts.
 
 ## Test Contract
 
@@ -327,20 +556,34 @@ A separately approved implementation must demonstrate:
 1. Canonical representation and digest are deterministic across runs and
    independent of input field order.
 2. Altering any bound field changes the scope digest.
-3. Client-declared context and broker-generated binding remain distinct in the
-   effect, the projection, and the API surface.
+3. Client-declared context and the broker-connection identifier remain distinct
+   in the effect, the projection, and the API surface.
 4. `proposed_bytes` must match `expected_post_digest` exactly; a mismatch fails
    closed.
 5. Non-UTF-8 content fails closed.
 6. Content exceeding `maximum_size_bytes` fails closed.
-7. A path cannot substitute for a `target_file_id`.
-8. Identical request replay and mismatched request-ID reuse are
-   distinguishable.
-9. The persistent projection contains no file content under any input,
-   including content crafted to resemble metadata.
-10. The projection passes the persistent privacy invariant.
-11. A malformed object never produces a partially valid effect; construction is
+7. Exact-byte treatment holds: content differing only by newline style, BOM
+   presence, or Unicode normal form produces different post-digests and is
+   never silently reconciled.
+8. `content_size_bytes` equals the original byte length, not that of any
+   decoded or re-encoded form.
+9. A path cannot substitute for a `target_file_id`.
+10. `classify_request_replay` returns `new_request`, `idempotent_replay`, and
+    `request_id_reuse_mismatch` for the corresponding input pairs, and performs
+    no I/O.
+11. A repeated `client_request_id` on a different `broker_connection_id`
+    classifies as `request_id_reuse_mismatch`, not `idempotent_replay`.
+12. Every one of the five canonical objects rejects unknown fields, missing
+    fields, and null values.
+13. Field-for-field identical payloads in two different schema domains produce
+    different digests.
+14. The persistent projection contains no file content under any input,
+    including content crafted to resemble metadata.
+15. The projection passes the persistent privacy invariant.
+16. A malformed object never produces a partially valid effect; construction is
     all-or-nothing.
+17. The module performs no file, network, subprocess, IPC, or database access,
+    demonstrated by test rather than asserted.
 
 ### Mutant checks
 
@@ -350,11 +593,14 @@ the mutated version.
 
 | Mutant | Expected killer |
 |---|---|
-| Remove `broker_connection_id` from the digest | scope-digest sensitivity test |
+| Remove `broker_connection_id` from the effect digest | scope-digest sensitivity test |
+| Remove `broker_connection_id` from the request digest | cross-connection reuse test (item 11) |
 | Remove `client_request_id` from the digest | scope-digest sensitivity test |
 | Omit `expected_pre_digest` from the effect | effect-completeness test |
 | Accept `proposed_bytes` that mismatch the post-digest | post-digest verification test |
+| Normalize newlines or strip a BOM before hashing | exact-byte treatment test (item 7) |
 | Persist `proposed_bytes` in the projection | projection privacy test |
+| Drop `schema` from a canonical envelope | cross-domain distinctness test (item 13) |
 | Treat declared session identity as authenticated | structural separation test |
 
 The last mutant is weaker than the others and this is recorded rather than
@@ -371,6 +617,9 @@ CR-OC-001A may be considered implemented only when:
 - all Test Contract items pass;
 - every mutant in the table is killed by its designated test, each shown to
   fail against the mutated version;
+- all five canonical objects are implemented with closed field sets, required
+  non-null fields, and a `schema` discriminator inside the digest input;
+- `classify_request_replay` is pure and performs no lookup or persistence;
 - the module performs no file, network, subprocess, IPC, or database access,
   demonstrated by test rather than asserted;
 - the persistent privacy invariant passes over the projection;
@@ -416,9 +665,12 @@ Each requires its own approval. None is authorized by this document.
 - This proposal has not implemented or exercised any of the contracts above.
 - The module cannot verify that `broker_connection_id` was broker-generated,
   that the declared invocation context is truthful, or that `target_file_id`
-  corresponds to a real allowlisted file.
-- Defining replay semantics prevents no replay. Enforcement arrives with
-  CR-OC-001B.
+  corresponds to a real allowlisted file. All three are validated
+  syntactically and asserted substantively.
+- Defining replay semantics prevents no replay. `classify_request_replay`
+  compares two bindings it is handed; it cannot discover that a prior binding
+  exists. Enforcement, durable state, and the `capability_id` ↔
+  `client_request_id` one-to-one constraint all arrive with CR-OC-001B.
 - Binding a content transition proves nothing about filesystem security
   metadata, which CR-OC-001C must handle separately.
 - The scope-digest-per-connection consequence constrains capability issuance
