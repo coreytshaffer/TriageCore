@@ -1209,9 +1209,20 @@ def tc_run(args, client=None) -> None:
             print(f"Error: could not initialize backend: {exc}")
             sys.exit(1)
 
+    # 6b. Resolve local capability (CR-DD-013). This reads an already-recorded
+    # probe record when one is configured; it never probes and never invokes a
+    # model. Missing, disabled, stale, or invalid evidence stays unknown rather
+    # than being synthesized into local health.
+    from triage_core import capability_evidence as capability_module
+
+    capability = capability_module.resolve_from_config(default_config)
+    print(capability_module.describe_for_operator(capability))
+
     # 7. Governed loop. Privacy/safety failures fail closed (exit 2).
     try:
-        result = client.run_task(task_packet=packet, ledger=ledger, task_id=task_id)
+        result = client.run_task(
+            task_packet=packet, ledger=ledger, task_id=task_id, capability=capability
+        )
     except PrivacyViolationError as exc:
         print(f"Blocked (privacy fail-closed): {exc}")
         sys.exit(2)

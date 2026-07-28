@@ -68,6 +68,10 @@ class ResilienceRouteInput:
     recent_local_fast_failures: int = 0
     human_review_required: bool = False
     required_checks: list[str] = field(default_factory=list)
+    # CR-DD-013: optional validated capability evidence recording where the
+    # availability booleans above came from. Evidence-only -- route selection
+    # still reads the booleans, and its decision semantics are unchanged.
+    capability_evidence: object = None
 
 
 @dataclass

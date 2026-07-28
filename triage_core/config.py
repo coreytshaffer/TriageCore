@@ -120,5 +120,28 @@ class Config:
     def get_boundary_rules_path(self) -> str:
         return self.get_global("policies", "boundary_rules_path", "policies/cybernetic_ecology_boundary.yaml")
 
+    # --- [capability] (CR-DD-013) -------------------------------------------
+    # Explicit operator capability declarations. Ordinary backend settings
+    # (endpoint, enabled backend, model name) deliberately do NOT qualify: they
+    # declare intent, not current executability.
+
+    def get_capability_probe_record_path(self) -> str:
+        """Path to an already-recorded local backend probe record, if any.
+
+        Empty by default. Reading this file is the only capability input
+        ``tc run`` consults; it never probes.
+        """
+        return self.get_global("capability", "local_probe_record_path", "")
+
+    def get_capability_freshness_seconds(self) -> int:
+        """Max age of a probe record, in seconds, before it becomes unknown."""
+        return int(self.get_global("capability", "freshness_seconds", 300))
+
+    def get_capability_declare_local_fast(self) -> bool:
+        return bool(self.get_global("capability", "declare_local_fast", False))
+
+    def get_capability_declare_local_heavy(self) -> bool:
+        return bool(self.get_global("capability", "declare_local_heavy", False))
+
 
 default_config = Config()

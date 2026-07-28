@@ -11,7 +11,7 @@ def build_route_decision_payload(
     selected_model: str = "",
     route_source: str = "resilience_router_v1",
 ) -> Dict[str, Any]:
-    return {
+    payload: Dict[str, Any] = {
         "task_class": route_input.task_class,
         "task_complexity": route_input.complexity,
         "task_sensitivity": route_input.sensitivity,
@@ -37,6 +37,15 @@ def build_route_decision_payload(
         "recent_local_fast_failures": route_input.recent_local_fast_failures,
         "route_source": route_source,
     }
+
+    # CR-DD-013: capability provenance through the existing open route_decision
+    # payload. No new ledger schema and no schema-version bump; the closed
+    # route-worker-ledger.v1 contract is untouched.
+    capability = getattr(route_input, "capability_evidence", None)
+    if capability is not None and hasattr(capability, "to_evidence_payload"):
+        payload.update(capability.to_evidence_payload())
+
+    return payload
 
 
 def build_worker_result_payload(
