@@ -7,24 +7,24 @@ complete and merged through PR #110 as `52dccd3`; its physically tested,
 request-bound WebAuthn authorization evidence and offline verification are now
 the baseline, and no CR-YK-001 lineage, validation, or cleanup work remains.
 
-CR-YK-002's atomic-claiming foundation is committed on branch
-`cr-yk-002-atomic-capability-claiming` as `27fd869`, `eaf432d`, and `63a053b`,
-and is open for review as PR #117 but is not merged. Claim ownership and
-lifecycle state now live in a local SQLite registry; the ledger remains durable
-evidence and is no longer the concurrency lock. CLI surfaces, `tc run`
-integration, `--confirmed-plan`, backend calls, routing/worker changes, and
-FIDO2 changes remain unauthorized. CR-DD-012B remains separately blocked
-pending review and merge of this foundation plus explicit CR-DD-012B approval.
+CR-YK-002 is complete and merged through PR #117 as `5155bbb`. Claim ownership
+and lifecycle state now live in a local SQLite registry at schema version
+`triagecore.capability_claims.v2`; the ledger remains durable evidence and is
+no longer the concurrency lock. CLI surfaces, `tc run` integration,
+`--confirmed-plan`, backend calls, routing/worker changes, and FIDO2 changes
+remain unauthorized. CR-DD-012B's atomic-claiming prerequisite is now
+satisfied, but CR-DD-012B itself remains blocked pending its own explicit
+approval; the merge of this foundation is not that approval.
 
 ## Active GitHub Backlog
 
 - CR-YK-002: Atomic Execution-Capability Claiming
-  - Status: foundation committed on branch `cr-yk-002-atomic-capability-claiming` as `27fd869`, `eaf432d`, and `63a053b`; open for review as PR #117, not merged; CLI, runtime integration, and execution remain unauthorized
+  - Status: complete and merged through PR #117 as `5155bbb`; CLI, runtime integration, and execution remain unauthorized
   - Purpose: Provide a local SQLite registry for atomic, irrevocable capability claiming while retaining the task ledger as durable evidence. The conservative invariant holds: a crash or a post-commit evidence-write failure burns the authorization rather than risking duplicate execution. The former strict concurrency `xfail` is replaced by passing multi-threaded atomicity tests over independent SQLite connections. The schema is at `triagecore.capability_claims.v2`, which enforces row shape per state, permits only legal transitions, and freezes claim ownership and terminal metadata at the proper lifecycle points; v1 databases fail closed rather than being migrated. Terminal store failures report `capability_store_busy` or `capability_store_unavailable` rather than falsely reporting an absent capability. `triage_core/authz.py` is the sole authorized module permitted to import the claim store; no CLI, run path, router, worker, or backend consumes it. Implementation grants no execution or CR-DD-012B authority.
 
 - CR-YK-001: FIDO2 Security-Key-Backed Human Authorization Receipts
   - Status: complete and merged through PR #110 as `52dccd3`; feature refs cleaned up; recovery branches retained
-  - Purpose: Provide physically tested, request-bound WebAuthn authorization evidence with offline verification and explicit assurance limits. Atomic capability claiming is delivered by the CR-YK-002 foundation, implemented on its branch and pending review and merge.
+  - Purpose: Provide physically tested, request-bound WebAuthn authorization evidence with offline verification and explicit assurance limits. Atomic capability claiming is delivered by the CR-YK-002 foundation, merged through PR #117 as `5155bbb`.
 
 - CR-DD-013: Observed Local Capability Binding for Governed Routing
   - Status: proposed; documentation only; implementation unauthorized
@@ -284,7 +284,7 @@ For the empirical AI safety evaluation track, CR-121 completes fixture validatio
 
 For external runtime interoperability, the next approved slice should be policy tests or execution-path validation for the bounded adapter path.
 
-For the daily-driver lane, CR-DD-009 established the governed `tc run` execution surface, and CR-DD-010/011 landed the deterministic preview plus exact-plan artifact and review-confirmation foundation through PR #104. CR-DD-012's architecture is approved, but monolithic implementation is withheld. CR-DD-012A is complete and merged through PR #107 as `bccaaad`; it distinguishes source bytes, normalized component bytes, and authoritative assembled worker-execution bytes while preserving existing reading and assembly behavior. CR-DD-012B remains separately blocked pending an implemented and reviewed CR-YK-002 atomic-claiming foundation plus explicit CR-DD-012B approval. CR-YK-002's atomic-claiming foundation is committed on its branch as `27fd869` and awaits review and merge; its CLI, runtime-integration, and execution surfaces remain unauthorized. Confirmed-plan execution, `governed_run_plan.v2`, and durable observation/execution schemas require later CRs. Do not combine either slice with general approval, persistence/resume, efficiency claims, live probes, circuit breakers, provider expansion, or TriageDesk authority. Separately, CR-DD-013 proposes the first M1 slice — binding the existing local backend probe observation into `ResilienceRouteInput` — and is documentation-only and unauthorized for implementation; it does not belong to the CR-DD-012 lane and carries no CR-YK-002 gate.
+For the daily-driver lane, CR-DD-009 established the governed `tc run` execution surface, and CR-DD-010/011 landed the deterministic preview plus exact-plan artifact and review-confirmation foundation through PR #104. CR-DD-012's architecture is approved, but monolithic implementation is withheld. CR-DD-012A is complete and merged through PR #107 as `bccaaad`; it distinguishes source bytes, normalized component bytes, and authoritative assembled worker-execution bytes while preserving existing reading and assembly behavior. CR-YK-002's atomic-claiming foundation is complete and merged through PR #117 as `5155bbb`, which satisfies CR-DD-012B's prerequisite; CR-DD-012B remains blocked pending its own explicit approval, and its CLI, runtime-integration, and execution surfaces remain unauthorized. Confirmed-plan execution, `governed_run_plan.v2`, and durable observation/execution schemas require later CRs. Do not combine either slice with general approval, persistence/resume, efficiency claims, live probes, circuit breakers, provider expansion, or TriageDesk authority. Separately, CR-DD-013 proposes the first M1 slice — binding the existing local backend probe observation into `ResilienceRouteInput` — and is documentation-only and unauthorized for implementation; it does not belong to the CR-DD-012 lane and carries no CR-YK-002 gate.
 
 For operator UX, future slices should focus on reviewability, export polish, and dashboard/TUI surfaces only after artifact contracts remain stable. Avoid re-opening completed wizard or Markdown renderer work unless there is a concrete regression or usability gap.
 
