@@ -78,15 +78,24 @@ ENCODING_UTF8 = "utf-8"
 # code for an undetectable condition would be a false capability claim in
 # vocabulary form.
 
+# Each code is reserved narrowly. A code that names a different condition from
+# the one that actually failed is a false report, even when the input really was
+# invalid -- the same failure mode corrected in CR-YK-002's terminal vocabulary.
+
 VALIDATION_OK = "ok"
-INVALID_OPERATION = "invalid_operation"
-INVALID_TARGET_FILE_ID = "invalid_target_file_id"
-INVALID_CLIENT_REQUEST_ID = "invalid_client_request_id"
+INVALID_OPERATION = "invalid_operation"  # operation is not "replace"
+INVALID_SCHEMA = "invalid_schema"  # wrong discriminator, or non-conforming shape
+INVALID_FILE_DESCRIPTOR = "invalid_file_descriptor"  # encoding/relpath/max size
+INVALID_TARGET_FILE_ID = "invalid_target_file_id"  # the file id itself
+INVALID_CLIENT_REQUEST_ID = "invalid_client_request_id"  # the request id itself
+INVALID_TASK_ID = "invalid_task_id"
+INVALID_DECISION_ID = "invalid_decision_id"
 INVALID_DIGEST = "invalid_digest"
 INVALID_DECLARED_CONTEXT = "invalid_declared_context"
 INVALID_BROKER_BINDING = "invalid_broker_binding"
+INVALID_CONTENT_SIZE = "invalid_content_size"  # not a non-negative integer
 CONTENT_NOT_UTF8 = "content_not_utf8"
-CONTENT_SIZE_EXCEEDED = "content_size_exceeded"
+CONTENT_SIZE_EXCEEDED = "content_size_exceeded"  # exact bytes exceed a valid limit
 POST_DIGEST_MISMATCH = "post_digest_mismatch"
 REQUEST_ID_REUSE_MISMATCH = "request_id_reuse_mismatch"
 
@@ -94,11 +103,16 @@ VALIDATION_REASONS = frozenset(
     {
         VALIDATION_OK,
         INVALID_OPERATION,
+        INVALID_SCHEMA,
+        INVALID_FILE_DESCRIPTOR,
         INVALID_TARGET_FILE_ID,
         INVALID_CLIENT_REQUEST_ID,
+        INVALID_TASK_ID,
+        INVALID_DECISION_ID,
         INVALID_DIGEST,
         INVALID_DECLARED_CONTEXT,
         INVALID_BROKER_BINDING,
+        INVALID_CONTENT_SIZE,
         CONTENT_NOT_UTF8,
         CONTENT_SIZE_EXCEEDED,
         POST_DIGEST_MISMATCH,
@@ -208,21 +222,22 @@ def _check_target_file_id(value: Any) -> str:
 
 
 def _check_canonical_relpath(value: Any) -> str:
-    """Type and shape only.
+    """Type and shape only; a descriptor-value check, not a safety check.
 
-    Deliberately not a safety check. This module does not resolve, join, open,
-    or existence-check the value, and must not imply that it is safe.
+    This module does not resolve, join, open, or existence-check the value, and
+    must not imply that it is safe.
     """
     if not isinstance(value, str):
-        raise MediatedValidationError(INVALID_TARGET_FILE_ID)
+        raise MediatedValidationError(INVALID_FILE_DESCRIPTOR)
     if not value or len(value) > _MAX_RELPATH_LENGTH:
-        raise MediatedValidationError(INVALID_TARGET_FILE_ID)
+        raise MediatedValidationError(INVALID_FILE_DESCRIPTOR)
     if "\x00" in value:
-        raise MediatedValidationError(INVALID_TARGET_FILE_ID)
+        raise MediatedValidationError(INVALID_FILE_DESCRIPTOR)
     return value
 
 
-def _check_size(value: Any, reason_code: str) -> int:
+def _check_size(value: Any, reason_code: str = INVALID_CONTENT_SIZE) -> int:
+    """A size must be a non-negative integer. Booleans are not integers here."""
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
         raise MediatedValidationError(reason_code)
     return value
@@ -231,21 +246,21 @@ def _check_size(value: Any, reason_code: str) -> int:
 def _require_exact_fields(
     mapping: Any,
     expected: Tuple[str, ...],
-    reason_code: str,
 ) -> Dict[str, Any]:
     """Closed field set: unknown, missing, and null values all fail closed.
 
     Optional values are forbidden rather than omitted, so an omitted-key form
-    cannot exist and two payloads cannot differ by key presence alone.
+    cannot exist and two payloads cannot differ by key presence alone. A shape
+    violation is a schema-conformance failure, so it reports ``invalid_schema``
+    rather than borrowing a field-specific code.
     """
     if not isinstance(mapping, Mapping):
-        raise MediatedValidationError(reason_code)
-    keys = set(mapping.keys())
-    if keys != set(expected):
-        raise MediatedValidationError(reason_code)
+        raise MediatedValidationError(INVALID_SCHEMA)
+    if set(mapping.keys()) != set(expected):
+        raise MediatedValidationError(INVALID_SCHEMA)
     for key in expected:
         if mapping[key] is None:
-            raise MediatedValidationError(reason_code)
+            raise MediatedValidationError(INVALID_SCHEMA)
     return {key: mapping[key] for key in expected}
 
 
@@ -278,10 +293,10 @@ class MediatedFileDescriptor:
         _check_target_file_id(self.target_file_id)
         _check_canonical_relpath(self.canonical_relpath)
         if self.encoding != ENCODING_UTF8:
-            raise MediatedValidationError(INVALID_OPERATION)
-        size = _check_size(self.maximum_size_bytes, CONTENT_SIZE_EXCEEDED)
+            raise MediatedValidationError(INVALID_FILE_DESCRIPTOR)
+        size = _check_size(self.maximum_size_bytes, INVALID_FILE_DESCRIPTOR)
         if size <= 0:
-            raise MediatedValidationError(CONTENT_SIZE_EXCEEDED)
+            raise MediatedValidationError(INVALID_FILE_DESCRIPTOR)
 
     def as_canonical_dict(self) -> Dict[str, Any]:
         return {
@@ -297,9 +312,9 @@ class MediatedFileDescriptor:
 
     @classmethod
     def from_mapping(cls, mapping: Any) -> "MediatedFileDescriptor":
-        fields = _require_exact_fields(mapping, cls.FIELDS, INVALID_TARGET_FILE_ID)
+        fields = _require_exact_fields(mapping, cls.FIELDS)
         if fields["schema"] != SCHEMA_FILE_DESCRIPTOR:
-            raise MediatedValidationError(INVALID_OPERATION)
+            raise MediatedValidationError(INVALID_SCHEMA)
         return cls(
             target_file_id=fields["target_file_id"],
             canonical_relpath=fields["canonical_relpath"],
@@ -367,9 +382,9 @@ class DeclaredInvocationContext:
 
     @classmethod
     def from_mapping(cls, mapping: Any) -> "DeclaredInvocationContext":
-        fields = _require_exact_fields(mapping, cls.FIELDS, INVALID_DECLARED_CONTEXT)
+        fields = _require_exact_fields(mapping, cls.FIELDS)
         if fields["schema"] != SCHEMA_DECLARED_CONTEXT:
-            raise MediatedValidationError(INVALID_DECLARED_CONTEXT)
+            raise MediatedValidationError(INVALID_SCHEMA)
         return cls(
             runtime_id=fields["runtime_id"],
             runtime_version=fields["runtime_version"],
@@ -421,7 +436,7 @@ class AuthorizedContentEffect:
         _check_digest(self.expected_pre_digest)
         _check_digest(self.expected_post_digest)
         _check_digest(self.declared_context_digest)
-        _check_size(self.content_size_bytes, CONTENT_SIZE_EXCEEDED)
+        _check_size(self.content_size_bytes, INVALID_CONTENT_SIZE)
         _check_identifier(self.broker_connection_id, INVALID_BROKER_BINDING)
         _check_identifier(self.client_request_id, INVALID_CLIENT_REQUEST_ID)
 
@@ -465,9 +480,9 @@ class AuthorizedContentEffect:
 
     @classmethod
     def from_mapping(cls, mapping: Any) -> "AuthorizedContentEffect":
-        fields = _require_exact_fields(mapping, cls.FIELDS, INVALID_OPERATION)
+        fields = _require_exact_fields(mapping, cls.FIELDS)
         if fields["schema"] != SCHEMA_FILE_EFFECT:
-            raise MediatedValidationError(INVALID_OPERATION)
+            raise MediatedValidationError(INVALID_SCHEMA)
         return cls(
             operation=fields["operation"],
             target_file_id=fields["target_file_id"],
@@ -516,7 +531,7 @@ class MediatedClientRequest:
     )
 
     def __post_init__(self) -> None:
-        _check_identifier(self.task_id, INVALID_CLIENT_REQUEST_ID)
+        _check_identifier(self.task_id, INVALID_TASK_ID)
         _check_identifier(self.client_request_id, INVALID_CLIENT_REQUEST_ID)
         _check_identifier(self.broker_connection_id, INVALID_BROKER_BINDING)
         _check_target_file_id(self.target_file_id)
@@ -524,7 +539,7 @@ class MediatedClientRequest:
         _check_digest(self.expected_pre_digest)
         _check_digest(self.expected_post_digest)
         _check_digest(self.declared_context_digest)
-        _check_size(self.content_size_bytes, CONTENT_SIZE_EXCEEDED)
+        _check_size(self.content_size_bytes, INVALID_CONTENT_SIZE)
 
     def as_canonical_dict(self) -> Dict[str, Any]:
         return {
@@ -551,9 +566,9 @@ class MediatedClientRequest:
 
     @classmethod
     def from_mapping(cls, mapping: Any) -> "MediatedClientRequest":
-        fields = _require_exact_fields(mapping, cls.FIELDS, INVALID_CLIENT_REQUEST_ID)
+        fields = _require_exact_fields(mapping, cls.FIELDS)
         if fields["schema"] != SCHEMA_CLIENT_REQUEST:
-            raise MediatedValidationError(INVALID_CLIENT_REQUEST_ID)
+            raise MediatedValidationError(INVALID_SCHEMA)
         return cls(
             task_id=fields["task_id"],
             client_request_id=fields["client_request_id"],
@@ -594,8 +609,8 @@ class MediatedPlanLinkage:
     )
 
     def __post_init__(self) -> None:
-        _check_identifier(self.task_id, INVALID_CLIENT_REQUEST_ID)
-        _check_identifier(self.decision_id, INVALID_CLIENT_REQUEST_ID)
+        _check_identifier(self.task_id, INVALID_TASK_ID)
+        _check_identifier(self.decision_id, INVALID_DECISION_ID)
         _check_identifier(self.client_request_id, INVALID_CLIENT_REQUEST_ID)
         _check_identifier(self.broker_connection_id, INVALID_BROKER_BINDING)
         _check_digest(self.effect_digest)
@@ -617,9 +632,9 @@ class MediatedPlanLinkage:
 
     @classmethod
     def from_mapping(cls, mapping: Any) -> "MediatedPlanLinkage":
-        fields = _require_exact_fields(mapping, cls.FIELDS, INVALID_CLIENT_REQUEST_ID)
+        fields = _require_exact_fields(mapping, cls.FIELDS)
         if fields["schema"] != SCHEMA_PLAN_LINKAGE:
-            raise MediatedValidationError(INVALID_CLIENT_REQUEST_ID)
+            raise MediatedValidationError(INVALID_SCHEMA)
         return cls(
             task_id=fields["task_id"],
             decision_id=fields["decision_id"],
@@ -656,7 +671,7 @@ def verify_proposed_bytes(
         raise MediatedValidationError(CONTENT_NOT_UTF8)
     raw = bytes(proposed_bytes)
     size = len(raw)
-    limit = _check_size(maximum_size_bytes, CONTENT_SIZE_EXCEEDED)
+    limit = _check_size(maximum_size_bytes, INVALID_FILE_DESCRIPTOR)
     if size > limit:
         raise MediatedValidationError(CONTENT_SIZE_EXCEEDED)
     try:
@@ -690,7 +705,7 @@ def build_authorized_effect(
     retained on the returned object.
     """
     if not isinstance(descriptor, MediatedFileDescriptor):
-        raise MediatedValidationError(INVALID_TARGET_FILE_ID)
+        raise MediatedValidationError(INVALID_FILE_DESCRIPTOR)
     if not isinstance(declared_context, DeclaredInvocationContext):
         raise MediatedValidationError(INVALID_DECLARED_CONTEXT)
     _check_identifier(client_request_id, INVALID_CLIENT_REQUEST_ID)
@@ -759,19 +774,59 @@ def build_client_request(
     )
 
 
+# Fields a request must reproduce exactly from the effect it represents. Without
+# this check, a linkage or capability bundle could be assembled from an effect
+# and an unrelated request, producing digests that look valid individually while
+# describing two different transitions.
+_REQUEST_EFFECT_FIELDS = (
+    "client_request_id",
+    "broker_connection_id",
+    "target_file_id",
+    "canonical_relpath",
+    "expected_pre_digest",
+    "expected_post_digest",
+    "content_size_bytes",
+    "declared_context_digest",
+)
+
+
+def assert_request_represents_effect(
+    effect: AuthorizedContentEffect,
+    request: MediatedClientRequest,
+) -> None:
+    """Raise unless ``request`` was built from ``effect``.
+
+    A mismatch between two already-validated objects is a caller-contract
+    defect, not a decision about untrusted input, so it raises
+    ``MediatedContractError`` rather than entering the closed validation
+    vocabulary.
+    """
+    if not isinstance(effect, AuthorizedContentEffect):
+        raise MediatedContractError("effect must be an AuthorizedContentEffect")
+    if not isinstance(request, MediatedClientRequest):
+        raise MediatedContractError("request must be a MediatedClientRequest")
+    for field in _REQUEST_EFFECT_FIELDS:
+        if getattr(effect, field) != getattr(request, field):
+            raise MediatedContractError(
+                f"request does not represent this effect: {field} differs"
+            )
+
+
 def build_plan_linkage(
     effect: AuthorizedContentEffect,
     request: MediatedClientRequest,
     *,
-    task_id: str,
     decision_id: str,
 ) -> MediatedPlanLinkage:
-    if not isinstance(effect, AuthorizedContentEffect):
-        raise MediatedValidationError(INVALID_OPERATION)
-    if not isinstance(request, MediatedClientRequest):
-        raise MediatedValidationError(INVALID_CLIENT_REQUEST_ID)
+    """Bind a governed decision to this exact effect, request, and connection.
+
+    ``task_id`` is derived from ``request`` rather than accepted separately:
+    a second input for a value the request already carries is one more thing
+    that can disagree, and the linkage is only meaningful when they agree.
+    """
+    assert_request_represents_effect(effect, request)
     return MediatedPlanLinkage(
-        task_id=task_id,
+        task_id=request.task_id,
         decision_id=decision_id,
         client_request_id=effect.client_request_id,
         broker_connection_id=effect.broker_connection_id,
@@ -780,15 +835,47 @@ def build_plan_linkage(
     )
 
 
+def assert_linkage_binds(
+    effect: AuthorizedContentEffect,
+    request: MediatedClientRequest,
+    linkage: MediatedPlanLinkage,
+) -> None:
+    """Raise unless the trio describes one transition."""
+    assert_request_represents_effect(effect, request)
+    if not isinstance(linkage, MediatedPlanLinkage):
+        raise MediatedContractError("linkage must be a MediatedPlanLinkage")
+    checks = (
+        ("task_id", linkage.task_id, request.task_id),
+        ("client_request_id", linkage.client_request_id, effect.client_request_id),
+        (
+            "broker_connection_id",
+            linkage.broker_connection_id,
+            effect.broker_connection_id,
+        ),
+        ("effect_digest", linkage.effect_digest, effect.effect_digest()),
+        ("request_digest", linkage.request_digest, request.request_digest()),
+    )
+    for field, actual, expected in checks:
+        if actual != expected:
+            raise MediatedContractError(
+                f"linkage does not bind this effect and request: {field} differs"
+            )
+
+
 def capability_binding_fields(
     effect: AuthorizedContentEffect,
+    request: MediatedClientRequest,
     linkage: MediatedPlanLinkage,
 ) -> Dict[str, str]:
     """Map the effect onto the merged CR-YK-002 capability fields.
 
     Adds no capability schema and changes no CR-YK-002 behavior; this is a
-    read-only projection of already-computed digests.
+    read-only projection of already-computed digests. The trio is verified to
+    describe one transition first, so an ``artifact_byte_digest`` and
+    ``scope_digest`` from one effect can never be paired with a
+    ``plan_body_digest`` computed for another.
     """
+    assert_linkage_binds(effect, request, linkage)
     return {
         "artifact_byte_digest": effect.expected_post_digest,
         "scope_digest": effect.effect_digest(),

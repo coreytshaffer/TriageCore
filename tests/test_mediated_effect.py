@@ -24,10 +24,15 @@ from triage_core.mediated_effect import (
     CONTENT_SIZE_EXCEEDED,
     INVALID_BROKER_BINDING,
     INVALID_CLIENT_REQUEST_ID,
+    INVALID_CONTENT_SIZE,
+    INVALID_DECISION_ID,
     INVALID_DECLARED_CONTEXT,
     INVALID_DIGEST,
+    INVALID_FILE_DESCRIPTOR,
     INVALID_OPERATION,
+    INVALID_SCHEMA,
     INVALID_TARGET_FILE_ID,
+    INVALID_TASK_ID,
     POST_DIGEST_MISMATCH,
     REPLAY_IDEMPOTENT,
     REPLAY_NEW_REQUEST,
@@ -46,6 +51,9 @@ from triage_core.mediated_effect import (
     MediatedPlanLinkage,
     MediatedValidationError,
     RequestBinding,
+    _REQUEST_EFFECT_FIELDS,
+    assert_linkage_binds,
+    assert_request_represents_effect,
     build_authorized_effect,
     build_client_request,
     build_plan_linkage,
@@ -400,7 +408,7 @@ def test_request_binding_is_not_a_canonical_digest_object():
         (
             MediatedPlanLinkage,
             lambda: build_plan_linkage(
-                _effect(), _request(), task_id=TASK_ID, decision_id=DECISION_ID
+                _effect(), _request(), decision_id=DECISION_ID
             ).as_canonical_dict(),
         ),
     ],
@@ -445,7 +453,7 @@ def test_security_bound_identifiers_are_rejected_not_normalized():
 
 def test_task_and_decision_ids_stay_case_exact():
     linkage = build_plan_linkage(
-        _effect(), _request(), task_id=TASK_ID, decision_id="GD-MixedCase"
+        _effect(), _request(), decision_id="GD-MixedCase"
     )
     assert linkage.task_id == TASK_ID
     assert linkage.decision_id == "GD-MixedCase"
@@ -591,12 +599,272 @@ def test_capability_mapping_reuses_computed_digests():
     effect = _effect()
     request = _request(effect)
     linkage = build_plan_linkage(
-        effect, request, task_id=TASK_ID, decision_id=DECISION_ID
+        effect, request, decision_id=DECISION_ID
     )
-    mapped = capability_binding_fields(effect, linkage)
+    mapped = capability_binding_fields(effect, request, linkage)
     assert mapped["artifact_byte_digest"] == effect.expected_post_digest
     assert mapped["scope_digest"] == effect.effect_digest()
     assert mapped["plan_body_digest"] == linkage.plan_body_digest()
+
+
+# --- Cross-object binding ------------------------------------------------------
+#
+# A linkage or capability bundle assembled from an effect and an unrelated
+# request produces digests that each look valid while describing two different
+# transitions. These tests close that seam. Mismatches between already-validated
+# objects are caller-contract defects, so they raise MediatedContractError rather
+# than entering the closed validation vocabulary.
+
+
+def _effect_b():
+    """A second, wholly distinct effect."""
+    context = _context(client_request_id="req-BBB")
+    return build_authorized_effect(
+        _descriptor(target_file_id="f-bbb", canonical_relpath="docs/other.md"),
+        context,
+        expected_pre_digest=OTHER_DIGEST,
+        proposed_bytes=b"different content\n",
+        expected_post_digest="sha256:"
+        + hashlib.sha256(b"different content\n").hexdigest(),
+        broker_connection_id="conn-BBB",
+        client_request_id="req-BBB",
+    )
+
+
+TASK_B = "8f14e45f-ceea-4e78-b3f4-1a2b3c4d5e6f"
+
+
+def test_build_plan_linkage_rejects_a_request_from_a_different_effect():
+    effect_a = _effect()
+    request_b = build_client_request(_effect_b(), task_id=TASK_B)
+    with pytest.raises(MediatedContractError):
+        build_plan_linkage(effect_a, request_b, decision_id=DECISION_ID)
+
+
+@pytest.mark.parametrize("field", list(_REQUEST_EFFECT_FIELDS))
+def test_every_request_effect_field_is_compared(field):
+    """Each bound field must be checked, not just the ones a happy path hits."""
+    effect = _effect()
+    request = _request(effect)
+    payload = dict(request.as_canonical_dict())
+    replacement = {
+        "client_request_id": "req-other",
+        "broker_connection_id": "conn-other",
+        "target_file_id": "f-other",
+        "canonical_relpath": "docs/other.md",
+        "expected_pre_digest": OTHER_DIGEST,
+        "expected_post_digest": OTHER_DIGEST,
+        "content_size_bytes": 12345,
+        "declared_context_digest": OTHER_DIGEST,
+    }[field]
+    payload[field] = replacement
+    tampered = MediatedClientRequest.from_mapping(payload)
+    with pytest.raises(MediatedContractError):
+        assert_request_represents_effect(effect, tampered)
+
+
+def test_linkage_task_id_is_derived_from_the_request():
+    """No second task_id input, so the two cannot disagree."""
+    effect = _effect()
+    request = build_client_request(effect, task_id=TASK_B)
+    linkage = build_plan_linkage(effect, request, decision_id=DECISION_ID)
+    assert linkage.task_id == TASK_B
+
+
+def test_capability_binding_rejects_a_linkage_for_a_different_effect():
+    effect_a = _effect()
+    request_a = _request(effect_a)
+    linkage_a = build_plan_linkage(effect_a, request_a, decision_id=DECISION_ID)
+
+    effect_b = _effect_b()
+    request_b = build_client_request(effect_b, task_id=TASK_B)
+    with pytest.raises(MediatedContractError):
+        capability_binding_fields(effect_b, request_b, linkage_a)
+
+
+def test_capability_binding_rejects_a_linkage_carrying_another_request_digest():
+    effect = _effect()
+    request = _request(effect)
+    other_request = build_client_request(_effect_b(), task_id=TASK_B)
+    forged = MediatedPlanLinkage(
+        task_id=request.task_id,
+        decision_id=DECISION_ID,
+        client_request_id=effect.client_request_id,
+        broker_connection_id=effect.broker_connection_id,
+        effect_digest=effect.effect_digest(),
+        request_digest=other_request.request_digest(),
+    )
+    with pytest.raises(MediatedContractError):
+        capability_binding_fields(effect, request, forged)
+
+
+def test_capability_binding_rejects_a_linkage_with_a_foreign_task_id():
+    effect = _effect()
+    request = _request(effect)
+    forged = MediatedPlanLinkage(
+        task_id=TASK_B,
+        decision_id=DECISION_ID,
+        client_request_id=effect.client_request_id,
+        broker_connection_id=effect.broker_connection_id,
+        effect_digest=effect.effect_digest(),
+        request_digest=request.request_digest(),
+    )
+    with pytest.raises(MediatedContractError):
+        capability_binding_fields(effect, request, forged)
+
+
+def test_the_exact_matching_trio_succeeds():
+    effect = _effect()
+    request = _request(effect)
+    linkage = build_plan_linkage(effect, request, decision_id=DECISION_ID)
+    mapped = capability_binding_fields(effect, request, linkage)
+    assert mapped["scope_digest"] == effect.effect_digest()
+    assert mapped["plan_body_digest"] == linkage.plan_body_digest()
+    assert linkage.task_id == request.task_id
+
+
+# --- Honest reason codes -------------------------------------------------------
+#
+# A closed code is only useful when it names the condition that actually failed.
+# Reporting a real failure under a different code is still a false report.
+
+
+@pytest.mark.parametrize(
+    "label, build, expected",
+    [
+        ("encoding not utf-8",
+         lambda: _descriptor(encoding="latin-1"), INVALID_FILE_DESCRIPTOR),
+        ("maximum_size_bytes zero",
+         lambda: _descriptor(maximum_size_bytes=0), INVALID_FILE_DESCRIPTOR),
+        ("maximum_size_bytes negative",
+         lambda: _descriptor(maximum_size_bytes=-1), INVALID_FILE_DESCRIPTOR),
+        ("canonical_relpath empty",
+         lambda: _descriptor(canonical_relpath=""), INVALID_FILE_DESCRIPTOR),
+        ("canonical_relpath wrong type",
+         lambda: _descriptor(canonical_relpath=7), INVALID_FILE_DESCRIPTOR),
+        ("target_file_id path-like",
+         lambda: _descriptor(target_file_id="a/b"), INVALID_TARGET_FILE_ID),
+    ],
+)
+def test_descriptor_reports_its_true_condition(label, build, expected):
+    with pytest.raises(MediatedValidationError) as error:
+        build()
+    assert error.value.reason_code == expected, label
+
+
+def test_linkage_reports_task_and_decision_ids_separately():
+    common = dict(
+        client_request_id=CLIENT_REQUEST_ID,
+        broker_connection_id=BROKER_CONNECTION_ID,
+        effect_digest=OTHER_DIGEST,
+        request_digest=OTHER_DIGEST,
+    )
+    with pytest.raises(MediatedValidationError) as error:
+        MediatedPlanLinkage(task_id="", decision_id=DECISION_ID, **common)
+    assert error.value.reason_code == INVALID_TASK_ID
+
+    with pytest.raises(MediatedValidationError) as error:
+        MediatedPlanLinkage(task_id=TASK_ID, decision_id=" padded ", **common)
+    assert error.value.reason_code == INVALID_DECISION_ID
+
+
+def test_request_reports_task_id_separately_from_client_request_id():
+    common = dict(
+        broker_connection_id=BROKER_CONNECTION_ID,
+        target_file_id=TARGET_FILE_ID,
+        canonical_relpath=RELPATH,
+        expected_pre_digest=PRE_DIGEST,
+        expected_post_digest=CONTENT_DIGEST,
+        content_size_bytes=11,
+        declared_context_digest=OTHER_DIGEST,
+    )
+    with pytest.raises(MediatedValidationError) as error:
+        MediatedClientRequest(task_id="", client_request_id=CLIENT_REQUEST_ID, **common)
+    assert error.value.reason_code == INVALID_TASK_ID
+
+    with pytest.raises(MediatedValidationError) as error:
+        MediatedClientRequest(task_id=TASK_ID, client_request_id="", **common)
+    assert error.value.reason_code == INVALID_CLIENT_REQUEST_ID
+
+
+@pytest.mark.parametrize(
+    "cls, payload_source",
+    [
+        (MediatedFileDescriptor, lambda: _descriptor().as_canonical_dict()),
+        (DeclaredInvocationContext, lambda: _context().as_canonical_dict()),
+        (AuthorizedContentEffect, lambda: _effect().as_canonical_dict()),
+        (MediatedClientRequest, lambda: _request().as_canonical_dict()),
+    ],
+)
+def test_wrong_discriminator_reports_invalid_schema(cls, payload_source):
+    payload = dict(payload_source())
+    payload["schema"] = "triagecore.some_other_object.v1"
+    with pytest.raises(MediatedValidationError) as error:
+        cls.from_mapping(payload)
+    assert error.value.reason_code == INVALID_SCHEMA
+
+
+def test_malformed_object_shape_reports_invalid_schema():
+    payload = dict(_effect().as_canonical_dict())
+    payload["surprise"] = 1
+    with pytest.raises(MediatedValidationError) as error:
+        AuthorizedContentEffect.from_mapping(payload)
+    assert error.value.reason_code == INVALID_SCHEMA
+
+
+def test_bad_content_size_is_distinguished_from_exceeding_the_limit():
+    """A malformed size and an oversized payload are different conditions."""
+    payload = dict(_effect().as_canonical_dict())
+    payload["content_size_bytes"] = -1
+    with pytest.raises(MediatedValidationError) as error:
+        AuthorizedContentEffect.from_mapping(payload)
+    assert error.value.reason_code == INVALID_CONTENT_SIZE
+
+    oversized = b"z" * 40
+    with pytest.raises(MediatedValidationError) as error:
+        build_authorized_effect(
+            _descriptor(maximum_size_bytes=8),
+            _context(),
+            expected_pre_digest=PRE_DIGEST,
+            proposed_bytes=oversized,
+            expected_post_digest="sha256:" + hashlib.sha256(oversized).hexdigest(),
+            broker_connection_id=BROKER_CONNECTION_ID,
+            client_request_id=CLIENT_REQUEST_ID,
+        )
+    assert error.value.reason_code == CONTENT_SIZE_EXCEEDED
+
+
+def test_operation_code_is_reserved_for_the_operation_field():
+    """invalid_operation must not be borrowed for unrelated failures."""
+    payload = dict(_effect().as_canonical_dict())
+    payload["operation"] = "append"
+    with pytest.raises(MediatedValidationError) as error:
+        AuthorizedContentEffect.from_mapping(payload)
+    assert error.value.reason_code == INVALID_OPERATION
+
+    # A descriptor problem must not surface as an operation problem.
+    with pytest.raises(MediatedValidationError) as error:
+        _descriptor(encoding="utf-16")
+    assert error.value.reason_code != INVALID_OPERATION
+
+
+def test_every_emitted_reason_code_is_in_the_closed_vocabulary():
+    from triage_core.mediated_effect import VALIDATION_REASONS  # noqa: PLC0415
+
+    emitters = [
+        lambda: _descriptor(encoding="latin-1"),
+        lambda: _descriptor(maximum_size_bytes=0),
+        lambda: _descriptor(target_file_id="a/b"),
+        lambda: _context(agent_id=""),
+        lambda: _effect(expected_pre_digest="nope"),
+        lambda: _effect(expected_post_digest=OTHER_DIGEST),
+        lambda: _effect(broker_connection_id=""),
+    ]
+    for emitter in emitters:
+        try:
+            emitter()
+        except MediatedValidationError as error:
+            assert error.reason_code in VALIDATION_REASONS
 
 
 # --- 18. No I/O, demonstrated rather than stated -------------------------------
@@ -617,7 +885,7 @@ def _exercise_every_public_path():
     )
     request = build_client_request(effect, task_id=TASK_ID)
     linkage = build_plan_linkage(
-        effect, request, task_id=TASK_ID, decision_id=DECISION_ID
+        effect, request, decision_id=DECISION_ID
     )
     outputs = [
         descriptor.digest(),
@@ -626,7 +894,7 @@ def _exercise_every_public_path():
         effect.persistent_projection(),
         request.request_digest(),
         linkage.plan_body_digest(),
-        capability_binding_fields(effect, linkage),
+        capability_binding_fields(effect, request, linkage),
         validate_replacement_proposal(
             descriptor,
             context,
