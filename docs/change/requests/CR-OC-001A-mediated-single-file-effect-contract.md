@@ -2,14 +2,20 @@
 
 ## Status
 
-- **Status:** Proposed / requirements proposal only.
-- **Implementation authority:** None.
-- **Approval gate:** Explicit human approval is required before any code, test,
-  schema, runtime, or integration change.
+- **Status:** Requirements approved and merged through PR #119 as `bfa1d6e`;
+  bounded implementation complete on branch and open for review; not merged.
+- **Implementation authority:** Granted only for the pure CR-OC-001A module,
+  tests, and documentation within the approved five-path allowlist.
+- **Still unauthorized:** CR-OC-001B through CR-OC-001E, runtime integration,
+  file mutation, persistence, IPC, capability issuance, and any runtime module
+  importing `triage_core.mediated_effect`.
+- **Approval gate:** Explicit human approval remains required before any change
+  beyond that allowlist.
 
-This document records requirements only. It does not authorize implementation,
-execution, IPC, persistence, file access, capability issuance, OpenClaw
-installation, or modification of any current path.
+This document records the requirements contract and the pure implementation
+written against it. It authorizes no execution, IPC, persistence, file access,
+capability issuance, or OpenClaw installation, and does not claim the
+implementation has been reviewed or merged.
 
 ## Scope
 
@@ -671,6 +677,48 @@ CR-OC-001A may be considered implemented only when:
 
 Recording this proposal does not satisfy any acceptance item and does not claim
 that implementation occurred.
+
+## Implementation Record
+
+Implemented on branch `cr-oc-001a-effect-contract-implementation`, open for
+review, not merged. Two code paths, both new:
+
+- `triage_core/mediated_effect.py` — the five canonical objects, exact-byte
+  verification, digest construction, the privacy-safe projection,
+  `RequestBinding`, and pure `classify_request_replay`. Imports only `hashlib`,
+  `json`, `re`, `dataclasses`, and `typing`; no `os`, `socket`, `subprocess`,
+  `sqlite3`, `authz`, `capability_claims`, or `task_ledger`.
+- `tests/test_mediated_effect.py` — 56 tests covering all 18 contract items.
+
+Canonical JSON is implemented locally rather than imported from another module,
+reusing the canonicalization *contract* without taking on another module's
+private helper or dependency graph. Every digest object carries its own
+`schema` discriminator inside the canonical input.
+
+Verification at this tree: focused 56 passed; full suite 1409 passed / 5
+environmental skips, no failures, errors, `xfail`, or `xpass`; `git diff
+--check` clean; only tests import the module; the three authority modules are
+unmodified; the persistent privacy invariant passes over the projection and the
+698-record repo audit still passes.
+
+All nine mutants were demonstrated failing against their defective versions and
+passing after restoration, with the module hash verified identical to its
+pristine value after each cycle. The four digest mutants are digest-level
+strips — the canonical dict keeps every field and only the digest ignores one —
+so each killer fails on a digest-equality assertion rather than a missing-key
+error, which is what makes the evidence about digest *sensitivity* rather than
+dict structure.
+
+Two limits on that evidence, recorded rather than glossed:
+
+- The M9 mutant remains the weakest. Its killer asserts the projection key set
+  and the absence of any accessor whose name contains "authenticated"; a
+  determined rename would defeat it. Reviewers, not tests, are the control.
+- Tests that pass against both the intended and mutated versions are controls,
+  not mutant evidence. `test_canonical_digest_is_deterministic_and_order_independent`,
+  `test_projection_keys_are_exactly_the_contract_set`, and
+  `test_classify_returns_new_request_for_absent_existing` all pass under several
+  mutants and are counted as controls only.
 
 ## Candidate Future Implementation Allowlist
 
