@@ -2,10 +2,12 @@
 
 ## Status
 
-- **Status:** Requirements approved and merged through PR #119 as `bfa1d6e`;
-  bounded implementation complete on branch and open for review; not merged.
-- **Implementation authority:** Granted only for the pure CR-OC-001A module,
-  tests, and documentation within the approved five-path allowlist.
+- **Status:** Complete and merged. Requirements contract merged through PR #119
+  as `bfa1d6e`; bounded pure-module implementation merged through PR #120 as
+  `1e1f441`.
+- **Implementation authority:** Was granted only for the pure CR-OC-001A
+  module, tests, and documentation within the approved five-path allowlist, and
+  is now spent. Merging this slice authorizes nothing further.
 - **Still unauthorized:** CR-OC-001B through CR-OC-001E, runtime integration,
   file mutation, persistence, IPC, capability issuance, and any runtime module
   importing `triage_core.mediated_effect`.
@@ -734,8 +736,11 @@ that implementation occurred.
 
 ## Implementation Record
 
-Implemented on branch `cr-oc-001a-effect-contract-implementation`, open for
-review, not merged. Two code paths, both new:
+Merged into `main` through PR #120 as merge commit
+`1e1f441e947f02dde47aa790149505196ebf44f7` on 2026-07-28, across `87b76a3`
+(implementation), `993cdb4` (cross-object binding and honest reason codes), and
+`7a6d6ac` (residual borrowed code and non-positive limit), with `c1f4074` and
+`8fa3b53` recording status. Two code paths, both new:
 
 - `triage_core/mediated_effect.py` — the five canonical objects, exact-byte
   verification, digest construction, the privacy-safe projection,
@@ -750,7 +755,7 @@ reusing the canonicalization *contract* without taking on another module's
 private helper or dependency graph. Every digest object carries its own
 `schema` discriminator inside the canonical input.
 
-Verification at this tree: focused 86 passed; full suite 1439 passed / 5
+Verification at the merged tree: focused 91 passed; full suite 1444 passed / 5
 environmental skips, no failures, errors, `xfail`, or `xpass`; `git diff
 --check` clean; only tests import the module; the three authority modules are
 unmodified; the persistent privacy invariant passes over the projection and the
