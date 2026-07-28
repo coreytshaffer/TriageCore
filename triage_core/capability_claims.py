@@ -98,6 +98,13 @@ TERMINAL_ALREADY_TERMINAL = "capability_already_terminal"
 TERMINAL_CLAIMANT_MISMATCH = "claimant_mismatch"
 TERMINAL_ATTEMPT_MISMATCH = "execution_attempt_mismatch"
 TERMINAL_EVIDENCE_WRITE_FAILED = "terminal_evidence_write_failed"
+# Operational store failures are not lifecycle facts. Collapsing them into
+# TERMINAL_NOT_FOUND would report "this capability does not exist" when the
+# truth is "lifecycle state is presently unknowable", inviting a caller to act
+# on an absence that was never observed. These mirror the claim-path values.
+# TERMINAL_NOT_FOUND is now reserved for a successful read that found no row.
+TERMINAL_STORE_BUSY = "capability_store_busy"
+TERMINAL_STORE_UNAVAILABLE = "capability_store_unavailable"
 
 _DIGEST_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
 
@@ -531,7 +538,14 @@ class CapabilityClaimStore:
         outcome: str,
         now: datetime,
     ) -> TerminalResult:
-        """Move ``claimed -> completed|failed``; terminal states are absorbing."""
+        """Move ``claimed -> completed|failed``; terminal states are absorbing.
+
+        Failure reasons distinguish lifecycle facts from store conditions.
+        ``TERMINAL_NOT_FOUND`` means the row was read and is genuinely absent;
+        a busy or unusable store reports ``TERMINAL_STORE_BUSY`` or
+        ``TERMINAL_STORE_UNAVAILABLE`` instead, because in those cases the
+        lifecycle state was never observed at all.
+        """
         if outcome not in _TERMINAL_STATES:
             raise CapabilityStoreError(
                 f"terminal outcome must be one of {_TERMINAL_STATES}"
@@ -587,10 +601,16 @@ class CapabilityClaimStore:
             return TerminalResult(True, TERMINAL_OK, capability_id, outcome)
         except CapabilitySchemaError:
             self._safe_rollback(conn)
-            return TerminalResult(False, TERMINAL_NOT_FOUND, capability_id)
+            return TerminalResult(False, TERMINAL_STORE_UNAVAILABLE, capability_id)
+        except sqlite3.OperationalError as exc:
+            self._safe_rollback(conn)
+            code = (
+                TERMINAL_STORE_BUSY if _is_busy(exc) else TERMINAL_STORE_UNAVAILABLE
+            )
+            return TerminalResult(False, code, capability_id)
         except (sqlite3.Error, OSError):
             self._safe_rollback(conn)
-            return TerminalResult(False, TERMINAL_NOT_FOUND, capability_id)
+            return TerminalResult(False, TERMINAL_STORE_UNAVAILABLE, capability_id)
         finally:
             if conn is not None:
                 conn.close()

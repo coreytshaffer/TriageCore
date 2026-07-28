@@ -44,6 +44,8 @@ from triage_core.capability_claims import (
     TERMINAL_NOT_CLAIMED,
     TERMINAL_NOT_FOUND,
     TERMINAL_OK,
+    TERMINAL_STORE_BUSY,
+    TERMINAL_STORE_UNAVAILABLE,
     CapabilityBinding,
     CapabilityClaimStore,
     CapabilityStoreError,
@@ -683,6 +685,116 @@ def test_malformed_existing_table_fails_closed(tmp_path):
     result = _claim(CapabilityClaimStore(db_path))
 
     assert not result.allowed and result.reason_code == CLAIM_STORE_UNAVAILABLE
+
+
+# --- Honest terminal failure reasons ------------------------------------------
+#
+# TERMINAL_NOT_FOUND must mean "the store was read and the row is genuinely
+# absent". A busy or unusable store never observed lifecycle state at all, and
+# reporting absence in that case would invite a caller to act on an absence it
+# never saw. These mirror the claim path, which already made the distinction.
+
+
+def _finalize(store, capability_id=CAPABILITY_ID, *, claimant="agent-a",
+              attempt="attempt-1", outcome=STATE_COMPLETED, now=NOW):
+    return store.finalize(
+        capability_id,
+        claimant_id=claimant,
+        execution_attempt_id=attempt,
+        outcome=outcome,
+        now=now,
+    )
+
+
+def test_finalize_reports_not_found_only_for_a_genuine_absence(tmp_path):
+    """A healthy store that reads no row is the one true not-found case."""
+    store = _store(tmp_path)
+    assert _claim(store).allowed
+
+    result = _finalize(store, capability_id=_OTHER_CAPABILITY_ID)
+
+    assert not result.applied and result.reason_code == TERMINAL_NOT_FOUND
+
+
+def test_finalize_reports_busy_rather_than_absent_under_a_held_lock(tmp_path):
+    store = _store(tmp_path, busy_timeout_ms=1)
+    assert _claim(store).allowed
+
+    blocker = sqlite3.connect(store.db_path, isolation_level=None)
+    try:
+        blocker.execute("BEGIN IMMEDIATE")
+        blocked = _finalize(store)
+    finally:
+        blocker.execute("ROLLBACK")
+        blocker.close()
+
+    assert not blocked.applied and blocked.reason_code == TERMINAL_STORE_BUSY
+    # The lifecycle was never observed, so nothing may have changed.
+    assert store.get_row(CAPABILITY_ID)["state"] == STATE_CLAIMED
+
+
+def test_finalize_reports_unavailable_for_a_corrupt_database(tmp_path):
+    store = _store(tmp_path)
+    assert _claim(store).allowed
+    with open(store.db_path, "wb") as handle:
+        handle.write(b"this is not a sqlite database" * 40)
+
+    result = _finalize(CapabilityClaimStore(store.db_path))
+
+    assert not result.applied
+    assert result.reason_code == TERMINAL_STORE_UNAVAILABLE
+
+
+def test_finalize_reports_unavailable_for_an_unsupported_schema(tmp_path):
+    store = _store(tmp_path)
+    assert _claim(store).allowed
+    with sqlite3.connect(store.db_path) as conn:
+        conn.execute(
+            "UPDATE schema_meta SET value = ? WHERE key = 'schema_version'",
+            ("triagecore.capability_claims.v999",),
+        )
+
+    result = _finalize(CapabilityClaimStore(store.db_path))
+
+    assert not result.applied
+    assert result.reason_code == TERMINAL_STORE_UNAVAILABLE
+
+
+@pytest.mark.parametrize(
+    "break_store, expected",
+    [
+        (lambda p: open(p, "wb").write(b"not a database" * 50),
+         TERMINAL_STORE_UNAVAILABLE),
+        (lambda p: None, TERMINAL_NOT_FOUND),
+    ],
+)
+def test_ledger_boundary_preserves_terminal_reason_and_writes_no_event(
+    tmp_path, break_store, expected
+):
+    """``finalize_capability`` passes the code through and records nothing."""
+    ledger = TaskLedger(ledger_dir=str(tmp_path))
+    _issue(ledger)
+    assert claim_capability(
+        ledger, TASK_ID, CAPABILITY_ID, ARTIFACT_DIGEST, SCOPE_DIGEST,
+        claimant_id="agent-a", execution_attempt_id="attempt-1", now=NOW,
+    ).allowed
+    before = len(ledger.get_events(TASK_ID))
+
+    break_store(default_db_path(str(tmp_path)))
+    target = CAPABILITY_ID if expected is TERMINAL_STORE_UNAVAILABLE \
+        else _OTHER_CAPABILITY_ID
+
+    outcome = finalize_capability(
+        ledger, TASK_ID, target, STATE_COMPLETED,
+        claimant_id="agent-a", execution_attempt_id="attempt-1", now=NOW,
+    )
+
+    assert not outcome.allowed and outcome.reason_code == expected
+    events = ledger.get_events(TASK_ID)
+    assert len(events) == before
+    assert not any(
+        event.get("event_type") == EVENT_CAPABILITY_TERMINAL for event in events
+    )
 
 
 # --- Compatibility boundary (triage_core.authz) -------------------------------
