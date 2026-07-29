@@ -543,15 +543,16 @@ exercising, recorded separately rather than backfilled into the requirements:
 
 ```text
 12 required mutants
-+ 3 review-found defective variants
-= 15 exercised variants
++ 4 review-found defective variants
+= 16 exercised variants
 ```
 
-The three additions are `M8b` (lookup failure reported as absence on the
+The four additions are `M8b` (lookup failure reported as absence on the
 mediated claim path), `M9b` (reservation-to-request verification removed from
-the issuance gate), and `M13` (the state classifier collapsed to one generic
-code). All fifteen were demonstrated failing against their defective versions
-with the module hash pristine after each cycle.
+the issuance gate), `M13` (the state classifier collapsed to one generic code),
+and `M14` (any insert integrity failure reported as a lost race). All sixteen
+were demonstrated failing against their defective versions with the module hash
+pristine after each cycle.
 
 ### Review-round corrections
 
