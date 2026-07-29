@@ -2,12 +2,13 @@
 
 ## Status
 
-- **Status:** Requirements approved and merged through PR #122 as `f22fee1`;
-  bounded implementation authorized on 2026-07-28 and complete on branch; **not
-  merged**.
-- **Implementation authority:** Limited to the five-path allowlist recorded
-  below — the reservation module, its tests, and this documentation.
-- **Merge authority:** None.
+- **Status:** Complete and merged. Requirements contract merged through
+  PR #122 as `f22fee1`; bounded implementation merged through PR #123 as
+  `47fb3d5` on 2026-07-29, with `main` CI green on Python 3.10, 3.11, and 3.12.
+- **Implementation authority:** Was limited to the five-path allowlist recorded
+  below — the reservation module, its tests, and this documentation — and is
+  now spent. Merging this slice authorizes nothing further.
+- **Merge authority:** Exercised for this slice only.
 - **Still unauthorized:** CR-OC-001C through CR-OC-001E, runtime integration,
   CLI or `tc run` surfaces, file access, IPC, named pipes, OpenClaw
   configuration, new dependencies, and any runtime module importing
@@ -517,8 +518,10 @@ test would reproduce it in the evidence rather than in the code.
 
 ## Implementation Record
 
-Implemented on branch `cr-oc-001b-request-reservation-implementation`, open for
-review, **not merged**. Two code paths, both new:
+Merged into `main` through PR #123 as merge commit
+`47fb3d5819c1f301968af714635aae75634dc29e` on 2026-07-29, across `4ac0df9`
+(implementation), `6730d58`, `247417e`, `d98c2ad`, and `04b666d` (four review
+rounds), with `b992aaf` recording status. Two code paths, both new:
 
 - `triage_core/request_reservation.py` — the versioned SQLite store, closed
   result objects and the exact merged reason vocabulary, atomic
@@ -534,6 +537,17 @@ primary key, a partial unique index on `capability_id`, a table-level `CHECK`
 binding row shape to state, and triggers for immutable identity, the legal
 transition whitelist, bound-capability immutability, and undeletability. Public
 prechecks exist for clearer outcomes and are never the enforcement.
+
+### Known follow-up, recorded rather than silently carried
+
+The schema-validation docstring in `triage_core/request_reservation.py` says
+indexes and triggers are checked "by presence", while the implementation
+compares their normalized DDL — which is the stronger behaviour, and the one
+the altered-trigger test exercises. The code and its tests are unambiguous, so
+this was not a merge blocker, but the sentence understates what the module
+actually does and should be corrected whenever that file is next opened under
+authorization. This closeout is documentation-only and deliberately does not
+touch the module to fix it.
 
 ### Mutant evidence, as required and as exercised
 
