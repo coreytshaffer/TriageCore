@@ -526,8 +526,8 @@ review, **not merged**. Two code paths, both new:
   transitions, idempotent recovery of an authorized binding, the mediated
   issuance and claim entry points, and a projection carrying neither the raw
   token nor its verifier.
-- `tests/test_request_reservation.py` — 41 tests covering all 16 named
-  obligations.
+- `tests/test_request_reservation.py` — 61 tests covering all 16 named
+  obligations, the operation x state truth table, and the request-aware gate.
 
 The database enforces the invariants, not the Python layer: `client_request_id`
 primary key, a partial unique index on `capability_id`, a table-level `CHECK`
@@ -535,7 +535,33 @@ binding row shape to state, and triggers for immutable identity, the legal
 transition whitelist, bound-capability immutability, and undeletability. Public
 prechecks exist for clearer outcomes and are never the enforcement.
 
-### Two findings from the evidence pass, recorded rather than smoothed over
+### Review-round corrections
+
+Five findings, each confirmed behaviourally against the pre-fix head before
+being changed:
+
+- **The reservation was not bound to the trio being issued.** `begin_issuance`
+  checked only id, state, and token, so a valid token for reservation A could
+  advance A while a capability was issued for a coherent request B sharing the
+  client request id, and bound into A's row. The gate now carries
+  `request_digest` and `broker_connection_id` in its atomic predicate; `bind` is
+  protected transitively, since only the request-aware gate produces `issuing`.
+- **Mediated claiming reported store failure as absence.** A decision-bearing
+  `lookup` now distinguishes not-found from busy and unavailable, and
+  `projection` raises rather than flattening an operational failure into `None`.
+- **One generic wrong-state code per operation.** A state-aware classifier
+  replaces it, ordered request-mismatch, then state, then token. Binding the
+  same capability twice now recovers the existing binding as `ok` rather than
+  reporting that issuance never began.
+- **Obligation 15 tested the projection, not the persisted row.** The exact row
+  payload is now privacy-checked before insertion, and a test runs the invariant
+  over every persisted column.
+- **The concurrency helpers could lose a worker.** They now capture worker
+  exceptions, join with a bounded timeout, and assert the result count before
+  any outcome assertion, so a crashed worker fails the test rather than
+  disappearing from the evidence.
+
+### Two findings from the first evidence pass, recorded rather than smoothed over
 
 **A test was passing for the wrong reason.** The connection-mismatch test
 compared a reservation against a request built on a different broker
