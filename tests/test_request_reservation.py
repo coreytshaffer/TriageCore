@@ -32,6 +32,7 @@ from triage_core.request_reservation import (
     CAPABILITY_ALREADY_RESERVED,
     REASON_CODES,
     REQUEST_ID_REUSE_MISMATCH,
+    RESERVATION_ALREADY_BOUND,
     RESERVATION_ALREADY_ISSUING,
     RESERVATION_ATTEMPT_MISMATCH,
     RESERVATION_BINDING_MISMATCH,
@@ -49,6 +50,7 @@ from triage_core.request_reservation import (
     STATE_RESERVED,
     RequestReservationStore,
     ReservationContractError,
+    ReservationError,
     default_db_path,
     mediated_claim_capability,
     mediated_issue_capability,
@@ -126,19 +128,9 @@ def test_concurrent_reserve_creates_exactly_one_row(tmp_path):
     """Real threads, independent connections, barrier-synchronised."""
     _, request, _ = _trio()
     worker_count = 8
-    barrier = threading.Barrier(worker_count)
-    results = []
-
-    def worker():
-        store = RequestReservationStore(default_db_path(str(tmp_path)))
-        barrier.wait()
-        results.append(store.reserve(request, now=NOW))
-
-    threads = [threading.Thread(target=worker) for _ in range(worker_count)]
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join()
+    results = _run_threads(
+        tmp_path, [lambda s: s.reserve(request, now=NOW)] * worker_count
+    )
 
     winners = [r for r in results if r.created]
     assert len(winners) == 1
@@ -158,7 +150,7 @@ def test_concurrent_reserve_creates_exactly_one_row(tmp_path):
 
 def test_same_request_and_digest_returns_the_existing_reservation(tmp_path):
     store, (effect, request, _), token = _reserved(tmp_path)
-    assert store.begin_issuance(CLIENT_REQUEST_ID, token, now=NOW).applied
+    assert store.begin_issuance(request, token, now=NOW).applied
     assert store.bind(CLIENT_REQUEST_ID, token, "cap-1", now=NOW).applied
 
     again = store.reserve(request, now=LATER)
@@ -171,7 +163,7 @@ def test_same_request_and_digest_returns_the_existing_reservation(tmp_path):
 
 
 def test_same_request_id_with_a_different_digest_fails(tmp_path):
-    store, _, _ = _reserved(tmp_path)
+    store, (_, request, _), _ = _reserved(tmp_path)
     _, other_request, _ = _trio(proposed_bytes=b"different content\n")
     assert other_request.client_request_id == CLIENT_REQUEST_ID
 
@@ -183,7 +175,7 @@ def test_same_request_id_with_a_different_digest_fails(tmp_path):
 
 def test_same_request_on_a_different_connection_fails(tmp_path):
     """The realistic reconnect path, where the digest changes as well."""
-    store, _, _ = _reserved(tmp_path)
+    store, (_, request, _), _ = _reserved(tmp_path)
     _, other_request, _ = _trio(broker_connection_id="conn-different")
     assert other_request.client_request_id == CLIENT_REQUEST_ID
 
@@ -234,8 +226,8 @@ def test_one_capability_cannot_bind_to_two_client_requests(tmp_path):
 
     first_token = store.reserve(first, now=NOW).attempt_token
     second_token = store.reserve(second, now=NOW).attempt_token
-    store.begin_issuance(first.client_request_id, first_token, now=NOW)
-    store.begin_issuance(second.client_request_id, second_token, now=NOW)
+    store.begin_issuance(first, first_token, now=NOW)
+    store.begin_issuance(second, second_token, now=NOW)
 
     assert store.bind(first.client_request_id, first_token, "cap-x", now=NOW).applied
     clash = store.bind(second.client_request_id, second_token, "cap-x", now=NOW)
@@ -245,14 +237,14 @@ def test_one_capability_cannot_bind_to_two_client_requests(tmp_path):
 
 
 def test_one_client_request_cannot_bind_two_capabilities(tmp_path):
-    store, _, token = _reserved(tmp_path)
-    store.begin_issuance(CLIENT_REQUEST_ID, token, now=NOW)
+    store, (_, request, _), token = _reserved(tmp_path)
+    store.begin_issuance(request, token, now=NOW)
     assert store.bind(CLIENT_REQUEST_ID, token, "cap-a", now=NOW).applied
 
     second = store.bind(CLIENT_REQUEST_ID, token, "cap-b", now=LATER)
 
     assert not second.applied
-    assert second.reason_code == RESERVATION_ISSUANCE_NOT_BEGUN
+    assert second.reason_code == RESERVATION_ALREADY_BOUND
     assert store.projection(CLIENT_REQUEST_ID)["capability_id"] == "cap-a"
 
 
@@ -278,7 +270,7 @@ def test_locked_store_reports_busy_not_absence(tmp_path):
 
 
 def test_corrupt_store_reports_unavailable_not_absence(tmp_path):
-    store, _, _ = _reserved(tmp_path)
+    store, (_, request, _), _ = _reserved(tmp_path)
     with open(store.db_path, "wb") as handle:
         handle.write(b"this is not a sqlite database" * 40)
 
@@ -290,7 +282,7 @@ def test_corrupt_store_reports_unavailable_not_absence(tmp_path):
 
 
 def test_unsupported_schema_reports_unavailable_not_absence(tmp_path):
-    store, _, _ = _reserved(tmp_path)
+    store, (_, request, _), _ = _reserved(tmp_path)
     with sqlite3.connect(store.db_path) as conn:
         conn.execute(
             "UPDATE schema_meta SET value = ? WHERE key = 'schema_version'",
@@ -306,7 +298,8 @@ def test_unsupported_schema_reports_unavailable_not_absence(tmp_path):
 
 def test_absence_is_reported_only_for_a_healthy_read(tmp_path):
     store = _store(tmp_path)
-    missing = store.begin_issuance("req-never-reserved", "token", now=NOW)
+    _, absent, _ = _trio(client_request_id="req-never-reserved")
+    missing = store.begin_issuance(absent, "token", now=NOW)
     assert missing.reason_code == RESERVATION_NOT_FOUND
 
 
@@ -347,17 +340,17 @@ def test_a_concurrent_retry_cannot_sabotage_the_insert_winner(tmp_path):
         assert blocked.reason_code == RESERVATION_ATTEMPT_MISMATCH
 
     # The winner can still complete afterwards.
-    assert store.begin_issuance(CLIENT_REQUEST_ID, token, now=LATER).applied
+    assert store.begin_issuance(request, token, now=LATER).applied
     assert store.bind(CLIENT_REQUEST_ID, token, "cap-ok", now=LATER).applied
 
 
 def test_a_later_invocation_cannot_bind_an_orphaned_row(tmp_path):
     """No sequence available to a non-owner advances an orphaned reservation."""
-    store, _, _ = _reserved(tmp_path)
+    store, (_, request, _), _ = _reserved(tmp_path)
     forged = "f" * 64
 
     # It cannot reach issuing, so it can never reach a bindable state.
-    gate = store.begin_issuance(CLIENT_REQUEST_ID, forged, now=LATER)
+    gate = store.begin_issuance(request, forged, now=LATER)
     assert not gate.applied
     assert gate.reason_code == RESERVATION_ATTEMPT_MISMATCH
 
@@ -372,24 +365,26 @@ def test_a_later_invocation_cannot_bind_an_orphaned_row(tmp_path):
 
 @pytest.mark.parametrize("operation", ["begin_issuance", "deny", "bind"])
 def test_a_wrong_token_cannot_advance_the_row(tmp_path, operation):
-    store, _, token = _reserved(tmp_path)
+    store, (_, request, _), token = _reserved(tmp_path)
     wrong = token[:-1] + ("0" if token[-1] != "0" else "1")
 
     if operation == "bind":
-        store.begin_issuance(CLIENT_REQUEST_ID, token, now=NOW)
+        store.begin_issuance(request, token, now=NOW)
         result = store.bind(CLIENT_REQUEST_ID, wrong, "cap-x", now=NOW)
+    elif operation == "begin_issuance":
+        result = store.begin_issuance(request, wrong, now=NOW)
     else:
-        result = getattr(store, operation)(CLIENT_REQUEST_ID, wrong, now=NOW)
+        result = store.deny(CLIENT_REQUEST_ID, wrong, now=NOW)
 
     assert not result.applied
     assert result.reason_code == RESERVATION_ATTEMPT_MISMATCH
 
 
 def test_the_stored_digest_is_not_accepted_as_a_token(tmp_path):
-    store, _, token = _reserved(tmp_path)
+    store, (_, request, _), token = _reserved(tmp_path)
     digest = token_digest(token)
 
-    result = store.begin_issuance(CLIENT_REQUEST_ID, digest, now=NOW)
+    result = store.begin_issuance(request, digest, now=NOW)
 
     assert not result.applied
     assert result.reason_code == RESERVATION_ATTEMPT_MISMATCH
@@ -432,15 +427,15 @@ _ROW = (CLIENT_REQUEST_ID, OTHER_DIGEST, OTHER_DIGEST, BROKER_CONNECTION_ID,
 
 
 def test_direct_sql_rejects_a_duplicate_client_request_id(tmp_path):
-    store, _, _ = _reserved(tmp_path)
+    store, (_, request, _), _ = _reserved(tmp_path)
     with sqlite3.connect(store.db_path) as conn:
         with pytest.raises(sqlite3.IntegrityError):
             conn.execute(_INSERT, _ROW)
 
 
 def test_direct_sql_rejects_a_duplicate_capability_binding(tmp_path):
-    store, _, token = _reserved(tmp_path)
-    store.begin_issuance(CLIENT_REQUEST_ID, token, now=NOW)
+    store, (_, request, _), token = _reserved(tmp_path)
+    store.begin_issuance(request, token, now=NOW)
     store.bind(CLIENT_REQUEST_ID, token, "cap-dup", now=NOW)
 
     with sqlite3.connect(store.db_path) as conn:
@@ -466,7 +461,7 @@ def test_direct_sql_rejects_a_duplicate_capability_binding(tmp_path):
 
 def test_direct_sql_rejects_skipping_issuing(tmp_path):
     """reserved -> authorized must be unreachable, even by direct SQL."""
-    store, _, _ = _reserved(tmp_path)
+    store, (_, request, _), _ = _reserved(tmp_path)
     with sqlite3.connect(store.db_path) as conn:
         with pytest.raises(sqlite3.IntegrityError, match="illegal"):
             conn.execute(
@@ -479,8 +474,8 @@ def test_direct_sql_rejects_skipping_issuing(tmp_path):
 
 
 def test_direct_sql_rejects_backward_and_absorbing_transitions(tmp_path):
-    store, _, token = _reserved(tmp_path)
-    store.begin_issuance(CLIENT_REQUEST_ID, token, now=NOW)
+    store, (_, request, _), token = _reserved(tmp_path)
+    store.begin_issuance(request, token, now=NOW)
     with sqlite3.connect(store.db_path) as conn:
         with pytest.raises(sqlite3.IntegrityError, match="illegal"):
             conn.execute(
@@ -506,8 +501,8 @@ def test_direct_sql_rejects_backward_and_absorbing_transitions(tmp_path):
 
 def test_direct_sql_rejects_denial_once_issuing(tmp_path):
     """issuing -> denied is illegal: the decision is already made."""
-    store, _, token = _reserved(tmp_path)
-    store.begin_issuance(CLIENT_REQUEST_ID, token, now=NOW)
+    store, (_, request, _), token = _reserved(tmp_path)
+    store.begin_issuance(request, token, now=NOW)
     with sqlite3.connect(store.db_path) as conn:
         with pytest.raises(sqlite3.IntegrityError):
             conn.execute(
@@ -518,7 +513,7 @@ def test_direct_sql_rejects_denial_once_issuing(tmp_path):
 
 
 def test_direct_sql_rejects_malformed_row_shapes(tmp_path):
-    store, _, _ = _reserved(tmp_path)
+    store, (_, request, _), _ = _reserved(tmp_path)
     shapes = (
         ("req-shape1", STATE_AUTHORIZED, None, "t", "t", None),
         ("req-shape2", STATE_RESERVED, "cap-nope", None, None, None),
@@ -541,7 +536,7 @@ def test_direct_sql_rejects_malformed_row_shapes(tmp_path):
 
 
 def test_direct_sql_rejects_identity_mutation_and_deletion(tmp_path):
-    store, _, _ = _reserved(tmp_path)
+    store, (_, request, _), _ = _reserved(tmp_path)
     with sqlite3.connect(store.db_path) as conn:
         with pytest.raises(sqlite3.IntegrityError):
             conn.execute(
@@ -563,8 +558,8 @@ def test_direct_sql_rejects_identity_mutation_and_deletion(tmp_path):
 
 
 def test_direct_sql_rejects_rebinding_a_bound_capability(tmp_path):
-    store, _, token = _reserved(tmp_path)
-    store.begin_issuance(CLIENT_REQUEST_ID, token, now=NOW)
+    store, (_, request, _), token = _reserved(tmp_path)
+    store.begin_issuance(request, token, now=NOW)
     store.bind(CLIENT_REQUEST_ID, token, "cap-first", now=NOW)
     with sqlite3.connect(store.db_path) as conn:
         with pytest.raises(sqlite3.IntegrityError):
@@ -581,7 +576,7 @@ def test_direct_sql_rejects_rebinding_a_bound_capability(tmp_path):
 def test_capability_expiry_does_not_release_the_reservation(tmp_path):
     """Otherwise expiry becomes a reuse channel a caller can wait out."""
     store, (_, request, _), token = _reserved(tmp_path)
-    store.begin_issuance(CLIENT_REQUEST_ID, token, now=NOW)
+    store.begin_issuance(request, token, now=NOW)
     store.bind(CLIENT_REQUEST_ID, token, "cap-expiring", now=NOW)
 
     long_after = NOW + timedelta(days=365)
@@ -597,7 +592,7 @@ def test_capability_expiry_does_not_release_the_reservation(tmp_path):
 
 
 def test_projection_is_privacy_safe_and_never_leaks_the_raw_token(tmp_path):
-    store, _, token = _reserved(tmp_path)
+    store, (_, request, _), token = _reserved(tmp_path)
     projection = store.projection(CLIENT_REQUEST_ID)
 
     assert_persistent_privacy_safe(
@@ -612,7 +607,7 @@ def test_projection_is_privacy_safe_and_never_leaks_the_raw_token(tmp_path):
 def test_the_raw_token_is_absent_from_the_database_while_the_digest_is_present(
     tmp_path,
 ):
-    store, _, token = _reserved(tmp_path)
+    store, (_, request, _), token = _reserved(tmp_path)
 
     with open(store.db_path, "rb") as handle:
         raw_bytes = handle.read()
@@ -629,9 +624,9 @@ def test_the_raw_token_is_absent_from_the_database_while_the_digest_is_present(
 
 
 def test_failure_payloads_never_carry_the_token(tmp_path):
-    store, _, token = _reserved(tmp_path)
+    store, (_, request, _), token = _reserved(tmp_path)
     wrong = token[:-1] + ("0" if token[-1] != "0" else "1")
-    result = store.begin_issuance(CLIENT_REQUEST_ID, wrong, now=NOW)
+    result = store.begin_issuance(request, wrong, now=NOW)
     text = json.dumps(
         [result.reason_code, result.client_request_id, result.state,
          result.capability_id]
@@ -641,10 +636,11 @@ def test_failure_payloads_never_carry_the_token(tmp_path):
 
 def test_every_reason_code_is_in_the_closed_vocabulary(tmp_path):
     store, (_, request, _), token = _reserved(tmp_path)
+    _, absent, _ = _trio(client_request_id="req-absent")
     emitted = [
         store.reserve(request, now=LATER).reason_code,
-        store.begin_issuance(CLIENT_REQUEST_ID, "wrong", now=NOW).reason_code,
-        store.begin_issuance("req-absent", token, now=NOW).reason_code,
+        store.begin_issuance(request, "wrong", now=NOW).reason_code,
+        store.begin_issuance(absent, token, now=NOW).reason_code,
         store.bind(CLIENT_REQUEST_ID, token, "cap-x", now=NOW).reason_code,
     ]
     for code in emitted:
@@ -654,29 +650,53 @@ def test_every_reason_code_is_in_the_closed_vocabulary(tmp_path):
 # --- 16. Transition race ------------------------------------------------------
 
 
-def _race(tmp_path, operations):
-    """Run operations concurrently on independent stores, barrier-synchronised."""
+def _run_threads(tmp_path, operations, timeout=30.0):
+    """Barrier-synchronised workers over independent stores.
+
+    A worker that dies must make the test fail rather than quietly shrink the
+    result set: an outcome assertion like "exactly one winner" would otherwise
+    pass on a truncated list. Every worker's exception is captured, the join is
+    bounded, and the result count is asserted against the worker count.
+    """
     barrier = threading.Barrier(len(operations))
     results = []
+    errors = []
+    lock = threading.Lock()
 
     def worker(operation):
-        store = RequestReservationStore(default_db_path(str(tmp_path)))
-        barrier.wait()
-        results.append(operation(store))
+        try:
+            store = RequestReservationStore(default_db_path(str(tmp_path)))
+            barrier.wait(timeout=timeout)
+            outcome = operation(store)
+            with lock:
+                results.append(outcome)
+        except BaseException as exc:  # noqa: BLE001 - must not vanish
+            with lock:
+                errors.append(exc)
 
     threads = [threading.Thread(target=worker, args=(op,)) for op in operations]
     for thread in threads:
         thread.start()
     for thread in threads:
-        thread.join()
+        thread.join(timeout=timeout)
+
+    assert not [t for t in threads if t.is_alive()], "a worker never finished"
+    assert not errors, f"worker exceptions: {errors!r}"
+    assert len(results) == len(operations), (
+        f"expected {len(operations)} results, got {len(results)}"
+    )
     return results
 
 
+def _race(tmp_path, operations):
+    return _run_threads(tmp_path, operations)
+
+
 def test_begin_issuance_races_itself_and_exactly_one_wins(tmp_path):
-    _, _, token = _reserved(tmp_path)
+    _, (_, request, _), token = _reserved(tmp_path)
     results = _race(
         tmp_path,
-        [lambda s: s.begin_issuance(CLIENT_REQUEST_ID, token, now=NOW)] * 6,
+        [lambda s: s.begin_issuance(request, token, now=NOW)] * 6,
     )
     assert sum(1 for r in results if r.applied) == 1
     assert all(
@@ -687,11 +707,11 @@ def test_begin_issuance_races_itself_and_exactly_one_wins(tmp_path):
 
 
 def test_begin_issuance_races_deny_and_exactly_one_transition_applies(tmp_path):
-    _, _, token = _reserved(tmp_path)
+    _, (_, request, _), token = _reserved(tmp_path)
     results = _race(
         tmp_path,
         [
-            lambda s: s.begin_issuance(CLIENT_REQUEST_ID, token, now=NOW),
+            lambda s: s.begin_issuance(request, token, now=NOW),
             lambda s: s.deny(CLIENT_REQUEST_ID, token, now=NOW),
         ],
     )
@@ -703,8 +723,8 @@ def test_begin_issuance_races_deny_and_exactly_one_transition_applies(tmp_path):
 
 
 def test_two_binds_race_from_issuing_and_exactly_one_capability_binds(tmp_path):
-    store, _, token = _reserved(tmp_path)
-    store.begin_issuance(CLIENT_REQUEST_ID, token, now=NOW)
+    store, (_, request, _), token = _reserved(tmp_path)
+    store.begin_issuance(request, token, now=NOW)
 
     results = _race(
         tmp_path,
@@ -793,7 +813,7 @@ def test_issuance_failure_leaves_the_row_permanently_issuing(tmp_path):
     assert store.projection(CLIENT_REQUEST_ID)["state"] == STATE_ISSUING
     # It never returns to reserved, permits denial, or authorizes a second issue.
     assert not store.deny(CLIENT_REQUEST_ID, token, now=LATER).applied
-    assert not store.begin_issuance(CLIENT_REQUEST_ID, token, now=LATER).applied
+    assert not store.begin_issuance(request, token, now=LATER).applied
 
 
 def test_mediated_claim_requires_an_authorized_reservation(tmp_path):
@@ -806,7 +826,7 @@ def test_mediated_claim_requires_an_authorized_reservation(tmp_path):
     assert not denied.applied
     assert denied.reason_code == RESERVATION_ISSUANCE_NOT_BEGUN
 
-    store.begin_issuance(CLIENT_REQUEST_ID, token, now=NOW)
+    store.begin_issuance(request, token, now=NOW)
     store.bind(CLIENT_REQUEST_ID, token, "cap-1", now=NOW)
 
     delegated = []
@@ -820,7 +840,7 @@ def test_mediated_claim_requires_an_authorized_reservation(tmp_path):
 
 def test_mediated_claim_refuses_a_capability_bound_to_another_request(tmp_path):
     store, (effect, request, linkage), token = _reserved(tmp_path)
-    store.begin_issuance(CLIENT_REQUEST_ID, token, now=NOW)
+    store.begin_issuance(request, token, now=NOW)
     store.bind(CLIENT_REQUEST_ID, token, "cap-real", now=NOW)
 
     result = mediated_claim_capability(
@@ -840,9 +860,199 @@ def test_schema_version_is_recorded(tmp_path):
     This passes against the intended module and against most mutations of it,
     so it is a control rather than mutant evidence and is reported as such.
     """
-    store, _, _ = _reserved(tmp_path)
+    store, (_, request, _), _ = _reserved(tmp_path)
     with sqlite3.connect(store.db_path) as conn:
         recorded = conn.execute(
             "SELECT value FROM schema_meta WHERE key = 'schema_version'"
         ).fetchone()[0]
     assert recorded == SCHEMA_VERSION
+
+# --- Review round: reservation must be bound to the trio ----------------------
+
+
+def test_the_gate_refuses_a_coherent_but_different_request(tmp_path):
+    """A valid token for A must not advance A on behalf of request B.
+
+    Both are internally coherent and share the client request id. Before the
+    request was bound into the gate predicate, this issued a capability for B
+    and bound it into A's reservation.
+    """
+    store, (_, request_a, _), token_a = _reserved(tmp_path)
+
+    effect_b = _effect(
+        proposed_bytes=b"totally different content\n",
+        broker_connection_id="conn-ATTACKER",
+    )
+    request_b = build_client_request(effect_b, task_id=TASK_ID)
+    linkage_b = build_plan_linkage(effect_b, request_b, decision_id=DECISION_ID)
+    mapped_b = capability_binding_fields(effect_b, request_b, linkage_b)
+    assert request_b.client_request_id == request_a.client_request_id
+
+    issued = []
+    result = mediated_issue_capability(
+        store, object(), _FakeReceipt(mapped_b), effect_b, request_b, linkage_b,
+        token_a,
+        issue_capability=lambda *a, **k: issued.append("B") or "cap-for-B",
+        now=NOW,
+    )
+
+    assert issued == [], "issue_capability must never be reached"
+    assert not result.applied
+    assert result.reason_code == REQUEST_ID_REUSE_MISMATCH
+    row = store.projection(CLIENT_REQUEST_ID)
+    assert row["state"] == STATE_RESERVED and row["capability_id"] == ""
+
+
+def test_the_gate_refuses_a_different_connection_with_a_valid_token(tmp_path):
+    store, (_, request_a, _), token = _reserved(tmp_path)
+    _, other_connection, _ = _trio(broker_connection_id="conn-elsewhere")
+
+    result = store.begin_issuance(other_connection, token, now=NOW)
+
+    assert not result.applied
+    assert result.reason_code == REQUEST_ID_REUSE_MISMATCH
+    assert store.projection(CLIENT_REQUEST_ID)["state"] == STATE_RESERVED
+
+
+# --- Review round: mediated claim preserves operational reasons ---------------
+
+
+@pytest.mark.parametrize("breakage", ["corrupt", "unsupported"])
+def test_mediated_claim_preserves_operational_reasons(tmp_path, breakage):
+    store, (effect, request, linkage), token = _reserved(tmp_path)
+    store.begin_issuance(request, token, now=NOW)
+    store.bind(CLIENT_REQUEST_ID, token, "cap-1", now=NOW)
+
+    if breakage == "corrupt":
+        with open(store.db_path, "wb") as handle:
+            handle.write(b"not a sqlite database" * 40)
+    else:
+        with sqlite3.connect(store.db_path) as conn:
+            conn.execute(
+                "UPDATE schema_meta SET value = ? WHERE key = 'schema_version'",
+                ("triagecore.request_reservation.v999",),
+            )
+
+    result = mediated_claim_capability(
+        RequestReservationStore(store.db_path), object(), "cap-1",
+        effect, request, linkage,
+        claim_capability=lambda *a, **k: pytest.fail("must not delegate"),
+        claimant_id="agent-a", now=NOW,
+    )
+
+    assert result.reason_code == RESERVATION_STORE_UNAVAILABLE
+    assert result.reason_code != RESERVATION_NOT_FOUND
+
+
+def test_mediated_claim_reports_busy_for_a_locked_store(tmp_path):
+    store, (effect, request, linkage), token = _reserved(
+        tmp_path, busy_timeout_ms=1
+    )
+    store.begin_issuance(request, token, now=NOW)
+    store.bind(CLIENT_REQUEST_ID, token, "cap-1", now=NOW)
+
+    blocker = sqlite3.connect(store.db_path, isolation_level=None)
+    try:
+        blocker.execute("BEGIN EXCLUSIVE")
+        result = mediated_claim_capability(
+            RequestReservationStore(store.db_path, busy_timeout_ms=1),
+            object(), "cap-1", effect, request, linkage,
+            claim_capability=lambda *a, **k: pytest.fail("must not delegate"),
+            claimant_id="agent-a", now=NOW,
+        )
+    finally:
+        blocker.execute("ROLLBACK")
+        blocker.close()
+
+    assert result.reason_code in {
+        RESERVATION_STORE_BUSY, RESERVATION_STORE_UNAVAILABLE
+    }
+    assert result.reason_code != RESERVATION_NOT_FOUND
+
+
+def test_projection_raises_rather_than_reporting_absence(tmp_path):
+    store, _, _ = _reserved(tmp_path)
+    with open(store.db_path, "wb") as handle:
+        handle.write(b"not a sqlite database" * 40)
+    with pytest.raises(ReservationError):
+        RequestReservationStore(store.db_path).projection(CLIENT_REQUEST_ID)
+
+
+# --- Review round: operation x state truth table ------------------------------
+
+
+def _row_in_state(tmp_path, state, capability="cap-bound"):
+    store, (_, request, _), token = _reserved(tmp_path)
+    if state == STATE_ISSUING:
+        store.begin_issuance(request, token, now=NOW)
+    elif state == STATE_AUTHORIZED:
+        store.begin_issuance(request, token, now=NOW)
+        store.bind(CLIENT_REQUEST_ID, token, capability, now=NOW)
+    elif state == STATE_DENIED:
+        store.deny(CLIENT_REQUEST_ID, token, now=NOW)
+    return store, request, token
+
+
+@pytest.mark.parametrize(
+    "state, operation, expected",
+    [
+        (STATE_RESERVED, "begin_issuance", RESERVE_OK),
+        (STATE_RESERVED, "deny", RESERVE_OK),
+        (STATE_RESERVED, "bind", RESERVATION_ISSUANCE_NOT_BEGUN),
+        (STATE_ISSUING, "begin_issuance", RESERVATION_ALREADY_ISSUING),
+        (STATE_ISSUING, "deny", RESERVATION_ALREADY_ISSUING),
+        (STATE_ISSUING, "bind", RESERVE_OK),
+        (STATE_AUTHORIZED, "begin_issuance", RESERVATION_ALREADY_BOUND),
+        (STATE_AUTHORIZED, "deny", RESERVATION_ALREADY_BOUND),
+        (STATE_AUTHORIZED, "bind_other", RESERVATION_ALREADY_BOUND),
+        (STATE_AUTHORIZED, "bind_same", RESERVE_OK),
+        (STATE_DENIED, "begin_issuance", RESERVATION_DENIED),
+        (STATE_DENIED, "deny", RESERVATION_DENIED),
+        (STATE_DENIED, "bind", RESERVATION_DENIED),
+    ],
+)
+def test_every_operation_state_pair_reports_truthfully(
+    tmp_path, state, operation, expected
+):
+    """No generic wrong-state code: each reachable pair names what happened."""
+    store, request, token = _row_in_state(tmp_path, state)
+
+    if operation == "begin_issuance":
+        result = store.begin_issuance(request, token, now=LATER)
+    elif operation == "deny":
+        result = store.deny(CLIENT_REQUEST_ID, token, now=LATER)
+    elif operation == "bind_same":
+        result = store.bind(CLIENT_REQUEST_ID, token, "cap-bound", now=LATER)
+    elif operation == "bind_other":
+        result = store.bind(CLIENT_REQUEST_ID, token, "cap-different", now=LATER)
+    else:
+        result = store.bind(CLIENT_REQUEST_ID, token, "cap-x", now=LATER)
+
+    assert result.reason_code == expected
+    assert result.applied == (expected == RESERVE_OK)
+
+
+# --- Review round: the persisted row itself passes the invariant --------------
+
+
+def test_the_persisted_row_passes_the_persistent_privacy_invariant(tmp_path):
+    """Obligation 15 covers the stored record, not only its projection."""
+    store, _, token = _reserved(tmp_path)
+    with sqlite3.connect(store.db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT * FROM request_reservations WHERE client_request_id = ?",
+            (CLIENT_REQUEST_ID,),
+        ).fetchone()
+
+    stored = {key: row[key] for key in row.keys()}
+    assert set(stored) >= {
+        "client_request_id", "reservation_attempt_digest", "request_digest",
+        "broker_connection_id", "task_id", "capability_id", "state",
+        "reserved_at", "issuing_at", "bound_at", "denied_at",
+    }
+    assert_persistent_privacy_safe(
+        stored, artifact_name="request reservation row"
+    )
+    assert token not in json.dumps(stored)
+    assert stored["reservation_attempt_digest"] == token_digest(token)

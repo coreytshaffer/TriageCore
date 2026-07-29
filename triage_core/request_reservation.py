@@ -49,6 +49,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, Optional
 
+from triage_core.privacy_invariants import assert_persistent_privacy_safe
 from triage_core.mediated_effect import (
     AuthorizedContentEffect,
     MediatedClientRequest,
@@ -266,6 +267,22 @@ class ReserveResult:
 
 
 @dataclass(frozen=True)
+class LookupResult:
+    """Decision-bearing read.
+
+    ``reservation_not_found`` is reserved for a **successful** read that found
+    no row. A locked, corrupt, or unsupported store reports its own condition,
+    so a caller told "no reservation exists" can distinguish that from "the
+    store could not be read" -- the former may reasonably create one, the
+    latter must not.
+    """
+
+    found: bool
+    reason_code: str
+    row: Optional[Dict[str, Any]] = None
+
+
+@dataclass(frozen=True)
 class TransitionResult:
     applied: bool
     reason_code: str
@@ -308,6 +325,17 @@ def _check_digest(value: Any, label: str) -> str:
 def _is_busy(exc: sqlite3.Error) -> bool:
     text = str(exc).lower()
     return "locked" in text or "busy" in text
+
+
+def _is_capability_conflict(exc: sqlite3.IntegrityError) -> bool:
+    """True only when the capability uniqueness index caused the failure.
+
+    A CHECK or trigger failure must not be relabelled as another request
+    already owning the capability -- that would name a condition that did not
+    occur.
+    """
+    text = str(exc).lower()
+    return "unique" in text and "capability_id" in text
 
 
 def _isoformat(moment: datetime) -> str:
@@ -430,20 +458,30 @@ class RequestReservationStore:
                 return outcome
 
             token = _new_attempt_token()
+            row_payload = {
+                "client_request_id": client_request_id,
+                "reservation_attempt_digest": token_digest(token),
+                "request_digest": request_digest,
+                "broker_connection_id": request.broker_connection_id,
+                "task_id": request.task_id,
+                "state": STATE_RESERVED,
+                "reserved_at": _isoformat(now),
+            }
+            # The exact persistence payload is checked, not a later projection
+            # of it: the invariant must gate what actually reaches the database.
+            assert_persistent_privacy_safe(
+                row_payload, artifact_name="request reservation row"
+            )
             conn.execute(
                 "INSERT INTO request_reservations ("
                 "client_request_id, reservation_attempt_digest, request_digest, "
                 "broker_connection_id, task_id, state, reserved_at"
                 ") VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (
-                    client_request_id,
-                    token_digest(token),
-                    request_digest,
-                    request.broker_connection_id,
-                    request.task_id,
-                    STATE_RESERVED,
-                    _isoformat(now),
-                ),
+                tuple(row_payload[key] for key in (
+                    "client_request_id", "reservation_attempt_digest",
+                    "request_digest", "broker_connection_id", "task_id",
+                    "state", "reserved_at",
+                )),
             )
             conn.execute("COMMIT")
             return ReserveResult(
@@ -499,6 +537,43 @@ class RequestReservationStore:
 
     # -- transitions -----------------------------------------------------------
 
+    @staticmethod
+    def _reason_for_row(
+        row: sqlite3.Row,
+        operation: str,
+        *,
+        capability_id: Optional[str] = None,
+        request: Optional[MediatedClientRequest] = None,
+    ) -> str:
+        """Why a conditional write changed no row, told truthfully.
+
+        A single generic wrong-state code per operation would report, for
+        instance, ``reservation_already_issuing`` for a denied row -- naming a
+        condition that is not the one that occurred. The order below matches
+        the contract: request mismatch, then state, then token.
+        """
+        if request is not None and (
+            row["request_digest"] != request.request_digest()
+            or row["broker_connection_id"] != request.broker_connection_id
+        ):
+            return REQUEST_ID_REUSE_MISMATCH
+
+        state = row["state"]
+        if state == STATE_DENIED:
+            return RESERVATION_DENIED
+        if state == STATE_AUTHORIZED:
+            if operation == "bind" and capability_id == row["capability_id"]:
+                return RESERVE_OK  # idempotent recovery of the same binding
+            return RESERVATION_ALREADY_BOUND
+        if state == STATE_ISSUING:
+            if operation in ("begin_issuance", "deny"):
+                return RESERVATION_ALREADY_ISSUING
+            return RESERVATION_ATTEMPT_MISMATCH  # bind: source state was right
+        # reserved
+        if operation == "bind":
+            return RESERVATION_ISSUANCE_NOT_BEGUN
+        return RESERVATION_ATTEMPT_MISMATCH  # begin/deny: source state was right
+
     def _transition(
         self,
         client_request_id: str,
@@ -508,7 +583,9 @@ class RequestReservationStore:
         to_state: str,
         assignments: str,
         values: tuple,
-        wrong_state_code: str,
+        operation: str,
+        capability_id: Optional[str] = None,
+        request: Optional[MediatedClientRequest] = None,
     ) -> TransitionResult:
         """One atomic token-verified conditional write.
 
@@ -519,6 +596,19 @@ class RequestReservationStore:
         """
         _check_text(client_request_id, "client_request_id")
         digest = token_digest(attempt_token)
+        # Binding the request into the predicate closes a transplant: a valid
+        # token for reservation A must not advance A on behalf of a coherent
+        # but different request B that merely shares the client request id.
+        request_predicate = ""
+        request_values: tuple = ()
+        if request is not None:
+            request_predicate = (
+                "  AND request_digest = ? AND broker_connection_id = ? "
+            )
+            request_values = (
+                request.request_digest(),
+                request.broker_connection_id,
+            )
         conn = None
         try:
             conn = self._connect()
@@ -526,8 +616,9 @@ class RequestReservationStore:
             cursor = conn.execute(
                 f"UPDATE request_reservations SET state = ?, {assignments} "
                 "WHERE client_request_id = ? AND state = ? "
-                "  AND reservation_attempt_digest = ?",
-                (to_state, *values, client_request_id, from_state, digest),
+                f"  AND reservation_attempt_digest = ? {request_predicate}",
+                (to_state, *values, client_request_id, from_state, digest,
+                 *request_values),
             )
             if cursor.rowcount == 1:
                 conn.execute("COMMIT")
@@ -548,19 +639,23 @@ class RequestReservationStore:
                 return TransitionResult(
                     False, RESERVATION_NOT_FOUND, client_request_id
                 )
-            if row["state"] != from_state:
-                return TransitionResult(
-                    False, wrong_state_code, client_request_id, row["state"],
-                    (row["capability_id"] or ""),
-                )
-            return TransitionResult(
-                False, RESERVATION_ATTEMPT_MISMATCH, client_request_id, row["state"]
+            reason = self._reason_for_row(
+                row, operation, capability_id=capability_id, request=request
             )
-        except sqlite3.IntegrityError:
+            # Recovering an identical binding is a success, not a refusal.
+            applied = reason == RESERVE_OK
+            return TransitionResult(
+                applied, reason, client_request_id, row["state"],
+                (row["capability_id"] or ""),
+            )
+        except sqlite3.IntegrityError as exc:
             self._rollback(conn)
-            return TransitionResult(
-                False, CAPABILITY_ALREADY_RESERVED, client_request_id
+            code = (
+                CAPABILITY_ALREADY_RESERVED
+                if _is_capability_conflict(exc)
+                else RESERVATION_STORE_UNAVAILABLE
             )
+            return TransitionResult(False, code, client_request_id)
         except (ReservationSchemaError, sqlite3.Error, OSError) as exc:
             self._rollback(conn)
             return TransitionResult(
@@ -579,7 +674,7 @@ class RequestReservationStore:
 
     def begin_issuance(
         self,
-        client_request_id: str,
+        request: MediatedClientRequest,
         attempt_token: str,
         *,
         now: datetime,
@@ -589,15 +684,23 @@ class RequestReservationStore:
         Winning this transition is what permits ``issue_capability`` to be
         called. Without it, two holders of the same valid token could each mint
         a capability and only then race to bind one.
+
+        The **whole request** is bound into the predicate, not just its id. A
+        valid token for reservation A must not advance A on behalf of a
+        different-but-coherent request B that happens to share the client
+        request id; otherwise the capability is issued for B and bound into A.
         """
+        if not isinstance(request, MediatedClientRequest):
+            raise ReservationContractError("request must be a MediatedClientRequest")
         return self._transition(
-            client_request_id,
+            request.client_request_id,
             attempt_token,
             from_state=STATE_RESERVED,
             to_state=STATE_ISSUING,
             assignments="issuing_at = ?",
             values=(_isoformat(now),),
-            wrong_state_code=RESERVATION_ALREADY_ISSUING,
+            operation="begin_issuance",
+            request=request,
         )
 
     def deny(
@@ -620,7 +723,7 @@ class RequestReservationStore:
             to_state=STATE_DENIED,
             assignments="denied_at = ?",
             values=(_isoformat(now),),
-            wrong_state_code=RESERVATION_ALREADY_ISSUING,
+            operation="deny",
         )
 
     def bind(
@@ -640,41 +743,62 @@ class RequestReservationStore:
             to_state=STATE_AUTHORIZED,
             assignments="capability_id = ?, bound_at = ?",
             values=(capability_id, _isoformat(now)),
-            wrong_state_code=RESERVATION_ISSUANCE_NOT_BEGUN,
+            operation="bind",
+            capability_id=capability_id,
         )
 
     # -- inspection ------------------------------------------------------------
 
-    def projection(self, client_request_id: str) -> Optional[Dict[str, Any]]:
-        """Evidence-safe metadata only.
-
-        Never carries the raw attempt token — it is authority-bearing, and the
-        store does not hold it in any case. The stored verifier is also withheld
-        so no projection consumer can mistake it for a token.
-        """
+    def lookup(self, client_request_id: str) -> LookupResult:
+        """Read a reservation, distinguishing absence from unavailability."""
         conn = None
         try:
             conn = self._connect()
             row = self._read(conn, client_request_id)
             if row is None:
-                return None
-            return {
-                "client_request_id": row["client_request_id"],
-                "request_digest": row["request_digest"],
-                "broker_connection_id": row["broker_connection_id"],
-                "task_id": row["task_id"],
-                "capability_id": row["capability_id"] or "",
-                "state": row["state"],
-                "reserved_at": row["reserved_at"],
-                "issuing_at": row["issuing_at"] or "",
-                "bound_at": row["bound_at"] or "",
-                "denied_at": row["denied_at"] or "",
-            }
-        except (ReservationSchemaError, sqlite3.Error, OSError):
-            return None
+                return LookupResult(False, RESERVATION_NOT_FOUND)
+            return LookupResult(True, RESERVE_OK, self._project(row))
+        except (ReservationSchemaError, sqlite3.Error, OSError) as exc:
+            return LookupResult(False, self._store_failure(exc))
         finally:
             if conn is not None:
                 conn.close()
+
+    @staticmethod
+    def _project(row) -> Dict[str, Any]:
+        """Evidence-safe metadata only.
+
+        Never carries the raw attempt token: it is authority-bearing, and the
+        store does not hold it in any case. The stored verifier is withheld too,
+        so no projection consumer can mistake it for a token.
+        """
+        return {
+            "client_request_id": row["client_request_id"],
+            "request_digest": row["request_digest"],
+            "broker_connection_id": row["broker_connection_id"],
+            "task_id": row["task_id"],
+            "capability_id": row["capability_id"] or "",
+            "state": row["state"],
+            "reserved_at": row["reserved_at"],
+            "issuing_at": row["issuing_at"] or "",
+            "bound_at": row["bound_at"] or "",
+            "denied_at": row["denied_at"] or "",
+        }
+
+    def projection(self, client_request_id: str) -> Optional[Dict[str, Any]]:
+        """Convenience read for healthy stores.
+
+        Returns ``None`` only for a successful read that found no row. An
+        operational failure raises rather than being flattened into absence: a
+        caller cannot act correctly on "not found" when the truth is "could not
+        be read".
+        """
+        result = self.lookup(client_request_id)
+        if result.found:
+            return result.row
+        if result.reason_code == RESERVATION_NOT_FOUND:
+            return None
+        raise ReservationError(result.reason_code)
 
 
 # --- Mediated boundaries ------------------------------------------------------
@@ -735,7 +859,10 @@ def mediated_issue_capability(
                 False, RESERVATION_BINDING_MISMATCH, request.client_request_id
             )
 
-    gate = store.begin_issuance(request.client_request_id, attempt_token, now=now)
+    # Request-aware gate: the predicate carries the request digest and broker
+    # connection, so a valid token for this reservation cannot advance it on
+    # behalf of a different-but-coherent request sharing the client request id.
+    gate = store.begin_issuance(request, attempt_token, now=now)
     if not gate.applied:
         return gate
 
@@ -770,11 +897,15 @@ def mediated_claim_capability(
     module should be read that way.
     """
     _verify_trio(effect, request, linkage)
-    projection = store.projection(request.client_request_id)
-    if projection is None:
+    found = store.lookup(request.client_request_id)
+    if not found.found:
+        # Operational failure keeps its own reason. Reporting a locked or
+        # corrupt store as absence would tell the caller the reservation does
+        # not exist when the truth is that it could not be read.
         return TransitionResult(
-            False, RESERVATION_NOT_FOUND, request.client_request_id
+            False, found.reason_code, request.client_request_id
         )
+    projection = found.row
     if projection["state"] != STATE_AUTHORIZED:
         code = (
             RESERVATION_ISSUANCE_NOT_BEGUN
