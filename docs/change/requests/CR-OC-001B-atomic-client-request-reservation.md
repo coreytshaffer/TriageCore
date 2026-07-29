@@ -2,14 +2,22 @@
 
 ## Status
 
-- **Status:** Proposed / requirements proposal only.
-- **Implementation authority:** None.
-- **Approval gate:** Explicit human approval is required before any code, test,
-  schema, runtime, or integration change.
+- **Status:** Requirements approved and merged through PR #122 as `f22fee1`;
+  bounded implementation authorized on 2026-07-28 and complete on branch; **not
+  merged**.
+- **Implementation authority:** Limited to the five-path allowlist recorded
+  below — the reservation module, its tests, and this documentation.
+- **Merge authority:** None.
+- **Still unauthorized:** CR-OC-001C through CR-OC-001E, runtime integration,
+  CLI or `tc run` surfaces, file access, IPC, named pipes, OpenClaw
+  configuration, new dependencies, and any runtime module importing
+  `triage_core.request_reservation`.
+- **Approval gate:** Explicit human approval remains required before any change
+  beyond that allowlist.
 
-This document records requirements only. It does not authorize implementation,
-execution, file access, IPC, OpenClaw installation, or modification of any
-current path.
+This document records the requirements contract and the bounded implementation
+written against it. It authorizes no execution, file access, IPC, or OpenClaw
+work, and does not claim the implementation has been reviewed or merged.
 
 ## Why This Slice Is Next
 
@@ -51,6 +59,12 @@ authorization rather than risking duplicate execution.**
 ### 1. Reservation happens before capability issuance
 
 Reserve first, then issue, then bind.
+
+```text
+reserve -> begin issuance -> issue -> bind
+```
+
+In full:
 
 ```text
 reserve(client_request_id, request_digest, broker_connection_id)
@@ -501,6 +515,46 @@ the mutant look killed while the invariant the schema claims to enforce is gone.
 That is the exact CR-YK-002 v1 failure, and pointing the mutant at the wrong
 test would reproduce it in the evidence rather than in the code.
 
+## Implementation Record
+
+Implemented on branch `cr-oc-001b-request-reservation-implementation`, open for
+review, **not merged**. Two code paths, both new:
+
+- `triage_core/request_reservation.py` — the versioned SQLite store, closed
+  result objects and the exact merged reason vocabulary, atomic
+  `reserved -> issuing`, `reserved -> denied`, and `issuing -> authorized`
+  transitions, idempotent recovery of an authorized binding, the mediated
+  issuance and claim entry points, and a projection carrying neither the raw
+  token nor its verifier.
+- `tests/test_request_reservation.py` — 41 tests covering all 16 named
+  obligations.
+
+The database enforces the invariants, not the Python layer: `client_request_id`
+primary key, a partial unique index on `capability_id`, a table-level `CHECK`
+binding row shape to state, and triggers for immutable identity, the legal
+transition whitelist, bound-capability immutability, and undeletability. Public
+prechecks exist for clearer outcomes and are never the enforcement.
+
+### Two findings from the evidence pass, recorded rather than smoothed over
+
+**A test was passing for the wrong reason.** The connection-mismatch test
+compared a reservation against a request built on a different broker
+connection — but `broker_connection_id` is inside the request digest, so the
+digests already differed and the test passed with the connection comparison
+deleted. Mutant M4 survived and exposed it. The check is now observed on a row
+seeded by direct SQL whose digest *matches* while the connection differs, which
+the public builder cannot produce. The original test is kept as the realistic
+reconnect path.
+
+This is exactly the trap the contract predicted, and predicting it was not
+enough to avoid it. Only the mutant caught it.
+
+**Two mutants were killing for the wrong reason.** Removing a SQL statement by
+text left dangling quotes, so M2 and M7 failed at collection with a syntax
+error rather than a missing constraint. The harness now removes whole tuple
+elements located at runtime, and treats a pytest exit code of 4 as *not* a
+clean kill. Both now fail with `DID NOT RAISE IntegrityError`, which is the
+constraint actually being absent.
 ## Explicitly Out of Scope
 
 - file reads or writes, path resolution, atomic replacement;
