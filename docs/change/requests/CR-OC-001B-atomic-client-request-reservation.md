@@ -519,9 +519,21 @@ test would reproduce it in the evidence rather than in the code.
 ## Implementation Record
 
 Merged into `main` through PR #123 as merge commit
-`47fb3d5819c1f301968af714635aae75634dc29e` on 2026-07-29, across `4ac0df9`
-(implementation), `6730d58`, `247417e`, `d98c2ad`, and `04b666d` (four review
-rounds), with `b992aaf` recording status. Two code paths, both new:
+`47fb3d5819c1f301968af714635aae75634dc29e` on 2026-07-29. The branch carried
+seven commits — one implementation, one initial status record, and five
+correction commits across **three** review rounds:
+
+```text
+4ac0df9  initial implementation
+b992aaf  initial implementation-status record
+6730d58  review round 1 code corrections
+247417e  review round 1 documentation sync
+99c851e  review round 2 code corrections
+d98c2ad  review round 2 documentation sync
+04b666d  review round 3 code and documentation corrections
+```
+
+Two code paths, both new:
 
 - `triage_core/request_reservation.py` — the versioned SQLite store, closed
   result objects and the exact merged reason vocabulary, atomic
