@@ -964,10 +964,9 @@ def test_mediated_claim_reports_busy_for_a_locked_store(tmp_path):
         blocker.execute("ROLLBACK")
         blocker.close()
 
-    assert result.reason_code in {
-        RESERVATION_STORE_BUSY, RESERVATION_STORE_UNAVAILABLE
-    }
-    assert result.reason_code != RESERVATION_NOT_FOUND
+    # A lock is a lock. Accepting "unavailable" here would not prove the busy
+    # classifier survives through the mediated boundary.
+    assert result.reason_code == RESERVATION_STORE_BUSY
 
 
 def test_projection_raises_rather_than_reporting_absence(tmp_path):
@@ -1056,3 +1055,34 @@ def test_the_persisted_row_passes_the_persistent_privacy_invariant(tmp_path):
     )
     assert token not in json.dumps(stored)
     assert stored["reservation_attempt_digest"] == token_digest(token)
+
+def test_an_incompatible_insert_trigger_reports_unavailable_not_unbound(tmp_path):
+    """A same-version database that refuses the insert is not a lost race.
+
+    Reporting `reservation_unbound` would assert that a valid reservation
+    exists and merely lacks this caller's ownership -- a claim never observed.
+    """
+    store = _store(tmp_path)
+    _, seed, _ = _trio(client_request_id="req-seed")
+    store.reserve(seed, now=NOW)  # materialise the schema at this version
+
+    with sqlite3.connect(store.db_path) as conn:
+        conn.execute(
+            "CREATE TRIGGER hostile_insert BEFORE INSERT ON request_reservations "
+            "FOR EACH ROW BEGIN SELECT RAISE(ABORT, 'incompatible trigger'); END"
+        )
+
+    _, request, _ = _trio()
+    result = RequestReservationStore(store.db_path).reserve(request, now=NOW)
+
+    assert result.reason_code == RESERVATION_STORE_UNAVAILABLE
+    assert result.reason_code != RESERVATION_UNBOUND
+    assert not result.created and not result.attempt_token
+
+
+def test_a_genuine_insert_conflict_still_classifies_the_existing_row(tmp_path):
+    """The narrowed handler must not lose the real duplicate-insert case."""
+    store, (_, request, _), _ = _reserved(tmp_path)
+    again = store.reserve(request, now=LATER)
+    assert again.reason_code == RESERVATION_UNBOUND
+    assert again.state == STATE_RESERVED

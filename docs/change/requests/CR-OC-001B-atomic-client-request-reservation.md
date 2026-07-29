@@ -526,7 +526,7 @@ review, **not merged**. Two code paths, both new:
   transitions, idempotent recovery of an authorized binding, the mediated
   issuance and claim entry points, and a projection carrying neither the raw
   token nor its verifier.
-- `tests/test_request_reservation.py` — 61 tests covering all 16 named
+- `tests/test_request_reservation.py` — 63 tests covering all 16 named
   obligations, the operation x state truth table, and the request-aware gate.
 
 The database enforces the invariants, not the Python layer: `client_request_id`
@@ -534,6 +534,24 @@ primary key, a partial unique index on `capability_id`, a table-level `CHECK`
 binding row shape to state, and triggers for immutable identity, the legal
 transition whitelist, bound-capability immutability, and undeletability. Public
 prechecks exist for clearer outcomes and are never the enforcement.
+
+### Mutant evidence, as required and as exercised
+
+The requirements above name **twelve** mutants and that contract is unchanged.
+Implementation review surfaced three further defective variants worth
+exercising, recorded separately rather than backfilled into the requirements:
+
+```text
+12 required mutants
++ 3 review-found defective variants
+= 15 exercised variants
+```
+
+The three additions are `M8b` (lookup failure reported as absence on the
+mediated claim path), `M9b` (reservation-to-request verification removed from
+the issuance gate), and `M13` (the state classifier collapsed to one generic
+code). All fifteen were demonstrated failing against their defective versions
+with the module hash pristine after each cycle.
 
 ### Review-round corrections
 
@@ -560,6 +578,21 @@ being changed:
   exceptions, join with a bounded timeout, and assert the result count before
   any outcome assertion, so a crashed worker fails the test rather than
   disappearing from the evidence.
+
+A third round narrowed two remaining reason-code claims:
+
+- **`reserve` misclassified arbitrary integrity failures.** Every insert
+  `IntegrityError` reported `reservation_unbound`, asserting that a valid
+  reservation exists and merely lacks this caller's ownership. Because
+  `BEGIN IMMEDIATE` serialises conforming writers, a loser sees the winner's
+  row during its `SELECT` rather than reaching a duplicate insert, so an error
+  there can equally be an incompatible trigger or an unexpected constraint on a
+  same-version database. Only a `client_request_id` uniqueness conflict now
+  re-reads and classifies the actual row; anything else reports
+  `reservation_store_unavailable`.
+- **A locked-store test accepted either busy or unavailable.** It now requires
+  exactly `reservation_store_busy`, which is what proves the busy classifier
+  survives through the mediated boundary.
 
 ### Two findings from the first evidence pass, recorded rather than smoothed over
 
@@ -592,7 +625,7 @@ constraint actually being absent.
 - any runtime module importing the reservation store;
 - CR-OC-001C, CR-OC-001D, or CR-OC-001E work of any kind.
 
-## Candidate Future Implementation Allowlist
+## Implementation Allowlist
 
 Subject to separate explicit human approval:
 
@@ -602,7 +635,9 @@ Subject to separate explicit human approval:
 - `docs/current_backlog.md`
 - `docs/change/change_log.md`
 
-This candidate list is not implementation authority.
+Bounded implementation authority was granted on 2026-07-28 and has been
+exercised within exactly this list. It confers no merge authority, and it
+extends to nothing outside these five paths.
 
 ## Acceptance Claim
 
@@ -628,7 +663,9 @@ used to support:
 
 ## Limitations and Uncertainty
 
-- This proposal has implemented and exercised nothing.
+- The bounded implementation exists on branch and is unmerged. Everything
+  below remains true of it, and none of it is resolved by having written
+  code.
 - The reserve/issue/bind sequence spans two stores with no shared transaction.
   The window is bounded by burning, not eliminated.
 - Local SQLite semantics establish nothing about distributed locking; local
@@ -636,7 +673,7 @@ used to support:
 - An unbound reservation whose owner is gone is deliberately unrecoverable and
   may leave an evidence gap, exactly as CR-YK-002 accepts for capabilities. No
   component can tell that case from a live in-flight one, which is why the
-  attempt ID decides rather than a heuristic.
+  raw attempt token decides rather than a heuristic.
 - Reservation gating binds only the mediated entry point. Direct use of the
   existing capability API is unchanged, and this slice makes no claim about it.
 - The one-shot gate bounds how many capabilities this store will *cause* to be

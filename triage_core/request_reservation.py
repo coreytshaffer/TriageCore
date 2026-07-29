@@ -327,6 +327,12 @@ def _is_busy(exc: sqlite3.Error) -> bool:
     return "locked" in text or "busy" in text
 
 
+def _is_client_request_conflict(exc: sqlite3.IntegrityError) -> bool:
+    """True only when the client_request_id primary key caused the failure."""
+    text = str(exc).lower()
+    return "unique" in text and "client_request_id" in text
+
+
 def _is_capability_conflict(exc: sqlite3.IntegrityError) -> bool:
     """True only when the capability uniqueness index caused the failure.
 
@@ -488,10 +494,25 @@ class RequestReservationStore:
                 True, RESERVE_OK, client_request_id, STATE_RESERVED,
                 attempt_token=token,
             )
-        except sqlite3.IntegrityError:
-            # Lost the insert race: another connection committed first.
+        except sqlite3.IntegrityError as exc:
             self._rollback(conn)
-            return ReserveResult(False, RESERVATION_UNBOUND, client_request_id)
+            # BEGIN IMMEDIATE serialises conforming writers, so a loser should
+            # see the winner's row during its SELECT rather than reaching a
+            # duplicate insert. An IntegrityError here is therefore not
+            # self-evidently a lost race: it can equally be an incompatible
+            # trigger or an unexpected constraint on a same-version database.
+            # Assuming "a valid reservation exists, you just do not own it"
+            # would assert something never observed.
+            if not _is_client_request_conflict(exc):
+                return ReserveResult(
+                    False, RESERVATION_STORE_UNAVAILABLE, client_request_id
+                )
+            found = self.lookup(client_request_id)
+            if not found.found:
+                return ReserveResult(
+                    False, found.reason_code, client_request_id
+                )
+            return self._classify_existing(found.row, request, request_digest)
         except (ReservationSchemaError, sqlite3.Error, OSError) as exc:
             self._rollback(conn)
             return ReserveResult(False, self._store_failure(exc), client_request_id)
@@ -501,7 +522,7 @@ class RequestReservationStore:
 
     def _classify_existing(
         self,
-        row: sqlite3.Row,
+        row: Any,
         request: MediatedClientRequest,
         request_digest: str,
     ) -> ReserveResult:
