@@ -526,7 +526,7 @@ review, **not merged**. Two code paths, both new:
   transitions, idempotent recovery of an authorized binding, the mediated
   issuance and claim entry points, and a projection carrying neither the raw
   token nor its verifier.
-- `tests/test_request_reservation.py` — 63 tests covering all 16 named
+- `tests/test_request_reservation.py` — 71 tests covering all 16 named
   obligations, the operation x state truth table, and the request-aware gate.
 
 The database enforces the invariants, not the Python layer: `client_request_id`
@@ -538,21 +538,23 @@ prechecks exist for clearer outcomes and are never the enforcement.
 ### Mutant evidence, as required and as exercised
 
 The requirements above name **twelve** mutants and that contract is unchanged.
-Implementation review surfaced three further defective variants worth
+Implementation review surfaced six further defective variants worth
 exercising, recorded separately rather than backfilled into the requirements:
 
 ```text
 12 required mutants
-+ 4 review-found defective variants
-= 16 exercised variants
++ 6 review-found defective variants
+= 18 exercised variants
 ```
 
-The four additions are `M8b` (lookup failure reported as absence on the
-mediated claim path), `M9b` (reservation-to-request verification removed from
-the issuance gate), `M13` (the state classifier collapsed to one generic code),
-and `M14` (any insert integrity failure reported as a lost race). All sixteen
-were demonstrated failing against their defective versions with the module hash
-pristine after each cycle.
+The six additions are `M8b` (lookup failure reported as absence on the mediated
+claim path), `M9b` (reservation-to-request verification removed from the
+issuance gate), `M13` (the state classifier collapsed to one generic code),
+`M13b` (mediated claim evaluating state before request identity), `M14` (any
+insert integrity failure reported as a lost race), and `M15` (a
+declared-current-version database accepted without validating what is actually
+installed). All eighteen were demonstrated failing against their defective
+versions with the module hash pristine after each cycle.
 
 ### Review-round corrections
 
@@ -595,6 +597,27 @@ A third round narrowed two remaining reason-code claims:
   exactly `reservation_store_busy`, which is what proves the busy classifier
   survives through the mediated boundary.
 
+A fourth round closed two more:
+
+- **A current-version database was trusted without verifying its schema.**
+  `PRAGMA integrity_check` proves SQLite's own structures are consistent, not
+  that the application's constraints exist, and `CREATE TABLE IF NOT EXISTS`
+  will not retrofit a table-level `CHECK` or a `PRIMARY KEY`. A database could
+  declare the current version while its table enforced neither, at which point
+  the module would claim SQLite guarantees invariants the installed schema does
+  not. The store now compares the normalized DDL of the table, the partial
+  unique index, and all four triggers against its canonical definitions before
+  the store is usable, and raises `ReservationSchemaError`, surfacing as
+  `reservation_store_unavailable`. Presence alone is insufficient: a missing
+  trigger is reinstalled by `CREATE ... IF NOT EXISTS`, but an *altered* trigger
+  of the same name is not, and would enforce nothing while looking present.
+- **Mediated claiming compared state before request identity.** A coherent
+  request B sharing A's client request id received whatever A's lifecycle
+  happened to be — `reservation_issuance_not_begun`, `reservation_already_issuing`,
+  and so on — rather than `request_id_reuse_mismatch`. The requirements do not
+  qualify reuse mismatch by state, so identity is now compared immediately
+  after lookup, matching the transition classifier's order.
+
 ### Two findings from the first evidence pass, recorded rather than smoothed over
 
 **A test was passing for the wrong reason.** The connection-mismatch test
@@ -628,7 +651,7 @@ constraint actually being absent.
 
 ## Implementation Allowlist
 
-Subject to separate explicit human approval:
+The bounded implementation authority covered exactly:
 
 - `docs/change/requests/CR-OC-001B-atomic-client-request-reservation.md`
 - `triage_core/request_reservation.py`

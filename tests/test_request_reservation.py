@@ -1086,3 +1086,138 @@ def test_a_genuine_insert_conflict_still_classifies_the_existing_row(tmp_path):
     again = store.reserve(request, now=LATER)
     assert again.reason_code == RESERVATION_UNBOUND
     assert again.state == STATE_RESERVED
+
+# --- Review round four: the installed schema is verified, not assumed ---------
+
+
+def _weakened_database(tmp_path, table_sql):
+    """A database declaring the current version with a hand-built table."""
+    db = default_db_path(str(tmp_path))
+    import os
+
+    os.makedirs(os.path.dirname(db), exist_ok=True)
+    with sqlite3.connect(db) as conn:
+        conn.execute(
+            "CREATE TABLE schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+        )
+        conn.execute(
+            "INSERT INTO schema_meta VALUES ('schema_version', ?)",
+            (SCHEMA_VERSION,),
+        )
+        conn.execute(table_sql)
+    return db
+
+
+_NO_PK_NO_CHECK = """CREATE TABLE request_reservations (
+    client_request_id TEXT, reservation_attempt_digest TEXT,
+    request_digest TEXT, broker_connection_id TEXT, task_id TEXT,
+    capability_id TEXT, state TEXT, reserved_at TEXT, issuing_at TEXT,
+    bound_at TEXT, denied_at TEXT)"""
+
+
+def test_a_declared_current_version_with_a_weakened_table_is_rejected(tmp_path):
+    """PRAGMA integrity_check proves SQLite is consistent, not that our
+    constraints exist. CREATE TABLE IF NOT EXISTS will not retrofit a
+    table-level CHECK or a PRIMARY KEY, so a same-version database can declare
+    conformance while enforcing none of it.
+    """
+    db = _weakened_database(tmp_path, _NO_PK_NO_CHECK)
+    _, request, _ = _trio()
+
+    result = RequestReservationStore(db).reserve(request, now=NOW)
+
+    assert not result.created
+    assert result.reason_code == RESERVATION_STORE_UNAVAILABLE
+    with sqlite3.connect(db) as conn:
+        rows = conn.execute(
+            "SELECT COUNT(*) FROM request_reservations"
+        ).fetchone()[0]
+    assert rows == 0, "nothing may be written to an unverified schema"
+
+
+def test_a_dropped_trigger_is_reinstalled_rather_than_trusted(tmp_path):
+    """A missing trigger is recoverable: the module reinstalls its own."""
+    store, _, _ = _reserved(tmp_path)
+    with sqlite3.connect(store.db_path) as conn:
+        conn.execute("DROP TRIGGER reservation_transition_legal")
+
+    _, other, _ = _trio(client_request_id="req-after-drop")
+    result = RequestReservationStore(store.db_path).reserve(other, now=NOW)
+
+    assert result.created
+    with sqlite3.connect(store.db_path) as conn:
+        restored = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE name = ?",
+            ("reservation_transition_legal",),
+        ).fetchone()
+    assert restored is not None
+
+
+def test_an_altered_trigger_is_rejected(tmp_path):
+    """Presence is not conformance.
+
+    ``CREATE TRIGGER IF NOT EXISTS`` will not replace a trigger of the same
+    name, so a neutered one enforces nothing while looking installed.
+    """
+    store, _, _ = _reserved(tmp_path)
+    with sqlite3.connect(store.db_path) as conn:
+        conn.execute("DROP TRIGGER reservation_transition_legal")
+        conn.execute(
+            "CREATE TRIGGER reservation_transition_legal "
+            "BEFORE UPDATE ON request_reservations FOR EACH ROW WHEN 0 "
+            "BEGIN SELECT RAISE(ABORT, 'never fires'); END"
+        )
+
+    _, other, _ = _trio(client_request_id="req-after-swap")
+    result = RequestReservationStore(store.db_path).reserve(other, now=NOW)
+
+    assert not result.created
+    assert result.reason_code == RESERVATION_STORE_UNAVAILABLE
+
+
+def test_a_healthy_store_passes_schema_validation_repeatedly(tmp_path):
+    """Validation must not reject the schema this module itself installs."""
+    store, (_, request, _), token = _reserved(tmp_path)
+    assert store.begin_issuance(request, token, now=NOW).applied
+    assert store.bind(CLIENT_REQUEST_ID, token, "cap-ok", now=NOW).applied
+    assert RequestReservationStore(store.db_path).projection(
+        CLIENT_REQUEST_ID
+    )["capability_id"] == "cap-ok"
+
+
+# --- Review round four: claim compares identity before state ------------------
+
+
+@pytest.mark.parametrize(
+    "state", [STATE_RESERVED, STATE_ISSUING, STATE_AUTHORIZED, STATE_DENIED]
+)
+def test_mediated_claim_reports_reuse_mismatch_whatever_the_state(tmp_path, state):
+    """Reuse mismatch is not qualified by lifecycle state.
+
+    A coherent request B sharing A's client request id must be told that it is
+    not the reserved request, not that A happens to be issuing or denied.
+    """
+    store, (_, request_a, _), token = _reserved(tmp_path)
+    if state == STATE_ISSUING:
+        store.begin_issuance(request_a, token, now=NOW)
+    elif state == STATE_AUTHORIZED:
+        store.begin_issuance(request_a, token, now=NOW)
+        store.bind(CLIENT_REQUEST_ID, token, "cap-a", now=NOW)
+    elif state == STATE_DENIED:
+        store.deny(CLIENT_REQUEST_ID, token, now=NOW)
+    assert store.projection(CLIENT_REQUEST_ID)["state"] == state
+
+    effect_b = _effect(
+        proposed_bytes=b"different content\n", broker_connection_id="conn-B"
+    )
+    request_b = build_client_request(effect_b, task_id=TASK_ID)
+    linkage_b = build_plan_linkage(effect_b, request_b, decision_id=DECISION_ID)
+    assert request_b.client_request_id == request_a.client_request_id
+
+    result = mediated_claim_capability(
+        store, object(), "cap-a", effect_b, request_b, linkage_b,
+        claim_capability=lambda *a, **k: pytest.fail("must not delegate"),
+        claimant_id="agent-a", now=NOW,
+    )
+
+    assert result.reason_code == REQUEST_ID_REUSE_MISMATCH

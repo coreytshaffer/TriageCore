@@ -230,6 +230,32 @@ _CREATE_SQL = (
 )
 
 
+REQUIRED_OBJECTS = (
+    "schema_meta",
+    "request_reservations",
+    "idx_reservation_capability",
+    "reservation_identity_immutable",
+    "reservation_transition_legal",
+    "reservation_capability_immutable",
+    "reservation_undeletable",
+)
+
+_OBJECT_NAME = re.compile(
+    r"CREATE\s+(?:UNIQUE\s+)?(?:TABLE|INDEX|TRIGGER)\s+IF NOT EXISTS\s+(\w+)"
+)
+
+
+def _normalize_ddl(sql: str) -> str:
+    """Comparable form of a CREATE statement.
+
+    Strips SQL comments, drops ``IF NOT EXISTS``, and collapses whitespace, so
+    the stored definition can be compared against the module's canonical DDL
+    without being defeated by formatting.
+    """
+    without_comments = re.sub(r"--[^\n]*", " ", sql or "")
+    return re.sub(r"\s+", " ", without_comments.replace("IF NOT EXISTS ", "")).strip()
+
+
 class ReservationError(Exception):
     """Base error for the reservation store."""
 
@@ -417,6 +443,50 @@ class RequestReservationStore:
             "INSERT OR IGNORE INTO schema_meta (key, value) VALUES (?, ?)",
             ("schema_version", SCHEMA_VERSION),
         )
+        self._validate_installed_schema(conn)
+
+    @staticmethod
+    def _validate_installed_schema(conn: sqlite3.Connection) -> None:
+        """Verify the schema actually installed, not merely its recorded version.
+
+        ``CREATE TABLE IF NOT EXISTS`` silently leaves a pre-existing table
+        alone, and a table-level ``CHECK`` or ``PRIMARY KEY`` cannot be
+        retrofitted. A database can therefore declare the current version while
+        its table lacks the row-shape check and the request-id primary key --
+        at which point the module would claim SQLite enforces invariants the
+        installed schema does not. ``PRAGMA integrity_check`` does not catch
+        this: it proves SQLite's own structures are consistent, not that the
+        application's constraints exist.
+
+        Table DDL is compared against the canonical definition because SQLite
+        exposes no pragma for table-level CHECK clauses. Indexes and triggers
+        are checked by presence.
+        """
+        present = {
+            name: sql
+            for name, sql in conn.execute(
+                "SELECT name, sql FROM sqlite_master "
+                "WHERE name NOT LIKE 'sqlite_%'"
+            ).fetchall()
+        }
+        missing = [name for name in REQUIRED_OBJECTS if name not in present]
+        if missing:
+            raise ReservationSchemaError(
+                f"schema objects missing: {sorted(missing)}"
+            )
+        # Presence is not enough. A missing trigger is recreated by
+        # CREATE ... IF NOT EXISTS, but an *altered* one of the same name is
+        # not -- and a neutered trigger enforces nothing while looking present.
+        for statement in _CREATE_SQL:
+            match = _OBJECT_NAME.search(statement)
+            if match is None:  # pragma: no cover - defensive
+                continue
+            name = match.group(1)
+            if _normalize_ddl(present.get(name)) != _normalize_ddl(statement):
+                raise ReservationSchemaError(
+                    f"installed definition of {name!r} does not match the "
+                    "canonical schema"
+                )
 
     @staticmethod
     def _rollback(conn: Optional[sqlite3.Connection]) -> None:
@@ -927,6 +997,21 @@ def mediated_claim_capability(
             False, found.reason_code, request.client_request_id
         )
     projection = found.row
+    # Request identity is compared before lifecycle state, matching the
+    # transition classifier's order. The requirements do not qualify reuse
+    # mismatch by state: the same client request id presented with a different
+    # digest or connection is a mismatch, whatever the reservation happens to
+    # be doing. Checking state first would report, say,
+    # ``reservation_already_issuing`` to a caller whose real problem is that it
+    # is not the request that was reserved.
+    if projection["request_digest"] != request.request_digest():
+        return TransitionResult(
+            False, REQUEST_ID_REUSE_MISMATCH, request.client_request_id
+        )
+    if projection["broker_connection_id"] != request.broker_connection_id:
+        return TransitionResult(
+            False, REQUEST_ID_REUSE_MISMATCH, request.client_request_id
+        )
     if projection["state"] != STATE_AUTHORIZED:
         code = (
             RESERVATION_ISSUANCE_NOT_BEGUN
@@ -943,15 +1028,6 @@ def mediated_claim_capability(
             False, RESERVATION_ALREADY_BOUND, request.client_request_id,
             projection["state"], projection["capability_id"],
         )
-    if projection["request_digest"] != request.request_digest():
-        return TransitionResult(
-            False, REQUEST_ID_REUSE_MISMATCH, request.client_request_id
-        )
-    if projection["broker_connection_id"] != request.broker_connection_id:
-        return TransitionResult(
-            False, REQUEST_ID_REUSE_MISMATCH, request.client_request_id
-        )
-
     mapped = capability_binding_fields(effect, request, linkage)
     return claim_capability(
         ledger,
