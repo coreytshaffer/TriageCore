@@ -690,8 +690,24 @@ narrowing the claim rather than widening the exception.
 Windows version, edition, filesystem configuration, or ACL shape. It is
 local evidence from one machine, generalized only as far as "when this
 occurs alongside exact preservation of every access-bearing component, do
-not report a metadata failure." Hosted Windows CI must reproduce the
-accepted behaviour before the implementation may merge (§21, §25.7).
+not report a metadata failure."
+
+**Reproduction is observational, not a merge gate.** The hosted Windows job
+attempts the same replacement and **records which transition it observed**,
+but not reproducing `False -> True` is not a failure. Requiring
+reproduction would contradict this section directly: the invariant accepts
+`False -> False`, `False -> True`, and `True -> True`, so a runner that
+produces `False -> False` has exhibited another explicitly accepted
+transition rather than disproving anything — and treating that as a merge
+blocker would turn a single machine's observation into the very platform
+guarantee this section denies.
+
+What the hosted job **must** fail on is a `True -> False` transition, or any
+other owner/DACL component differing. Those are real violations of the
+amended invariant. The deterministic evidence for the rule itself is
+platform-neutral (§19 T35, T36): the `False -> True` acceptance and its
+narrow gating are proven by constructing the snapshots directly, which needs
+no Windows at all.
 
 ### 10.2 How preservation is achieved, not just checked
 
@@ -1426,15 +1442,27 @@ point.
     `target_observation_unstable` with nothing mutated.
 35. [N and W] The `SE_DACL_AUTO_INHERITED` monotonic rule accepts
     `False -> True` **only** alongside exact preservation of every other
-    owner/DACL component. [N] the pure comparison accepts
-    `False -> False`, `False -> True`, and `True -> True`, and rejects the
-    `False -> True` pair as soon as any one of owner SID, DACL state,
+    owner/DACL component.
+
+    [N] The deterministic half, and the one that carries the rule: the pure
+    comparison is handed **directly constructed** snapshots and accepts
+    `False -> False`, `False -> True`, and `True -> True`; it then rejects
+    the `False -> True` pair as soon as any one of owner SID, DACL state,
     `SE_DACL_PRESENT`, `SE_DACL_PROTECTED`, ACL revision, ACE count, ACE
     order, or any ACE byte also differs — asserted per component, so the
-    exception cannot widen. [W] a genuine NTFS replacement of a file whose
-    descriptor lacks the bit reports `replacement_verified`, with the
-    observed transition confirmed as `False -> True` and the ACEs confirmed
-    byte-identical (§10.1a).
+    exception cannot widen. No Windows is involved and nothing is left to
+    what a runner happens to do.
+
+    [W] The observational half: a genuine NTFS replacement starts from a
+    **confirmed pre-state** (the pre-replacement value of the bit is
+    captured and asserted), performs the replacement, and requires that the
+    observed transition be one of the three accepted transitions, that
+    every other owner/DACL component be exactly preserved, and that the
+    result be `replacement_verified`. The observed transition is recorded.
+    **Failing to reproduce `False -> True` is not a failure** — a runner
+    that yields `False -> False` has exhibited another accepted transition
+    (§10.1a). The test fails on `True -> False`, on any other metadata
+    difference, or on a non-verified outcome.
 36. [N] The monotonic rule rejects `True -> False`: a snapshot pair
     identical in every other component but clearing
     `SE_DACL_AUTO_INHERITED` fails the comparison and, through the
@@ -1483,7 +1511,7 @@ evidence, and must be reported as controls.
 | M25 | Ignore ACE order | T21[N] order-swap fixture (two otherwise-identical ACEs exchanged) |
 | M26 | Accept an out-of-bounds or malformed `AceSize` (compare whatever parses) | T21[N] malformed-`AceSize` fixtures must fail closed; the mutant proceeds to a comparison and reports a result |
 | M27 | Flatten `ERROR_UNABLE_TO_REMOVE_REPLACED` (1175) into the ambiguous 1177 outcome | T25[N] distinct 1175 assertion; T25[W] 1175-class end-to-end (`target_unchanged`, target byte-identical) |
-| M28 | Replace the `SE_DACL_AUTO_INHERITED` monotonic rule with strict equality (the pre-amendment defect) | T35[N] `False -> True` acceptance; T35[W] a genuine NTFS replacement reports `metadata_preservation_failed` under the mutant |
+| M28 | Replace the `SE_DACL_AUTO_INHERITED` monotonic rule with strict equality (the pre-amendment defect) | T35[N] — the directly constructed `False -> True` pair is rejected under the mutant. Killed deterministically, without depending on what a hosted runner exhibits |
 | M29 | Ignore `SE_DACL_AUTO_INHERITED` entirely (the rejected complete-exclusion option) | T36 `True -> False` rejection — the mutant accepts it |
 
 Controls, identified in advance: the healthy-path test (T19), determinism
@@ -1506,11 +1534,14 @@ CR-OC-001C may be considered implemented only when:
   (Windows-scoped mutants in the Windows evidence pass), with the module
   hash verified pristine after each cycle, and controls reported as
   controls;
-- the hosted Windows job reproduces the §10.1a accepted
-  `SE_DACL_AUTO_INHERITED` normalization. That behaviour rests on local
-  single-machine evidence today, so it must be observed on the hosted
-  runner before the implementation may merge; if the hosted runner does not
-  reproduce it, the amendment is re-opened rather than the test relaxed;
+- the hosted Windows job observes a `SE_DACL_AUTO_INHERITED` transition
+  that is one of the three §10.1a accepted transitions, with every other
+  owner/DACL component exactly preserved, and records which transition it
+  saw. **Reproducing `False -> True` specifically is not required**:
+  `False -> False` is an accepted transition, so requiring the
+  normalization would contradict §10.1a and elevate one machine's
+  observation into a platform guarantee. The job fails on `True -> False`
+  or on any other metadata difference;
 - the §12.6/§17 privacy gate runs in-module over the exact projection
   payload and passes;
 - the full test suite passes with no new `xfail`;
@@ -1628,10 +1659,13 @@ Recorded rather than glossed:
   `ReplaceFileW` preserves the replaced file's DACL; it does not document
   byte-for-byte stability of every control flag in either direction. The
   accepted transition may therefore vary by Windows version, edition,
-  filesystem configuration, or ACL shape. Hosted Windows CI reproducing it
-  is an acceptance requirement precisely because one machine is not a
-  platform claim, and `True -> False` stays a failure precisely because no
-  evidence supports it.
+  filesystem configuration, or ACL shape. That variability is exactly why
+  hosted reproduction of `False -> True` is **observational rather than an
+  acceptance gate** — `False -> False` is itself accepted, so demanding the
+  normalization would convert one machine's observation into the platform
+  claim this contract refuses to make. `True -> False` stays a failure
+  precisely because no evidence supports it, and the rule itself is proven
+  deterministically off Windows (§19 T35[N], T36).
 - **The temp-file DACL-inheritance window** (§11.1) is a stated exposure
   bounded by the parent directory's ACL; hardening via `SetSecurityInfo`
   is deferred and would need approval.
@@ -1991,7 +2025,7 @@ NTFS workspace; **U+W** = required evidence in both.
 | 32 | Unsupported platform fails closed (U); forced API-probe failure (W) | U+W |
 | 33 | Backup lifecycle: delete on success, retain otherwise | W |
 | 34 | Identity re-probe catches a swapped target | W |
-| 35 | `SE_DACL_AUTO_INHERITED` `False -> True` accepted only with every other component preserved (pure rule U; genuine NTFS observation W) | U+W |
+| 35 | `SE_DACL_AUTO_INHERITED` monotonic rule: deterministic `False -> True` acceptance and per-component gating on constructed snapshots (U); genuine NTFS replacement observes and records **any** accepted transition with all other components preserved (W) | U+W |
 | 36 | `SE_DACL_AUTO_INHERITED` `True -> False` rejected | U |
 
 Totals: 20 W-only, 7 U-only, 9 U+W — **exactly 36 required obligations**.
@@ -2096,16 +2130,21 @@ CR-YK-002/A/B bar. Controls are reported as controls, never as kills.
 | M25 ignore ACE order | T21 | U |
 | M26 accept malformed `AceSize` | T21 | U |
 | M27 flatten 1175 into the ambiguous 1177 outcome | T25 | U+W |
-| M28 strict equality instead of the `SE_DACL_AUTO_INHERITED` monotonic rule (the pre-amendment defect) | T35 | U+W |
+| M28 strict equality instead of the `SE_DACL_AUTO_INHERITED` monotonic rule (the pre-amendment defect) | T35[N] | U |
 | M29 ignore `SE_DACL_AUTO_INHERITED` entirely (the rejected complete-exclusion option) | T36 | U |
 
-Eight mutants (M16, M18, M20, M22–M26, M29) are killed on Ubuntu, which is
-the direct payoff of the §25.2 module split: the ACE-comparison mutants that
-matter most are killed on every pull request, not only in the Windows job.
-M28 is deliberately U+W — the pure rule is Ubuntu-testable, but only a
-genuine NTFS replacement demonstrates that the pre-amendment strict-equality
-requirement fails against real Windows behaviour, which is the evidence that
-justified the amendment at all.
+Ten mutants (M16, M18, M20, M22–M26, M28, M29) are killed on Ubuntu, which
+is the direct payoff of the §25.2 module split: the ACE-comparison mutants
+that matter most are killed on every pull request, not only in the Windows
+job.
+
+M28 is deliberately Ubuntu-only. Its killer must be deterministic, and only
+the constructed-snapshot half of T35 is: a hosted runner that produced
+`False -> False` would leave a strict-equality mutant alive, so pointing
+M28 at the Windows half would make the kill depend on which accepted
+transition the runner happened to exhibit. That is the same
+mutant-target-precision lesson CR-OC-001B recorded, applied before the
+evidence was collected rather than after.
 
 ### 25.7 Windows CI evidence design and acceptance contract
 
@@ -2193,8 +2232,13 @@ changes):
 - **Bounded job summary**, emitted to the step summary, carrying exactly:
   commit SHA, Windows image/OS build, Python version, detected filesystem
   type, mandatory test totals (passed/failed/errored/skipped), the
-  mandatory skip count, and the symlink probe's status. Counts come from
-  the structured report, not from echoing test output.
+  mandatory skip count, the symlink probe's status, and the
+  `SE_DACL_AUTO_INHERITED` transition observed by T35[W], recorded as one
+  of `False->False`, `False->True`, or `True->True`. Counts come from the
+  structured report, not from echoing test output. The transition is two
+  booleans and a bit name -- no descriptor, ACL, ACE, or SID material
+  reaches the summary, and recording it is observational (§10.1a), never a
+  pass/fail criterion for the normalization itself.
 - **Disclosure ban:** the summary and job log must disclose no file
   content, previous content, absolute paths, temporary names, backup names,
   raw ACLs, raw security descriptors, tokens, or credentials. Test node
