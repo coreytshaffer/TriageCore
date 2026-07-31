@@ -2,24 +2,34 @@
 
 ## 1. Status and Authority
 
-- **Status:** Proposed. Requirements contract only; documentation only.
-  Revised once in draft after adversarial review, before any approval.
-- **Implementation authority:** None. This document authorizes no code, no
-  tests, no fixtures, no dependency change, no CI change, no CLI or `tc run`
-  change, no runtime integration, no capability or reservation change, no
-  IPC, no Windows account work, and no OpenClaw installation or
-  configuration.
+- **Requirements status:** Accepted and merged. The requirements contract
+  (§2–§24) was merged through PR #125 as merge commit
+  `0b2b8a5e4397a903f5a48a07be8c86f6701ad5b8`, unamended from the reviewed
+  draft. It is the authoritative baseline for everything below.
+- **Implementation status:** Proposed, not authorized. §25 records an
+  implementation proposal — an allowlist, module split, plan, evidence
+  design, and acceptance boundary — for review. It is a planning artifact.
+- **Implementation authority:** None. Neither the merged requirements nor
+  §25 authorizes code, tests, fixtures, a dependency change, a CI change, a
+  CLI or `tc run` change, runtime integration, a capability or reservation
+  change, IPC, Windows account work, or OpenClaw installation or
+  configuration. **Merging the requirements was not implementation
+  authority, and drafting §25 is not implementation authority.**
 - **Approval gate:** Explicit human approval is required before any
-  implementation, and again before any merge. Recording this proposal
+  implementation, and again before any merge. Recording either proposal
   satisfies neither.
 - **Still unauthorized:** CR-OC-001D, CR-OC-001E, and every runtime surface.
 
-This document defines the requirements an implementation must satisfy. It is
-written so that an implementation agent cannot choose materially different
-safety semantics without returning for approval. Where this document says
-"must", a conforming implementation has no discretion; where it says
-"recorded rather than glossed", the limitation is part of the contract and
-may not be papered over with stronger wording later.
+Sections 2–24 define the requirements an implementation must satisfy. They
+are written so that an implementation agent cannot choose materially
+different safety semantics without returning for approval. Where this
+document says "must", a conforming implementation has no discretion; where
+it says "recorded rather than glossed", the limitation is part of the
+contract and may not be papered over with stronger wording later.
+
+Section 25 is a separate, clearly bounded implementation proposal written
+against that merged baseline. Where §25 and §2–§24 could be read as
+disagreeing, the merged requirements govern and §25 is the defect.
 
 ## 2. Why This Slice Is Next
 
@@ -1427,18 +1437,23 @@ docs/current_backlog.md
 docs/change/change_log.md
 ```
 
-The Windows `ctypes` code lives inside `triage_core/mediated_executor.py`.
+**Both named unresolved candidates have since been resolved into scope by
+the operator, and §25.1 supersedes this five-path list with the settled
+seven-path allowlist.** This section is retained as the requirements-era
+record of what was open at merge time:
 
-**Named unresolved allowlist candidates, each requiring explicit approval
-before it may be touched, never added silently:**
+- `.github/workflows/tests.yml` — was conditional on choosing a Windows CI
+  job (§4.3) as the evidence source. **Resolved: a dedicated repeatable
+  Windows job is the evidence mechanism** (§25.7), so this path is in
+  scope.
+- `triage_core/mediated_executor_win32.py` — was conditional on a separate
+  platform helper being necessary for reviewability. **Resolved: the
+  helper is required** (§25.2), so this path is in scope, and the Windows
+  `ctypes` code lives there rather than in `mediated_executor.py`.
 
-- `.github/workflows/tests.yml` — only if a Windows CI job (§4.3) is
-  chosen as the Windows evidence source. Without that approval, the
-  recorded local Windows run is the evidence mechanism and CI stays
-  unmodified.
-- `triage_core/mediated_executor_win32.py` — only if implementation review
-  concludes a separate platform helper file is genuinely necessary for
-  reviewability.
+Resolving these two candidates enlarged the allowlist by exactly two paths,
+by explicit operator decision recorded in §25.1 — not silently, and not by
+implementation discretion.
 
 Expected to remain unmodified unless a separate change request proves
 otherwise:
@@ -1459,7 +1474,9 @@ This candidate list confers no implementation authority.
 ```text
 CR-OC-001A  pure effect contract                    complete and merged
 CR-OC-001B  atomic client-request reservation       complete and merged
-CR-OC-001C  constrained replacement executor        this proposal
+CR-OC-001C  constrained replacement executor        requirements merged;
+                                                    implementation proposed
+                                                    (§25), unauthorized
 CR-OC-001D  privilege-separated broker and pipe     unauthorized
 CR-OC-001E  exclusive OpenClaw tool and schema      unauthorized
 ```
@@ -1526,3 +1543,687 @@ Recorded rather than glossed:
   executor does not make OpenClaw containable, does not authenticate
   anything, and must not be cited as progress on CR-OC-001D or CR-OC-001E
   claims.
+
+---
+
+# Part II — Implementation Proposal
+
+## 25. Implementation Proposal (planning only — grants no authority)
+
+This part is a **planning and authorization proposal** drafted against the
+requirements contract merged as `0b2b8a5e4397a903f5a48a07be8c86f6701ad5b8`.
+It proposes *how* the contract would be satisfied and *what evidence* would
+be produced. It writes no code and authorizes none.
+
+### 25.1 The exact implementation allowlist
+
+Seven paths, settled by operator decision, closed:
+
+```text
+triage_core/mediated_executor.py
+triage_core/mediated_executor_win32.py
+tests/test_mediated_executor.py
+.github/workflows/tests.yml
+docs/change/requests/CR-OC-001C-constrained-single-file-replacement-executor.md
+docs/current_backlog.md
+docs/change/change_log.md
+```
+
+No other path may be created, modified, deleted, renamed, or implied. In
+particular the implementation adds **no new package dependency** (no
+pywin32), touches no other workflow, and leaves unmodified:
+
+```text
+triage_core/authz.py
+triage_core/capability_claims.py
+triage_core/request_reservation.py
+triage_core/task_ledger.py
+triage_core/mediated_effect.py
+triage_core/client.py
+triage_core/tc_cli.py
+pyproject.toml
+```
+
+Discovering that any eighth path is needed is a **stop condition** (§25.10),
+not an implementation decision.
+
+### 25.2 Module split and dependency direction
+
+Dependency direction is strictly one-way, with no cycle:
+
+```text
+tests/test_mediated_executor.py
+        |
+        v
+triage_core/mediated_executor.py        (policy, platform-neutral core)
+        |  imports ONLY inside the Windows-gated path, never at module scope
+        v
+triage_core/mediated_executor_win32.py  (mechanism, Windows-only adapter)
+```
+
+**`triage_core/mediated_executor.py` — policy and orchestration.** Owns:
+immutable public and internal contract types; trusted target-registry
+construction and validation; platform-neutral input validation; exact
+proposed-content checks; the closed outcome and reason vocabulary; pure
+`ReplaceFileW` result classification; the metadata-only privacy-safe result
+projection; the process-local orchestration lock; the Windows platform
+gate; and high-level sequencing. It performs **no direct Win32 structure
+parsing** — it never interprets a security-descriptor, ACL, or ACE layout,
+and never touches `ctypes` or `msvcrt`. It receives already-extracted plain
+Python values from the helper and reasons over them.
+
+**`triage_core/mediated_executor_win32.py` — a private Windows-only
+adapter.** Provides narrowly typed mechanism operations: opening targets
+without ever accepting a caller path; final-path and NTFS/workspace
+verification; file-identity capture; reparse and regular-file checks; exact
+bounded reads and writes; exclusive private same-directory temporary
+creation; flushing and closing; owner and DACL capture including complete
+ordered ACE-byte extraction with `AceSize` bounds validation; `ReplaceFileW`;
+backup deletion only after verified success; and the bounded cleanup
+operations the contract permits.
+
+It must contain **no** policy decision, outcome classification, persistence,
+logging, capability logic, reservation logic, ledger access, IPC, OpenClaw
+code, subprocess use, or network access. It raises a narrow adapter error or
+returns plain values; it never decides what an error *means*.
+
+**Import safety.** `mediated_executor.py` must import cleanly on
+non-Windows and perform **zero filesystem access** at import time. The
+helper is imported dynamically, inside the Windows-gated code path only and
+only after the gate has passed — `ctypes.windll` does not exist off
+Windows, so a module-scope import would break the neutral core on Ubuntu. A
+test asserts the absence of a module-scope helper/`ctypes`/`msvcrt` import
+(§25.5, T31).
+
+**The dependency is one-way, and no type crosses it upward.**
+`mediated_executor_win32.py` **must not import
+`triage_core.mediated_executor`**, must not reference any core-owned type,
+and must not import any other TriageCore module. It owns its own private
+value type (`Win32SecurityCapture`, §25.3.4) carrying mechanism-level
+primitive data only. The core receives that capture, validates it, and
+converts it into the core-owned `SecuritySnapshot` before any policy runs.
+
+An earlier draft of this proposal had the helper hand back a core-owned
+`SecuritySnapshot` directly. That was a defect: it would have required the
+helper to import the core, contradicting the one-way direction claimed in
+this very section. The two-type seam below is the correction. **No third
+shared module is introduced** to hold a common type — that would be an
+eighth path (§25.1) and is non-conforming.
+
+**Why the split, given the contract preferred a single module.** The merged
+contract left the helper as an unresolved candidate "only if implementation
+review concludes a separate platform helper file is genuinely necessary for
+reviewability" (§22). The operator has resolved it into scope, and the
+reviewability argument is concrete: the ACE-comparison rule (§10.1) is the
+single most defect-prone requirement in this slice, and splitting *parsing*
+(helper, Windows-only, untestable on CI's Ubuntu jobs) from *comparison*
+(core, pure, exhaustively testable on every job) is what lets mutants M22–M26
+be killed on Ubuntu rather than only on Windows.
+
+### 25.3 Function- and type-level plan
+
+#### 25.3.1 Types in `mediated_executor.py`
+
+```text
+TrustedTargetEntry            frozen dataclass
+    target_file_id: str            A-syntax identifier, never path-like
+    workspace_relpath: str         §6.2 grammar
+    maximum_size_bytes: int        positive
+
+MediatedTargetRegistry        frozen; no mutation API
+    workspace_root_final_path: str    captured once at construction
+    _entries: Mapping[str, TrustedTargetEntry]   copied, frozen
+    lookup(target_file_id) -> TrustedTargetEntry | None
+
+SecuritySnapshot              frozen dataclass; CORE-owned. The only
+                              security type policy reasons over. Built by
+                              the core from a helper capture, never
+                              constructed by the helper.
+    owner_sid: bytes               canonical form; compared for identity
+    dacl_state: str                "absent" | "null" | "present"  (core
+                                   vocabulary; the classification decision
+                                   belongs to the core, not the helper)
+    control_bits: tuple[bool,bool,bool]   PRESENT, PROTECTED, AUTO_INHERITED
+    acl_revision: int
+    ace_count: int
+    aces: tuple[bytes, ...]        complete AceSize-byte sequences, in order
+
+ReplacementResult             frozen dataclass; §17 field set exactly
+    persistent_projection() -> dict     privacy-gated in-module
+
+MediatedExecutorError                  base
+MediatedExecutorContractError          trusted-side/caller defect; raises
+
+OUTCOMES / REASON_CODES       frozensets; REASON_TO_OUTCOME mapping (§16)
+```
+
+The `Win32SecurityCapture` → `SecuritySnapshot` conversion is the seam that
+keeps the split honest and the dependency one-way. The helper performs
+every Win32 structure walk and returns its **own** private capture of
+primitive data; the core validates that capture, classifies it into its own
+vocabulary, and compares — and never parses a Win32 structure. Because
+`SecuritySnapshot` is core-owned and constructible from plain values,
+**platform-neutral tests build it directly** and exercise
+`compare_security_snapshots` on Ubuntu with crafted inputs, with no helper
+import and no Windows involved.
+
+#### 25.3.2 Pure functions in `mediated_executor.py`
+
+```text
+build_target_registry(workspace_root, entries) -> MediatedTargetRegistry
+_validate_workspace_relpath(value) -> str          §6.2 grammar
+_reject_duplicate_ids(entries) -> None             raises on duplicate
+_validate_effect_against_entry(effect, entry) -> str | None   §7.1 steps 3-6
+_verify_proposed_bytes(effect, entry, proposed) -> str | None §15.2
+classify_replace_result(succeeded, last_error) -> str         §11.2, pure
+snapshot_from_capture(capture) -> SecuritySnapshot            pure; validates
+        the helper capture's shape and derives the three-valued dacl_state
+        in core vocabulary; raises MediatedExecutorContractError on a
+        malformed or internally inconsistent capture
+compare_security_snapshots(pre, post) -> bool                 §10.1, pure
+_build_result(...) -> ReplacementResult
+```
+
+`classify_replace_result`, `snapshot_from_capture`, and
+`compare_security_snapshots` take no handles, no paths, and no I/O — they
+carry the most safety weight in this slice and are unit-testable on Ubuntu
+with crafted inputs. `snapshot_from_capture` is where a helper capture stops
+being mechanism data and becomes core vocabulary; the three-valued DACL
+classification (§10.1) is decided here, in the core, never by the helper.
+
+`compare_security_snapshots` implements §10.1 exactly and in order: owner
+SID identity; three-valued DACL state equality; the three control bits;
+`acl_revision` and `ace_count`; then ordered per-index equality of the
+complete ACE byte sequences. It compares only what the snapshot carries, so
+ACL slack space cannot enter the decision — the helper never extracts it.
+
+#### 25.3.3 Orchestration in `mediated_executor.py`
+
+```text
+_EXECUTION_LOCK = threading.Lock()      module-level, process-local only
+
+execute_replacement(registry, effect, proposed_bytes) -> ReplacementResult
+```
+
+Holds `_EXECUTION_LOCK` for the whole invocation (§14). Performs the §25.4
+sequence, calling the helper for every filesystem action and deciding every
+outcome itself.
+
+#### 25.3.4 Adapter surface in `mediated_executor_win32.py`
+
+Narrowly typed; every function takes validated components and returns plain
+values or its own private capture type, or raises `Win32AdapterError`. This
+module imports **no** TriageCore module — in particular never
+`triage_core.mediated_executor` — so the dependency stays one-way:
+
+```text
+Win32SecurityCapture          frozen dataclass; HELPER-owned, private to
+                              this module. Mechanism-level primitives only:
+                              no core vocabulary, no policy, no decision.
+    owner_sid: bytes               canonical owner SID representation
+    dacl_present: bool             SE_DACL_PRESENT as observed
+    dacl_is_null: bool             present flag set with a NULL ACL pointer
+    control_bits: tuple[bool,bool,bool]   PRESENT, PROTECTED, AUTO_INHERITED
+    acl_revision: int              0 when there is no ACL to read
+    ace_count: int                 0 when there is no ACL to read
+    aces: tuple[bytes, ...]        complete AceSize-byte sequences, in order,
+                                   each already bounds-validated
+
+windows_support_probe() -> bool          required APIs resolvable
+open_anchor(root_path) -> handle         registry construction only
+final_path(handle) -> str
+volume_is_ntfs(handle) -> bool
+walk_open_target(anchor_final_path, relpath_segments) -> handle
+        never accepts a caller-supplied path string
+has_reparse_or_not_regular(path_or_handle) -> bool
+file_identity(handle) -> tuple[int, int, int]
+read_exact_bounded(handle, limit) -> bytes
+process_owner_sid() -> bytes
+capture_security(handle) -> Win32SecurityCapture
+        performs every Win32 structure walk and AceSize bounds validation;
+        raises Win32AdapterError on a malformed descriptor, ACL, or ACE.
+        Reports observed facts only — it does not classify DACL state into
+        the core's three-valued vocabulary and reaches no conclusion.
+create_private_temp(dir_final_path, name) -> handle    exclusive CREATE_NEW
+write_all(handle, data) -> int
+flush_and_close(handle) -> None
+replace_file(replaced, replacement, backup) -> tuple[bool, int]
+        returns (succeeded, last_error); classifies nothing
+delete_file(path) -> bool                temp cleanup / verified backup only
+```
+
+`replace_file` returning `(succeeded, last_error)` rather than an outcome is
+the boundary that keeps classification in the core, where it is pure and
+Ubuntu-testable.
+
+### 25.4 Filesystem observation sequence and the single replacement call
+
+The contract's required order, preserved exactly, with the owning module:
+
+```text
+ 1 validate immutable inputs                          core
+ 2 freeze and validate trusted registry               core
+ 3 verify Windows and NTFS                            core gate -> helper
+ 4 resolve target only from target_file_id            core -> helper walk
+ 5 validate original object and containment           helper -> core decides
+ 6 capture pre-identity and owner/DACL state          helper -> core
+ 7 read and verify exact pre-content                  helper read, core hash
+ 8 independently verify exact proposed bytes          core (pure)
+ 9 prepare and verify private temporary file          helper, core verifies
+10 perform immediate identity re-probe                helper, core compares
+11 issue at most ONE ReplaceFileW call                helper (once)
+12 classify the primitive result                      core (pure)
+13 freshly resolve post-state through the registry    core -> helper walk
+14 verify content, size, type, containment, owner,    helper reads,
+   and DACL                                           core compares
+15 delete backup ONLY after complete verified success helper, core gates
+16 produce the privacy-safe result                    core
+```
+
+Step 11 executes at most once per invocation. There is no retry loop around
+it, and no code path reaches it twice.
+
+Explicitly **not** introduced anywhere in this plan: automatic rollback,
+retries of the replacement primitive, path-based fallback, best-effort ACL
+parsing, cleanup during ambiguous states, or any integration with
+authorization or reservation machinery.
+
+### 25.5 Where each of the 34 test obligations is exercised
+
+Venue: **U** = the existing Ubuntu jobs via the normal full suite (pure
+core, platform-neutral); **W** = the proposed Windows CI job against a real
+NTFS workspace; **U+W** = required evidence in both.
+
+| # | Obligation | Venue |
+|---|---|---|
+| 1 | Only `target_file_id` selects the target | W |
+| 2 | `canonical_relpath` cannot redirect execution | W |
+| 3 | Unknown id fails closed (W); duplicate ids raise (U) | U+W |
+| 4 | Caller paths cannot enter the API; §6.2 grammar | U |
+| 5 | Target outside the workspace fails closed | W |
+| 6 | Reparse-point target fails closed (junction) | W |
+| 7 | Reparse-point ancestor fails closed; not lexical | W |
+| 8 | Directory target fails closed | W |
+| 9 | Missing target fails closed, nothing created | W |
+| 10 | Pre-digest mismatch leaves target unchanged | W |
+| 11 | Proposed-content mismatch leaves target unchanged | W |
+| 12 | Proposed size mismatch leaves target unchanged | W |
+| 13 | Oversized pre / oversized proposed fail closed | W |
+| 14 | Exact bytes preserved (CRLF, BOM, NFD) | W |
+| 15 | Temp and backup created exclusively, same directory | W |
+| 16 | Partial temp write never alters the target | W |
+| 17 | Temp flushed before replacement | W |
+| 18 | Replacement on the same volume | W |
+| 19 | Success writes exact bytes; backup deleted | W |
+| 20 | Owner gate and owner preservation | W |
+| 21 | DACL invariant: pure comparison (U); real DACL (W) | U+W |
+| 22 | Result remains a regular file | W |
+| 23 | Result remains in the workspace | W |
+| 24 | Post mismatch ⇒ ambiguous, one call, backup retained | W |
+| 25 | Classifier pure fn incl. distinct 1175 (U); e2e (W) | U+W |
+| 26 | Degenerate pre==post rejected (U); thread race (W) | U+W |
+| 27 | Cross-process exclusion excluded, structural | U |
+| 28 | Projection shape (U); real-run payload (W) | U+W |
+| 29 | Errors expose no bytes or sensitive paths | W |
+| 30 | No network/subprocess/IPC/DB/ledger/capability ops | U+W |
+| 31 | No runtime module imports the executor; no module-scope `ctypes`/`msvcrt`/helper import in the core; the helper imports no TriageCore module | U |
+| 32 | Unsupported platform fails closed (U); forced API-probe failure (W) | U+W |
+| 33 | Backup lifecycle: delete on success, retain otherwise | W |
+| 34 | Identity re-probe catches a swapped target | W |
+
+Totals: 20 W-only, 6 U-only, 8 U+W — **exactly 34 required obligations**.
+Every obligation has a named venue; none is left to "wherever it happens to
+run".
+
+**Mandatory Windows evidence cannot skip.** All 20 required
+Windows-only obligations (plus the Windows half of the 8 U+W items) execute
+on `windows_executor`. `[W]` tests carry a `windows` marker so the Ubuntu
+suite skips them cleanly, which creates the exact hazard the contract's
+review discipline names — "platform skips that leave the central safety
+claims untested". The Windows job therefore **fails if any mandatory
+Windows test is skipped**, verified by machine-reading a structured result
+file rather than trusting the human-readable tail (§25.7). A broken
+platform gate must turn the job red, never silently green.
+
+**T6 and T7 are satisfied by junctions, which the hosted runner reliably
+supports.** Both obligations require *reparse-point* rejection, and a
+junction is a reparse point; `mklink /J` needs no elevation, so this
+evidence is dependable on `windows-latest`. T6 and T7 are therefore
+mandatory, zero-skip, and fully within the 34.
+
+**The symbolic-link variant is a supplemental probe, not an obligation.**
+Symlink creation may require a privilege the runner does not grant. The
+symlink probe is therefore:
+
+- **outside the 34 acceptance obligations** — it adds no obligation and
+  replaces none;
+- **outside the required-zero-skip calculation** — it carries a distinct
+  `windows_optional` marker and is deselected from the mandatory run;
+- **run separately and non-gating**, reporting either pass or
+  environment-unavailable;
+- **never evidence for acceptance.** A skipped or unavailable symlink probe
+  contributes nothing and must never be counted toward acceptance, quoted
+  as coverage, or used to argue that reparse handling was verified. The
+  junction evidence carries that claim on its own.
+
+If a reviewer concludes that §19 T6 requires genuine *symbolic-link*
+coverage for acceptance rather than reparse-point coverage generally, that
+is a contract question and a stop condition (§25.10 item 10) — the merged
+requirements would have to change first.
+
+**Genuine filesystem behavior versus seam injection, stated honestly.**
+Every `[W]` obligation runs against real files on a real NTFS volume: real
+directories, real junctions, real DACLs, a real `ReplaceFileW` call. Some
+branches cannot be provoked on demand by any test — Windows will not
+produce a chosen `ReplaceFileW` error code, a post-verification divergence,
+or a foreign-owner target to order. For those the plan uses a **closed,
+enumerated set of injection seams**, and the evidence record must label
+them as seam-injected rather than counting them as genuine-filesystem
+evidence for the injected branch:
+
+```text
+replace_file()        forced (succeeded=False, last_error=<code>)   T25
+post-verification     forced divergent read                          T24
+process_owner_sid()   forced foreign SID                             T20
+windows_support_probe() forced False                                 T32
+capture_security()    crafted malformed AceSize                      T21
+```
+
+Where a condition *can* be provoked genuinely it must be, not injected —
+junction ancestors via real `mklink /J`, sharing violations via a real
+handle held without `FILE_SHARE_DELETE`, oversize via real files.
+
+### 25.6 Designated killer test for each of the 27 mutants
+
+Each mutant must be demonstrated **failing** against its defective variant,
+with the module hash verified pristine after each cycle, following the
+CR-YK-002/A/B bar. Controls are reported as controls, never as kills.
+
+| Mutant | Designated killer | Venue |
+|---|---|---|
+| M1 resolve via `canonical_relpath` | T2, T3 | W |
+| M2 lexical containment only | T7 | W |
+| M3 follow final symlink/reparse | T6 | W |
+| M4 skip ancestor checks | T7 | W |
+| M5 omit pre-digest verification | T10 | W |
+| M6 normalize content before hashing | T14 | W |
+| M7 temp/backup outside target directory | T18 | W |
+| M8 predictable temp/backup name | T15, T33 | W |
+| M9 permit partial writes | T16 | W |
+| M10 skip flush before replacement | T17 | W |
+| M11 call primitive with no backup name | T25 | W |
+| M12 omit owner verification | T20 | W |
+| M13 omit DACL comparison / substitute SDDL | T21 | U+W |
+| M14 report success before post-verification | T24 | W |
+| M15 flatten ambiguous into `target_unchanged` | T24, T25 | W |
+| M16 absolute path in persistent evidence | T28 | U |
+| M17 proposed bytes in error or result | T29 | W |
+| M18 claim cross-process exclusion | T27 (weak, reviewer-controlled) | U |
+| M19 second mutation during rollback | T24 | W |
+| M20 import reservation/capability/ledger/IPC/subprocess | T30, T31 | U |
+| M21 delete backup early / on non-verified outcome | T33, T24 | W |
+| M22 omit object-type GUID data | T21 | U |
+| M23 omit callback application data | T21 | U |
+| M24 compare only type/mask/SID | T21 | U |
+| M25 ignore ACE order | T21 | U |
+| M26 accept malformed `AceSize` | T21 | U |
+| M27 flatten 1175 into the ambiguous 1177 outcome | T25 | U+W |
+
+Seven mutants (M16, M18, M20, M22–M26) are killed on Ubuntu, which is the
+direct payoff of the §25.2 module split: the ACE-comparison mutants that
+matter most are killed on every pull request, not only in the Windows job.
+
+### 25.7 Windows CI evidence design and acceptance contract
+
+**One additive job** in the existing `.github/workflows/tests.yml`. The
+existing Ubuntu Python 3.10/3.11/3.12 matrix is **left exactly intact** and
+is not converted into an OS × Python matrix — converting it would multiply
+job count, change evidence for three unrelated Python versions, and couple
+this slice to the whole suite's CI shape. The Ubuntu jobs continue to run
+the normal full suite, exercising the pure core and the non-Windows
+fail-closed gate.
+
+Proposed shape (`windows_executor`, additive, nothing else in the file
+changes):
+
+```yaml
+  windows_executor:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+      - name: Verify workspace volume is NTFS
+        # fails the job when the workspace is not NTFS
+      - name: Run mandatory executor and guard suites
+        # deselects the windows_optional marker; writes JUnit XML to
+        # $env:RUNNER_TEMP
+      - name: Assert zero mandatory skips
+        # parses that XML; fails when skipped != 0
+      - name: Supplemental symlink probe (non-gating)
+        # runs the windows_optional marker only; reports pass or
+        # environment-unavailable; never gates the job
+      - name: Bounded job summary
+        # commit SHA, Windows build, Python version, filesystem type,
+        # mandatory totals, mandatory skip count, symlink probe status
+```
+
+- **Runner and Python:** `windows-latest`, Python 3.12 (single version —
+  this slice's risk is the filesystem and Win32 surface, not Python
+  version drift, which the Ubuntu matrix already covers).
+- **Permissions:** job-level `permissions: contents: read`. The job needs
+  no secrets, no write scope, and no package or deployment access; it reads
+  the checkout and runs tests. Nothing it produces is uploaded.
+- **Dependencies, pinned:** the install command is exactly
+  `python -m pip install -e ".[dev]"`. Current repository inspection shows
+  the focused executor suite and the two selected guards require no
+  `mobile` extra — that extra's consumers (`triage_core/web/server.py`,
+  `triage_core/validators.py`) are not among the absence guard's public
+  import seams. **There is no conditional fallback.** If implementation
+  finds the focused suite cannot collect under `.[dev]`, that is a stop
+  condition (§25.10 item 14): stop and return for approval rather than
+  silently broadening the installed dependency surface. The existing Ubuntu
+  job keeps its current `.[dev,mobile]` install, unchanged.
+- **NTFS verification:** the workspace volume's filesystem is queried
+  (`Get-Volume` on the workspace drive, falling back to
+  `Get-CimInstance Win32_LogicalDisk`) and the job **fails** if it is not
+  NTFS. Without this, an unexpected runner volume could silently reduce
+  every DACL and reparse claim to noise.
+- **Mandatory suites:** `tests/test_mediated_executor.py` with the
+  `windows_optional` marker deselected, plus the two guards identified by
+  repository inspection — `tests/test_privacy_invariants.py`
+  (persistent-privacy invariant) and
+  `tests/test_governed_decision_integration_absence.py`
+  (runtime-integration absence).
+- **Structured result and the zero-skip assertion:** the mandatory run
+  writes JUnit XML (or an equivalent bounded machine-readable result) to a
+  path under `$env:RUNNER_TEMP`. A dedicated step parses it and **fails the
+  job when the mandatory group reports a non-zero skip count**, and also
+  fails if the result file is missing or unparseable — a vanished report
+  must not read as success. The file stays under `RUNNER_TEMP`, is **not
+  uploaded as an artifact**, and no filesystem-diagnostic artifact of any
+  kind is published.
+- **Supplemental symlink probe:** a separate non-gating step runs only the
+  `windows_optional` marker and reports pass or environment-unavailable.
+  Its result never affects the job outcome and never counts toward
+  acceptance (§25.5).
+- **Bounded job summary**, emitted to the step summary, carrying exactly:
+  commit SHA, Windows image/OS build, Python version, detected filesystem
+  type, mandatory test totals (passed/failed/errored/skipped), the
+  mandatory skip count, and the symlink probe's status. Counts come from
+  the structured report, not from echoing test output.
+- **Disclosure ban:** the summary and job log must disclose no file
+  content, previous content, absolute paths, temporary names, backup names,
+  raw ACLs, raw security descriptors, tokens, or credentials. Test node
+  IDs are not echoed into the summary.
+- **Repeatability:** the job runs on every pull request and every push the
+  existing workflow triggers already cover; no new trigger is added.
+
+**Acceptance contract.** The implementation may be considered complete only
+when: every `[N]` obligation passes in the Ubuntu jobs across 3.10/3.11/3.12;
+every mandatory `[W]` obligation passes in `windows_executor` with **zero
+skips in the mandatory group**, asserted from the structured result file;
+the NTFS verification step passes; all 27 mutants are
+demonstrated failing against their defective variants with the module hash
+pristine after each cycle, and controls reported as controls; the privacy
+gate runs in-module over the exact projection payload; the full suite passes
+with no new `xfail`; `git diff --check` passes; the diff stays inside the
+seven-path allowlist; the six untouched modules of §25.1 are unmodified; no
+runtime module imports the executor; no new dependency is added; and the
+implementation record cites the Microsoft/Python documentation each
+load-bearing behavior rests on, naming which behaviors were verified by test
+rather than by documentation.
+
+**A local Windows run may supplement this evidence and may never substitute
+for it.** A recorded local run is useful for iteration and for the §24
+implementation-time documentation obligations; it is not acceptance
+evidence, because it is neither repeatable by a reviewer nor re-run on
+future changes.
+
+### 25.8 Privacy and diagnostic-output restrictions
+
+The §17 rules govern the result, the projection, every exception, and every
+reachable repr. This plan adds the implementation-side obligations that make
+them hold:
+
+- The helper raises `Win32AdapterError` carrying **only** a numeric error
+  code and a fixed operation label — never a path, name, handle value,
+  SID, ACL, or descriptor. OS message strings are never propagated.
+- The core maps adapter errors to closed reason codes; no OS text reaches
+  a result, an exception, or a log.
+- Absolute paths, temporary names, and backup names exist only in local
+  variables inside the helper and the orchestrator, and are never stored on
+  a result object, formatted into a message, or emitted.
+- `SecuritySnapshot` values are compared and discarded; owner SIDs and ACE
+  bytes never reach a result, projection, or error, and SDDL text is never
+  produced at all in production paths.
+- Pre-content and proposed bytes are hashed and dropped; neither is stored
+  on any object that outlives the call.
+- `persistent_projection()` runs `assert_persistent_privacy_safe` over the
+  exact payload before returning it.
+- **Test diagnostics obey the same rules in CI.** Assertion messages,
+  captured output, and the job summary must not embed content, absolute
+  paths, temp/backup names, or descriptor material; canary-based tests
+  (T28, T29) assert their absence.
+
+### 25.9 Concrete verification command set
+
+Run by the implementer before requesting review, and reproducible by a
+reviewer:
+
+```powershell
+# Windows machine — the mandatory slice and the two guards
+python -m pytest tests/test_mediated_executor.py -m "not windows_optional" -q
+python -m pytest tests/test_privacy_invariants.py tests/test_governed_decision_integration_absence.py -q
+
+# Windows machine — no mandatory test may skip (structured, then eyeballed)
+python -m pytest tests/test_mediated_executor.py -m "not windows_optional" -q -rs `
+    --junit-xml="$env:RUNNER_TEMP\mediated-executor.xml"
+
+# Windows machine — supplemental symlink probe; never gates acceptance
+python -m pytest tests/test_mediated_executor.py -m windows_optional -q -rs
+
+# Any machine — full suite, no new xfail
+python -m pytest -q
+
+# Non-Windows machine — the neutral core and the fail-closed gate
+python -m pytest tests/test_mediated_executor.py -q
+
+# Diff hygiene and allowlist containment
+git diff --check
+git status --short
+git diff --name-only
+git diff --stat
+```
+
+Plus, per the standing evidence bar, the mutant cycle for each of the 27
+variants: back up the module, apply the defect, run the designated killer
+and record the failure, restore with `git checkout HEAD -- <file>`, and
+verify the module hash is pristine before the next cycle.
+
+### 25.10 Stop conditions requiring renewed approval
+
+Implementation halts and returns for explicit approval if any of these
+occurs. None may be resolved by implementation discretion:
+
+1. Any path outside the §25.1 seven would need to be created or modified —
+   including any "shared types" module introduced to bridge the core and
+   the helper. There is no eighth path, and a third module is not a
+   workaround for a dependency problem.
+2. Any new package dependency, or any change to `pyproject.toml`.
+3. A required Win32 capability turns out to need a privilege the executing
+   account lacks (for example `SeSecurityPrivilege`), or an API is
+   unavailable on the runner.
+4. Current Microsoft documentation does not support the `target_unchanged`
+   classification for `ERROR_UNABLE_TO_REMOVE_REPLACED` (1175) or
+   `ERROR_UNABLE_TO_MOVE_REPLACEMENT` (1176) — the claim narrows to
+   ambiguous and the contract text must change first (§24).
+5. The §8.2 capture-then-close plus identity re-probe design does not hold
+   on real Windows, or `ReplaceFileW` interacts with held handles
+   differently than the contract assumes.
+6. A `[W]` obligation cannot be exercised genuinely **and** has no
+   acceptable seam in the §25.5 enumerated set.
+7. The NTFS verification step fails on `windows-latest`, or the runner's
+   workspace volume is not NTFS.
+8. Any mutant cannot be killed by its designated test, or a designated
+   killer turns out to kill for the wrong reason (the CR-OC-001B lesson:
+   a collection error is not a kill).
+9. The neutral core cannot be kept import-safe and filesystem-silent on
+   non-Windows.
+10. Symlink privilege is unavailable and the reviewer requires genuine
+    symlink coverage rather than junction coverage plus a visible skip.
+11. Any temptation to convert the Ubuntu matrix into an OS × Python matrix,
+    touch another workflow, or alter the existing Ubuntu jobs.
+12. Any runtime module would need to import the executor, or the executor
+    would need to import authorization, reservation, or ledger machinery.
+13. The requirements contract (§2–§24) would need to change for the
+    implementation to proceed.
+14. The focused executor suite or the two selected guards cannot collect
+    on Windows under exactly `python -m pip install -e ".[dev]"`. Stop and
+    return for approval; do not silently broaden the installed dependency
+    surface.
+15. `mediated_executor_win32.py` would need to import
+    `triage_core.mediated_executor`, reference any core-owned type, or
+    import any other TriageCore module — or the core would need to consume
+    a helper-owned type as policy input rather than converting it through
+    `snapshot_from_capture`. Either direction breaks the one-way
+    dependency and is non-conforming.
+16. A mandatory Windows test cannot be made to run without skipping, or
+    the structured result file cannot be produced or parsed. A missing or
+    unreadable report is a failure, never a pass.
+
+### 25.11 This proposal grants no implementation authority
+
+Explicitly, and without qualification:
+
+- **Drafting §25 is not implementation authority.** No file in the §25.1
+  allowlist may be created or modified on the strength of this section.
+- **Merging the requirements contract was not implementation authority.**
+  PR #125 published requirements; it authorized nothing.
+- **Merging this proposal would not be implementation authority either.**
+  It would settle the plan, not license the work.
+
+Implementation may begin only after **all** of the following:
+
+```text
+1. this implementation proposal is reviewed;
+2. its exact seven-path allowlist is accepted;
+3. the Windows CI evidence design is accepted;
+4. the module boundary is accepted;
+5. explicit human implementation approval is granted.
+```
+
+Until every one of those is satisfied, `triage_core/mediated_executor.py`,
+`triage_core/mediated_executor_win32.py`,
+`tests/test_mediated_executor.py`, and `.github/workflows/tests.yml` remain
+**unauthorized and must not exist**. CR-OC-001D and CR-OC-001E remain
+unauthorized independently of anything decided here.
