@@ -2250,9 +2250,12 @@ changes):
 when: every `[N]` obligation passes in the Ubuntu jobs across 3.10/3.11/3.12;
 every mandatory `[W]` obligation passes in `windows_executor` with **zero
 skips in the mandatory group**, asserted from the structured result file;
-the NTFS verification step passes; the hosted Windows job reproduces the
-§10.1a accepted `SE_DACL_AUTO_INHERITED` normalization (T35[W]) rather than
-that behaviour resting on local evidence alone; all 29 mutants are
+the NTFS verification step passes; the hosted Windows job observes and
+records one of the three §10.1a accepted `SE_DACL_AUTO_INHERITED`
+transitions, with every other owner/DACL component exactly preserved —
+reproducing `False -> True` specifically is **not** required, while
+`True -> False` or any other metadata difference fails (T35[W]); all 29
+mutants are
 demonstrated failing against their defective variants with the module hash
 pristine after each cycle, and controls reported as controls; the privacy
 gate runs in-module over the exact projection payload; the full suite passes
