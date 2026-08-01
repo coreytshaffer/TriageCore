@@ -719,17 +719,71 @@ short name, object identifier, encryption, compression, and named streams
 precondition:
 
 - **Pre-mutation ownership gate:** before any temporary file is created,
-  the target's owner SID must equal the executing principal — the process
-  token's user SID from `OpenProcessToken` + `GetTokenInformation
-  (TokenUser)`. Failure is `metadata_precondition_failed`, not attempted.
-  This converts an unpreservable case into a refusal instead of a broken
-  promise.
+  the target's owner SID must equal the **token's default owner** — the SID
+  from `OpenProcessToken` + `GetTokenInformation(..., TokenOwner, ...)`
+  (information class `4`). Failure is `metadata_precondition_failed`, not
+  attempted. This converts an unpreservable case into a refusal instead of
+  a broken promise. See §10.2a for why this is `TokenOwner` and not
+  `TokenUser`.
 - **DACL carry-over:** `ReplaceFileW` is documented to give the resulting
   file the replaced file's DACL, which is the load-bearing reason §11
   selects it over `MoveFileExW` (whose result would carry the temporary
   file's directory-inherited DACL instead). Post-verification (§12) still
   performs the full §10.1 comparison; documentation is trusted to choose
   the primitive, never to skip the check.
+
+### 10.2a Implementation-discovered contract correction: `TokenOwner`
+
+This subsection records why the ownership gate reads the token's **default
+owner** rather than its user. Like §10.1a, it is a contract-discovery result
+found by running the contract, not by reading it.
+
+**The two token quantities answer different questions.** `TokenUser`
+identifies the user account associated with the access token. `TokenOwner`
+is the **default owner SID applied to newly created objects**: when a process
+creates an object without supplying an explicit owner in a security
+descriptor, Windows takes the owner from the token's default owner. The two
+frequently coincide, and on many ordinary accounts they always do.
+
+**Only `TokenOwner` answers the question this gate asks.** The gate exists
+because `ReplaceFileW`'s documented preservation list covers the replaced
+file's DACL, timestamps, short name, object identifier, encryption,
+compression, and named streams, but **not** the owner — and the resulting
+file retains the replacement file's identity. The precondition therefore has
+to reason about the owner Windows will actually assign to the temporary
+object this process is about to create. Comparing the target's owner against
+`TokenUser` answers a different question — "is this object owned by the
+token's user identity?" — and says nothing about the owner the new object
+will receive.
+
+**Discovery trigger: hosted run `30686689771`.** The first hosted execution
+of the `windows_executor` job against the implementation reported:
+
+```text
+NTFS verification            passed
+mandatory executor group     131 passed, 34 failed
+all 34 failures uniform      metadata_precondition_failed
+structured-result gate       correctly did not run after the failure
+```
+
+Every failure was this gate refusing before mutation, because on that runner
+the target's owner SID and the token's `TokenUser` SID were not the same
+value. Local evidence had been green throughout because on the development
+account those two SIDs coincided, so the distinction was invisible until a
+different environment exercised it. The zero-skip and fail-closed design of
+the job is what surfaced it rather than letting it pass quietly.
+
+**Scope of the claim, stated carefully.** This amendment does **not** assert
+that hosted runners necessarily execute elevated, nor that the target's owner
+was any particular well-known SID. Those would be unverified explanations of
+*why* the two values differed, and the contract defect does not depend on
+proving them: `TokenUser` was the wrong quantity for this precondition
+regardless of which specific SIDs a given machine reports.
+
+**No raw SIDs.** Neither this amendment nor its tests record, request, or
+emit SID values. The regression evidence is equality-shaped only, and §17's
+exclusion of SIDs from results, projections, errors, JUnit, and the job
+summary is unchanged.
 
 The `ctypes` code lives inside the executor module itself under the
 proposed allowlist (§22) — no new dependency (no pywin32), no subprocess
@@ -1355,10 +1409,22 @@ point.
     parent directory equals the target's parent directory.
 19. [W] Successful replacement produces exactly the expected bytes on
     disk, `replacement_verified`, `ok`, and the backup file is deleted.
-20. [W] Owner gate and preservation: the §10.2 fault-injection seam
-    returning a foreign owner SID pre-mutation yields
-    `metadata_precondition_failed` with nothing attempted; on the real
-    path, post owner SID equals pre owner SID.
+20. [W] Owner gate and preservation, against the token's **default owner**
+    (§10.2a). Revised rather than supplemented, so the obligation count is
+    unchanged. Three parts:
+
+    - **injected incompatible default owner** — the seam returning a
+      default owner that differs from the target's owner yields
+      `metadata_precondition_failed` with nothing attempted and no
+      artifacts left behind;
+    - **genuine newly created file** — a file created by this process
+      without an explicit security descriptor has an owner equal to the
+      token's default owner, proving the gate compares the quantity that
+      actually governs the temporary file's ownership. Equality-shaped
+      only: **no SID value is recorded or emitted**;
+    - **normal replacement passes the gate** — an ordinary target created
+      by this process reaches `replacement_verified`, and post owner
+      equals pre owner.
 21. [W] DACL invariant: the §10.1 structured comparison passes on a real
     replacement including a non-default explicit DACL on the target; an
     injected post-comparison difference in each participating component —
@@ -1513,6 +1579,7 @@ evidence, and must be reported as controls.
 | M27 | Flatten `ERROR_UNABLE_TO_REMOVE_REPLACED` (1175) into the ambiguous 1177 outcome | T25[N] distinct 1175 assertion; T25[W] 1175-class end-to-end (`target_unchanged`, target byte-identical) |
 | M28 | Replace the `SE_DACL_AUTO_INHERITED` monotonic rule with strict equality (the pre-amendment defect) | T35[N] — the directly constructed `False -> True` pair is rejected under the mutant. Killed deterministically, without depending on what a hosted runner exhibits |
 | M29 | Ignore `SE_DACL_AUTO_INHERITED` entirely (the rejected complete-exclusion option) | T36 `True -> False` rejection — the mutant accepts it |
+| M30 | Query `TokenUser` instead of `TokenOwner` in the ownership gate (the pre-amendment defect, §10.2a) | T20's **deterministic instrumented** assertion that the adapter requests information class `TokenOwner` (`4`). Uses a fake or instrumented `GetTokenInformation`, so the kill does **not** depend on the two SIDs happening to differ on the machine under test — otherwise the mutant would survive on any host where they coincide, which is exactly how the defect escaped local evidence |
 
 Controls, identified in advance: the healthy-path test (T19), determinism
 of the projection key set, and the vocabulary-membership test all pass
@@ -1933,7 +2000,7 @@ walk_open_target(anchor_final_path, relpath_segments) -> handle
 has_reparse_or_not_regular(path_or_handle) -> bool
 file_identity(handle) -> tuple[int, int, int]
 read_exact_bounded(handle, limit) -> bytes
-process_owner_sid() -> bytes
+process_default_owner_sid() -> bytes
 capture_security(handle) -> Win32SecurityCapture
         performs every Win32 structure walk and AceSize bounds validation;
         raises Win32AdapterError on a malformed descriptor, ACL, or ACE.
@@ -2086,7 +2153,7 @@ evidence for the injected branch:
 ```text
 replace_file()        forced (succeeded=False, last_error=<code>)   T25
 post-verification     forced divergent read                          T24
-process_owner_sid()   forced foreign SID                             T20
+process_default_owner_sid() forced incompatible default owner        T20
 windows_support_probe() forced False                                 T32
 capture_security()    crafted malformed AceSize                      T21
 ```
@@ -2095,7 +2162,7 @@ Where a condition *can* be provoked genuinely it must be, not injected —
 junction ancestors via real `mklink /J`, sharing violations via a real
 handle held without `FILE_SHARE_DELETE`, oversize via real files.
 
-### 25.6 Designated killer test for each of the 29 mutants
+### 25.6 Designated killer test for each of the 30 mutants
 
 Each mutant must be demonstrated **failing** against its defective variant,
 with the module hash verified pristine after each cycle, following the
@@ -2132,6 +2199,7 @@ CR-YK-002/A/B bar. Controls are reported as controls, never as kills.
 | M27 flatten 1175 into the ambiguous 1177 outcome | T25 | U+W |
 | M28 strict equality instead of the `SE_DACL_AUTO_INHERITED` monotonic rule (the pre-amendment defect) | T35[N] | U |
 | M29 ignore `SE_DACL_AUTO_INHERITED` entirely (the rejected complete-exclusion option) | T36 | U |
+| M30 query `TokenUser` instead of `TokenOwner` (§10.2a) | T20 instrumented information-class assertion | W |
 
 Ten mutants (M16, M18, M20, M22–M26, M28, M29) are killed on Ubuntu, which
 is the direct payoff of the §25.2 module split: the ACE-comparison mutants
@@ -2254,7 +2322,7 @@ the NTFS verification step passes; the hosted Windows job observes and
 records one of the three §10.1a accepted `SE_DACL_AUTO_INHERITED`
 transitions, with every other owner/DACL component exactly preserved —
 reproducing `False -> True` specifically is **not** required, while
-`True -> False` or any other metadata difference fails (T35[W]); all 29
+`True -> False` or any other metadata difference fails (T35[W]); all 30
 mutants are
 demonstrated failing against their defective variants with the module hash
 pristine after each cycle, and controls reported as controls; the privacy
