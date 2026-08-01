@@ -24,8 +24,11 @@ explicit gate, and the merge of either foundation is not that gate.
 The three questions this proposal originally left open have since been settled by
 recorded supervisor decision — see **Resolved Questions** — and five
 implementation approval gates are recorded in **Implementation Approval Gates**.
-Settling a design question is not implementation authority either; the gates
-describe what an approval must require, not an approval already given.
+Gates 1 and 2 are proposal-stage preconditions and are satisfied here. Gates 3
+through 5 are implementation obligations: they must be **bound by** any bounded
+implementation approval and **satisfied before** implementation acceptance,
+merge, or closeout. Settling a design question is not implementation authority;
+the gates describe what an approval must require, not an approval already given.
 
 This CR is scoped against `main` at `8bfb547`. Its parent architecture is
 `CR-DD-012-shared-governed-run-decision.md`, which remains authoritative on the
@@ -513,9 +516,23 @@ option — has failed the slice regardless of what its tests report.
 
 ## Implementation Approval Gates
 
-These are the recorded conditions for moving this work out of proposal. All five
-must be satisfied before implementation authority is granted; none is satisfied
-by this document.
+The five gates bind at **two different stages**, and conflating them would be a
+timing error: gates 3 through 5 assert properties of code that does not exist
+yet, so they cannot be satisfied before the authority to write that code is
+granted.
+
+The governance model is therefore two-stage:
+
+| Stage | What it grants | Gates |
+|---|---|---|
+| **Permission to implement** | a bounded implementation approval with an explicit file allowlist and mandatory test obligations | gates 1–2 must already be satisfied; gates 3–5 must be **bound by** the approval |
+| **Permission to accept** | acceptance, merge, and closeout of the implementation | gates 3–5 must **actually pass** |
+
+An approval that grants permission to implement without binding gates 3 through
+5 as obligations is incomplete, and an implementation that reaches acceptance,
+merge, or closeout without them passing must be rejected.
+
+### Proposal-stage preconditions — satisfied
 
 1. **A recorded decision on capability volatility and its CR-DD-013 behavioral
    consequence.** Satisfied above: binding-only, with the behavioral change to
@@ -525,6 +542,9 @@ by this document.
    Question 1**: the seam sits after argument assembly and privacy mapping and
    before `if planning:`, context sources are read exactly once there, and both
    paths receive `(snapshot, decision)` as parameters.
+
+### Implementation obligations — bound at approval, satisfied before acceptance
+
 3. **Replacement of the integration-absence guard with positive tests** proving
    one snapshot, one governed decision, and two projections — **not merely
    deletion of the old guard.** `tests/test_governed_decision_integration_absence.py`
@@ -536,8 +556,10 @@ by this document.
 5. **A negative test showing unavailable capability causes only an authorized
    fallback or a closed failure** — never an unauthorized route.
 
-Gates 3 through 5 are obligations on the implementation and are additive to the
-focused tests listed in **Settled Question 8**.
+Gates 3 through 5 are additive to the focused tests listed in **Settled
+Question 8**. Satisfying gates 1 and 2 grants nothing on its own: implementation
+authority still requires a separate explicit approval and its own bounded file
+allowlist, and this document is not that approval.
 
 ## Dependencies And Sequencing
 

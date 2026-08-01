@@ -23,8 +23,10 @@ constrains **execution binding only** and never governed-decision formation: a
 volatile observation may execute, bind an already-authorized fallback, or fail
 closed, but may never invent a route the decision did not authorize. That is a
 deliberate correction to current `tc run` route selection and is recorded as
-such. The proposal also records five approval gates that any implementation
-approval must require.
+such. The proposal also records five approval gates binding at two stages: two
+proposal-stage preconditions, already satisfied, and three test obligations that
+any bounded implementation approval must bind and that must pass before
+implementation acceptance, merge, or closeout.
 
 The CR-DD-012A foundation is specified in
 `CR-DD-012A-governed-decision-foundation.md`. It resolves “exact bytes” as the

@@ -145,10 +145,15 @@ backwards.
    only** and never governed-decision formation, so stable inputs produce the decision,
    route intent, envelope, and decision ID while volatile observations may only
    execute, bind an already-authorized fallback, or fail closed. That is a deliberate
-   correction to current `tc run` route selection, recorded as such. Five approval
-   gates — including negative tests that runtime capability changes cannot alter the
-   decision ID or envelope, and that unavailable capability yields only an authorized
-   fallback or a closed failure — must be met before implementation authority. `governed_run_plan.v2`, durable `RuntimeObservation`/`ExecutionRecord` contracts,
+   correction to current `tc run` route selection, recorded as such. Five approval gates
+   bind at two stages: the two proposal-stage preconditions — the recorded capability
+   decision and the pre-`planning` seam statement — are satisfied, while the three test
+   obligations must be **bound by** any bounded implementation approval and **satisfied
+   before** implementation acceptance, merge, or closeout. Those three are replacing
+   rather than deleting the CR-DD-012A integration-absence guard, a negative test that
+   post-decision capability change cannot alter the decision ID, route policy, or
+   envelope, and a negative test that unavailable capability yields only an authorized
+   fallback or a closed failure. `governed_run_plan.v2`, durable `RuntimeObservation`/`ExecutionRecord` contracts,
    and confirmed-plan execution remain deferred.
 5. **M1 — Capability binding complete; real route bindings and circuit breakers remain
    open** (G3, G4, G6).
