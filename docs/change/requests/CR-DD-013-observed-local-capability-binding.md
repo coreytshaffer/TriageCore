@@ -2,13 +2,115 @@
 
 ## Status
 
-Approved for implementation. The bounded implementation is complete on its
-branch; see **Implementation Amendment** below for the decisions that resolved
-the blockers found during implementation.
+**Complete, accepted, and merged.** The bounded implementation landed on `main`
+through PR #116 as merge commit `98df9c1`
+(`98df9c1a51d8d67999517eb8e1008cd55c51e738`). See **Implementation Amendment**
+below for the decisions that resolved the blockers found during implementation,
+and **Closeout** for the final bounded claim.
+
+Implementation authority and merge authority for CR-DD-013 were both exercised
+and are **now spent**. Any correction, expansion, or downstream integration —
+including any change to the resolution precedence, the `[capability]` surface,
+the evidence payload, or the route-input binding — requires new, separate,
+explicit authority. Neither this document nor the merge is a standing grant.
+
+CR-DD-012B remains an independent lane. It receives no authority from this
+closeout, retains its own CR-YK-002 atomic-claiming gate and its own separate
+approval requirement, and is neither advanced nor unblocked by CR-DD-013.
 
 This CR was originally scoped against `main` at `ac851d5` and implemented
-against `cce1985`. It is the first slice of M1 in
-`docs/architecture/daily_driver_orchestrator_spec.md` and addresses gap G4.
+against `cce1985`. It is the first slice of M1 in the daily-driver orchestrator
+spec and addresses gap G4.
+
+## Closeout
+
+Recorded after merge. Where this section states what the merged code does, it
+is authoritative over any earlier proposal text in this document.
+
+### What `tc run` now does
+
+- `tc run` resolves local capability from the `[capability]` configuration
+  section before governed route selection, by **reading an already-recorded
+  local-runtime observation**. It performs no probe of its own.
+- A validated recorded `local_backend_probe_record.v1` observation, within the
+  applied freshness bound, is projected into route input.
+- Explicit `[capability]` declarations — `declare_local_fast` and
+  `declare_local_heavy` — can declare `local_fast` and `local_heavy` for route
+  consideration. Ordinary backend configuration does not qualify.
+- **Observed runtime reachability and configured route-class availability
+  remain distinct evidence.** A reachable runtime is recorded as
+  `ObservedAvailable`; a declaration standing in for an absent observation is
+  recorded as `Configured`, carrying `source_type=operator_config` and a
+  `config_reference` and never a probe evidence tier or an `observed_at`.
+- Missing, `probe_disabled`, stale, malformed, freshness-indeterminate, or
+  otherwise insufficient evidence resolves to **`Unknown`, never healthy**. The
+  closed reason set is `missing`, `probe_disabled`, `stale`, `invalid_record`,
+  and `insufficient_model_evidence`. A record that carries no `observed_at` —
+  which the probe contract forbids for `synthetic_fixture` records — resolves
+  to `Unknown` with reason `stale`, covering both an expired observation and
+  one whose freshness cannot be established.
+- **A fresh observed-unavailable result overrides declarations** and suppresses
+  every route depending on that runtime. A declaration cannot revive it.
+- **A fresh reachable runtime does not by itself prove `local_fast` or
+  `local_heavy`.** Reachability confirms the runtime only; class availability
+  comes from the explicit declarations.
+- With no usable observation and no declaration, `lm_studio_ok`,
+  `local_fast_available`, and `local_heavy_available` are all `False` and the
+  recorded state is `Unknown`. Local-only work then fails closed through the
+  existing `LocalRouteUnavailableError` path; no second enforcement path was
+  added.
+- Capability provenance is carried additively through the existing open
+  `route_decision` payload. No new ledger schema and no schema-version bump; the
+  closed `route-worker-ledger.v1` contract is untouched.
+
+### Direct-caller compatibility
+
+`TriageClient.run_task` accepts an optional `capability` object. **Direct
+callers that omit it retain the previous library behavior exactly** — the prior
+route-input literals are preserved for those callers, and no observation is
+inferred on their behalf. The behavioral change is scoped to the `tc run`
+construction path, which always supplies a resolution.
+
+### Explicit non-goals of the merged slice
+
+The implementation performs **no** automatic probe, completion, chat,
+embedding, or model execution; adds **no** provider expansion; adds **no**
+circuit-breaker behavior; and introduces **no** new ledger schema.
+`choose_resilience_route`'s decision logic is unmodified.
+
+### Remaining boundaries
+
+- **Class-to-model evidence remains G3 work.** A metadata observation cannot
+  establish that a given model fits a route class's memory or context envelope,
+  so route-class availability rests on explicit declarations until G3 separates
+  route-to-backend and route-to-model bindings.
+- **Runtime disappearance after the single pre-route resolution remains G6
+  work.** Capability is resolved once, before routing. Nothing here claims the
+  selected route is still executable when the worker runs, and no retry,
+  re-probe, re-route, circuit breaker, or execution-time verification exists.
+
+### Merged paths versus the provisional allowlist
+
+The merge changed nine paths:
+`triage_core/capability_evidence.py` (new),
+`triage_core/client.py`,
+`triage_core/config.py`,
+`triage_core/routing/resilience_router.py`,
+`triage_core/routing/route_events.py`,
+`triage_core/tc_cli.py`,
+`tests/test_capability_binding.py` (new),
+`tests/test_tc_run_cli.py`,
+and this CR document.
+
+That differs from the provisional list below in both directions, and the
+difference is recorded rather than smoothed over: `triage_core/config.py` and
+`triage_core/tc_cli.py` were changed although the provisional section named
+`tc_cli.py` as deliberately excluded — the `[capability]` surface and the
+`tc run` resolution point both required them — while
+`triage_core/local_backend_probe.py`, `tests/test_local_only_routing.py`,
+`docs/current_backlog.md`, and the architecture spec were not changed by the
+merge. The provisional list is retained below as history; this paragraph is the
+record of what actually landed.
 
 ## Implementation Amendment
 
@@ -230,6 +332,14 @@ work. But this CR must not treat ordinary backend configuration as equivalent
 to it: until such a surface exists, an operator with only ordinary backend
 configuration and no observation resolves to `Unknown`, not `Configured`.
 
+> **Superseded on the first sentence only.** Implementation found that without
+> a declaration surface every `tc run` resolved to `Unknown`, so the
+> `[capability]` section was added under the same merge — see **Implementation
+> Amendment**. The rule this paragraph exists to protect survived unchanged and
+> is enforced on `main`: ordinary backend configuration still resolves to
+> `Unknown`, not `Configured`, and only `declare_local_fast` /
+> `declare_local_heavy` qualify.
+
 ### Operator behavior when capability is unknown
 
 Unknown is policy-sensitive rather than uniformly fatal:
@@ -343,6 +453,13 @@ runtime, opening a socket, or spawning a subprocess. The existing
 no new test harness or fake-probe abstraction is required.
 
 ## Proposed Field Shape
+
+> **Superseded by the merge.** The text below was the pre-implementation
+> proposal and was true when written. The shape it proposes was subsequently
+> authorized, implemented, and merged through PR #116 as `98df9c1`: exactly one
+> additive optional `capability_evidence` field on `ResilienceRouteInput`,
+> validated as a four-variant discriminated union. Read this section as design
+> rationale, not as a live authorization status.
 
 Provisional. This shape is proposed, not authorized.
 
@@ -487,6 +604,13 @@ Explicitly deferred to later, separately approved work:
 - **execution-time capability verification** immediately before the worker call.
 
 ## Recommended Design
+
+> **Superseded by the merge.** The approval gates referenced below were
+> subsequently satisfied by separate explicit approvals, and all six
+> recommendations are implemented on `main`. The statement that recording a
+> recommendation grants no implementation authority remains true as a statement
+> about this section; the authority that was later granted came from elsewhere,
+> was bounded, and is now spent.
 
 These are recorded as the recommended design. They remain subject to the
 supervisor approval gates repository convention requires; recording a
@@ -709,6 +833,15 @@ recommendation grants no implementation authority.
 - readiness-score recalculation;
 - production-code edits under this proposal CR.
 
+> **Note on the last bullet.** It was true of the proposal CR and remains a
+> correct statement about the proposal. Production-code edits were subsequently
+> authorized separately and merged through PR #116 as `98df9c1`. Every other
+> exclusion in this list survived the merge unchanged: no CR-YK change, no new
+> probe or record schema version, no change to `choose_resilience_route`, no
+> provider integration, no token or context execution change, no circuit
+> breaker or retry, no interactive session, no TriageDesk change, and no
+> readiness recalculation.
+
 ## Dependencies And Sequencing
 
 - Depends on the merged local backend probe lane (CR-114, CR-118, CR-119) and
@@ -721,6 +854,12 @@ recommendation grants no implementation authority.
   local-first behavior be demonstrated over a real usage window.
 
 ## Provisional Implementation File Allowlist
+
+> **Superseded by the merge.** A separate implementation approval was
+> subsequently granted, and the paths that actually landed are recorded in
+> **Closeout — Merged paths versus the provisional allowlist** above. The list
+> below is retained as the pre-implementation estimate and is not the record of
+> what was changed.
 
 Provisional. Not authorized by this proposal; a separate implementation
 approval must confirm or replace it.
@@ -772,6 +911,15 @@ module, and `docs/change/change_log.md` are deliberately excluded.
 
 ## Deferred To The Implementation CR
 
+> **Resolved by the merge.** All three items were decided and are recorded in
+> **Implementation Amendment** above: the freshness threshold is `300` seconds
+> by default, configurable through `[capability] freshness_seconds`, with the
+> applied value carried in evidence; the projection is constructed at the
+> `tc run` resolution point and a validation failure surfaces as `Unknown` with
+> `invalid_record` rather than leaking probe internals; and the operator line
+> for the unknown case states that local capability is unknown without
+> asserting an observed local failure.
+
 These are settled in principle and require a concrete choice at implementation
 time, recorded and tested there rather than assumed:
 
@@ -786,6 +934,15 @@ time, recorded and tested there rather than assumed:
    failure.
 
 ## Open Questions
+
+> **Status after the merge.** Question 1 was answered during implementation:
+> the declaration surface is the `triagecore.toml` `[capability]` section
+> described in **Implementation Amendment**, read through the existing
+> `Config.get_global` mechanism. The proposal text below, which says CR-DD-013
+> deliberately does not invent that surface, was true when written and is
+> superseded by the amendment. Question 2 is unresolved and remains **G3**
+> work: route-class availability still rests on explicit declarations, and
+> unsupported classes resolve to `Unknown`.
 
 1. **Where an explicit capability declaration surface would live**, if one is
    later introduced. CR-DD-013 deliberately does not invent it and resolves
