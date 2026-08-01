@@ -33,6 +33,7 @@ reservation, capability-claim, and constrained replacement components are implem
 | Review queue | Current projection | Derived from JSONL events where `human_review_required` is true and no review decision exists |
 | Workspace Unifier | Current subsystem | Local YAML views, explicit mutations, static dashboard, handoff, and evaluator-input exports |
 | TriageDesk adapter | Current review/observability surface | Reads diagnostics, ledger projections, context plans, and packet previews; no action/executor bridge |
+| TriageDesk action/executor bridge | Future and disconnected | Not implemented. A later separately governed bridge could translate explicit operator actions into mediated execution requests; it would have no independent approval authority. |
 | Human authorization + capability lifecycle | Implemented separate lane | WebAuthn-backed receipts, issuance evidence, atomic SQLite claiming, and terminal state; not consumed by `tc run` |
 | Mediated effect + request reservation | Implemented but disconnected | Pure effect/request/linkage contracts and an atomic reservation store with gated authorization wrappers |
 | Constrained replacement executor | Implemented but disconnected | Windows/NTFS single-file `ReplaceFileW` executor; no runtime module calls it |
