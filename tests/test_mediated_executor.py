@@ -90,8 +90,9 @@ windows_only = pytest.mark.skipif(not WINDOWS, reason="Windows/NTFS obligation")
 #  17  W      flush precedes the single replacement call
 #  18  W      temp and backup in the target directory (same volume)
 #  19  W      verified success writes exact bytes; backup deleted
-#  20  W      owner gate refuses a foreign principal; control for the real one
-#  21  U+W    complete ordered ACE comparison (U); real DACL and injected (W)
+#  20  W      owner gate refuses a foreign principal; supported-profile control
+#  21  U+W    complete ordered ACE comparison (U); real DACL, supported-profile
+#             gate, and unsupported-profile refusal before mutation (W)
 #  22  W      post-replacement non-regular file
 #  23  W      post containment loss (ancestor and final-path observations)
 #  24  W      post divergence is ambiguous, one replacement, no restore
@@ -171,13 +172,40 @@ def entry(target_id="f-target", relpath="docs/notes.md", maximum_size_bytes=4096
     return TrustedTargetEntry(target_id, relpath, maximum_size_bytes)
 
 
-def workspace(tmp_path, *, relpath="docs/notes.md", content=b"original\n"):
-    """Create a workspace root with one target file, return (root, target)."""
+def workspace(tmp_path, *, relpath="docs/notes.md", content=b"original\n", protect=True):
+    """Create a workspace root with one target file, return (root, target).
+
+    On Windows the target is placed into the CR section 10.2b **supported
+    profile** by construction -- DACL present, non-NULL, and protected from
+    inheritance -- because an inheritance-enabled target is now refused before
+    mutation. Protection copies the effective ACEs in as explicit entries and
+    **does not change the owner**, so the section 10.2a ownership gate is
+    unaffected.
+
+    ``protect=False`` is for the tests that deliberately exercise unsupported
+    profiles (T21). Fixture preparation lives entirely here in the tests: the
+    production executor only inspects and refuses, and never alters a DACL.
+    """
     root = tmp_path / "ws"
     target = root / relpath
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(content)
+    if protect:
+        prepare_supported_target(target)
     return str(root), target
+
+
+def prepare_supported_target(path):
+    """Place an already-created file into the CR section 10.2b supported profile.
+
+    Windows-only in effect. Disables inheritance while copying the effective
+    ACEs in as explicit entries, leaving the owner untouched. Raises rather
+    than skipping: a fixture that silently failed to protect would make a
+    healthy-path assertion meaningless under the amended contract.
+    """
+    if WINDOWS and not protect_dacl_from_inheritance(path):
+        raise RuntimeError("supported-profile fixture preparation failed")
+    return path
 
 
 def registry_for(root, entries=None):
@@ -1021,22 +1049,19 @@ def classify_snapshot_differences(before, after):
 def _replacement_differences(tmp_path, record_property, label, protect):
     """Run one genuine replacement and report which components changed."""
     pre_bytes, post_bytes = b"before\n", b"after\n"
-    root, target = workspace(tmp_path, content=pre_bytes)
-
-    protected_ok = True
-    if protect:
-        protected_ok = protect_dacl_from_inheritance(target)
+    root, target = workspace(tmp_path, content=pre_bytes, protect=protect)
 
     before = capture_snapshot(target)
     record_property(f"{label}_pre_dacl_protected", str(before.control_bits[1]))
     # Boolean only. A protected-but-empty DACL would compare equal trivially and
     # make the control meaningless, so record that entries were actually copied.
     record_property(f"{label}_pre_dacl_nonempty", str(before.ace_count > 0))
-    if protect and not (protected_ok and before.control_bits[1]):
+    if protect and not (before.control_bits[1] and before.ace_count > 0):
         # Fail rather than skip: the mandatory group permits zero skips, and a
-        # fixture that silently failed to protect would make the control's
-        # result meaningless. Fixed message -- no path or command output.
-        pytest.fail("protected_dacl_fixture_failed pre_dacl_protected=false")
+        # fixture that silently failed to protect -- or that protected an empty
+        # DACL -- would make the control's result meaningless. Fixed message:
+        # no path, descriptor, or command output.
+        pytest.fail("protected_dacl_fixture_invalid")
 
     result = execute_replacement(
         registry_for(root), make_effect(pre=pre_bytes, post=post_bytes), post_bytes
@@ -1056,42 +1081,178 @@ def _replacement_differences(tmp_path, record_property, label, protect):
 
 @windows_only
 @pytest.mark.windows
-def test_diagnostic_inherited_dacl_replacement_components(tmp_path, record_property):
-    """DIAGNOSTIC control 1: ordinary inheritance-enabled target.
+def test_t21w_unprotected_target_refuses_before_any_mutation(tmp_path, monkeypatch):
+    """T21 part (a). GENUINE NTFS unprotected target -- the M31 killer.
 
-    Reports which participating components a genuine ``ReplaceFileW`` changed.
-    Field labels only.
+    A present but inheritance-enabled DACL must be refused before the temporary
+    file is created and before ``ReplaceFileW``. Original bytes intact, no
+    artifacts. A mutant that omits the gate, or treats an unprotected target as
+    supported, reaches a forbidden preparation or replacement call and fails
+    here behaviourally.
     """
-    result, labels, _target, _post_bytes = _replacement_differences(
-        tmp_path, record_property, "inherited", protect=False
+    pre_bytes, post_bytes = b"original\n", b"replacement\n"
+    root, target = workspace(tmp_path, content=pre_bytes, protect=False)
+
+    # The fixture really is in the unsupported profile, and really does hold a
+    # descriptor -- otherwise this would prove nothing about the gate.
+    before = capture_snapshot(target)
+    assert before.dacl_state == "present"
+    assert before.control_bits[1] is False
+
+    calls = []
+    instrument(monkeypatch, calls)
+    result = execute_replacement(
+        registry_for(root), make_effect(pre=pre_bytes, post=post_bytes), post_bytes
     )
-    # dacl_auto_inherited alone is the contract-accepted monotonic transition
-    # (CR 10.1a). Anything beyond it is the unexplained hosted difference.
-    if [x for x in labels if x != "dacl_auto_inherited"]:
-        pytest.fail(
-            "inherited_dacl_differences=" + ",".join(labels)
-            + " result=" + result.reason_code
-        )
+
+    assert result.reason_code == "metadata_precondition_failed"
+    assert result.outcome == OUTCOME_NOT_ATTEMPTED
+
+    # Cessation point: the pre-mutation capture is the last observation, and
+    # nothing was prepared, replaced, or cleaned up afterwards.
+    operations = [c for c in calls if c in FILESYSTEM_CALLS]
+    assert operations[-1] == "capture_security", operations[-6:]
+    assert "create_private_temp" not in calls
+    assert "replace_file" not in calls
+    assert "write_all" not in calls
+    assert "delete_file" not in calls
+    # The gate must refuse before spending a token query on a dead profile.
+    assert "process_default_owner_sid" not in calls
+
+    assert target.read_bytes() == pre_bytes
+    assert artifacts_in(str(target.parent)) == []
+    # The executor inspects and refuses; it never protects or repairs a DACL.
+    assert capture_snapshot(target).control_bits[1] is False
 
 
 @windows_only
 @pytest.mark.windows
-def test_diagnostic_protected_dacl_replacement_components(tmp_path, record_property):
-    """DIAGNOSTIC control 2: DACL protected from inheritance.
+@pytest.mark.parametrize(
+    "state,mutate",
+    [
+        ("absent", {"dacl_present": False, "dacl_is_null": False}),
+        ("null", {"dacl_present": True, "dacl_is_null": True}),
+    ],
+)
+def test_t21w_absent_and_null_dacl_states_refuse_before_any_mutation(
+    tmp_path, monkeypatch, state, mutate
+):
+    """T21 part (b). SEAM-INJECTED absent and NULL DACL states refuse
+    identically to the genuine unprotected case: same reason code, same
+    outcome, same cessation point, bytes preserved, no artifacts.
 
-    Inheritance is disabled while the effective ACEs are copied in as explicit
-    entries, then the same replacement and the same exact comparison run. This
-    is the control that decides whether exact ordered-ACE preservation is
-    achievable under bare ``ReplaceFileW`` at all. Field labels only.
+    Windows will not produce these states on demand for an ordinary file, so
+    they are injected at the capture seam and labeled as such (CR section 25).
+    """
+    import triage_core.mediated_executor_win32 as win32
 
-    A hosted pass must establish ALL of: the fixture was genuinely protected and
-    nonempty, the replacement reason code is ``ok``, the outcome is
-    ``replacement_verified``, the proposed bytes actually reached the target,
-    and the metadata differences are none or the accepted monotonic bit alone.
-    Passing on "no differences" by itself would be satisfied by any refusal.
+    pre_bytes, post_bytes = b"original\n", b"replacement\n"
+    root, target = workspace(tmp_path, content=pre_bytes)
+    real_capture = win32.capture_security
+
+    def injected(handle):
+        captured = real_capture(handle)
+        fields = dict(
+            owner_sid=captured.owner_sid,
+            dacl_present=captured.dacl_present,
+            dacl_is_null=captured.dacl_is_null,
+            control_bits=captured.control_bits,
+            acl_revision=captured.acl_revision,
+            ace_count=0,
+            aces=(),
+        )
+        fields.update(mutate)
+        return win32.Win32SecurityCapture(**fields)
+
+    calls = []
+    instrument(monkeypatch, calls, {"capture_security": injected})
+    result = execute_replacement(
+        registry_for(root), make_effect(pre=pre_bytes, post=post_bytes), post_bytes
+    )
+
+    assert result.reason_code == "metadata_precondition_failed", state
+    assert result.outcome == OUTCOME_NOT_ATTEMPTED, state
+
+    operations = [c for c in calls if c in FILESYSTEM_CALLS]
+    assert operations[-1] == "capture_security", operations[-6:]
+    assert "create_private_temp" not in calls
+    assert "replace_file" not in calls
+    assert "process_default_owner_sid" not in calls
+
+    assert target.read_bytes() == pre_bytes
+    assert artifacts_in(str(target.parent)) == []
+
+
+@windows_only
+@pytest.mark.windows
+def test_t21w_present_protected_zero_ace_dacl_is_supported(tmp_path, monkeypatch):
+    """T21 part (c), boundary. A present, non-NULL, protected DACL holding
+    ZERO ACEs must be SUPPORTED.
+
+    ``pre_dacl_nonempty`` was only ever a diagnostic validity control proving a
+    hosted success was not a trivial empty-ACL comparison. This test is the
+    deterministic guard that it never leaked into production policy: the gate
+    inspects DACL state and the protected bit, and must not consult ACE count.
+
+    Injected at the capture seam because Windows will not hand out an empty
+    protected DACL on demand. The injection is applied to the PRE-capture only,
+    so the post-comparison still runs on genuine descriptors.
+    """
+    import triage_core.mediated_executor_win32 as win32
+
+    pre_bytes, post_bytes = b"original\n", b"replacement\n"
+    root, target = workspace(tmp_path, content=pre_bytes)
+    real_capture = win32.capture_security
+    state = {"n": 0}
+
+    def empty_protected_dacl(handle):
+        captured = real_capture(handle)
+        state["n"] += 1
+        if state["n"] != 1:
+            return captured
+        present, _protected, auto_inherited = captured.control_bits
+        return win32.Win32SecurityCapture(
+            owner_sid=captured.owner_sid,
+            dacl_present=True,
+            dacl_is_null=False,
+            control_bits=(present, True, auto_inherited),
+            acl_revision=captured.acl_revision,
+            ace_count=0,
+            aces=(),
+        )
+
+    calls = []
+    instrument(monkeypatch, calls, {"capture_security": empty_protected_dacl})
+    result = execute_replacement(
+        registry_for(root), make_effect(pre=pre_bytes, post=post_bytes), post_bytes
+    )
+
+    # The profile gate must NOT be what stops this. It proceeds past the gate
+    # and reaches the token query, which is the next step in the sequence.
+    assert result.reason_code != "metadata_precondition_failed"
+    assert "process_default_owner_sid" in calls
+
+
+@windows_only
+@pytest.mark.windows
+def test_t21w_supported_profile_replacement_preserves_metadata_exactly(
+    tmp_path, record_property
+):
+    """T21 part (c). GENUINE NTFS target in the section 10.2b supported
+    profile -- present, non-NULL, protected from inheritance.
+
+    A pass must establish ALL of: the fixture was genuinely protected and
+    nonempty, the reason code is ``ok``, the outcome is ``replacement_verified``,
+    the proposed bytes actually reached the target, and the metadata differences
+    are none or the accepted monotonic bit alone. Passing on "no differences"
+    by itself would be satisfied by any refusal.
 
     ``pre_dacl_nonempty`` is an EVIDENCE control, not a production requirement:
-    it exists to prove a hosted success was not a trivial empty-ACL comparison.
+    it exists to prove this success was not a trivial empty-ACL comparison. The
+    production gate deliberately ignores ACE count -- see the zero-ACE test.
+
+    Field labels and booleans only: no SID, ACE, access mask, descriptor, SDDL,
+    path, or command output reaches pytest output or JUnit.
     """
     result, labels, target, post_bytes = _replacement_differences(
         tmp_path, record_property, "protected", protect=True
@@ -1143,6 +1304,13 @@ def test_t35w_auto_inherited_transition_is_accepted_and_recorded(
     root, target = workspace(tmp_path, content=pre_bytes)
 
     before = capture_snapshot(target)
+    # Confirmed pre-state, section 10.2b: the target is inside the SUPPORTED
+    # profile before the replacement runs. Without this the observed transition
+    # would be recorded for a profile the executor no longer accepts.
+    assert before.dacl_state == "present"
+    assert before.control_bits[1] is True
+    record_property("t35w_pre_dacl_supported_profile", "True")
+
     pre_bit = before.control_bits[2]
     record_property("se_dacl_auto_inherited_pre", str(pre_bit))
 
@@ -1158,29 +1326,12 @@ def test_t35w_auto_inherited_transition_is_accepted_and_recorded(
     except Exception:
         after = None
 
-    differences = []
-    if after is None:
-        differences.append("post_capture_failed")
-    else:
-        if before.owner_sid != after.owner_sid:
-            differences.append("owner")
-        if before.dacl_state != after.dacl_state:
-            differences.append("dacl_state")
-        if before.control_bits[0] != after.control_bits[0]:
-            differences.append("dacl_present")
-        if before.control_bits[1] != after.control_bits[1]:
-            differences.append("dacl_protected")
-        if before.control_bits[2] != after.control_bits[2]:
-            differences.append("dacl_auto_inherited")
-        if before.acl_revision != after.acl_revision:
-            differences.append("acl_revision")
-        if before.ace_count != after.ace_count:
-            differences.append("ace_count")
-        if before.aces != after.aces:
-            differences.append("ace_bytes_or_order")
+    # One shared classifier, so this test and T21's controls cannot drift into
+    # parallel, differently-worded notions of "what changed".
+    differences = classify_snapshot_differences(before, after)
 
-    # DIAGNOSTIC: field names only. No SID, ACE, descriptor, path, or
-    # control-bit VALUE is emitted -- only which component differed.
+    # Field names only. No SID, ACE, descriptor, path, or control-bit VALUE is
+    # emitted -- only which component differed.
     if result.reason_code == "metadata_preservation_failed":
         pytest.fail(
             "hosted_metadata_differences="
@@ -2059,12 +2210,26 @@ def test_t20_created_file_owner_equals_the_token_default_owner(tmp_path):
 
 @windows_only
 @pytest.mark.windows
-def test_t20_ordinary_replacement_passes_the_gate_and_preserves_owner(tmp_path):
-    """T20 part 3. The gate does not block an ordinary target, and the owner
-    is preserved across the replacement."""
+def test_t20_supported_profile_replacement_passes_the_gate_and_preserves_owner(
+    tmp_path,
+):
+    """T20 part 3. A target created by this process and then placed into the
+    section 10.2b supported profile -- present, non-NULL, protected -- **without
+    changing its owner** reaches replacement_verified, and post owner equals
+    pre owner.
+
+    The profile qualifier is required by section 10.2b: an inheritance-enabled
+    target must refuse before mutation, so a healthy result may not be asserted
+    for an unrestricted "ordinary" target.
+    """
     pre_bytes, post_bytes = b"original\n", b"replacement\n"
     root, target = workspace(tmp_path, content=pre_bytes)
-    before = capture_snapshot(target).owner_sid
+
+    before = capture_snapshot(target)
+    # The fixture is in the supported profile, and protecting it did not
+    # change the owner -- which is what keeps the 10.2a gate meaningful here.
+    assert before.dacl_state == "present"
+    assert before.control_bits[1] is True
 
     result = execute_replacement(
         registry_for(root), make_effect(pre=pre_bytes, post=post_bytes), post_bytes
@@ -2072,7 +2237,7 @@ def test_t20_ordinary_replacement_passes_the_gate_and_preserves_owner(tmp_path):
 
     assert result.reason_code == "ok"
     assert result.outcome == OUTCOME_VERIFIED
-    assert capture_snapshot(target).owner_sid == before
+    assert capture_snapshot(target).owner_sid == before.owner_sid
 
 
 @windows_only
@@ -2148,6 +2313,8 @@ def test_t01_only_target_file_id_selects_the_target(tmp_path):
     second = root / "docs" / "other.md"
     first.write_bytes(b"original\n")
     second.write_bytes(b"original\n")
+    prepare_supported_target(first)
+    prepare_supported_target(second)
 
     registry = build_target_registry(
         str(root),
@@ -2330,6 +2497,7 @@ def test_t28w_real_run_projection_carries_no_content_or_absolute_path(tmp_path):
     (canary_root / "docs").mkdir(parents=True)
     target = canary_root / "docs" / "notes.md"
     target.write_bytes(CANARY)
+    prepare_supported_target(target)
     post_bytes = b"CANARY-SENTINEL-replacement payload\n"
 
     result = execute_replacement(
@@ -2374,6 +2542,7 @@ def test_t29_failures_expose_no_content_or_absolute_paths(
         pass
     else:
         target.write_bytes(CANARY if scenario == "pre_digest_mismatch" else b"original\n")
+        prepare_supported_target(target)
     if scenario == "temp_creation_failed":
         fixed = iter([".tcx-tmp-fixed.tmp", ".tcx-bak-fixed.bak"])
         monkeypatch.setattr(executor, "_artifact_name", lambda *a: next(fixed))

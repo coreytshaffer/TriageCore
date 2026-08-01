@@ -907,6 +907,30 @@ def _execute_on_windows(
             # Malformed pre-state metadata fails before any mutation.
             return _build_result(effect, REASON_METADATA_PRECONDITION_FAILED)
 
+        # Supported-profile gate (CR section 10.2b). Evaluated immediately
+        # after the pre-mutation snapshot validates and BEFORE the TokenOwner
+        # ownership gate, so an already-unsupported profile ceases here without
+        # a needless token query.
+        #
+        # Hosted evidence showed a *successful* ReplaceFileW on an
+        # inheritance-enabled target changing SE_DACL_AUTO_INHERITED, the ACE
+        # count, and the ordered ACE bytes, while a present-and-protected
+        # target was exactly preserved under the same comparison. The response
+        # is to narrow the supported profile, never to relax section 10.1.
+        #
+        # This executor only INSPECTS and REFUSES. It never protects,
+        # normalizes, repairs, or otherwise alters a target's DACL to make it
+        # eligible -- that would be an unrequested security-descriptor mutation
+        # outside the authorized effect.
+        #
+        # A present, non-NULL, protected DACL with ZERO ACEs is supported: ace
+        # count deliberately does not participate in this gate.
+        if (
+            pre_snapshot.dacl_state != _DACL_STATE_PRESENT
+            or not pre_snapshot.control_bits[1]
+        ):
+            return _build_result(effect, REASON_METADATA_PRECONDITION_FAILED)
+
         # Pre-mutation ownership gate: ReplaceFileW does not preserve the
         # owner, so an unpreservable case is refused rather than promised.
         # The comparison is against the token's DEFAULT OWNER -- the owner the
