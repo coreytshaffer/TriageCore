@@ -1,0 +1,154 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="1500" viewBox="0 0 1180 1500" role="img" aria-labelledby="title desc">
+  <title id="title">Workspace Unifier subsystem architecture</title>
+  <desc id="desc">A vertical local-first subsystem diagram. Human authority and current TriageDesk review are visually dominant at the top. Solid blue paths descend through the current Workspace Unifier local core and stop at static export artifacts. Dotted purple paths continue only through separately selected external workflows. The meta-harness, bounded agent, independent evaluator, and future TriageDesk action bridge are disconnected and have no approval authority.</desc>
+  <defs>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 0 L10 5 L0 10z" fill="#1f5d96"/>
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 0 L10 5 L0 10z" fill="#6750a4"/>
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 0 L10 5 L0 10z" fill="#a45a00"/>
+    </marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#18212f" flood-opacity="0.12"/>
+    </filter>
+    <style>
+      .title { font: 700 34px Inter, Segoe UI, Arial, sans-serif; fill: #18212f; }
+      .subtitle { font: 400 19px Inter, Segoe UI, Arial, sans-serif; fill: #536174; }
+      .band-title { font: 700 26px Inter, Segoe UI, Arial, sans-serif; fill: #18212f; }
+      .node-title { font: 700 22px Inter, Segoe UI, Arial, sans-serif; fill: #18212f; }
+      .body { font: 400 19px Inter, Segoe UI, Arial, sans-serif; fill: #334155; }
+      .small { font: 400 17px Inter, Segoe UI, Arial, sans-serif; fill: #526174; }
+      .edge { font: 600 17px Inter, Segoe UI, Arial, sans-serif; fill: #334155; }
+      .band { fill: #ffffff; stroke: #cbd5e1; stroke-width: 2; }
+      .human-band { fill: #fff8ea; stroke: #e0a13d; stroke-width: 2.6; }
+      .external-band { fill: #ffffff; stroke: #6750a4; stroke-width: 2.2; stroke-dasharray: 3 9; }
+      .blue { fill: #eaf3fb; stroke: #8eb8dc; stroke-width: 2; }
+      .green { fill: #e8f5ee; stroke: #8dc6a8; stroke-width: 2; }
+      .amber { fill: #fff4df; stroke: #e4b86a; stroke-width: 2.2; }
+      .purple { fill: #f2effb; stroke: #b6a8df; stroke-width: 2; }
+      .neutral { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.8; }
+      .external-node { fill: #faf8ff; stroke: #8e7bc2; stroke-width: 2; stroke-dasharray: 3 7; }
+      .current { fill: none; stroke: #1f5d96; stroke-width: 3; marker-end: url(#arrow-blue); }
+      .external { fill: none; stroke: #6750a4; stroke-width: 3; stroke-dasharray: 3 8; marker-end: url(#arrow-purple); }
+      .authority { fill: none; stroke: #a45a00; stroke-width: 3.5; marker-end: url(#arrow-amber); }
+    </style>
+  </defs>
+
+  <rect width="1180" height="1500" fill="#f7f9fc"/>
+  <text x="30" y="48" class="title">Workspace Unifier: current local core + disconnected actors</text>
+  <text x="30" y="78" class="subtitle">Secondary subsystem view • structure in the SVG, detailed status in the Markdown</text>
+
+  <!-- Human authority and current review -->
+  <g filter="url(#shadow)">
+    <rect x="30" y="105" width="1120" height="225" rx="18" class="human-band"/>
+  </g>
+  <text x="590" y="148" text-anchor="middle" class="band-title">HUMAN AUTHORITY AND REVIEW</text>
+
+  <rect x="70" y="178" width="380" height="104" rx="13" class="amber"/>
+  <text x="260" y="216" text-anchor="middle" class="node-title">Human operator</text>
+  <text x="260" y="251" text-anchor="middle" class="body">selects • initiates • reviews • approves</text>
+
+  <rect x="730" y="178" width="380" height="104" rx="13" class="blue"/>
+  <text x="920" y="216" text-anchor="middle" class="node-title">TriageDesk review surface</text>
+  <text x="920" y="251" text-anchor="middle" class="body">current observability • no action bridge</text>
+
+  <path d="M260 282 V372" class="authority"/>
+  <text x="277" y="340" class="edge">explicit operator action</text>
+
+  <!-- Current local core -->
+  <g filter="url(#shadow)">
+    <rect x="30" y="380" width="1120" height="440" rx="18" class="band"/>
+  </g>
+  <text x="60" y="423" class="band-title">WORKSPACE UNIFIER LOCAL CORE — CURRENT</text>
+  <text x="60" y="452" class="small">Solid paths are current validation, mutation, state, view, and export operations.</text>
+
+  <rect x="60" y="490" width="300" height="130" rx="13" class="blue"/>
+  <text x="210" y="528" text-anchor="middle" class="node-title">Intake + preview</text>
+  <text x="210" y="563" text-anchor="middle" class="body">candidate requests and imports</text>
+  <text x="210" y="593" text-anchor="middle" class="small">preview is not live state</text>
+
+  <rect x="440" y="490" width="300" height="130" rx="13" class="amber"/>
+  <text x="590" y="528" text-anchor="middle" class="node-title">Policy + mutation valves</text>
+  <text x="590" y="563" text-anchor="middle" class="body">validate • promote • touch • close</text>
+  <text x="590" y="593" text-anchor="middle" class="small">explicit write intent required</text>
+
+  <rect x="820" y="490" width="300" height="130" rx="13" class="green"/>
+  <text x="970" y="528" text-anchor="middle" class="node-title">Local state reservoirs</text>
+  <text x="970" y="563" text-anchor="middle" class="body">work_items.yaml • today.yaml</text>
+  <text x="970" y="593" text-anchor="middle" class="small">operator source of truth</text>
+
+  <path d="M360 555 H432" class="current"/>
+  <path d="M740 555 H812" class="current"/>
+
+  <rect x="170" y="675" width="330" height="105" rx="13" class="blue"/>
+  <text x="335" y="714" text-anchor="middle" class="node-title">Workspace views</text>
+  <text x="335" y="749" text-anchor="middle" class="body">board • WBS • now • review</text>
+
+  <rect x="680" y="675" width="330" height="105" rx="13" class="blue"/>
+  <text x="845" y="714" text-anchor="middle" class="node-title">Bounded exporters</text>
+  <text x="845" y="749" text-anchor="middle" class="body">selective deterministic artifacts</text>
+
+  <path d="M970 620 V647 H335 V667" class="current"/>
+  <path d="M590 620 V647 H845 V667" class="current"/>
+  <path d="M845 780 V872" class="current"/>
+  <path d="M335 780 V872" class="current"/>
+
+  <!-- Static export boundary -->
+  <g filter="url(#shadow)">
+    <rect x="30" y="880" width="1120" height="235" rx="18" class="band"/>
+  </g>
+  <text x="60" y="923" class="band-title">STATIC EXPORT BOUNDARY — CURRENT OUTPUTS</text>
+  <text x="60" y="952" class="small">TriageCore creates these artifacts; delivery, agent work, and evaluator execution remain external.</text>
+
+  <rect x="60" y="985" width="300" height="92" rx="12" class="green"/>
+  <text x="210" y="1021" text-anchor="middle" class="node-title">Dashboard + evidence</text>
+  <text x="210" y="1053" text-anchor="middle" class="body">local reviewer artifacts</text>
+
+  <rect x="440" y="985" width="300" height="92" rx="12" class="blue"/>
+  <text x="590" y="1021" text-anchor="middle" class="node-title">Handoff packet</text>
+  <text x="590" y="1053" text-anchor="middle" class="body">private notes omitted by default</text>
+
+  <rect x="820" y="985" width="300" height="92" rx="12" class="purple"/>
+  <text x="970" y="1021" text-anchor="middle" class="node-title">Evaluator-input JSON</text>
+  <text x="970" y="1053" text-anchor="middle" class="body">static selective observation input</text>
+
+  <path d="M335 872 V965 H210 V977" class="current"/>
+  <path d="M845 872 V965 H590 V977" class="current"/>
+  <path d="M845 872 V965 H970 V977" class="current"/>
+
+  <!-- Disconnected external actors -->
+  <g filter="url(#shadow)">
+    <rect x="30" y="1160" width="1120" height="255" rx="18" class="external-band"/>
+  </g>
+  <text x="60" y="1203" class="band-title">DISCONNECTED EXTERNAL ACTORS</text>
+  <text x="60" y="1232" class="small">Dotted paths require separate selection or delivery; no external actor inherits approval authority.</text>
+  <text x="60" y="1257" class="small">Work and evaluator results return only as static evidence for human review.</text>
+
+  <rect x="60" y="1285" width="320" height="100" rx="13" class="external-node"/>
+  <text x="220" y="1323" text-anchor="middle" class="node-title">Meta-harness + agent</text>
+  <text x="220" y="1357" text-anchor="middle" class="body">coordination and work stay external</text>
+
+  <rect x="430" y="1285" width="320" height="100" rx="13" class="external-node"/>
+  <text x="590" y="1323" text-anchor="middle" class="node-title">Independent evaluator</text>
+  <text x="590" y="1357" text-anchor="middle" class="body">result production • no approval</text>
+
+  <rect x="800" y="1285" width="310" height="100" rx="13" class="external-node"/>
+  <text x="955" y="1323" text-anchor="middle" class="node-title">Future TriageDesk bridge</text>
+  <text x="955" y="1357" text-anchor="middle" class="body">not implemented • cannot approve</text>
+
+  <path d="M590 1077 V1140 H220 V1277" class="external"/>
+  <path d="M970 1077 V1140 H590 V1277" class="external"/>
+
+  <!-- Legend -->
+  <g transform="translate(85,1460)">
+    <path d="M0 0 H70" class="current"/>
+    <text x="88" y="6" class="small">current typed artifact / state</text>
+    <path d="M470 0 H540" class="external"/>
+    <text x="558" y="6" class="small">disconnected delivery / signal</text>
+    <path d="M880 0 H950" class="authority"/>
+    <text x="968" y="6" class="small">human authority</text>
+  </g>
+</svg>

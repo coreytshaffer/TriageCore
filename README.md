@@ -162,9 +162,11 @@ Invoke-Item ~/.triagecore/dashboard.html
 ### Architecture Boundary
 
 - **TriageCore** = policy, contracts, state, and CLI engine.
-- **TriageDesk** = human control cockpit.
+- **TriageDesk** = current review and observability cockpit; an action/executor bridge is future and separately governed.
 - **Meta-harness** = agent coordination layer.
 - **Independent evaluator** = external assessment layer.
+- See [Current System Architecture](docs/architecture/current_system_architecture.md) for the Level 1 integration map and progressive-zoom architecture index.
+- See [Workspace Unifier Architecture](docs/architecture/workspace_unifier_architecture.md) for the subsystem-specific logical architecture, authority boundaries, artifact contracts, and current-versus-disconnected framing.
 - See [Workspace Evaluator Preview](docs/evals/workspace_evaluator_preview.md) for the file-contract-based workspace export that feeds external assessment without importing or invoking the evaluator.
 - See [Fluidic Signal Paths](docs/architecture/fluidic_signal_paths.md) for the architecture note on how context, handoffs, approvals, evaluator outputs, and evidence should flow between these layers.
 
@@ -194,7 +196,7 @@ Capture → Clarify → Promote → Focus → Handoff → Execute → Close → 
 
 ### Next Architecture Direction
 
-TriageDesk should become the human-facing cockpit for approvals, evidence, review, and dashboard operation. Meta-harness should coordinate agents and sessions. Independent evaluator should assess whether observed behavior matched expected control boundaries. TriageCore remains the stable contract/evidence substrate.
+TriageDesk currently provides review and observability. A future, separately governed action/executor bridge could carry explicit operator actions. Meta-harness should coordinate agents and sessions. Independent evaluator should assess whether observed behavior matched expected control boundaries. TriageCore remains the stable contract/evidence substrate.
 
 ## Current, Planned, And Research Framing
 
