@@ -914,6 +914,186 @@ def adapter_error():
     return win32.Win32AdapterError
 
 
+# --- Paired inheritance diagnostic ------------------------------------------
+# Hosted evidence showed a successful ReplaceFileW changing dacl_auto_inherited,
+# ace_count, and ace_bytes_or_order on an ordinary (inheritance-enabled) target.
+# These controls establish whether a DACL protected from inheritance behaves
+# differently. They emit FIELD LABELS AND BOOLEANS ONLY -- never a SID, ACE,
+# access mask, descriptor, SDDL, path, or command output.
+
+_WRITE_DAC = 0x00040000
+_READ_CONTROL = 0x00020000
+_PROTECTED_DACL_SECURITY_INFORMATION = 0x80000000
+
+
+def protect_dacl_from_inheritance(path):
+    """Disable inheritance on ``path`` while copying its effective ACEs in.
+
+    Uses ``SetSecurityInfo`` with ``PROTECTED_DACL_SECURITY_INFORMATION``
+    directly rather than shelling out to ``icacls``, so no external command
+    output can reach pytest or JUnit. Returns True on success.
+    """
+    from ctypes import wintypes
+
+    import triage_core.mediated_executor_win32 as win32
+
+    advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+    advapi32.SetSecurityInfo.restype = wintypes.DWORD
+    advapi32.SetSecurityInfo.argtypes = [
+        wintypes.HANDLE,
+        ctypes.c_int,
+        wintypes.DWORD,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+    ]
+
+    handle = win32._create_file(
+        str(path),
+        _READ_CONTROL | _WRITE_DAC,
+        win32.FILE_SHARE_READ | win32.FILE_SHARE_WRITE | win32.FILE_SHARE_DELETE,
+        win32.OPEN_EXISTING,
+        win32.FILE_ATTRIBUTE_NORMAL,
+        "test_protect_dacl_open",
+    )
+    try:
+        owner = ctypes.c_void_p()
+        dacl = ctypes.c_void_p()
+        descriptor = ctypes.c_void_p()
+        status = win32._ADV.GetSecurityInfo(
+            wintypes.HANDLE(handle),
+            win32.SE_FILE_OBJECT,
+            win32.DACL_SECURITY_INFORMATION,
+            ctypes.byref(owner),
+            None,
+            ctypes.byref(dacl),
+            None,
+            ctypes.byref(descriptor),
+        )
+        if status != 0:
+            return False
+        try:
+            # Supplying the currently effective DACL alongside the PROTECTED
+            # flag converts inherited entries into explicit ones.
+            result = advapi32.SetSecurityInfo(
+                wintypes.HANDLE(handle),
+                win32.SE_FILE_OBJECT,
+                win32.DACL_SECURITY_INFORMATION
+                | _PROTECTED_DACL_SECURITY_INFORMATION,
+                None,
+                None,
+                dacl,
+                None,
+            )
+            return result == 0
+        finally:
+            if descriptor.value:
+                win32._K32.LocalFree(descriptor)
+    finally:
+        win32.close_handle(handle)
+
+
+def classify_snapshot_differences(before, after):
+    """Field labels only. No component VALUE is ever returned."""
+    if after is None:
+        return ["post_capture_failed"]
+    labels = []
+    if before.owner_sid != after.owner_sid:
+        labels.append("owner")
+    if before.dacl_state != after.dacl_state:
+        labels.append("dacl_state")
+    if before.control_bits[0] != after.control_bits[0]:
+        labels.append("dacl_present")
+    if before.control_bits[1] != after.control_bits[1]:
+        labels.append("dacl_protected")
+    if before.control_bits[2] != after.control_bits[2]:
+        labels.append("dacl_auto_inherited")
+    if before.acl_revision != after.acl_revision:
+        labels.append("acl_revision")
+    if before.ace_count != after.ace_count:
+        labels.append("ace_count")
+    if before.aces != after.aces:
+        labels.append("ace_bytes_or_order")
+    return labels
+
+
+def _replacement_differences(tmp_path, record_property, label, protect):
+    """Run one genuine replacement and report which components changed."""
+    pre_bytes, post_bytes = b"before\n", b"after\n"
+    root, target = workspace(tmp_path, content=pre_bytes)
+
+    protected_ok = True
+    if protect:
+        protected_ok = protect_dacl_from_inheritance(target)
+
+    before = capture_snapshot(target)
+    record_property(f"{label}_pre_dacl_protected", str(before.control_bits[1]))
+    # Boolean only. A protected-but-empty DACL would compare equal trivially and
+    # make the control meaningless, so record that entries were actually copied.
+    record_property(f"{label}_pre_dacl_nonempty", str(before.ace_count > 0))
+    if protect and not (protected_ok and before.control_bits[1]):
+        # Fail rather than skip: the mandatory group permits zero skips, and a
+        # fixture that silently failed to protect would make the control's
+        # result meaningless. Fixed message -- no path or command output.
+        pytest.fail("protected_dacl_fixture_failed pre_dacl_protected=false")
+
+    result = execute_replacement(
+        registry_for(root), make_effect(pre=pre_bytes, post=post_bytes), post_bytes
+    )
+    try:
+        after = capture_snapshot(target)
+    except Exception:
+        after = None
+
+    labels = classify_snapshot_differences(before, after)
+    record_property(f"{label}_replacement_result", result.reason_code)
+    record_property(
+        f"{label}_metadata_differences", ",".join(labels) if labels else "none"
+    )
+    return result, labels
+
+
+@windows_only
+@pytest.mark.windows
+def test_diagnostic_inherited_dacl_replacement_components(tmp_path, record_property):
+    """DIAGNOSTIC control 1: ordinary inheritance-enabled target.
+
+    Reports which participating components a genuine ``ReplaceFileW`` changed.
+    Field labels only.
+    """
+    result, labels = _replacement_differences(
+        tmp_path, record_property, "inherited", protect=False
+    )
+    # dacl_auto_inherited alone is the contract-accepted monotonic transition
+    # (CR 10.1a). Anything beyond it is the unexplained hosted difference.
+    if [x for x in labels if x != "dacl_auto_inherited"]:
+        pytest.fail(
+            "inherited_dacl_differences=" + ",".join(labels)
+            + " result=" + result.reason_code
+        )
+
+
+@windows_only
+@pytest.mark.windows
+def test_diagnostic_protected_dacl_replacement_components(tmp_path, record_property):
+    """DIAGNOSTIC control 2: DACL protected from inheritance.
+
+    Inheritance is disabled while the effective ACEs are copied in as explicit
+    entries, then the same replacement and the same exact comparison run. This
+    is the control that decides whether exact ordered-ACE preservation is
+    achievable under bare ``ReplaceFileW`` at all. Field labels only.
+    """
+    result, labels = _replacement_differences(
+        tmp_path, record_property, "protected", protect=True
+    )
+    if [x for x in labels if x != "dacl_auto_inherited"]:
+        pytest.fail(
+            "protected_dacl_differences=" + ",".join(labels)
+            + " result=" + result.reason_code
+        )
+
+
 # --- Priority 1: T35[W] genuine NTFS observation -----------------------------
 
 
