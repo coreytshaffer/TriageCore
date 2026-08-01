@@ -17,9 +17,14 @@ CR-YK-002's atomic-claiming foundation is complete and merged through PR #117 as
 questions this document deferred. **Neither the satisfied prerequisite nor the
 proposal is implementation approval.** CR-DD-012B still requires its own
 explicit human implementation approval and its own bounded file allowlist before
-any code is written. The proposal additionally records three open questions —
-most importantly whether CR-DD-013 capability evidence constrains route policy or
-only route binding — that must be settled before approval is considered.
+any code is written. The proposal's three previously open questions are now
+settled by recorded decision, most importantly that CR-DD-013 capability evidence
+constrains **execution binding only** and never governed-decision formation: a
+volatile observation may execute, bind an already-authorized fallback, or fail
+closed, but may never invent a route the decision did not authorize. That is a
+deliberate correction to current `tc run` route selection and is recorded as
+such. The proposal also records five approval gates that any implementation
+approval must require.
 
 The CR-DD-012A foundation is specified in
 `CR-DD-012A-governed-decision-foundation.md`. It resolves “exact bytes” as the

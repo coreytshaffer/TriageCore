@@ -21,6 +21,12 @@ The sequencing prerequisites are satisfied:
 Satisfying a prerequisite is not approval. CR-DD-012B remains blocked on its own
 explicit gate, and the merge of either foundation is not that gate.
 
+The three questions this proposal originally left open have since been settled by
+recorded supervisor decision — see **Resolved Questions** — and five
+implementation approval gates are recorded in **Implementation Approval Gates**.
+Settling a design question is not implementation authority either; the gates
+describe what an approval must require, not an approval already given.
+
 This CR is scoped against `main` at `8bfb547`. Its parent architecture is
 `CR-DD-012-shared-governed-run-decision.md`, which remains authoritative on the
 contract model; this document settles only the consumption questions the parent
@@ -74,8 +80,8 @@ Four concrete consequences follow:
 - **Volatile runtime facts reach policy.** Since CR-DD-013, capability resolution
   sets the local availability booleans that `choose_resilience_route` reads. Route
   *policy* is therefore currently a function of a volatile observation. See
-  **Open Question 1**; this is the sharpest unresolved design question in the
-  slice and the proposal does not paper over it.
+  **Resolved Question 1**; this was the sharpest design question in the slice
+  and is now settled as a deliberate correction to CR-DD-013 semantics.
 
 ## Settled Questions
 
@@ -145,7 +151,7 @@ alike.
 `decision_id`, is never persisted as its own schema, and lives only long enough
 to validate envelope compliance and populate bounded evidence.
 
-Its relationship to CR-DD-013 must be settled explicitly, because CR-DD-013
+Its relationship to CR-DD-013 is settled explicitly below, because CR-DD-013
 already ships a pre-route volatile observation — `CapabilityResolution`, resolved
 in `tc_run` step 6b and passed into `run_task`. Two runtime-observation surfaces
 that each claim to describe local availability would be a governance defect, not
@@ -167,8 +173,10 @@ The recommendation is **subsumption without re-derivation**:
   not relabel `Configured` as observed, and may not promote unknown evidence to
   health.
 
-The unresolved half of this relationship is **Open Question 1** below, and it is
-genuinely unresolved rather than deferred for tidiness.
+The other half of this relationship — whether capability may reach route policy
+at all — is settled in **Resolved Question 1** below: it may not. Capability
+constrains binding only, so `RuntimeObservation` carries it as an execution-time
+constraint and never as a policy input.
 
 ### 4. Constraining actual backend selection to the envelope
 
@@ -290,7 +298,10 @@ Deliberately excluded: `triage_core/route_worker_ledger.py`,
 foundation as unintegrated and **will fail by design** the moment this slice
 integrates it. Retiring or narrowing that guard is part of the implementation
 approval, not a silent side effect — the guard is doing its job, and an
-implementation that quietly deletes it should be rejected.
+implementation that quietly deletes it should be rejected. Per approval gate 3,
+retirement is permitted **only in the same change** that adds positive tests
+proving one snapshot, one governed decision, and two projections; the coverage is
+replaced, never merely removed.
 
 Focused tests, by category:
 
@@ -310,6 +321,20 @@ the prior decision.
 **Runtime separation.** Simulated backend-health changes alter the observation
 while the decision ID is unchanged; an actual route outside the envelope is
 rejected; runtime facts cannot widen egress, cloud, or human-review posture.
+
+**Capability volatility (approval gate 4).** A negative test in which runtime
+capability changes *after* decision formation and cannot change the decision ID,
+the route policy, or the envelope.
+
+**Unavailable capability (approval gate 5).** A negative test in which
+unavailable capability produces only an authorized envelope fallback or a closed
+failure — never an unauthorized route. This is the forbidden fourth outcome in
+**Runtime Outcome Model**, asserted directly rather than assumed.
+
+**Integrated shape (approval gate 3).** Positive tests proving one snapshot, one
+governed decision, and two projections. These must land in the same change that
+retires `tests/test_governed_decision_integration_absence.py`; deleting that
+guard without replacing its coverage is a rejection condition.
 
 **TOCTOU.** A context file modified after snapshot construction, with a trap
 proving execution does not reopen it and the worker receives exact snapshot
@@ -388,53 +413,131 @@ This document is not that approval, and neither is the merge of this proposal.
 - **Scope creep into G3/G6.** Mitigated by excluding circuit breakers, probes,
   and per-route backend separation outright.
 
-## Open Questions
+## Resolved Questions
 
-These are genuinely unresolved and must be settled **before** implementation
-approval, not during implementation.
+All three questions raised in the first draft of this proposal have since been
+settled by recorded supervisor decision. They are resolved as design direction
+only; **implementation remains unauthorized** and still requires its own
+explicit approval and bounded file allowlist.
 
-1. **Does capability evidence constrain route policy or only route binding?**
-   This is the load-bearing question of the slice. Today, CR-DD-013's resolution
-   sets `lm_studio_ok`, `local_fast_available`, and `local_heavy_available`, which
-   `choose_resilience_route` reads to choose a route — so a volatile observation
-   currently participates in producing route *policy*. CR-DD-012B requires the
-   logical route and envelope to come from the governed decision and to be stable
-   across runtime-health changes. Those two facts cannot both hold unchanged.
+### 1. Capability volatility — RESOLVED: binding only
 
-   Two candidate resolutions, with materially different consequences:
+**Decision: capability resolution constrains execution binding, not
+governed-decision formation.**
 
-   - **(a) Capability constrains binding only.** The decision computes the
-     logical route and envelope from policy alone, assuming no capability
-     knowledge; capability then filters which envelope member is bound at
-     runtime. This preserves decision stability cleanly, but changes current
-     `tc run` behavior: a run whose local capability is unknown would produce a
-     decision naming local routes and fail at binding, where today it resolves
-     to no local route earlier.
-   - **(b) Capability is a decision-relevant input.** The resolution enters the
-     snapshot binding and therefore the decision ID. This preserves today's
-     routing behavior exactly, but breaks the parent CR's invariant that
-     decision identity is stable across runtime-health changes — the same
-     packet would produce different decision IDs before and after a probe went
-     stale.
+The architectural split is:
 
-   The proposal recommends **(a)**, because the parent invariant is the more
-   expensive one to give up and because (b) makes decision IDs non-reproducible
-   for reviewers. But (a) is a real behavioral change to a merged, closed-out CR
-   and must be approved on that basis rather than absorbed as an implementation
-   detail. It is not settled here.
+```text
+Stable inputs
+  -> governed decision
+  -> deterministic route intent + envelope + decision ID
 
-2. **Does the deterministic classifier fully replace the model-assisted one?**
-   The parent CR requires builder classification without a model, network, or
-   socket call, while ordinary `tc run` may currently use the model-assisted
-   classifier. Whether execution loses that capability, or the model-assisted
-   result becomes a non-decision-bearing annotation, is unresolved. It affects
-   observable classification behavior and needs an explicit decision.
+Volatile runtime observations
+  -> execution binding
+  -> execute, use an already-authorized fallback, or fail closed
+```
 
-3. **Does `build_run_plan`'s current signature survive?** Projecting a decision
-   may not need `prompt`, `data`, and `sources` at all. Whether the function is
-   re-signatured or kept compatible for existing callers affects the allowlist,
-   and repository inspection at implementation time should settle it rather than
-   a guess here.
+Capability availability answers exactly one question: **"Can the
+already-authorized plan execute right now?"** It must never silently answer
+"What policy or route should this task receive?"
+
+The reason is concrete rather than aesthetic. If capability enters decision
+formation, identical task and context inputs produce different decision IDs
+because a model server briefly disappeared, a tool was temporarily unhealthy, or
+a probe record went stale. That converts operational weather into policy input
+and weakens replay, comparison, audit, and caching — all four of which depend on
+a decision ID being a function of governed inputs alone.
+
+**The behavioral cost is real and is recorded plainly as a deliberate
+correction to CR-DD-013 semantics, not as an implementation detail.** Today
+`tc run` may choose a resilience route from live capability state, because
+CR-DD-013's resolution sets `lm_studio_ok`, `local_fast_available`, and
+`local_heavy_available` before `choose_resilience_route` reads them. Under this
+decision it no longer may. A run whose local capability is unknown will produce
+a governed decision naming local routes and then fail at binding, where today it
+resolves to no local route earlier. Anyone reviewing this slice should
+understand they are approving that change, stated in those terms.
+
+Nothing here reopens CR-DD-013 or spends new authority on its behalf. Its
+implementation and merge authority remain spent; this is a change in what
+consumes its output, made under CR-DD-012B's own approval.
+
+### 2. Classifier — RESOLVED: deterministic is authoritative
+
+**Decision: the deterministic classifier is authoritative for all
+decision-relevant fields.**
+
+A model-assisted classifier may remain **advisory** — producing suggestions,
+confidence notes, or review evidence — but it may not alter the governed result.
+It may become decision-bearing only if its normalized output is later promoted
+to an explicit, stable decision input by a separate CR, which this slice does
+not do.
+
+This keeps builder classification free of any model, network, socket, or
+subprocess call, as the parent CR requires, without silently deleting the
+model-assisted path.
+
+### 3. `build_run_plan` signature — RESOLVED: coherence over compatibility
+
+**Decision: preserve the signature only if it still represents one coherent
+projection from the shared snapshot and governed decision.**
+
+A backward-compatible signature is not worth keeping if it leaves callers able
+to recompute context, route, or envelopes independently. A narrow signature
+break is preferable to preserving an attractive second integration path, which
+is precisely the failure mode this slice exists to close. Repository inspection
+at implementation time determines which applies; either outcome stays inside the
+provisional allowlist.
+
+## Runtime Outcome Model
+
+The governed decision must encode the allowable execution envelope richly enough
+to support exactly three outcomes:
+
+1. **Primary binding succeeds** — execute the selected route.
+2. **Primary unavailable, authorized fallback exists** — bind to that fallback
+   **without changing the governed decision**, its ID, its route policy, or its
+   envelope.
+3. **No authorized binding exists** — fail closed and require a new decision or
+   explicit operator action.
+
+There is a fourth outcome, and it is the one this slice exists to make
+impossible:
+
+> **Forbidden:** runtime capability resolution inventing a different route that
+> the governed decision never authorized.
+
+Any implementation in which a runtime observation can produce a route outside
+the envelope — by synthesis, reordering, widening, or fallback to an unlisted
+option — has failed the slice regardless of what its tests report.
+
+## Implementation Approval Gates
+
+These are the recorded conditions for moving this work out of proposal. All five
+must be satisfied before implementation authority is granted; none is satisfied
+by this document.
+
+1. **A recorded decision on capability volatility and its CR-DD-013 behavioral
+   consequence.** Satisfied above: binding-only, with the behavioral change to
+   current `tc run` route selection stated explicitly rather than absorbed.
+2. **An explicit statement that the seam is constructed before the `planning`
+   branch and consumed by both preview and execution.** Satisfied in **Settled
+   Question 1**: the seam sits after argument assembly and privacy mapping and
+   before `if planning:`, context sources are read exactly once there, and both
+   paths receive `(snapshot, decision)` as parameters.
+3. **Replacement of the integration-absence guard with positive tests** proving
+   one snapshot, one governed decision, and two projections — **not merely
+   deletion of the old guard.** `tests/test_governed_decision_integration_absence.py`
+   may be retired only in the same change that adds positive tests asserting
+   the integrated shape. An implementation that deletes the guard without
+   replacing its coverage is rejected.
+4. **A negative test where runtime capability changes after decision formation**
+   and cannot change the decision ID, the route policy, or the envelope.
+5. **A negative test showing unavailable capability causes only an authorized
+   fallback or a closed failure** — never an unauthorized route.
+
+Gates 3 through 5 are obligations on the implementation and are additive to the
+focused tests listed in **Settled Question 8**.
 
 ## Dependencies And Sequencing
 
@@ -443,8 +546,12 @@ approval, not during implementation.
 - Depends on merged CR-YK-002 (`5155bbb`) only for the sequencing gate the parent
   named; this slice adds no claiming, capability, or authorization behavior and
   imports no CR-YK module.
-- Interacts with merged CR-DD-013 (`98df9c1`) through Open Question 1. Nothing
-  here reopens CR-DD-013, whose implementation and merge authority are spent.
+- Interacts with merged CR-DD-013 (`98df9c1`) through Resolved Question 1, which
+  deliberately corrects what consumes its capability resolution: capability
+  constrains execution binding and no longer reaches route policy. Nothing here
+  reopens CR-DD-013, whose implementation and merge authority remain spent; the
+  correction is made under CR-DD-012B's own approval and is a change to the
+  consumer, not to `capability_evidence.py`.
 - Precedes any confirmed-plan execution CR, `governed_run_plan.v2`, and durable
   observation/execution schemas, none of which this slice authorizes.
 - Does not block and is not blocked by G3 (per-route backend bindings) or G6

@@ -140,10 +140,15 @@ backwards.
    CR-YK-002 prerequisite is now satisfied and whose documentation-only proposal is
    recorded, but which remains blocked until it receives its own separate approval and
    bounded file allowlist. It owns shared preview/execution consumption, envelope
-   enforcement, bounded decision-ID linkage, and parity/fail-closed tests. Its proposal
-   leaves open whether CR-DD-013 capability evidence constrains route policy or only
-   route binding; that must be settled before approval, since current merged behavior
-   and the decision-stability invariant cannot both hold unchanged. `governed_run_plan.v2`, durable `RuntimeObservation`/`ExecutionRecord` contracts,
+   enforcement, bounded decision-ID linkage, and parity/fail-closed tests. A recorded
+   decision settles that CR-DD-013 capability evidence constrains **execution binding
+   only** and never governed-decision formation, so stable inputs produce the decision,
+   route intent, envelope, and decision ID while volatile observations may only
+   execute, bind an already-authorized fallback, or fail closed. That is a deliberate
+   correction to current `tc run` route selection, recorded as such. Five approval
+   gates — including negative tests that runtime capability changes cannot alter the
+   decision ID or envelope, and that unavailable capability yields only an authorized
+   fallback or a closed failure — must be met before implementation authority. `governed_run_plan.v2`, durable `RuntimeObservation`/`ExecutionRecord` contracts,
    and confirmed-plan execution remain deferred.
 5. **M1 — Capability binding complete; real route bindings and circuit breakers remain
    open** (G3, G4, G6).
