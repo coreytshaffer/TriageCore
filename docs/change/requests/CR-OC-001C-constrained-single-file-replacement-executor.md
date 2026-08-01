@@ -11,18 +11,26 @@
   discovered by running the contract against real Windows evidence and
   merged as a documentation-only change before the implementation was
   corrected to match.
-- **Implementation status:** Proposed, not authorized. §25 records an
-  implementation proposal — an allowlist, module split, plan, evidence
-  design, and acceptance boundary — for review. It is a planning artifact.
-- **Implementation authority:** None. Neither the merged requirements nor
+- **Implementation status:** Authorized and in progress on draft PR #128;
+  **not merged, not accepted, and not runtime-integrated.** The
+  implementation does not yet conform to §10.2b: the supported-profile
+  gate, revised fixtures, T21 evidence, and M31 remain pending. §25 remains
+  the planning artifact it was written as — an allowlist, module split,
+  plan, evidence design, and acceptance boundary.
+- **Implementation authority:** Granted separately and explicitly, bounded
+  to the seven-path allowlist of §25.1 and to the work on draft PR #128. It
+  did **not** come from this document: neither the merged requirements nor
   §25 authorizes code, tests, fixtures, a dependency change, a CI change, a
   CLI or `tc run` change, runtime integration, a capability or reservation
   change, IPC, Windows account work, or OpenClaw installation or
   configuration. **Merging the requirements was not implementation
-  authority, and drafting §25 is not implementation authority.**
-- **Approval gate:** Explicit human approval is required before any
-  implementation, and again before any merge. Recording either proposal
-  satisfies neither.
+  authority, and drafting §25 is not implementation authority.** No
+  authority extends beyond that allowlist, and none of it is merge
+  authority.
+- **Approval gate:** Explicit human approval was required before
+  implementation and is required again before any merge. Recording a
+  proposal satisfies neither, and the implementation approval already
+  granted is not merge approval.
 - **Still unauthorized:** CR-OC-001D, CR-OC-001E, and every runtime surface.
 
 Sections 2–24 define the requirements an implementation must satisfy. They
@@ -733,7 +741,12 @@ precondition:
 - **Supported-profile gate:** before any temporary file is created, the
   target's pre-mutation DACL must be present, non-NULL, and protected from
   inheritance. Failure is `metadata_precondition_failed`, not attempted.
-  See §10.2b.
+  See §10.2b. **The supported-profile gate is evaluated immediately after
+  validating the pre-mutation security snapshot and before the
+  `TokenOwner` ownership gate** — despite the order these two bullets are
+  written in. That ordering gives T21's absent, NULL, and unprotected
+  cases a precise cessation point, and avoids querying the token's default
+  owner for a profile already known to be unsupported.
 - **DACL carry-over, scoped to the supported profile:** `ReplaceFileW` is
   documented to give the resulting file the replaced file's DACL, which is
   the load-bearing reason §11 selects it over `MoveFileExW` (whose result
@@ -1549,9 +1562,13 @@ point.
       token's default owner, proving the gate compares the quantity that
       actually governs the temporary file's ownership. Equality-shaped
       only: **no SID value is recorded or emitted**;
-    - **normal replacement passes the gate** — an ordinary target created
-      by this process reaches `replacement_verified`, and post owner
-      equals pre owner.
+    - **supported-profile replacement passes the ownership gate** — a
+      target created by this process, then placed into a present,
+      non-NULL, protected DACL profile **without changing its owner**,
+      reaches `replacement_verified`, and post owner equals pre owner. The
+      profile qualifier is required by §10.2b: an inheritance-enabled
+      target must refuse before mutation, so a healthy result may not be
+      asserted for an unrestricted "ordinary" target.
 21. [W] DACL invariant **and supported-profile gate** (§10.2b). Four
     parts. (a) **Unsupported profile refuses before mutation:** a target
     whose DACL is present but *unprotected* is refused with
