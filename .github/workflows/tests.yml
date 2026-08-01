@@ -30,3 +30,147 @@ jobs:
 
       - name: Run tests
         run: python -m pytest -q
+
+  # CR-OC-001C Windows/NTFS evidence. Additive: the Ubuntu matrix above is
+  # unchanged, and is deliberately NOT converted into an OS x Python matrix.
+  windows_executor:
+    runs-on: windows-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Verify workspace volume is NTFS
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $letter = (Get-Item -LiteralPath $env:GITHUB_WORKSPACE).PSDrive.Name
+          $fs = $null
+          try { $fs = (Get-Volume -DriveLetter $letter).FileSystem } catch { }
+          if ([string]::IsNullOrWhiteSpace($fs)) {
+            $fs = (Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$letter`:'").FileSystem
+          }
+          if ([string]::IsNullOrWhiteSpace($fs)) {
+            Write-Error "workspace filesystem type could not be determined"; exit 1
+          }
+          if ($fs -ne 'NTFS') {
+            Write-Error "workspace volume is $fs, not NTFS"; exit 1
+          }
+          "workspace_filesystem=$fs" | Out-File -Append -FilePath $env:GITHUB_ENV
+
+      - name: Run mandatory Windows executor group
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $xml = Join-Path $env:RUNNER_TEMP 'mediated-executor.xml'
+          "mandatory_result=$xml" | Out-File -Append -FilePath $env:GITHUB_ENV
+          python -m pytest `
+            tests/test_mediated_executor.py `
+            tests/test_privacy_invariants.py `
+            tests/test_governed_decision_integration_absence.py `
+            -m "not windows_optional" -q --junit-xml=$xml
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Gate on the structured mandatory result
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $accepted = @('False->False', 'False->True', 'True->True')
+          $path = $env:mandatory_result
+          if (-not (Test-Path -LiteralPath $path)) {
+            Write-Error "mandatory result file is absent"; exit 1
+          }
+          try { [xml]$doc = Get-Content -LiteralPath $path -Raw }
+          catch { Write-Error "mandatory result file could not be parsed"; exit 1 }
+
+          # Sum ONLY leaf suites: pytest emits a root <testsuites> wrapper plus
+          # child <testsuite> totals, and summing both would double-count.
+          $suites = $doc.SelectNodes("//testsuite[not(.//testsuite)]")
+          if ($null -eq $suites -or $suites.Count -lt 1) {
+            Write-Error "mandatory result contains no leaf testsuite"; exit 1
+          }
+          $tests = 0; $failures = 0; $errors = 0; $skipped = 0
+          foreach ($s in $suites) {
+            foreach ($pair in @(@('tests',[ref]$tests), @('failures',[ref]$failures),
+                                @('errors',[ref]$errors), @('skipped',[ref]$skipped))) {
+              $raw = $s.GetAttribute($pair[0])
+              if ([string]::IsNullOrWhiteSpace($raw)) {
+                Write-Error "testsuite is missing the $($pair[0]) attribute"; exit 1
+              }
+              $parsed = 0
+              if (-not [int]::TryParse($raw, [ref]$parsed)) {
+                Write-Error "testsuite $($pair[0]) is not an integer"; exit 1
+              }
+              $pair[1].Value += $parsed
+            }
+          }
+          if ($tests -lt 1) { Write-Error "mandatory group ran no tests"; exit 1 }
+          if ($failures -ne 0 -or $errors -ne 0) {
+            Write-Error "mandatory group reported failures=$failures errors=$errors"; exit 1
+          }
+          if ($skipped -ne 0) {
+            Write-Error "mandatory group reported $skipped skip(s); zero are permitted"; exit 1
+          }
+
+          $t35 = $doc.SelectNodes("//testcase[contains(@name,'t35w_auto_inherited')]")
+          if ($t35.Count -ne 1) {
+            Write-Error "expected exactly one T35[W] case, found $($t35.Count)"; exit 1
+          }
+          $props = $doc.SelectNodes("//property[@name='se_dacl_auto_inherited_transition']")
+          if ($props.Count -ne 1) {
+            Write-Error "expected exactly one transition property, found $($props.Count)"; exit 1
+          }
+          $transition = $props[0].GetAttribute('value')
+          if ($accepted -notcontains $transition) {
+            Write-Error "transition '$transition' is not an accepted transition"; exit 1
+          }
+
+          "mandatory_tests=$tests"       | Out-File -Append -FilePath $env:GITHUB_ENV
+          "mandatory_skipped=$skipped"   | Out-File -Append -FilePath $env:GITHUB_ENV
+          "dacl_transition=$transition"  | Out-File -Append -FilePath $env:GITHUB_ENV
+
+      - name: Supplemental symlink probe (non-gating)
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          python -m pytest tests/test_mediated_executor.py -m windows_optional -q
+          if ($LASTEXITCODE -eq 0) { $status = 'pass' } else { $status = 'environment-unavailable' }
+          "symlink_probe=$status" | Out-File -Append -FilePath $env:GITHUB_ENV
+          exit 0
+
+      - name: Bounded job summary
+        if: always()
+        shell: pwsh
+        run: |
+          # Bounded counters and identifiers only. No raw XML, no test output,
+          # no file content, paths, artifact names, ACLs, descriptors, tokens,
+          # or credentials. The recorded transition is observational (CR 10.1a)
+          # and is never a pass/fail criterion for the normalization itself.
+          $lines = @(
+            "### CR-OC-001C Windows executor evidence",
+            "",
+            "| field | value |",
+            "| --- | --- |",
+            "| commit | $env:GITHUB_SHA |",
+            "| windows build | $([System.Environment]::OSVersion.Version.ToString()) |",
+            "| python | $(python -c 'import platform;print(platform.python_version())') |",
+            "| filesystem | $env:workspace_filesystem |",
+            "| mandatory tests | $env:mandatory_tests |",
+            "| mandatory skipped | $env:mandatory_skipped |",
+            "| SE_DACL_AUTO_INHERITED transition | $env:dacl_transition |",
+            "| symlink probe (supplemental) | $env:symlink_probe |"
+          )
+          $lines -join "`n" | Out-File -Append -FilePath $env:GITHUB_STEP_SUMMARY
