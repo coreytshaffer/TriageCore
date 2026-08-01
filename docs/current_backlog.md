@@ -206,6 +206,62 @@ this closeout. Detailed design history lives in the CR document.
 
 ## Candidate Future Work
 
+- TriageCore identity consolidation and agentic boundary governance
+  - Status: candidate epic, backlog-only; no slice is approved or active. This
+    entry grants no implementation, runtime integration, branch, merge, or
+    standing authority for any slice.
+  - Identity thesis: TriageCore is a local-first, evidence-bound research
+    workbench for governing AI-assisted decisions and consequential actions
+    through explicit authority, reviewable artifacts, bounded execution
+    mechanisms, and independently governed evaluation boundaries.
+    Resource-aware routing remains one governed subsystem rather than the whole
+    identity.
+  - Category distinctions: **workbench** names the maturity and research posture;
+    **control plane** names an architectural function; **harness** names the
+    experimental and evaluation role; **runtime** applies only to
+    execution-bearing paths. Do not describe TriageCore as a platform, general
+    agent runtime, complete containment system, or safety-certification
+    authority.
+  - Continuity: preserve local control and operator sovereignty, evidence before
+    claims, explicit authority, fail-closed uncertainty, reviewable artifacts,
+    and the separation of observation, recommendation, authorization,
+    execution, and evaluation.
+  - Scope taxonomy:
+    - **Governance kernel**: decision integrity; identity and authority;
+      capability and effect bounds; evidence and reconstruction; review and
+      human control; evaluator independence; privacy and provenance.
+    - **Supporting subsystems**: routing; tokens and context; energy; telemetry;
+      workspace and presentation surfaces; provider adapters.
+    - **Adjacent applications**: software agents, environmental or edge
+      workflows, and external agent frameworks.
+  - Sequenced track 1 — **Identity consolidation**: inventory the enduring
+    architectural pillars, preserve the category distinctions above, and use
+    this candidate documentation order: canonical identity document;
+    `pyproject.toml`; README; `AGENTS.md` supervisor terminology; claim
+    boundaries; architecture overview/index; portfolio/submission language; and
+    backlog taxonomy. Each item is a separately reviewable documentation slice,
+    not authorization to perform it now.
+  - `AGENTS.md` terminology checkpoint: a cloud supervisor's quality verdict
+    must not be confused with human authorization for mutation or consequential
+    effects. Future consolidation should distinguish artifact-review
+    pass/revise/escalate outcomes from approval authority.
+  - Sequenced track 2 — **Agentic boundary governance**: after the identity work,
+    investigate evaluation-environment assurance, evaluator-harness threat
+    modeling, incident-derived adversarial fixtures, delegation-chain
+    capability attenuation building on CR-095, reality-and-scope uncertainty
+    handling, trajectory-level policy evaluation, and incident reconstruction
+    and recovery.
+  - Sequence boundary: near-term work is documentary and research-only. Later
+    implementation candidates must remain separate slices; every code-bearing
+    or integration slice requires its own approved CR and authoritative evidence
+    or versioned profile, as applicable.
+  - Uncertainty and limitations: preserve the distinctions among current,
+    implemented-but-disconnected, and future components. Do not claim that
+    TriageCore solves alignment, certifies safety, or currently composes
+    authorization through execution end to end.
+  - Scope test: `Does this strengthen the evidence-bound governance kernel, or is
+    it merely an interesting adjacent capability?`
+
 - Agent authority and delegation boundary
   - Source: CR-095 task-scoped agent authority manifest
   - Status: authority manifest contract, reviewer-style example, invalid example, and metadata-only CLI validation complete; identity-registry binding, manifest signing, admission enforcement, and route enforcement remain future slices
