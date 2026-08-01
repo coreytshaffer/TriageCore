@@ -5,19 +5,33 @@
 - **Requirements status:** Accepted and merged. The requirements contract
   (§2–§24) was merged through PR #125 as merge commit
   `0b2b8a5e4397a903f5a48a07be8c86f6701ad5b8`, unamended from the reviewed
-  draft. It is the authoritative baseline for everything below.
-- **Implementation status:** Proposed, not authorized. §25 records an
-  implementation proposal — an allowlist, module split, plan, evidence
-  design, and acceptance boundary — for review. It is a planning artifact.
-- **Implementation authority:** None. Neither the merged requirements nor
+  draft. It is the authoritative baseline for everything below, as amended
+  by §10.1a (`SE_DACL_AUTO_INHERITED` monotonic rule), §10.2a
+  (`TokenOwner`), and §10.2b (supported DACL profile). Each amendment was
+  discovered by running the contract against real Windows evidence.
+  Implementation is corrected only after the corresponding
+  documentation-only amendment merges; the §10.2b implementation correction
+  remains pending on draft PR #128.
+- **Implementation status:** Authorized and in progress on draft PR #128;
+  **not merged, not accepted, and not runtime-integrated.** The
+  implementation does not yet conform to §10.2b: the supported-profile
+  gate, revised fixtures, T21 evidence, and M31 remain pending. §25 remains
+  the planning artifact it was written as — an allowlist, module split,
+  plan, evidence design, and acceptance boundary.
+- **Implementation authority:** Granted separately and explicitly, bounded
+  to the seven-path allowlist of §25.1 and to the work on draft PR #128. It
+  did **not** come from this document: neither the merged requirements nor
   §25 authorizes code, tests, fixtures, a dependency change, a CI change, a
   CLI or `tc run` change, runtime integration, a capability or reservation
   change, IPC, Windows account work, or OpenClaw installation or
   configuration. **Merging the requirements was not implementation
-  authority, and drafting §25 is not implementation authority.**
-- **Approval gate:** Explicit human approval is required before any
-  implementation, and again before any merge. Recording either proposal
-  satisfies neither.
+  authority, and drafting §25 is not implementation authority.** No
+  authority extends beyond that allowlist, and none of it is merge
+  authority.
+- **Approval gate:** Explicit human approval was required before
+  implementation and is required again before any merge. Recording a
+  proposal satisfies neither, and the implementation approval already
+  granted is not merge approval.
 - **Still unauthorized:** CR-OC-001D, CR-OC-001E, and every runtime surface.
 
 Sections 2–24 define the requirements an implementation must satisfy. They
@@ -725,12 +739,27 @@ precondition:
   attempted. This converts an unpreservable case into a refusal instead of
   a broken promise. See §10.2a for why this is `TokenOwner` and not
   `TokenUser`.
-- **DACL carry-over:** `ReplaceFileW` is documented to give the resulting
-  file the replaced file's DACL, which is the load-bearing reason §11
-  selects it over `MoveFileExW` (whose result would carry the temporary
-  file's directory-inherited DACL instead). Post-verification (§12) still
-  performs the full §10.1 comparison; documentation is trusted to choose
-  the primitive, never to skip the check.
+- **Supported-profile gate:** before any temporary file is created, the
+  target's pre-mutation DACL must be present, non-NULL, and protected from
+  inheritance. Failure is `metadata_precondition_failed`, not attempted.
+  See §10.2b. **The supported-profile gate is evaluated immediately after
+  validating the pre-mutation security snapshot and before the
+  `TokenOwner` ownership gate** — despite the order these two bullets are
+  written in. That ordering gives T21's absent, NULL, and unprotected
+  cases a precise cessation point, and avoids querying the token's default
+  owner for a profile already known to be unsupported.
+- **DACL carry-over, scoped to the supported profile:** `ReplaceFileW` is
+  documented to give the resulting file the replaced file's DACL, which is
+  the load-bearing reason §11 selects it over `MoveFileExW` (whose result
+  would carry the temporary file's directory-inherited DACL instead). That
+  documentation is **not** treated as establishing general exact
+  preservation: hosted evidence (§10.2b) shows an inheritance-enabled
+  target differing in `SE_DACL_AUTO_INHERITED`, ACE count, and the ordered
+  ACE bytes across a *successful* call, while a present-and-protected
+  target was exactly preserved under the same comparison. Documentation is
+  trusted to **choose the primitive**, never to skip the check.
+  Post-verification (§12) still performs the full §10.1 comparison and
+  remains the deciding evidence.
 
 ### 10.2a Implementation-discovered contract correction: `TokenOwner`
 
@@ -800,6 +829,106 @@ proposed allowlist (§22) — no new dependency (no pywin32), no subprocess
 module. If implementation finds a separate platform helper file genuinely
 necessary, that is an allowlist change requiring explicit approval first.
 
+### 10.2b Implementation-discovered contract correction: the supported DACL profile
+
+This subsection narrows the **supported target profile** rather than
+weakening the invariant. Like §10.1a and §10.2a, it is a contract-discovery
+result found by running the contract, not by reading it.
+
+**The requirement.** CR-OC-001C supports only targets whose pre-mutation
+DACL is **present, non-NULL, and protected from inheritance**
+(`SE_DACL_PROTECTED` set). Any absent DACL, NULL DACL, or
+inheritance-enabled DACL is refused as `metadata_precondition_failed` with
+outcome `not_attempted`, **before temporary-file creation and before any
+replacement attempt**.
+
+**What this amendment does and does not change:**
+
+- The exact owner, DACL state, control-bit, `AclRevision`, ACE-count,
+  ACE-order, and complete-ACE-byte invariant of §10.1 is **unchanged**. No
+  comparison is relaxed, made unordered, made partial, or replaced by an
+  effective-permissions rule.
+- The §10.1a `SE_DACL_AUTO_INHERITED` monotonic rule is **unchanged**.
+- Post-verification (§12) remains **mandatory and authoritative**. The
+  narrowed profile is a precondition, never a substitute for checking.
+- Unsupported targets are **not normalized, repaired, protected
+  automatically, or attempted**. The executor never modifies a security
+  descriptor to make a target supportable; it refuses.
+- This amendment narrows the supported profile. It does **not** claim that
+  Microsoft guarantees exact DACL preservation for all protected DACLs.
+
+**Why an effective-permissions rule was rejected.** Relaxing the comparison
+to "same effective permissions" would be materially harder to prove safely
+than exact equality: ACE order affects access decisions, and common
+effective-rights helpers omit owner rights, privileges, logon-session
+groups, resource-manager policy, and some inherited-deny cases. Exact
+equality over a narrower profile is the conservative direction.
+
+**Discovery record.** Three hosted `windows_executor` runs, in sequence:
+
+```text
+30689442321:
+  unprotected target differed in
+  dacl_auto_inherited, ace_count, ace_bytes_or_order
+
+30690450931:
+  paired protected control did not fail, but was under-asserted
+
+30691068391:
+  strengthened protected control passed all fixture, result,
+  outcome, exact-byte, and exact-metadata assertions
+  unprotected control reproduced the same three differences
+```
+
+The middle run is recorded deliberately. The protected control's *absence
+from the failure list* was not evidence: as first written it failed only on
+a metadata label beyond `dacl_auto_inherited`, so a refusal such as
+`temp_creation_failed` accompanied by no metadata differences would also
+have passed it — and the recorded result property was unrecoverable,
+because the mandatory command failed before the gate or summary exposed it
+and no artifact is uploaded. The control was strengthened to require,
+simultaneously, a protected and nonempty fixture, `reason_code == ok`,
+outcome `replacement_verified`, target bytes equal to the proposed bytes,
+and metadata differences of none or `dacl_auto_inherited` alone.
+
+**What run `30691068391` establishes, stated narrowly:**
+
+> On the hosted runner, the unprotected profile violated the exact
+> invariant, while the present-and-protected profile completed a verified
+> replacement under the exact same comparison.
+
+**What it does not establish.** It does **not** prove that inheritance
+recomputation is the underlying Windows mechanism. The diagnostic reported
+field labels only; it did not establish that every new or changed ACE was
+inherited, nor that effective access was unchanged. Microsoft documents
+`ReplaceFileW` as preserving the DACL, and separately describes the
+operation as merging attribute and ACL information into the replacement
+file; it does not promise byte-identical ACE enumeration in every
+inheritance environment. Automatic inheritance can set
+`SE_DACL_AUTO_INHERITED`, materialize inherited ACEs, and order inherited
+entries after explicit ones. The governance conclusion above does not
+depend on which of these explanations is correct.
+
+**The hosted environment, recorded as bounded evidence:**
+
+```text
+Windows Server 2025
+build 10.0.26100
+windows-2025-vs2026
+Python 3.12.10
+NTFS
+```
+
+This is evidence from one bounded environment, **not a universal Windows
+guarantee**.
+
+**`pre_dacl_nonempty` was a diagnostic validity control, not a production
+requirement.** Its only purpose was to prove the hosted success was not a
+trivial empty-ACL comparison. The executor does **not** require a nonempty
+DACL: a present, non-NULL, protected DACL with zero ACEs remains supported,
+and §10.1's three-state classification continues to distinguish
+present-empty from NULL and absent.
+
 ### 10.3 Permitted incidental changes
 
 Timestamps (modification, change, creation as observed), file identity
@@ -855,7 +984,10 @@ invariant. The result never claims they were preserved.
 NULL)` via `ctypes`, with `dwReplaceFlags` pinned to `0`:
 `REPLACEFILE_IGNORE_MERGE_ERRORS` is forbidden because a failure while
 merging the replaced file's metadata (the DACL this contract depends on)
-must surface, not be swallowed. A **backup name is always supplied**
+must surface, not be swallowed. That the operation *merges* rather than
+verbatim-copies ACL information is precisely why §10.2b restricts the
+supported profile and why §12's post-verification, not the documentation,
+decides whether the invariant held. A **backup name is always supplied**
 (§11.3); Microsoft documents that without one, the
 `ERROR_UNABLE_TO_MOVE_REPLACEMENT` failure class leaves the replaced file
 **deleted** — an unacceptable silent-loss mode this contract forbids.
@@ -1431,11 +1563,29 @@ point.
       token's default owner, proving the gate compares the quantity that
       actually governs the temporary file's ownership. Equality-shaped
       only: **no SID value is recorded or emitted**;
-    - **normal replacement passes the gate** — an ordinary target created
-      by this process reaches `replacement_verified`, and post owner
-      equals pre owner.
-21. [W] DACL invariant: the §10.1 structured comparison passes on a real
-    replacement including a non-default explicit DACL on the target; an
+    - **supported-profile replacement passes the ownership gate** — a
+      target created by this process, then placed into a present,
+      non-NULL, protected DACL profile **without changing its owner**,
+      reaches `replacement_verified`, and post owner equals pre owner. The
+      profile qualifier is required by §10.2b: an inheritance-enabled
+      target must refuse before mutation, so a healthy result may not be
+      asserted for an unrestricted "ordinary" target.
+21. [W] DACL invariant **and supported-profile gate** (§10.2b). Four
+    parts. (a) **Unsupported profile refuses before mutation:** a target
+    whose DACL is present but *unprotected* is refused with
+    `metadata_precondition_failed` and outcome `not_attempted` **before
+    temporary-file creation and before `ReplaceFileW`**, asserted from the
+    mechanism call log; the target's original bytes are unchanged and no
+    temporary or backup artifact remains in the directory. (b)
+    **Seam-injected absent and NULL DACL states refuse identically**, with
+    the same reason code, outcome, cessation point, byte preservation, and
+    artifact absence. (c) **Supported profile completes:** a present,
+    non-NULL, protected target yields `ok`, outcome
+    `replacement_verified`, target bytes exactly equal to the proposed
+    bytes, and the full exact metadata invariant of §10.1 preserved. (d)
+    **Injected post-replacement differences still fail:** the §10.1
+    structured comparison passes on a real replacement including a
+    non-default explicit DACL on the target; an
     injected post-comparison difference in each participating component —
     owner SID, DACL three-state classification (absent versus NULL versus
     present-empty), a selected control bit, `AclRevision`, ACE count, ACE
@@ -1529,8 +1679,10 @@ point.
     what a runner happens to do.
 
     [W] The observational half: a genuine NTFS replacement starts from a
-    **confirmed pre-state** (the pre-replacement value of the bit is
-    captured and asserted), performs the replacement, and requires that the
+    **confirmed pre-state** — the pre-replacement value of the bit is
+    captured and asserted, **and the target is confirmed to be within the
+    §10.2b supported profile (DACL present, non-NULL, protected) before the
+    replacement** — performs the replacement, and requires that the
     observed transition be one of the three accepted transitions, that
     every other owner/DACL component be exactly preserved, and that the
     result be `replacement_verified`. The observed transition is recorded.
@@ -1589,6 +1741,7 @@ evidence, and must be reported as controls.
 | M28 | Replace the `SE_DACL_AUTO_INHERITED` monotonic rule with strict equality (the pre-amendment defect) | T35[N] — the directly constructed `False -> True` pair is rejected under the mutant. Killed deterministically, without depending on what a hosted runner exhibits |
 | M29 | Ignore `SE_DACL_AUTO_INHERITED` entirely (the rejected complete-exclusion option) | T36 `True -> False` rejection — the mutant accepts it |
 | M30 | Query `TokenUser` instead of `TokenOwner` in the ownership gate (the pre-amendment defect, §10.2a) | T20's **deterministic instrumented** assertion that the adapter requests information class `TokenOwner` (`4`). Uses a fake or instrumented `GetTokenInformation`, so the kill does **not** depend on the two SIDs happening to differ on the machine under test — otherwise the mutant would survive on any host where they coincide, which is exactly how the defect escaped local evidence |
+| M31 | Omit the present-and-protected DACL precondition, or treat an inheritance-enabled target as supported (the pre-amendment defect, §10.2b) | T21[W] unprotected-target test: asserts refusal **before** temporary-file creation or `ReplaceFileW` (mechanism call log), original bytes unchanged, and no artifacts left behind. Venue: Windows |
 
 Controls, identified in advance: the healthy-path test (T19), determinism
 of the projection key set, and the vocabulary-membership test all pass
@@ -1610,6 +1763,14 @@ CR-OC-001C may be considered implemented only when:
   (Windows-scoped mutants in the Windows evidence pass), with the module
   hash verified pristine after each cycle, and controls reported as
   controls;
+- **the supported DACL profile (§10.2b) is enforced and evidenced:** every
+  healthy replacement case in the Windows evidence pass uses a target whose
+  DACL is present, non-NULL, and protected from inheritance; T35[W]
+  confirms that supported pre-state **before** the replacement; every other
+  participating owner/DACL component is exactly preserved; absent, NULL,
+  and unprotected profiles are shown failing **before mutation** with
+  `metadata_precondition_failed` / `not_attempted` (T21[W]); and M31 is
+  killed cleanly;
 - the hosted Windows job observes a `SE_DACL_AUTO_INHERITED` transition
   that is one of the three §10.1a accepted transitions, with every other
   owner/DACL component exactly preserved, and records which transition it
@@ -2059,7 +2220,7 @@ retries of the replacement primitive, path-based fallback, best-effort ACL
 parsing, cleanup during ambiguous states, or any integration with
 authorization or reservation machinery.
 
-### 25.5 Where each of the 34 test obligations is exercised
+### 25.5 Where each of the 36 test obligations is exercised
 
 Venue: **U** = the existing Ubuntu jobs via the normal full suite (pure
 core, platform-neutral); **W** = the proposed Windows CI job against a real
@@ -2087,7 +2248,7 @@ NTFS workspace; **U+W** = required evidence in both.
 | 18 | Replacement on the same volume | W |
 | 19 | Success writes exact bytes; backup deleted | W |
 | 20 | Owner gate and owner preservation | W |
-| 21 | DACL invariant: pure comparison (U); real DACL (W) | U+W |
+| 21 | DACL invariant: pure comparison (U); real DACL, supported-profile gate, and unsupported-profile refusal before mutation (W) | U+W |
 | 22 | Result remains a regular file | W |
 | 23 | Result remains in the workspace | W |
 | 24 | Post mismatch ⇒ ambiguous, one call, backup retained | W |
@@ -2171,7 +2332,7 @@ Where a condition *can* be provoked genuinely it must be, not injected —
 junction ancestors via real `mklink /J`, sharing violations via a real
 handle held without `FILE_SHARE_DELETE`, oversize via real files.
 
-### 25.6 Designated killer test for each of the 30 mutants
+### 25.6 Designated killer test for each of the 31 mutants
 
 Each mutant must be demonstrated **failing** against its defective variant,
 with the module hash verified pristine after each cycle, following the
@@ -2209,11 +2370,18 @@ CR-YK-002/A/B bar. Controls are reported as controls, never as kills.
 | M28 strict equality instead of the `SE_DACL_AUTO_INHERITED` monotonic rule (the pre-amendment defect) | T35[N] | U |
 | M29 ignore `SE_DACL_AUTO_INHERITED` entirely (the rejected complete-exclusion option) | T36 | U |
 | M30 query `TokenUser` instead of `TokenOwner` (§10.2a) | T20 instrumented information-class assertion | W |
+| M31 omit the present-and-protected DACL precondition, or treat an inheritance-enabled target as supported (§10.2b) | T21[W] unprotected-target refusal before temporary-file creation or `ReplaceFileW`, original bytes unchanged, no artifacts | W |
+
+Mutant totals: **31 total — 21 Windows, 10 Ubuntu.**
 
 Ten mutants (M16, M18, M20, M22–M26, M28, M29) are killed on Ubuntu, which
 is the direct payoff of the §25.2 module split: the ACE-comparison mutants
 that matter most are killed on every pull request, not only in the Windows
 job.
+
+M31 is Windows-scoped by necessity: its killer asserts refusal against a
+genuine NTFS security descriptor and a real mechanism call log, which the
+neutral core cannot produce.
 
 M28 is deliberately Ubuntu-only. Its killer must be deterministic, and only
 the constructed-snapshot half of T35 is: a hosted runner that produced
@@ -2331,7 +2499,11 @@ the NTFS verification step passes; the hosted Windows job observes and
 records one of the three §10.1a accepted `SE_DACL_AUTO_INHERITED`
 transitions, with every other owner/DACL component exactly preserved —
 reproducing `False -> True` specifically is **not** required, while
-`True -> False` or any other metadata difference fails (T35[W]); all 30
+`True -> False` or any other metadata difference fails (T35[W]); **every
+healthy replacement case runs within the §10.2b supported profile (present,
+non-NULL, protected DACL), T35[W] confirms that pre-state before
+replacement, and absent, NULL, and unprotected profiles are shown refusing
+before mutation (T21[W])**; all 31
 mutants are
 demonstrated failing against their defective variants with the module hash
 pristine after each cycle, and controls reported as controls; the privacy
