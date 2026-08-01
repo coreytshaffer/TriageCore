@@ -766,12 +766,17 @@ all 34 failures uniform      metadata_precondition_failed
 structured-result gate       correctly did not run after the failure
 ```
 
-Every failure was this gate refusing before mutation, because on that runner
-the target's owner SID and the token's `TokenUser` SID were not the same
-value. Local evidence had been green throughout because on the development
-account those two SIDs coincided, so the distinction was invisible until a
-different environment exercised it. The zero-skip and fail-closed design of
-the job is what surfaced it rather than letting it pass quietly.
+Every failure reached the ownership gate's closed refusal path before
+mutation. Because the implementation compared the target owner against
+`TokenUser`, while `TokenOwner` is the quantity governing the default owner
+of newly created objects, the hosted run exposed the contract defect. The
+job did not disclose SID values and therefore does not establish the exact
+SID relationship on that runner.
+
+Local evidence had been green because the gate passed in the development
+environment; no persisted evidence established whether or why `TokenUser`
+and `TokenOwner` coincided there. The zero-skip and fail-closed design of
+the job is what surfaced the defect rather than letting it pass quietly.
 
 **Scope of the claim, stated carefully.** This amendment does **not** assert
 that hosted runners necessarily execute elevated, nor that the target's owner
@@ -780,8 +785,12 @@ was any particular well-known SID. Those would be unverified explanations of
 proving them: `TokenUser` was the wrong quantity for this precondition
 regardless of which specific SIDs a given machine reports.
 
-**No raw SIDs.** Neither this amendment nor its tests record, request, or
-emit SID values. The regression evidence is equality-shaped only, and §17's
+**No raw SIDs leave the process.** SID values are necessarily read into
+memory — the gate cannot compare owners without them, and `capture_security`
+and `GetTokenInformation` both return them. What is forbidden is disclosure
+and persistence: no raw SID is logged, serialized, persisted, placed in
+JUnit, included in the bounded job summary, or otherwise emitted. Tests may
+compare SID values in memory but report only equality or inequality. §17's
 exclusion of SIDs from results, projections, errors, JUnit, and the job
 summary is unchanged.
 
