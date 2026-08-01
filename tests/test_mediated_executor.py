@@ -1051,7 +1051,7 @@ def _replacement_differences(tmp_path, record_property, label, protect):
     record_property(
         f"{label}_metadata_differences", ",".join(labels) if labels else "none"
     )
-    return result, labels
+    return result, labels, target, post_bytes
 
 
 @windows_only
@@ -1062,7 +1062,7 @@ def test_diagnostic_inherited_dacl_replacement_components(tmp_path, record_prope
     Reports which participating components a genuine ``ReplaceFileW`` changed.
     Field labels only.
     """
-    result, labels = _replacement_differences(
+    result, labels, _target, _post_bytes = _replacement_differences(
         tmp_path, record_property, "inherited", protect=False
     )
     # dacl_auto_inherited alone is the contract-accepted monotonic transition
@@ -1083,14 +1083,45 @@ def test_diagnostic_protected_dacl_replacement_components(tmp_path, record_prope
     entries, then the same replacement and the same exact comparison run. This
     is the control that decides whether exact ordered-ACE preservation is
     achievable under bare ``ReplaceFileW`` at all. Field labels only.
+
+    A hosted pass must establish ALL of: the fixture was genuinely protected and
+    nonempty, the replacement reason code is ``ok``, the outcome is
+    ``replacement_verified``, the proposed bytes actually reached the target,
+    and the metadata differences are none or the accepted monotonic bit alone.
+    Passing on "no differences" by itself would be satisfied by any refusal.
+
+    ``pre_dacl_nonempty`` is an EVIDENCE control, not a production requirement:
+    it exists to prove a hosted success was not a trivial empty-ACL comparison.
     """
-    result, labels = _replacement_differences(
+    result, labels, target, post_bytes = _replacement_differences(
         tmp_path, record_property, "protected", protect=True
     )
-    if [x for x in labels if x != "dacl_auto_inherited"]:
+    allowed_labels = ([], ["dacl_auto_inherited"])
+
+    # An absent metadata difference is NOT on its own evidence that the
+    # invariant held: a refusal before or after mutation would also produce no
+    # differences. The control must establish that a genuine, verified,
+    # byte-effective replacement preserved the descriptor.
+    if result.reason_code != "ok":
         pytest.fail(
-            "protected_dacl_differences=" + ",".join(labels)
-            + " result=" + result.reason_code
+            "protected_replacement_result="
+            + result.reason_code
+            + " metadata_differences="
+            + (",".join(labels) if labels else "none")
+        )
+
+    if result.outcome != OUTCOME_VERIFIED:
+        pytest.fail("protected_replacement_outcome_not_verified")
+
+    # Fixed message: the test bytes are not sensitive, but keeping the
+    # diagnostic discipline uniform avoids a habit of printing observed values.
+    if target.read_bytes() != post_bytes:
+        pytest.fail("protected_post_bytes_mismatch")
+
+    if labels not in allowed_labels:
+        pytest.fail(
+            "protected_dacl_differences="
+            + (",".join(labels) if labels else "none")
         )
 
 
