@@ -7,20 +7,28 @@ Architecture approved; monolithic implementation authority withheld.
 This is a documentation-only architectural milestone. Implementation is
 decomposed into CR-DD-012A and CR-DD-012B below. CR-DD-012A received separate
 bounded implementation approval and is complete and merged through PR #107 as
-`bccaaad` as an internal, non-integrated foundation. CR-DD-012B remains
-blocked pending an implemented and reviewed CR-YK-002 atomic-claiming
-foundation, and still requires its own explicit human implementation approval
-and bounded file allowlist. Current CR-DD-009 through CR-DD-011 behavior
-remains unchanged.
+`bccaaad` as an internal, non-integrated foundation. Current CR-DD-009 through
+CR-DD-011 behavior remains unchanged.
+
+**CR-DD-012B status update.** Its sequencing prerequisite is now satisfied:
+CR-YK-002's atomic-claiming foundation is complete and merged through PR #117 as
+`5155bbb`. A documentation-only proposal for the slice now exists at
+`CR-DD-012B-shared-preview-execution-consumption.md`, settling the consumption
+questions this document deferred. **Neither the satisfied prerequisite nor the
+proposal is implementation approval.** CR-DD-012B still requires its own
+explicit human implementation approval and its own bounded file allowlist before
+any code is written. The proposal additionally records three open questions —
+most importantly whether CR-DD-013 capability evidence constrains route policy or
+only route binding — that must be settled before approval is considered.
 
 The CR-DD-012A foundation is specified in
 `CR-DD-012A-governed-decision-foundation.md`. It resolves “exact bytes” as the
 established normalized worker-facing execution representation, not raw
 filesystem or backend transport bytes. CR-DD-012A implementation authority
 is limited to its exact internal module, focused test, and documentation
-allowlist. 012A has landed; CR-DD-012B remains blocked pending an implemented
-and reviewed CR-YK-002 atomic-claiming foundation plus its own separate
-approval.
+allowlist. 012A has landed. The CR-YK-002 prerequisite has since been satisfied,
+so CR-DD-012B is now blocked solely on its own separate explicit approval and
+bounded file allowlist; its proposal is documentation-only and grants nothing.
 
 ## Decision
 
@@ -780,6 +788,13 @@ alignment in:
   alignment
 - `docs/change/requests/CR-DD-011-plan-confirmation-linkage.md` — status-only
   alignment
+
+The later CR-DD-012B proposal is a separate documentation-only change with its
+own scope — `CR-DD-012B-shared-preview-execution-consumption.md`, this document,
+`docs/current_backlog.md`, and
+`docs/architecture/daily_driver_orchestrator_spec.md`. It likewise touches no
+change log, code, test, workflow, schema, CLI, ledger, or artifact contract, and
+it grants no implementation authority.
 
 `docs/change/change_log.md` must remain untouched. No code, tests, runtime
 behavior, CLI surface, artifact schema, ledger behavior, or other documentation
