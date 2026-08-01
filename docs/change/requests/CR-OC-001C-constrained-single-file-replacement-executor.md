@@ -8,9 +8,10 @@
   draft. It is the authoritative baseline for everything below, as amended
   by §10.1a (`SE_DACL_AUTO_INHERITED` monotonic rule), §10.2a
   (`TokenOwner`), and §10.2b (supported DACL profile). Each amendment was
-  discovered by running the contract against real Windows evidence and
-  merged as a documentation-only change before the implementation was
-  corrected to match.
+  discovered by running the contract against real Windows evidence.
+  Implementation is corrected only after the corresponding
+  documentation-only amendment merges; the §10.2b implementation correction
+  remains pending on draft PR #128.
 - **Implementation status:** Authorized and in progress on draft PR #128;
   **not merged, not accepted, and not runtime-integrated.** The
   implementation does not yet conform to §10.2b: the supported-profile
