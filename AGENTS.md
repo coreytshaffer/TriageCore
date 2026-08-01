@@ -42,7 +42,7 @@ Does the work. Handles all routine coding tasks via specialized roles (RepoMappe
 | Docs & comments | Docstrings, inline comments, changelogs |
 
 The local models should be dispatched immediately for all of the above.
-Do not wait for cloud approval before starting local execution.
+Do not wait for a cloud artifact-review verdict before starting local execution.
 
 ---
 
@@ -55,13 +55,23 @@ Does not execute tasks. Supervises local output by:
    mismatches, security gaps
 3. **Issuing a correction prompt** back to the local model with precise, bounded
    feedback
-4. **Approving** the revised output once it passes, or **escalating** to direct
-   cloud execution only if the feedback loop fails to converge
+4. **Marking the revised artifact as review-passed** once it satisfies the task
+   specification and rubric, or **escalating** to direct cloud execution only if
+   the feedback loop fails to converge
 
 The supervisor's output is always one of three things:
-- ✅ **APPROVED** — artifact is correct; commit it
+- ✅ **ARTIFACT_REVIEW_PASSED** — the artifact satisfies the task specification
+  and supervisor rubric. It is an evidence/quality verdict only and does not
+  itself authorize mutation, commit, push, merge, approval of a consequential
+  effect, or recording human acceptance of evidence.
 - 🔁 **REVISE** — targeted feedback prompt for the local model to act on
 - 🚨 **ESCALATE** — local cannot fix this; cloud takes over for this task only
+
+Any next workflow action proceeds only under authority separately supplied by
+the user or governing workflow. The supervisor verdict neither creates nor
+expands authority. This terminology-only distinction changes no code, runtime,
+or permissions and grants no implementation, mutation, merge, or standing
+authority.
 
 ---
 
@@ -85,16 +95,16 @@ The supervisor's output is always one of three things:
          │   Reviews artifact     │
          └────────────┬───────────┘
                       │
-           ┌──────────┼──────────┐
-           ▼          ▼          ▼
-        APPROVED    REVISE    ESCALATE
-           │          │          │
-           ▼          ▼          ▼
-        Commit    Send feedback   Cloud executes
-                  → Local retries this task only
-                  → Supervisor
-                    reviews again
-                  (max 2 cycles)
+           ┌──────────────────────┼──────────┐
+           ▼                      ▼          ▼
+ ARTIFACT_REVIEW_PASSED        REVISE    ESCALATE
+           │                      │          │
+           ▼                      ▼          ▼
+ Return to separately      Send feedback   Cloud executes
+ authorized workflow       → Local retries this task only
+                           → Supervisor
+                             reviews again
+                           (max 2 cycles)
 ```
 
 **Cycle limit:** If the local model fails to produce an acceptable artifact
