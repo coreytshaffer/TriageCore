@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "triagecore"
 version = "0.1.0"
-description = "A lightweight, local-compute-first orchestration harness for token-efficient agent workflows."
+description = "A local-first, evidence-bound research workbench for governing AI-assisted decisions and actions."
 authors = [
     {name = "Corey"}
 ]
