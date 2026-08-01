@@ -1,6 +1,6 @@
 # TriageDesk Evaluator Panel
 
-The **Evaluator Panel** in TriageDesk is a display-only UI module designed to visualize external evaluation results of TriageCore workspace packets. 
+The **Evaluator Panel** in TriageDesk is a display-only UI module designed to visualize external evaluation results of TriageCore evaluator-input packets.
 
 > [!WARNING]
 > **Observation-Only Safety Boundary**
@@ -9,21 +9,23 @@ The **Evaluator Panel** in TriageDesk is a display-only UI module designed to vi
 ## Architectural Context
 
 This module implements the TriageDesk portion of the **Decoupled Workspace Evaluator Bridge**:
-1. `TriageCore` exports an immutable workspace packet.
+1. `TriageCore` exports a **selective, static evaluator-input packet** — a deliberately narrowed artifact assembled for evaluation, not a complete or authoritative copy of workspace state.
 2. `agent-control-evals` (or another external evaluator) assesses the packet structurally.
 3. The evaluator produces a static JSON result.
 4. **`TriageDesk` (Evaluator Panel) loads and displays that result.**
 
+The boundary at step 1 is one-way. **TriageCore does not invoke the evaluator and does not produce evaluator results.** It writes the input artifact and stops there; evaluator execution and result production are external to TriageCore, and nothing in this bridge gives TriageCore a way to run an evaluator or synthesize a result on its behalf.
+
 > "The evaluator is a signal classifier, not an approval authority."
 
-For more details on the fluidic boundary and observation-only constraints, see the [Workspace Unifier Architecture](./workspace_unifier_architecture.md).
+For more details on the fluidic boundary and observation-only constraints, see the [Workspace Unifier Architecture](architecture/workspace_unifier_architecture.md).
 
 ## Strict Display-Only Rules
 
 To maintain the safety boundary, the TriageDesk Evaluator Panel explicitly enforces the following:
 
 - **No Execution:** TriageDesk does not spawn subprocesses, invoke models, or make network calls to run evaluators. It only reads static JSON files from disk.
-- **No Inferred Approval:** Any evaluator result that attempts to claim approval authority (e.g., `approval_status != "not_approval"`, or a decision like `"approve"`) is instantly classified as **INVALID** or **UNSAFE**. 
+- **No Inferred Approval:** Any evaluator result that attempts to claim approval authority (e.g., `approval_status != "not_approval"`, or a decision like `"approve"`) is instantly classified as **INVALID** or **UNSAFE**.
 - **No Target Invocation:** Any evaluator result that claims execution capability (e.g., `target_invocation != "not_invoked"`) is instantly classified as **INVALID** or **UNSAFE**.
 
 ## History List and Loading Results
@@ -45,11 +47,19 @@ The history list represents **file outcomes**, rather than only valid evaluator 
 - **INVALID**: Valid JSON, but missing or misconfigured expected evaluator-result fields.
 - **MALFORMED**: The file is not valid JSON or could not be parsed.
 
+These statuses describe **what a file said**, not what may now happen.
+
+`PASS`, `FAIL`, `AMBIG`, and any numeric or categorical score are observational
+results only. None grants, withholds, or implies execution authority. A `PASS`
+result is neither human approval nor a required precondition for execution.
+
+A human operator remains the sole approval authority.
+
 Selecting any row in the history table updates the detail pane. For `UNSAFE`, `INVALID`, or `MALFORMED` files, the details pane displays the specific validation error to aid in debugging.
 
 ## Expected JSON Shape
 
-The panel expects a static JSON file matching the observation-only schema. 
+The panel expects a static JSON file matching the observation-only schema.
 
 Below is an example of a valid evaluator result:
 
