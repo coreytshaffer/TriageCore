@@ -11,13 +11,13 @@
   discovered by running the contract against real Windows evidence.
   Implementation is corrected only after the corresponding
   documentation-only amendment merges; the §10.2b implementation correction
-  remains pending on draft PR #128.
-- **Implementation status:** Authorized and in progress on draft PR #128;
-  **not merged, not accepted, and not runtime-integrated.** The
-  implementation does not yet conform to §10.2b: the supported-profile
-  gate, revised fixtures, T21 evidence, and M31 remain pending. §25 remains
-  the planning artifact it was written as — an allowlist, module split,
-  plan, evidence design, and acceptance boundary.
+  was applied after that amendment merged as `5e41d6f`.
+- **Implementation status:** Authorized and implemented on draft PR #128.
+  **The implementation now conforms to §10.2b**, and both local and hosted
+  validation have passed (§26.6, §26.6a). It remains **unmerged, not
+  accepted, and not runtime-integrated**, and **merge authority has not been
+  granted**. §25 remains the planning artifact it was written as — an
+  allowlist, module split, plan, evidence design, and acceptance boundary.
 - **Implementation authority:** Granted separately and explicitly, bounded
   to the seven-path allowlist of §25.1 and to the work on draft PR #128. It
   did **not** come from this document: neither the merged requirements nor
@@ -2577,10 +2577,20 @@ git diff --name-only
 git diff --stat
 ```
 
-Plus, per the standing evidence bar, the mutant cycle for each of the 27
-variants: back up the module, apply the defect, run the designated killer
-and record the failure, restore with `git checkout HEAD -- <file>`, and
-verify the module hash is pristine before the next cycle.
+Plus, per the standing evidence bar, the mutant cycle for each of the **31**
+variants (21 Windows, 10 Ubuntu): back up the module, apply the defect, run
+the designated killer and record the failure, restore with
+`git checkout HEAD -- <file>`, and verify the module hash is pristine before
+the next cycle.
+
+Two additions the implementation proved necessary (§26.3), stated here
+because this is the reviewer's concrete command set and not merely a
+historical note: **disable bytecode writing and purge caches** around every
+mutation and restoration, since a same-length mutation can otherwise be
+served from a stale `.pyc`; and **normalize each anchor to the file's own
+newline convention**, treating a missing or duplicated anchor as a hard
+failure rather than a skip, since a silently unmatched multi-line anchor
+produces a run that looks complete while having exercised nothing.
 
 ### 25.10 Stop conditions requiring renewed approval
 
@@ -2659,3 +2669,327 @@ Until every one of those is satisfied, `triage_core/mediated_executor.py`,
 `tests/test_mediated_executor.py`, and `.github/workflows/tests.yml` remain
 **unauthorized and must not exist**. CR-OC-001D and CR-OC-001E remain
 unauthorized independently of anything decided here.
+
+---
+
+# Part III — Implementation Record
+
+## 26. Implementation Record
+
+Implementation authority over the §25.1 seven-path allowlist was granted after
+the §25 proposal merged (PR #126, `0ab1522`) and the §10.1a amendment merged
+(PR #127, `8c0ad3c`), and was exercised again for the §10.2a amendment
+(PR #129, `8e19cdf`) and the §10.2b amendment (PR #130, `5e41d6f`). This
+section records what was built and what the evidence actually establishes.
+
+**The implementation now conforms to §10.2b, and both local and hosted
+validation have passed** (§26.6 and §26.6a). It is nonetheless **not
+complete, not merged, not accepted, and not runtime-integrated**, and
+**merge authority has not been granted.**
+
+### 26.1 What was implemented
+
+Four of the seven allowlisted paths were touched:
+
+```text
+triage_core/mediated_executor.py        new  policy core
+triage_core/mediated_executor_win32.py  new  Windows mechanism adapter
+tests/test_mediated_executor.py         new  36-obligation suite
+.github/workflows/tests.yml             modified, additively only
+```
+
+The three documentation paths carry this record. No eighth path was created,
+no dependency was added, `pyproject.toml` is untouched, and none of the six
+"remain unmodified" modules of §25.1 changed.
+
+The core owns policy: immutable contract types, the frozen trusted registry
+and its grammar, exact proposed-content verification, the closed vocabularies
+with a single `REASON_TO_OUTCOME` source of truth, pure
+`classify_replace_result`, pure `snapshot_from_capture` and
+`compare_security_snapshots`, the privacy-gated projection, the process-local
+lock, the Windows gate, and the sixteen-step sequence. The adapter owns
+mechanism only and imports no TriageCore module; the core imports it
+dynamically and only after the gate.
+
+### 26.2 Implementation discoveries
+
+**Five** defects were found **by building and testing the contract**, not by
+reading it. Each is a correction a reviewer should see. Three were found
+locally; **two were found only by hosted Windows CI**, which is the strongest
+available argument that the hosted job is not ceremonial.
+
+**`SE_DACL_AUTO_INHERITED` strict equality was unimplementable.** §10.1
+originally required strict equality of that control bit. A successful
+`ReplaceFileW` on real NTFS sets it on a file whose descriptor lacked it while
+preserving owner, DACL state, presence, protection, ACL revision, ACE count,
+and every complete ACE byte sequence byte-identically. As written the contract
+would have reported `metadata_preservation_failed` for the first replacement
+of essentially any inherited-DACL file. Amended to the monotonic rule of
+§10.1a before any test hardened the defect into permanent behaviour.
+
+**T8 exposed a reason-code defect in directory handling.** A directory cannot
+be opened without `FILE_FLAG_BACKUP_SEMANTICS`, so the open failed and the
+executor reported `containment_violation` where §19 T8 requires
+`target_not_regular_file`. The adapter now opens with directory-capable flags
+and the core *classifies* the opened object, which preserves the required
+reason code. Opening and then classifying is the more faithful design; the
+flag grants no rights the executing token does not already hold.
+
+**M3/M4 exposed a missing pre-open final-target reparse rejection.** §7.2
+requires reparse rejection "for the target **and** every ancestor", ordered
+before `CreateFileW`. The first implementation walked only
+`segments[:-1]`, so a reparse *target* was rejected after the handle was
+opened rather than before. `has_reparse_target` was added as a separate
+adapter call so both halves of the rule are independently enforceable and
+independently mutable, and the core now rejects either before any target
+handle exists. Without the M3/M4 mutant analysis this would have shipped as a
+latent ordering defect.
+
+**The ownership gate compared the wrong token quantity (hosted).** §10.2
+required the target's owner to equal `TokenUser`, but `TokenOwner` is the
+default owner Windows applies to newly created objects — the quantity the
+gate actually needs, since it exists to establish the owner the temporary
+file *about to be created* will receive. Local evidence was green because the
+two coincided in the development environment, with no persisted evidence
+establishing whether or why. Hosted run `30686689771` refused 34 tests
+uniformly at `metadata_precondition_failed`, exposing it. Amended as §10.2a.
+
+**A successful `ReplaceFileW` does not preserve the invariant on
+inheritance-enabled targets (hosted).** Hosted runs `30689442321`,
+`30690450931`, and `30691068391` established that an unprotected target
+differs in `dacl_auto_inherited`, `ace_count`, and `ace_bytes_or_order`
+across a *successful* call, while a present-and-protected target is exactly
+preserved under the same comparison. The response was to narrow the supported
+profile (§10.2b), never to relax §10.1. The middle run is recorded because
+its control passed while being under-asserted — absence from a failure list
+is not evidence, and the strengthened control's own assertions were then
+verified to fail when forced.
+
+### 26.3 Evidence-harness corrections
+
+**Seven** harness defects were found across the whole implementation, listed
+cumulatively rather than replaced as later ones appeared. None weakened a
+mutant or a test; each was producing a false reading about otherwise-correct
+behaviour. The first three were scoring and decoding faults; the last four
+are **evidence-integrity** faults, capable of making unexercised or
+unrestored state look like valid evidence.
+
+- **M26** — `pytest.raises` reporting `DID NOT RAISE` was scored as an unclean
+  failure. It is a clean behavioural kill: the test collected, executed, and
+  the guarded condition stopped occurring. This is the marker CR-OC-001B
+  settled on after its own harness mis-scored two mutants.
+- **M6** — `subprocess(text=True)` decoded pytest output using the Windows
+  console codepage and hit byte `0x81` from T14's BOM/NFD failure diff,
+  blanking captured output entirely and making a real kill look unclean.
+  Output is now decoded UTF-8 with replacement.
+- **M10** — T17 called `order.index("flush")`, which raises `ValueError` when
+  the flush never happens. Membership assertions now precede ordering
+  assertions so a missing flush fails on a clean assertion rather than a test
+  error, because an unclean failure is not a valid kill.
+- **Stale bytecode served a mutated constant.** A same-length mutation
+  (`_TOKEN_OWNER_CLASS = 4` → `= 1`) leaves file size unchanged, so
+  CPython's `(mtime, size)` `.pyc` invalidation heuristic could treat a cached
+  module as valid after a fast restore and keep serving the **mutated**
+  constant. That produces both false survivals and false post-restore
+  failures. Fixed by running with `-B`, setting `PYTHONDONTWRITEBYTECODE`,
+  and purging caches around every mutation and restoration.
+- **CRLF byte-mode anchors silently skipped multi-line mutants.** Git checks
+  these files out with CRLF, and the harness reads bytes without
+  universal-newline translation, so every *multi-line* anchor failed to match
+  and its mutant was **skipped rather than exercised** — while the run still
+  looked complete. Fixed by normalizing each anchor to the file's own newline
+  convention, and by making a missing or duplicated anchor a **hard failure
+  status** (`ANCHOR_NOT_FOUND`, `ANCHOR_AMBIGUOUS`) rather than a silent
+  skip. All 31 anchors are now pre-validated as present exactly once before
+  any cycle runs. This surfaced only because the silent-failure path had just
+  been made to report; all Windows mutants were rerun after the fix.
+- **`docker cp` created root-owned source files.** Copying the corrected
+  source into the Ubuntu container produced `root:root` files inside a volume
+  whose directory the container's `tc` user could write but whose files it
+  could not, so the first Ubuntu cycle raised `PermissionError` on its very
+  first write. Because the failure occurred *before* any mutation landed, the
+  `finally` restore also failed — so the file was verified against the
+  pristine hash **before anything else was done**, confirming no mutation had
+  been applied and no unrestored state existed. The files were then recreated
+  under the container user with content hashes re-verified against the
+  Windows source, and the ten cycles rerun from a clean manifest.
+- **`.pytest_cache` invalidated the repository manifest.** The 640-file
+  manifest is meant to prove the *source* tree was not disturbed, but it had
+  been generated over ephemeral pytest cache files as well, so an ordinary
+  suite run made it fail before any mutation. Narrowed to the source-
+  controlled files it is intended to protect, excluding `.pytest_cache` and
+  `__pycache__`, and verified clean both before and after every cycle.
+
+### 26.4 Evidence-integrity incident
+
+Recorded plainly, because it demonstrates why the hash and healthy-suite
+controls exist rather than being embarrassing residue.
+
+A legitimate post-baseline change — the §26.2 `has_reparse_target` fix —
+produced a hash mismatch against a manifest captured *before* that change. The
+mismatch was initially misdiagnosed as PowerShell re-encoding the file on a
+read/write round-trip. Acting on that mistaken diagnosis, the file was
+restored from the container's older staging copy, which **reverted an
+authorized implementation change**. The healthy suite exposed the regression
+on the next run with a precise failure
+(`assert 'target_not_regular_file' == 'containment_violation'`). The change
+was reapplied, the baseline and container staging authority were refreshed,
+and every subsequent mutation used the byte-safe Python harness rather than a
+shell round-trip.
+
+The root error was comparing against a baseline already invalidated by
+authorized work. No evidence was lost and no incorrect result was reported;
+the controls caught it within one cycle.
+
+### 26.5 Mutant outcome
+
+```text
+31 designated mutants
+31 clean behavioural kills
+21 Windows venue
+10 Ubuntu venue
+ 0 surviving mutants
+ 0 invalid kills
+ 0 syntax/import/collection/fixture/timeout failures counted as kills
+byte-exact restoration verified after every cycle
+```
+
+**Evidence rebinding.** Mutant evidence must bind to the final production
+and killer-test text. Because §10.2b changed the shared Windows fixture
+(healthy targets are now protected by construction) and several designated
+killers, **all 31 mutants were rerun against the final text** rather than
+resting on function-equivalence arguments for the unchanged ones — a
+complete rebinding is cheaper to justify than a per-mutant argument that a
+fixture change could not have affected it. The Ubuntu venue was resynced to
+the final tree and its manifest regenerated before its ten cycles.
+
+Before any cycle ran, **all 31 anchors were pre-validated** as present
+exactly once in their target files, after newline normalization. That check
+is what makes "31 kills" mean 31 exercised mutants rather than some smaller
+number plus silent skips (§26.3).
+
+**M31** (§10.2b) is Windows-scoped by necessity: its killer asserts refusal
+against a genuine NTFS security descriptor and a real mechanism call log,
+which the neutral core cannot produce. Under the mutant the unprotected
+target returned `ok` instead of refusing — a behavioural failure, not a
+collection or import artifact.
+
+Windows venue was exercised on a real NTFS workspace. Ubuntu venue was
+exercised in container `tc-ubuntu-mutants` (`triagecore-ubuntu-mutants:24.04`,
+Python 3.12.3, pytest 9.0.3). Running a `U`-venue killer on Windows was never
+counted as Ubuntu evidence.
+
+### 26.6 Validation results
+
+Final tree, all venues, **observed rather than carried forward**:
+
+```text
+Windows focused      149 passed / 1 optional skip
+Windows mandatory    173 passed / 1 deselected / 0 skipped
+structured gate      PASS
+recorded transition  True->True
+
+Ubuntu neutral        96 passed / 54 skipped
+Ubuntu guards         24 passed
+Ubuntu manifest       640 source files verified
+
+Full repository     1664 passed / 6 skipped
+Mutants               31/31 killed
+```
+
+**The Ubuntu "54 skipped" is not a zero-skip violation and is not the
+hosted metric.** It is what running the whole Windows-oriented executor test
+file on Ubuntu produces: every `[W]` obligation is `windows_only` and skips
+by design. The zero-skip rule applies to the *hosted mandatory group*, which
+selects `-m "not windows_optional"` on a Windows runner and reported
+**0 skipped** (§26.6a). Conflating the two would be reading a Ubuntu
+platform skip as a mandatory-evidence gap.
+
+The recorded transition is now `True->True` rather than the earlier
+`False->True`. That is a direct consequence of §10.2b: a protected DACL
+already carries `SE_DACL_AUTO_INHERITED`, so the bit does not flip. Both are
+accepted transitions under §10.1a — which is precisely why that section
+refused to *require* `False->True`. Had it mandated the normalization, the
+supported profile would have failed acceptance for exhibiting a transition
+the contract itself accepts.
+
+All 36 obligations have a designated test, machine-checked by a ledger test
+that parses the suite and asserts coverage of exactly 1–36 with no strays.
+
+### 26.6a Hosted Windows evidence
+
+```text
+Run                    30694001033
+PR head                257966b5899a96143f1757fb4694eca3448aeb13
+checked-out merge ref  c5e8a9e4764f954f8d3baf263dfaaf0f783ec855
+base                   5e41d6fc27f505e14b206d0e743add020428bfba
+
+Windows Server 2025
+build 10.0.26100
+image windows-2025-vs2026
+image version 20260714.173.1
+Python 3.12.10
+NTFS
+
+mandatory tests        173
+mandatory skipped        0
+structured gate        PASS
+transition             True->True
+symlink probe          pass
+```
+
+**The tested tree is the generated merge commit, not the head commit.**
+GitHub Actions builds a merge of the pull request head into its base and
+checks that out; `c5e8a9e` has exactly two parents, `5e41d6f` (base) and
+`257966b` (head), verified through the commits API rather than assumed. The
+run's own `headSha` field reports `257966b`, which is the *association*, not
+the checkout. Recording only one of the two would misstate what was tested.
+
+All four jobs were green: the three Ubuntu pytest matrix jobs (3.10, 3.11,
+3.12) and `windows_executor`.
+
+**This satisfies the hosted Windows portions of §21 and §25.7 for that
+tested tree.** It is not a universal Windows guarantee, and it is not
+evidence about any later commit: any subsequent change produces a different
+merge ref and requires its own hosted run.
+
+### 26.7 What this evidence does not establish
+
+- **Hosted Windows validation has now been achieved** (§26.6a), for the
+  tested merge ref only. It is not a universal Windows guarantee and says
+  nothing about any later commit.
+- The `windows_optional` symlink probe **skipped locally** — the development
+  environment withheld the privilege — while the **hosted supplemental probe
+  passed**. Both facts are recorded as they occurred; the probe is outside
+  the 36 obligations and outside the zero-skip calculation, and contributes
+  nothing to acceptance either way.
+- The recorded `True->True` transition is **one accepted observation, not a
+  required platform behaviour**. §10.1a governs: `False->False`,
+  `False->True`, and `True->True` are all accepted, reproduction of any
+  particular one is observational, and only `True->False` or another
+  metadata difference fails.
+- Nothing here establishes hostile-writer safety, cross-process exclusion,
+  OpenClaw containment, caller or broker authentication, capability or
+  reservation integration, exactly-once execution, or that observing a
+  postcondition proves this invocation caused it. CR-OC-001C is **not
+  complete, not merged, not accepted, and not runtime-integrated**, and no
+  runtime module imports either new module.
+- Implementation authority is spent only when this implementation is accepted.
+  **Merge authority was not granted.**
+
+### 26.8 Known cosmetic residue
+
+`pytest.mark.windows` and `pytest.mark.windows_optional` are unregistered, so
+pytest emits `PytestUnknownMarkWarning` — **46 occurrences** in the hosted
+mandatory run (`173 passed, 1 deselected, 46 warnings`), up from 40 as
+§10.2b added marked tests. Registering the markers
+would require editing `pyproject.toml` — an eighth path. The warnings are
+cosmetic, marker-based selection works, and escalation to strict-marker
+enforcement is treated as a stop condition rather than a reason to widen
+scope.
+
+A local environment note, not a repository defect: this machine's editable
+install resolves `triage_core` to a different worktree, so local runs used an
+explicit path. **No `PYTHONPATH` manipulation was added to CI** — a clean
+hosted runner's editable install points at its own checkout, and injecting an
+override could mask a genuine packaging defect.
