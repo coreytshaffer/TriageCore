@@ -206,17 +206,41 @@ this closeout. Detailed design history lives in the CR document.
   - Status: candidate epic, backlog-only; no slice is approved or active. This
     entry grants no implementation, runtime integration, branch, merge, or
     standing authority for any slice.
-  - Identity thesis: TriageCore is a local-first, evidence-bound control-plane
-    research workbench. Resource-aware routing remains one current governed
-    decision-and-evidence subsystem rather than the whole identity.
+  - Identity thesis: TriageCore is a local-first, evidence-bound research
+    workbench for governing AI-assisted decisions and consequential actions
+    through explicit authority, reviewable artifacts, bounded execution
+    mechanisms, and independently governed evaluation boundaries.
+    Resource-aware routing remains one governed subsystem rather than the whole
+    identity.
+  - Category distinctions: **workbench** names the maturity and research posture;
+    **control plane** names an architectural function; **harness** names the
+    experimental and evaluation role; **runtime** applies only to
+    execution-bearing paths. Do not describe TriageCore as a platform, general
+    agent runtime, complete containment system, or safety-certification
+    authority.
   - Continuity: preserve local control and operator sovereignty, evidence before
     claims, explicit authority, fail-closed uncertainty, reviewable artifacts,
     and the separation of observation, recommendation, authorization,
     execution, and evaluation.
-  - Sequenced track 1 — **Identity consolidation**: first inventory the enduring
-    architectural pillars; reconcile README, architecture, portfolio/submission
-    claims, and backlog language; and distinguish carefully among workbench,
-    control-plane, runtime, and containment claims.
+  - Scope taxonomy:
+    - **Governance kernel**: decision integrity; identity and authority;
+      capability and effect bounds; evidence and reconstruction; review and
+      human control; evaluator independence; privacy and provenance.
+    - **Supporting subsystems**: routing; tokens and context; energy; telemetry;
+      workspace and presentation surfaces; provider adapters.
+    - **Adjacent applications**: software agents, environmental or edge
+      workflows, and external agent frameworks.
+  - Sequenced track 1 — **Identity consolidation**: inventory the enduring
+    architectural pillars, preserve the category distinctions above, and use
+    this candidate documentation order: canonical identity document;
+    `pyproject.toml`; README; `AGENTS.md` supervisor terminology; claim
+    boundaries; architecture overview/index; portfolio/submission language; and
+    backlog taxonomy. Each item is a separately reviewable documentation slice,
+    not authorization to perform it now.
+  - `AGENTS.md` terminology checkpoint: a cloud supervisor's quality verdict
+    must not be confused with human authorization for mutation or consequential
+    effects. Future consolidation should distinguish artifact-review
+    pass/revise/escalate outcomes from approval authority.
   - Sequenced track 2 — **Agentic boundary governance**: after the identity work,
     investigate evaluation-environment assurance, evaluator-harness threat
     modeling, incident-derived adversarial fixtures, delegation-chain
