@@ -909,8 +909,11 @@ def _execute_on_windows(
 
         # Pre-mutation ownership gate: ReplaceFileW does not preserve the
         # owner, so an unpreservable case is refused rather than promised.
+        # The comparison is against the token's DEFAULT OWNER -- the owner the
+        # temporary file about to be created will actually receive -- and not
+        # against the token's user account (CR section 10.2a).
         try:
-            if pre_snapshot.owner_sid != win32.process_owner_sid():
+            if pre_snapshot.owner_sid != win32.process_default_owner_sid():
                 return _build_result(effect, REASON_METADATA_PRECONDITION_FAILED)
         except adapter_error:
             return _build_result(effect, REASON_METADATA_PRECONDITION_FAILED)

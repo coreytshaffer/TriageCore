@@ -63,7 +63,13 @@ SE_DACL_PROTECTED = 0x1000
 
 _ACL_SIZE_INFORMATION_CLASS = 2
 TOKEN_QUERY = 0x0008
-_TOKEN_USER_CLASS = 1
+
+# TokenOwner (information class 4), NOT TokenUser (1). TokenUser identifies the
+# token's user account; TokenOwner is the default owner SID Windows applies to
+# newly created objects. The caller's ownership gate must reason about the
+# owner the temporary file will actually receive, so this is the only token
+# quantity this adapter exposes (CR section 10.2a).
+_TOKEN_OWNER_CLASS = 4
 
 # ACE_HEADER is AceType (1) + AceFlags (1) + AceSize (2).
 ACE_HEADER_SIZE = 4
@@ -154,12 +160,8 @@ class _ACE_HEADER(ctypes.Structure):
     ]
 
 
-class _SID_AND_ATTRIBUTES(ctypes.Structure):
-    _fields_ = [("Sid", ctypes.c_void_p), ("Attributes", wintypes.DWORD)]
-
-
-class _TOKEN_USER(ctypes.Structure):
-    _fields_ = [("User", _SID_AND_ATTRIBUTES)]
+class _TOKEN_OWNER(ctypes.Structure):
+    _fields_ = [("Owner", ctypes.c_void_p)]
 
 
 # --- Library bindings ---------------------------------------------------------
@@ -717,25 +719,37 @@ def _sid_to_canonical_bytes(sid_pointer: int) -> bytes:
         _K32.LocalFree(ctypes.cast(text, ctypes.c_void_p))
 
 
-def process_owner_sid() -> bytes:
-    """Canonical SID of the executing principal."""
+def process_default_owner_sid() -> bytes:
+    """Canonical SID of the token's **default owner**.
+
+    This is ``TokenOwner`` (information class 4), the owner Windows applies to
+    objects this process creates without an explicit owner in a security
+    descriptor -- which is exactly the temporary file the caller is about to
+    create. It is deliberately **not** ``TokenUser``, which identifies the
+    token's user account and says nothing about the new object's owner.
+
+    Both ``GetTokenInformation`` calls -- the sizing probe and the retrieval --
+    pass ``_TOKEN_OWNER_CLASS``, and a test asserts that on both.
+    """
     token = wintypes.HANDLE()
     if not _ADV.OpenProcessToken(
         _K32.GetCurrentProcess(), TOKEN_QUERY, ctypes.byref(token)
     ):
-        raise Win32AdapterError("process_owner_sid", _last_error())
+        raise Win32AdapterError("process_default_owner_sid", _last_error())
     try:
         needed = wintypes.DWORD(0)
-        _ADV.GetTokenInformation(token, _TOKEN_USER_CLASS, None, 0, ctypes.byref(needed))
+        _ADV.GetTokenInformation(
+            token, _TOKEN_OWNER_CLASS, None, 0, ctypes.byref(needed)
+        )
         if needed.value == 0:
-            raise Win32AdapterError("process_owner_sid", _last_error())
+            raise Win32AdapterError("process_default_owner_sid", _last_error())
         buffer = ctypes.create_string_buffer(needed.value)
         if not _ADV.GetTokenInformation(
-            token, _TOKEN_USER_CLASS, buffer, needed.value, ctypes.byref(needed)
+            token, _TOKEN_OWNER_CLASS, buffer, needed.value, ctypes.byref(needed)
         ):
-            raise Win32AdapterError("process_owner_sid", _last_error())
-        token_user = ctypes.cast(buffer, ctypes.POINTER(_TOKEN_USER)).contents
-        return _sid_to_canonical_bytes(token_user.User.Sid)
+            raise Win32AdapterError("process_default_owner_sid", _last_error())
+        token_owner = ctypes.cast(buffer, ctypes.POINTER(_TOKEN_OWNER)).contents
+        return _sid_to_canonical_bytes(token_owner.Owner)
     finally:
         close_handle(token.value)
 

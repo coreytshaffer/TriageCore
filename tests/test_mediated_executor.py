@@ -22,6 +22,7 @@ evidence, not genuine-filesystem evidence.
 
 from __future__ import annotations
 
+import ctypes
 import hashlib
 import json
 import os
@@ -1220,7 +1221,7 @@ FILESYSTEM_CALLS = {
     "read_exact_bounded",
     "write_all",
     "flush_and_close",
-    "process_owner_sid",
+    "process_default_owner_sid",
     "capture_security",
     "replace_file",
     "delete_file",
@@ -1764,16 +1765,21 @@ def test_t21w_injected_malformed_post_capture_is_ambiguous(tmp_path, monkeypatch
 
 @windows_only
 @pytest.mark.windows
-def test_t20_owner_gate_refuses_a_foreign_owner_before_any_mutation(
+def test_t20_injected_incompatible_default_owner_refuses_before_mutation(
     tmp_path, monkeypatch
 ):
-    """SEAM-INJECTED foreign principal. ReplaceFileW does not preserve the
-    owner, so an unpreservable case is refused rather than promised."""
+    """T20 part 1. SEAM-INJECTED incompatible default owner.
+
+    ``ReplaceFileW`` does not preserve the owner, so an unpreservable case is
+    refused rather than promised.
+    """
     pre_bytes, post_bytes = b"original\n", b"replacement\n"
     root, target = workspace(tmp_path, content=pre_bytes)
     calls = []
     instrument(
-        monkeypatch, calls, {"process_owner_sid": lambda: b"S-1-5-21-9-9-9-4242"}
+        monkeypatch,
+        calls,
+        {"process_default_owner_sid": lambda: b"S-1-5-21-9-9-9-4242"},
     )
 
     result = execute_replacement(
@@ -1789,14 +1795,99 @@ def test_t20_owner_gate_refuses_a_foreign_owner_before_any_mutation(
 
 @windows_only
 @pytest.mark.windows
-def test_t20_owner_gate_passes_for_the_executing_principal(tmp_path):
-    """Control: the real owner matches, so the gate does not block."""
+def test_t20_created_file_owner_equals_the_token_default_owner(tmp_path):
+    """T20 part 2. A file this process creates without an explicit security
+    descriptor carries the token's default owner.
+
+    That is the property the gate depends on, and it is why the gate must read
+    ``TokenOwner`` rather than ``TokenUser``. Equality-shaped only: neither SID
+    value is attached to the assertion or otherwise emitted.
+    """
+    import triage_core.mediated_executor_win32 as win32
+
+    root, target = workspace(tmp_path)
+    created_owner = capture_snapshot(target).owner_sid
+    default_owner = win32.process_default_owner_sid()
+
+    assert created_owner == default_owner
+
+
+@windows_only
+@pytest.mark.windows
+def test_t20_ordinary_replacement_passes_the_gate_and_preserves_owner(tmp_path):
+    """T20 part 3. The gate does not block an ordinary target, and the owner
+    is preserved across the replacement."""
     pre_bytes, post_bytes = b"original\n", b"replacement\n"
-    root, _ = workspace(tmp_path, content=pre_bytes)
+    root, target = workspace(tmp_path, content=pre_bytes)
+    before = capture_snapshot(target).owner_sid
+
     result = execute_replacement(
         registry_for(root), make_effect(pre=pre_bytes, post=post_bytes), post_bytes
     )
+
     assert result.reason_code == "ok"
+    assert result.outcome == OUTCOME_VERIFIED
+    assert capture_snapshot(target).owner_sid == before
+
+
+@windows_only
+@pytest.mark.windows
+def test_t20_adapter_queries_token_owner_information_class(monkeypatch):
+    """T20, designated killer for M30. DETERMINISTIC and host-independent.
+
+    Records the information class passed to every ``GetTokenInformation`` call
+    and asserts both the sizing probe and the retrieval request ``TokenOwner``.
+    A narrowly fake ``_ADV`` is substituted so the assertion does not depend on
+    whether ``TokenUser`` and ``TokenOwner`` happen to resolve to the same SID
+    on the machine under test -- which is precisely how the original defect
+    escaped local evidence.
+    """
+    import triage_core.mediated_executor_win32 as win32
+
+    requested_classes = []
+    sid_blob = b"\x01\x01\x00\x00\x00\x00\x00\x05\x12\x00\x00\x00"
+
+    class _FakeAdv:
+        def OpenProcessToken(self, process, access, token_ref):
+            token_ref._obj.value = 1234
+            return 1
+
+        def GetTokenInformation(self, token, info_class, buffer, length, needed):
+            requested_classes.append(int(info_class))
+            if buffer is None:
+                needed._obj.value = ctypes.sizeof(ctypes.c_void_p)
+                return 0
+            ctypes.cast(
+                buffer, ctypes.POINTER(win32._TOKEN_OWNER)
+            ).contents.Owner = ctypes.cast(
+                ctypes.create_string_buffer(sid_blob), ctypes.c_void_p
+            ).value
+            return 1
+
+    monkeypatch.setattr(win32, "_ADV", _FakeAdv())
+    monkeypatch.setattr(win32, "_sid_to_canonical_bytes", lambda p: b"S-1-5-18")
+    monkeypatch.setattr(win32, "close_handle", lambda h: None)
+
+    assert win32.process_default_owner_sid() == b"S-1-5-18"
+
+    # Two calls are expected: one for buffer sizing, one for retrieval.
+    assert requested_classes == [
+        win32._TOKEN_OWNER_CLASS,
+        win32._TOKEN_OWNER_CLASS,
+    ]
+    assert set(requested_classes) == {4}
+
+
+def test_t20_adapter_exposes_no_dormant_token_user_machinery():
+    """Leaving TokenUser definitions in place would weaken M30 and confuse
+    review, so their absence is asserted rather than assumed."""
+    with open(
+        os.path.join(PRODUCTION, "mediated_executor_win32.py"), "r", encoding="utf-8"
+    ) as handle:
+        source = handle.read()
+    assert "_TOKEN_USER_CLASS" not in source
+    assert "class _TOKEN_USER" not in source
+    assert "_TOKEN_OWNER_CLASS = 4" in source
 
 
 # --- Resolution: only target_file_id selects the target ----------------------
