@@ -33,9 +33,12 @@ remains blocked. CR-DD-012's shared-decision architecture is approved, but monol
 implementation is withheld. **CR-DD-012A is complete and merged through PR #107 as
 `bccaaad`.** It distinguishes optional provenance source bytes, normalized component
 bytes under current UTF-8/text semantics, and authoritative assembled worker-execution
-bytes, but grants no integration authority; no public command consumes it. CR-DD-012B
-remains blocked pending an implemented and reviewed CR-YK-002 atomic-claiming foundation
-plus its own explicit approval. **CR-DD-013 is implemented and merged through PR #116 as
+bytes, but grants no integration authority; no public command consumes it. CR-DD-012B's
+CR-YK-002 atomic-claiming prerequisite is satisfied through PR #117 as `5155bbb`, and a
+documentation-only proposal now exists at
+`docs/change/requests/CR-DD-012B-shared-preview-execution-consumption.md`; implementation
+remains blocked on its own explicit approval and bounded file allowlist, and the proposal
+is not that approval. **CR-DD-013 is implemented and merged through PR #116 as
 `98df9c1`.** `tc run` now resolves recorded capability evidence and binds that resolution
 into route selection; configured route declarations and observed reachability remain
 separate inputs. Its documentation-only closeout merged through PR #132 at `6d585268` and
@@ -88,7 +91,8 @@ after M0 (below) produces daily-use evidence. See **Evidence Requirements**.
   artifact review linkage. Execution still does not consume that artifact or the same
   immutable decision. CR-DD-012A's bounded internal, non-integrated foundation and focused
   tests are complete and merged through PR #107 as `bccaaad`; no public command consumes
-  them. CR-DD-012B has no implementation authority. The future shared path must use one immutable input snapshot
+  them. CR-DD-012B has a documentation-only proposal and still has no implementation
+  authority. The future shared path must use one immutable input snapshot
   so execution does not reopen or reconstruct governed inputs. Confirmed-artifact
   execution remains a later, separately gated CR; `triagecore run-pipeline` also remains
   local-only and bypasses the router.
@@ -132,10 +136,24 @@ backwards.
    the immutable input snapshot around `SourceBytes`,
    `NormalizedComponentBytes`, and authoritative `AssembledExecutionBytes`, plus the
    canonical decision, pure normalizer/builder, identity, and focused tests with no CLI,
-   ledger, worker, route, or plan-v2 change; then **M0.3b / CR-DD-012B**, still blocked
-   until 012A lands and 012B receives separate approval, owns shared preview/execution
-   consumption, envelope enforcement, bounded decision-ID linkage, and parity/fail-closed
-   tests. `governed_run_plan.v2`, durable `RuntimeObservation`/`ExecutionRecord` contracts,
+   ledger, worker, route, or plan-v2 change; then **M0.3b / CR-DD-012B**, whose
+   CR-YK-002 prerequisite is now satisfied and whose documentation-only proposal is
+   recorded, but which remains blocked until it receives its own separate approval and
+   bounded file allowlist. It owns shared preview/execution consumption, envelope
+   enforcement, bounded decision-ID linkage, and parity/fail-closed tests. A recorded
+   decision settles that CR-DD-013 capability evidence constrains **execution binding
+   only** and never governed-decision formation, so stable inputs produce the decision,
+   route intent, envelope, and decision ID while volatile observations may only
+   execute, bind an already-authorized fallback, or fail closed. That is a deliberate
+   correction to current `tc run` route selection, recorded as such. Five approval gates
+   bind at two stages: the two proposal-stage preconditions — the recorded capability
+   decision and the pre-`planning` seam statement — are satisfied, while the three test
+   obligations must be **bound by** any bounded implementation approval and **satisfied
+   before** implementation acceptance, merge, or closeout. Those three are replacing
+   rather than deleting the CR-DD-012A integration-absence guard, a negative test that
+   post-decision capability change cannot alter the decision ID, route policy, or
+   envelope, and a negative test that unavailable capability yields only an authorized
+   fallback or a closed failure. `governed_run_plan.v2`, durable `RuntimeObservation`/`ExecutionRecord` contracts,
    and confirmed-plan execution remain deferred.
 5. **M1 — Capability binding complete; real route bindings and circuit breakers remain
    open** (G3, G4, G6).
