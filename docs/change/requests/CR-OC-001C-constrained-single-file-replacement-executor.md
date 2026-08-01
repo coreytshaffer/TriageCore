@@ -12,27 +12,28 @@
   Implementation is corrected only after the corresponding
   documentation-only amendment merges; the §10.2b implementation correction
   was applied after that amendment merged as `5e41d6f`.
-- **Implementation status:** Authorized and implemented on draft PR #128.
-  **The implementation now conforms to §10.2b**, and both local and hosted
-  validation have passed (§26.6, §26.6a). It remains **unmerged, not
-  accepted, and not runtime-integrated**, and **merge authority has not been
-  granted**. §25 remains the planning artifact it was written as — an
-  allowlist, module split, plan, evidence design, and acceptance boundary.
-- **Implementation authority:** Granted separately and explicitly, bounded
-  to the seven-path allowlist of §25.1 and to the work on draft PR #128. It
-  did **not** come from this document: neither the merged requirements nor
-  §25 authorizes code, tests, fixtures, a dependency change, a CI change, a
+- **Implementation status:** **Complete, accepted, and merged** through
+  PR #128 as merge commit `f65a864`. Local and hosted validation passed as
+  recorded in §26. The implementation remains deliberately
+  **non-runtime-integrated**: no runtime module imports or invokes the
+  executor.
+- **Authority status:** Implementation and merge authority for CR-OC-001C
+  have been **exercised and are now spent.** Any correction, expansion,
+  runtime integration, or change to the supported profile requires **new
+  authority**. Neither this document nor §25 was ever the source of that
+  authority: each grant was separate and explicit, bounded to the §25.1
+  seven-path allowlist, and none of it extended to a dependency change, a
   CLI or `tc run` change, runtime integration, a capability or reservation
   change, IPC, Windows account work, or OpenClaw installation or
-  configuration. **Merging the requirements was not implementation
-  authority, and drafting §25 is not implementation authority.** No
-  authority extends beyond that allowlist, and none of it is merge
-  authority.
+  configuration.
 - **Approval gate:** Explicit human approval was required before
-  implementation and is required again before any merge. Recording a
-  proposal satisfies neither, and the implementation approval already
-  granted is not merge approval.
-- **Still unauthorized:** CR-OC-001D, CR-OC-001E, and every runtime surface.
+  implementation and again before merge. **Both gates were satisfied for
+  CR-OC-001C** — implementation authority over the §25.1 allowlist, then
+  merge authority once hosted evidence passed. That history establishes no
+  precedent and no standing permission: every later slice requires its own
+  separate approval, and recording a proposal still satisfies neither gate.
+- **Still unauthorized:** CR-OC-001D, CR-OC-001E, and every runtime
+  consumer.
 
 Sections 2–24 define the requirements an implementation must satisfy. They
 are written so that an implementation agent cannot choose materially
@@ -1934,6 +1935,16 @@ Recorded rather than glossed:
 
 ## 25. Implementation Proposal (planning only — grants no authority)
 
+> **Supersession note (closeout).** §25 is preserved verbatim as the
+> planning artifact it was, written *before* implementation authority
+> existed. Its "grants no authority" statements were true when written and
+> remain true as statements about §25 itself: authority came from separate,
+> explicit operator grants, never from this section. The conditions §25.11
+> sets out were subsequently satisfied, and the work it plans was
+> implemented and merged (PR #128, `f65a864`) — see §1 for current status
+> and §26.9 for the closure record. Nothing here is rewritten to read as
+> though it had authorized the work.
+
 This part is a **planning and authorization proposal** drafted against the
 requirements contract merged as `0b2b8a5e4397a903f5a48a07be8c86f6701ad5b8`.
 It proposes *how* the contract would be satisfied and *what evidence* would
@@ -2670,6 +2681,13 @@ Until every one of those is satisfied, `triage_core/mediated_executor.py`,
 **unauthorized and must not exist**. CR-OC-001D and CR-OC-001E remain
 unauthorized independently of anything decided here.
 
+> **Superseded by events, not by revision.** All five conditions above were
+> subsequently satisfied by separate explicit operator approvals, and those
+> four paths now exist on `main` (PR #128, `f65a864`). The final sentence
+> still holds unchanged: **CR-OC-001D and CR-OC-001E remain unauthorized**,
+> as does every runtime consumer. The authority exercised here is spent
+> (§1).
+
 ---
 
 # Part III — Implementation Record
@@ -2682,10 +2700,12 @@ the §25 proposal merged (PR #126, `0ab1522`) and the §10.1a amendment merged
 (PR #129, `8e19cdf`) and the §10.2b amendment (PR #130, `5e41d6f`). This
 section records what was built and what the evidence actually establishes.
 
-**The implementation now conforms to §10.2b, and both local and hosted
-validation have passed** (§26.6 and §26.6a). It is nonetheless **not
-complete, not merged, not accepted, and not runtime-integrated**, and
-**merge authority has not been granted.**
+**The implementation conforms to §10.2b, both local and hosted validation
+passed** (§26.6 and §26.6a), and it was **merged through PR #128 as
+`f65a864`** (§26.9). It remains **non-runtime-integrated**: no runtime
+module imports or invokes the executor, and CR-OC-001D, CR-OC-001E, and
+every runtime consumer remain separately unauthorized. The authority
+exercised here is spent (§1).
 
 ### 26.1 What was implemented
 
@@ -2971,11 +2991,13 @@ merge ref and requires its own hosted run.
 - Nothing here establishes hostile-writer safety, cross-process exclusion,
   OpenClaw containment, caller or broker authentication, capability or
   reservation integration, exactly-once execution, or that observing a
-  postcondition proves this invocation caused it. CR-OC-001C is **not
-  complete, not merged, not accepted, and not runtime-integrated**, and no
-  runtime module imports either new module.
-- Implementation authority is spent only when this implementation is accepted.
-  **Merge authority was not granted.**
+  postcondition proves this invocation caused it. **Merging did not change
+  this**: CR-OC-001C is merged but remains **not runtime-integrated**, no
+  runtime module imports either new module, and none of the properties above
+  became established by the act of merging.
+- Implementation and merge authority are now **spent** (§1). Any correction,
+  expansion, runtime integration, or change to the supported profile requires
+  new authority.
 
 ### 26.8 Known cosmetic residue
 
@@ -2993,3 +3015,38 @@ install resolves `triage_core` to a different worktree, so local runs used an
 explicit path. **No `PYTHONPATH` manipulation was added to CI** — a clean
 hosted runner's editable install points at its own checkout, and injecting an
 override could mask a genuine packaging defect.
+
+### 26.9 Closure record
+
+```text
+PR                     #128
+merged                  2026-08-01T09:53:15Z
+merge commit            f65a86423d520a9583c47e5863b90159b4b040ac
+parents                 5e41d6f + dec98b1
+tested generated merge  86d43b7
+tree comparison         zero file differences
+implementation branch   deleted after ancestry verification
+runtime integration     none
+```
+
+**The tested tree and the merged tree are the same tree.** CI ran against
+the generated merge commit `86d43b7`, not against `f65a864`, and the two
+have different commit graphs — but a file-level comparison shows **zero
+differences**, so the complete four-job evidence from run `30694417116`
+applies to the tree now on `main`. The post-merge local run
+(`149 passed / 1 skipped`) is supplemental confirmation, **not** the
+acceptance basis; the hosted run is.
+
+The implementation branch was deleted only after verifying that `dec98b1`
+is an ancestor of `main` and that zero commits existed on the branch but not
+in the merged history.
+
+**What this merge completed, stated narrowly.** It completes CR-OC-001C's
+**bounded executor slice**: a Windows/NTFS constrained single-file
+replacement executor, existing as a **non-integrated library surface** that
+only tests invoke. It does **not** complete the broader OpenClaw lane or the
+mediated-execution lane. CR-OC-001D (broker and named pipe), CR-OC-001E
+(OpenClaw tool), and every runtime consumer remain separately unauthorized,
+and no runtime module imports or invokes the executor. The non-claims of
+§26.7 survive the merge unchanged — merging code does not convert any of
+them into established properties.
