@@ -202,6 +202,38 @@ this closeout. Detailed design history lives in the CR document.
 
 ## Candidate Future Work
 
+- TriageCore identity consolidation and agentic boundary governance
+  - Status: candidate epic, backlog-only; no slice is approved or active. This
+    entry grants no implementation, runtime integration, branch, merge, or
+    standing authority for any slice.
+  - Identity thesis: TriageCore is a local-first, evidence-bound control-plane
+    research workbench. Resource-aware routing remains one current governed
+    decision-and-evidence subsystem rather than the whole identity.
+  - Continuity: preserve local control and operator sovereignty, evidence before
+    claims, explicit authority, fail-closed uncertainty, reviewable artifacts,
+    and the separation of observation, recommendation, authorization,
+    execution, and evaluation.
+  - Sequenced track 1 — **Identity consolidation**: first inventory the enduring
+    architectural pillars; reconcile README, architecture, portfolio/submission
+    claims, and backlog language; and distinguish carefully among workbench,
+    control-plane, runtime, and containment claims.
+  - Sequenced track 2 — **Agentic boundary governance**: after the identity work,
+    investigate evaluation-environment assurance, evaluator-harness threat
+    modeling, incident-derived adversarial fixtures, delegation-chain
+    capability attenuation building on CR-095, reality-and-scope uncertainty
+    handling, trajectory-level policy evaluation, and incident reconstruction
+    and recovery.
+  - Sequence boundary: near-term work is documentary and research-only. Later
+    implementation candidates must remain separate slices; every code-bearing
+    or integration slice requires its own approved CR and authoritative evidence
+    or versioned profile, as applicable.
+  - Uncertainty and limitations: preserve the distinctions among current,
+    implemented-but-disconnected, and future components. Do not claim that
+    TriageCore solves alignment, certifies safety, or currently composes
+    authorization through execution end to end.
+  - Scope test: `Does this strengthen the evidence-bound governance kernel, or is
+    it merely an interesting adjacent capability?`
+
 - Agent authority and delegation boundary
   - Source: CR-095 task-scoped agent authority manifest
   - Status: authority manifest contract, reviewer-style example, invalid example, and metadata-only CLI validation complete; identity-registry binding, manifest signing, admission enforcement, and route enforcement remain future slices
