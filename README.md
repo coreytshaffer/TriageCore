@@ -4,10 +4,22 @@
 
 **Observable, Traceable, Data-Driven**
 
-TriageCore is an observable, traceable, data-driven control-plane harness for evaluating local AI routing decisions. It records structured evidence about model and runtime choices, agent-group behavior, token use, latency, quality gates, and energy-measurement tier before making stronger orchestration claims. The project remains an early research workbench for AI-assisted software work that keeps local control, reviewable artifacts, and privacy boundaries visible to the operator. It can generate preflight and handoff packets, inspect privacy-safe route audit events, run local benchmark/report workflows, and support a bounded Qwen Cloud path for external-safe packets.
+TriageCore is a local-first, evidence-bound research workbench for governing
+AI-assisted decisions and consequential actions. It uses explicit authority,
+reviewable artifacts, bounded execution mechanisms, and independently governed
+evaluation boundaries while keeping policy and evidence visible to the operator.
+Resource-aware routing remains one governed subsystem rather than the whole
+identity. Current integrated paths coexist with separate and
+implemented-but-disconnected foundations; see the
+[canonical identity reference](docs/architecture/triagecore_identity.md) for the
+wording and status boundaries.
 
 > **Status**
-> TriageCore is active as a local-first prototype/workbench. Current capabilities, supporting docs, tests, and demo paths are in-repo now. Broader governance, release polish, and long-term environmental-edge integrations should be treated as ongoing work, not completed product claims.
+> TriageCore is active as a local-first prototype/workbench, not a production
+> governance platform or safety-certification system. Current and integrated,
+> current but optional, implemented separate-lane, implemented but disconnected,
+> and future capabilities are distinct statuses. Supporting docs, tests, and demo
+> paths must be read within those boundaries.
 
 ## Feedback Wanted
 
@@ -21,17 +33,33 @@ Share feedback in [GitHub Discussions](https://github.com/coreytshaffer/TriageCo
 
 ## What It Does Today
 
-- Verifies operator environment and local repo state with `tc doctor`.
-- Generates reviewable preflight and handoff artifacts with `tc preflight` and `tc handoff`.
-- Records and inspects privacy-safe route audit events with `tc audit`.
-- Validates and renders offline Task Envelope and Admission Evidence contracts via the `tc task-envelope` and `tc admission` CLI tools.
-- Validates static agent authority manifests with `tc authority check` without granting execution authority.
-- Supports local benchmark fixtures and benchmark reports without hiding the evidence trail.
-- Enforces local-only privacy boundaries before any optional external-safe Qwen Cloud path is considered.
+- Forms governed `tc run` decisions from privacy preflight, recorded
+  local-runtime capability evidence, routing policy, terminal handoff rules,
+  configured backend execution, validation, and ledger evidence.
+- Verifies the operator environment and local repo state with `tc doctor` and
+  produces reviewable preflight, handoff, build-review, audit, and review
+  projections while keeping system recommendations distinct from human
+  decisions.
+- Validates and renders Task Envelope and Admission Evidence contracts and
+  validates static agent authority manifests without granting execution
+  authority.
+- Implements request-bound WebAuthn receipts and the atomic capability lifecycle
+  as a separate lane, while mediated effect, reservation, capability-binding,
+  and constrained-replacement foundations remain disconnected from current
+  `tc run`.
+- Supports local benchmark/report workflows, Workspace Unifier views,
+  TriageDesk read-only review and observability, bounded handoffs, and static,
+  unscored evaluator-input exports that keep evaluation external without
+  invoking or deploying an independent evaluator. TriageDesk has no
+  action/executor bridge.
+- Enforces local-only privacy boundaries before optional external-safe Qwen
+  routing and keeps resource-aware route considerations inspectable as one
+  governed subsystem.
 
 ### Experimental WebAuthn Authorization
 
-CR-YK-001 prototypes request-bound WebAuthn authorization receipts. Two
+CR-YK-001 implements request-bound WebAuthn authorization receipts, and
+CR-YK-002 implements the atomic capability lifecycle as a separate lane. Two
 independently enrolled physical YubiKeys are the optimal production and
 recovery posture. When a second hardware key is unavailable, TriageCore
 supports a separately enrolled and labeled cross-device phone WebAuthn
@@ -43,10 +71,13 @@ for either WebAuthn pathway.
 
 Primary YubiKey enrollment and assertion ceremonies verified on Windows. A phone passkey was also validated as a secondary cross-device pathway. Redundant backup-YubiKey enrollment remains unverified.
 
-This feature remains experimental: execution integration and atomic
-capability consumption are not complete. See
+This feature remains experimental. The receipts and atomic capability lifecycle
+are implemented as a separate lane, but current `tc run` does not consume them,
+and they are not composed with mediated effects or execution end to end. See
 [CR-YK-001](docs/change/requests/CR-YK-001-hardware-authorization-receipts.md)
-for evidence and limitations.
+and
+[CR-YK-002](docs/change/requests/CR-YK-002-atomic-capability-claiming.md) for
+evidence and limitations.
 
 ## Evidence-Bound Build Review
 
