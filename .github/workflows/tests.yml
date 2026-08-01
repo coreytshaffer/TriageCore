@@ -77,11 +77,17 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $xml = Join-Path $env:RUNNER_TEMP 'mediated-executor.xml'
           "mandatory_result=$xml" | Out-File -Append -FilePath $env:GITHUB_ENV
+          # junit_family=legacy is required for testcase-level <property>
+          # elements: the default xunit2 schema does not permit them, so
+          # record_property would be dropped and the transition gate would
+          # silently have nothing to read. Applied here only -- pyproject.toml
+          # is not touched and the Ubuntu jobs are unaffected.
           python -m pytest `
             tests/test_mediated_executor.py `
             tests/test_privacy_invariants.py `
             tests/test_governed_decision_integration_absence.py `
-            -m "not windows_optional" -q --junit-xml=$xml
+            -m "not windows_optional" -q `
+            -o junit_family=legacy --junit-xml=$xml
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Gate on the structured mandatory result

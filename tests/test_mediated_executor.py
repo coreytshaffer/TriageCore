@@ -938,9 +938,47 @@ def test_t35w_auto_inherited_transition_is_accepted_and_recorded(
     result = execute_replacement(
         registry_for(root), make_effect(pre=pre_bytes, post=post_bytes), post_bytes
     )
-    assert result.outcome == OUTCOME_VERIFIED, result.reason_code
 
-    after = capture_snapshot(target)
+    # The post snapshot is captured BEFORE any outcome assertion, so a
+    # metadata_preservation_failed result can still be classified rather than
+    # aborting the test with the component difference unknown.
+    try:
+        after = capture_snapshot(target)
+    except Exception:
+        after = None
+
+    differences = []
+    if after is None:
+        differences.append("post_capture_failed")
+    else:
+        if before.owner_sid != after.owner_sid:
+            differences.append("owner")
+        if before.dacl_state != after.dacl_state:
+            differences.append("dacl_state")
+        if before.control_bits[0] != after.control_bits[0]:
+            differences.append("dacl_present")
+        if before.control_bits[1] != after.control_bits[1]:
+            differences.append("dacl_protected")
+        if before.control_bits[2] != after.control_bits[2]:
+            differences.append("dacl_auto_inherited")
+        if before.acl_revision != after.acl_revision:
+            differences.append("acl_revision")
+        if before.ace_count != after.ace_count:
+            differences.append("ace_count")
+        if before.aces != after.aces:
+            differences.append("ace_bytes_or_order")
+
+    # DIAGNOSTIC: field names only. No SID, ACE, descriptor, path, or
+    # control-bit VALUE is emitted -- only which component differed.
+    if result.reason_code == "metadata_preservation_failed":
+        pytest.fail(
+            "hosted_metadata_differences="
+            + (",".join(differences) if differences else "unclassified")
+        )
+
+    assert result.outcome == OUTCOME_VERIFIED, result.reason_code
+    assert after is not None
+
     post_bit = after.control_bits[2]
     transition = "{0}->{1}".format(pre_bit, post_bit)
     record_property("se_dacl_auto_inherited_transition", transition)
@@ -948,13 +986,9 @@ def test_t35w_auto_inherited_transition_is_accepted_and_recorded(
     assert transition in {"False->False", "False->True", "True->True"}, transition
     assert (pre_bit, post_bit) != (True, False)
 
-    assert before.owner_sid == after.owner_sid
-    assert before.dacl_state == after.dacl_state
-    assert before.control_bits[0] == after.control_bits[0]
-    assert before.control_bits[1] == after.control_bits[1]
-    assert before.acl_revision == after.acl_revision
-    assert before.ace_count == after.ace_count
-    assert before.aces == after.aces
+    # Every other component must be exactly preserved. Computed labels are
+    # used so a failure names the component without printing its value.
+    assert differences in ([], ["dacl_auto_inherited"]), differences
 
 
 # --- Priority 2: healthy replacement and backup lifecycle --------------------
