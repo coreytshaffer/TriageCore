@@ -1,0 +1,199 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1050" viewBox="0 0 1800 1050" role="img" aria-labelledby="title desc">
+  <title id="title">TriageCore current system architecture</title>
+  <desc id="desc">Level one architecture verified against main at commit 6d585268, re-pinned after the documentation-only CR-DD-013 closeout. Solid blue arrows show current integrated calls or persistence, amber shows explicit operator authority, purple dashed arrows show static or observation-only external exchange, and gray dashed boundaries show implemented but disconnected foundations or conceptual actors. The Workspace Unifier is one TriageCore subsystem. Human authorization is a separate implemented lane not consumed by tc run. Mediated effect, reservation, capability, and replacement foundations are implemented without a current orchestration edge.</desc>
+  <defs>
+    <marker id="blue-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 0 L10 5 L0 10z" fill="#1f5d96"/>
+    </marker>
+    <marker id="amber-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 0 L10 5 L0 10z" fill="#a45a00"/>
+    </marker>
+    <marker id="purple-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 0 L10 5 L0 10z" fill="#6750a4"/>
+    </marker>
+    <marker id="gray-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 0 L10 5 L0 10z" fill="#64748b"/>
+    </marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#18212f" flood-opacity="0.12"/>
+    </filter>
+    <style>
+      .title { font: 700 32px Inter, Segoe UI, Arial, sans-serif; fill: #18212f; }
+      .subtitle { font: 400 16px Inter, Segoe UI, Arial, sans-serif; fill: #5d6b7c; }
+      .section { font: 700 20px Inter, Segoe UI, Arial, sans-serif; fill: #18212f; }
+      .node-title { font: 700 16px Inter, Segoe UI, Arial, sans-serif; fill: #18212f; }
+      .body { font: 400 13px Inter, Segoe UI, Arial, sans-serif; fill: #334155; }
+      .small { font: 400 12px Inter, Segoe UI, Arial, sans-serif; fill: #5d6b7c; }
+      .edge { font: 600 12px Inter, Segoe UI, Arial, sans-serif; fill: #334155; }
+      .boundary { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.7; }
+      .boundary-disconnected { fill: #ffffff; stroke: #8793a3; stroke-width: 1.8; stroke-dasharray: 9 7; }
+      .blue { fill: #eaf3fb; stroke: #8eb8dc; stroke-width: 1.5; }
+      .green { fill: #e8f5ee; stroke: #8dc6a8; stroke-width: 1.5; }
+      .amber { fill: #fff4df; stroke: #e4b86a; stroke-width: 1.8; }
+      .purple { fill: #f2effb; stroke: #b6a8df; stroke-width: 1.5; }
+      .neutral { fill: #f8fafc; stroke: #cbd5e1; stroke-width: 1.3; }
+      .implemented-disconnected { fill: #f8fafc; stroke: #7b8796; stroke-width: 1.6; stroke-dasharray: 7 5; }
+      .integrated { fill: none; stroke: #1f5d96; stroke-width: 2.5; marker-end: url(#blue-arrow); }
+      .authority { fill: none; stroke: #a45a00; stroke-width: 3; marker-end: url(#amber-arrow); }
+      .external { fill: none; stroke: #6750a4; stroke-width: 2.4; stroke-dasharray: 8 6; marker-end: url(#purple-arrow); }
+      .contract { fill: none; stroke: #64748b; stroke-width: 2.2; stroke-dasharray: 8 6; marker-end: url(#gray-arrow); }
+    </style>
+  </defs>
+
+  <rect width="1800" height="1050" fill="#f7f9fc"/>
+  <text x="55" y="50" class="title">TriageCore current system architecture</text>
+  <text x="55" y="80" class="subtitle">main@6d585268 • current integration, separate implemented lanes, and disconnected actors</text>
+
+  <!-- Human-facing boundary -->
+  <g filter="url(#shadow)">
+    <rect x="55" y="125" width="285" height="275" rx="16" class="amber"/>
+  </g>
+  <text x="198" y="158" text-anchor="middle" class="section">Human authority</text>
+  <rect x="80" y="180" width="235" height="78" rx="11" class="amber"/>
+  <text x="198" y="208" text-anchor="middle" class="node-title">Human operator</text>
+  <text x="198" y="232" text-anchor="middle" class="body">selects • initiates • reviews • approves</text>
+  <rect x="80" y="278" width="235" height="48" rx="11" class="amber"/>
+  <text x="198" y="299" text-anchor="middle" class="node-title">CLI surfaces</text>
+  <text x="198" y="318" text-anchor="middle" class="small">explicit commands + review decisions</text>
+  <rect x="80" y="334" width="235" height="50" rx="11" class="blue"/>
+  <text x="198" y="355" text-anchor="middle" class="node-title">TriageDesk adapter</text>
+  <text x="198" y="375" text-anchor="middle" class="small">state + evidence; no action bridge</text>
+
+  <!-- Current TriageCore boundary -->
+  <g filter="url(#shadow)">
+    <rect x="380" y="110" width="825" height="735" rx="18" class="boundary"/>
+  </g>
+  <text x="410" y="145" class="section">TriageCore repository boundary (current)</text>
+  <text x="410" y="168" class="small">Integrated paths are solid; separate implemented lanes have no implicit cross-lane authority.</text>
+
+  <rect x="410" y="192" width="330" height="88" rx="12" class="blue"/>
+  <text x="575" y="222" text-anchor="middle" class="node-title">CLI entrypoints</text>
+  <text x="575" y="246" text-anchor="middle" class="body">tc run • workspace • review • authz commands</text>
+  <text x="575" y="265" text-anchor="middle" class="small">Explicit operator invocation</text>
+
+  <rect x="410" y="318" width="360" height="168" rx="12" class="blue"/>
+  <text x="590" y="347" text-anchor="middle" class="node-title">Governed tc run path — integrated</text>
+  <text x="590" y="374" text-anchor="middle" class="body">Packet + privacy preflight</text>
+  <text x="590" y="397" text-anchor="middle" class="body">Recorded capability resolution</text>
+  <text x="590" y="420" text-anchor="middle" class="body">Classification + resilience route</text>
+  <text x="590" y="443" text-anchor="middle" class="body">Terminal-route cessation + worker evidence</text>
+  <text x="590" y="466" text-anchor="middle" class="small">human_review_required metadata ≠ universal gate</text>
+
+  <rect x="800" y="318" width="375" height="168" rx="12" class="green"/>
+  <text x="988" y="347" text-anchor="middle" class="node-title">Execution + validation — integrated</text>
+  <text x="988" y="374" text-anchor="middle" class="body">Local TriageEngine + configured backend</text>
+  <text x="988" y="397" text-anchor="middle" class="body">Bounded Qwen path for external-safe packets</text>
+  <text x="988" y="420" text-anchor="middle" class="body">Post-processing + optional validator</text>
+  <text x="988" y="443" text-anchor="middle" class="small">deterministic and human_handoff routes stop</text>
+  <text x="988" y="464" text-anchor="middle" class="small">before worker invocation</text>
+
+  <rect x="410" y="525" width="360" height="135" rx="12" class="blue"/>
+  <text x="590" y="554" text-anchor="middle" class="node-title">Workspace Unifier — current subsystem</text>
+  <text x="590" y="580" text-anchor="middle" class="body">Local YAML views + explicit promotion/close</text>
+  <text x="590" y="603" text-anchor="middle" class="body">Static dashboard, handoff, evaluator-input exports</text>
+  <text x="590" y="628" text-anchor="middle" class="small">No delivery, agent execution, or evaluator invocation</text>
+
+  <rect x="800" y="525" width="375" height="135" rx="12" class="purple"/>
+  <text x="988" y="554" text-anchor="middle" class="node-title">Evidence + review projection — integrated</text>
+  <text x="988" y="580" text-anchor="middle" class="body">Append-only JSONL route / worker evidence</text>
+  <text x="988" y="603" text-anchor="middle" class="body">Task reduction + pending review queue</text>
+  <text x="988" y="628" text-anchor="middle" class="small">Evidence and review metadata are not approval</text>
+
+  <rect x="410" y="700" width="360" height="112" rx="12" class="amber"/>
+  <text x="590" y="729" text-anchor="middle" class="node-title">Human authz + capability — separate lane</text>
+  <text x="590" y="755" text-anchor="middle" class="body">WebAuthn receipt • issuance evidence • atomic claim</text>
+  <text x="590" y="780" text-anchor="middle" class="small">Implemented; no tc run consumer</text>
+  <text x="590" y="799" text-anchor="middle" class="small">SQLite state + JSONL evidence divide authority</text>
+
+  <rect x="800" y="700" width="375" height="112" rx="12" class="implemented-disconnected"/>
+  <text x="988" y="729" text-anchor="middle" class="node-title">Mediated execution foundations</text>
+  <text x="988" y="754" text-anchor="middle" class="body">Effect • reservation • capability • replacement</text>
+  <text x="988" y="778" text-anchor="middle" class="small">Implemented individually; no runtime orchestrator</text>
+  <text x="988" y="798" text-anchor="middle" class="small">No continuous execution edge</text>
+
+  <!-- Current dependencies and stores -->
+  <g filter="url(#shadow)">
+    <rect x="1245" y="110" width="500" height="420" rx="18" class="boundary"/>
+  </g>
+  <text x="1275" y="145" class="section">Current targets and local stores</text>
+  <rect x="1275" y="178" width="210" height="88" rx="11" class="green"/>
+  <text x="1380" y="207" text-anchor="middle" class="node-title">Local model backend</text>
+  <text x="1380" y="232" text-anchor="middle" class="body">Configured execution target</text>
+  <text x="1380" y="251" text-anchor="middle" class="small">route class declared separately</text>
+  <rect x="1510" y="178" width="205" height="88" rx="11" class="green"/>
+  <text x="1613" y="207" text-anchor="middle" class="node-title">Qwen Cloud</text>
+  <text x="1613" y="232" text-anchor="middle" class="body">Optional integrated path</text>
+  <text x="1613" y="251" text-anchor="middle" class="small">external-safe packets only</text>
+
+  <rect x="1275" y="296" width="210" height="88" rx="11" class="purple"/>
+  <text x="1380" y="325" text-anchor="middle" class="node-title">JSONL task ledger</text>
+  <text x="1380" y="350" text-anchor="middle" class="body">Durable evidence history</text>
+  <text x="1380" y="369" text-anchor="middle" class="small">not a concurrency lock</text>
+  <rect x="1510" y="296" width="205" height="88" rx="11" class="blue"/>
+  <text x="1613" y="325" text-anchor="middle" class="node-title">Workspace YAML</text>
+  <text x="1613" y="350" text-anchor="middle" class="body">work items + focus</text>
+  <text x="1613" y="369" text-anchor="middle" class="small">operator source of truth</text>
+
+  <rect x="1275" y="414" width="440" height="88" rx="11" class="amber"/>
+  <text x="1495" y="443" text-anchor="middle" class="node-title">Authorization persistence</text>
+  <text x="1495" y="467" text-anchor="middle" class="body">Receipt sidecars + capability-claim SQLite + reservation SQLite</text>
+  <text x="1495" y="487" text-anchor="middle" class="small">Each store owns a bounded authority; none proves execution correctness</text>
+
+  <!-- Conceptual and external actors -->
+  <g filter="url(#shadow)">
+    <rect x="1245" y="570" width="500" height="275" rx="18" class="boundary-disconnected"/>
+  </g>
+  <text x="1495" y="605" text-anchor="middle" class="section">Conceptual / externally operated actors</text>
+  <text x="1495" y="627" text-anchor="middle" class="small">No current TriageCore runtime wiring</text>
+  <rect x="1275" y="650" width="210" height="72" rx="11" class="neutral"/>
+  <text x="1380" y="678" text-anchor="middle" class="node-title">Meta-harness + agent</text>
+  <text x="1380" y="702" text-anchor="middle" class="small">external packet delivery / work</text>
+  <rect x="1510" y="650" width="205" height="72" rx="11" class="neutral"/>
+  <text x="1613" y="678" text-anchor="middle" class="node-title">Independent evaluator</text>
+  <text x="1613" y="702" text-anchor="middle" class="small">external result production</text>
+  <rect x="1275" y="746" width="440" height="69" rx="11" class="neutral"/>
+  <text x="1495" y="774" text-anchor="middle" class="node-title">Future TriageDesk action / executor bridge</text>
+  <text x="1495" y="798" text-anchor="middle" class="small">Not implemented; current adapter remains review/observability only</text>
+
+  <!-- Integrated current paths -->
+  <path d="M315 219 H365 V236 H402" class="authority"/>
+  <text x="345" y="205" class="edge">explicit command</text>
+  <path d="M575 280 V310" class="integrated"/>
+  <path d="M770 402 H792" class="integrated"/>
+  <path d="M1175 370 H1218 V222 H1267" class="integrated"/>
+  <text x="1190" y="355" class="edge">local</text>
+  <path d="M1175 420 H1228 V280 H1495 V222 H1502" class="integrated"/>
+  <text x="1325" y="272" class="edge">external-safe only</text>
+  <path d="M770 456 H785 V550 H792" class="integrated"/>
+  <text x="797" y="505" class="edge">route / worker evidence</text>
+  <path d="M1175 570 H1218 V340 H1267" class="integrated"/>
+  <text x="1185" y="554" class="edge">append / reduce</text>
+  <path d="M410 575 H390 V295 H1613 V288" class="integrated"/>
+  <text x="1370" y="288" class="edge">workspace state</text>
+  <path d="M590 812 V870 H1225 V458 H1267" class="integrated"/>
+  <text x="835" y="863" class="edge">receipt / ledger / atomic store state</text>
+
+  <!-- Static/disconnected external paths -->
+  <path d="M620 660 V674 H1218" class="integrated"/>
+  <text x="900" y="668" text-anchor="middle" class="edge">current static handoff export</text>
+  <path d="M1218 674 H1232 V686 H1267" class="contract"/>
+  <path d="M700 660 V694 H1235 V735 H1495 V686 H1502" class="external"/>
+  <text x="1450" y="640" text-anchor="middle" class="edge">static evaluator input; external delivery</text>
+  <path d="M1715 686 H1765 V96 H350 V359 H315" class="external"/>
+  <text x="1480" y="90" class="edge">display-only external evaluator result</text>
+  <!-- Evidence shown to review surface -->
+  <path d="M800 570 H785 V505 H365 V359 H315" class="integrated"/>
+  <text x="375" y="497" class="edge">review projection</text>
+
+  <!-- Legend -->
+  <g transform="translate(60,960)">
+    <path d="M0 0 H55" class="integrated"/>
+    <text x="68" y="5" class="small">current integrated call / persistence</text>
+    <path d="M380 0 H435" class="contract"/>
+    <text x="448" y="5" class="small">implemented contract or disconnected transfer</text>
+    <path d="M830 0 H885" class="external"/>
+    <text x="898" y="5" class="small">static / observation-only external exchange</text>
+    <path d="M1275 0 H1330" class="authority"/>
+    <text x="1343" y="5" class="small">explicit human authority</text>
+  </g>
+</svg>

@@ -2,6 +2,10 @@
 
 This note captures the "Fluidic" architecture metaphor for the Workspace Unifier while the current control boundaries are still fresh. It is a framing document only. It adds no runtime behavior, no new command surface, and no schema changes.
 
+See [Workspace Unifier Architecture](workspace_unifier_architecture.md) for the companion subsystem diagram that distinguishes the current local core and static exports from conceptual or disconnected coordination and evaluation actors.
+
+See [Workspace Unifier Promotion, Handoff, and Review Flow](workspace_unifier_flow.md) for the sequence-oriented zoom into promotion and approval gates.
+
 ## The Fluidic Metaphor
 
 The Workspace Unifier can be understood as a small local-first lab-on-chip for work control. Instead of imagining work as an unbounded stream of chat context, the Fluidic model treats it as routed flow through explicit control surfaces.
@@ -19,12 +23,12 @@ This metaphor matters because the Workspace Unifier is not trying to be a genera
 ## Component Roles
 
 - **TriageCore** = contracts, schemas, CLI engine, gates, packets, and evidence.
-- **TriageDesk** = human cockpit for approvals, review, evidence, and dashboard operation.
+- **TriageDesk** = current review and observability cockpit; a future action/executor bridge would carry explicit operator actions through a separately governed path.
 - **Meta-harness** = agent and session coordination layer.
 - **Agents** = bounded execution or analysis workers.
 - **Independent evaluator** = external assessment of whether observed behavior matched expected control boundaries.
 
-In this model, TriageCore provides the typed channels and persistence rules. TriageDesk is where human judgment remains visible. The meta-harness can route work between sessions or agents, but it does not become an approval authority. Agents perform bounded work against the handoff they receive, not against an unlimited context pool. The independent evaluator measures observed behavior against the intended boundary model, but it also does not approve.
+In this model, TriageCore provides the typed channels and persistence rules. The current TriageDesk adapter presents review state and evidence; the human operator retains judgment, and any future action/executor bridge remains a separately governed path. The meta-harness can route work between sessions or agents, but it does not become an approval authority. Agents perform bounded work against the handoff they receive, not against an unlimited context pool. The independent evaluator measures observed behavior against the intended boundary model, but it also does not approve.
 
 ## Signal Flow
 
@@ -63,7 +67,7 @@ A slightly expanded reading of that flow:
 - No cross-contamination.
 - The meta-harness coordinates but does not approve.
 - The evaluator assesses but does not approve.
-- TriageDesk presents decisions; TriageCore preserves contracts and evidence.
+- TriageDesk presents state and evidence; the operator decides; TriageCore preserves contracts and evidence.
 
 ## Why This Matters
 

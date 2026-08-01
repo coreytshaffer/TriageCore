@@ -10,20 +10,21 @@ Every capability described as "future" remains future until its own implementati
 
 ## Scope Basis (repo-grounded)
 
-Assessment re-pinned against `main` at commit `ac851d5` (merge of PR #114,
-`test: bind tc run evidence to reported task id`). Verified with
-`git merge-base --is-ancestor`: CR-DD-012A (`bccaaad`, "feat(daily-driver): add governed
-decision foundation (#107)") is an ancestor of `HEAD`, and `origin/main` also points at
-`ac851d5`. So PR #107 is **merged** and the CR-DD-012A foundation is present on `main` at
-the time of this re-pin.
+Assessment re-pinned against `main` at commit `6d585268` (merge of PR #132, the CR-DD-013
+documentation-only closeout). Verified with `git merge-base --is-ancestor`: CR-DD-012A
+(`bccaaad`, merged through PR #107) and CR-DD-013 (`98df9c1`, merged through PR #116) are
+both ancestors of `main`. The immutable decision foundation and governed capability
+binding are therefore present on `main` at the time of this re-pin.
 
-The previous pin was `72c070f` (merge of PR #87, `cr-rh-003-eval-review-cli`). That basis
-is retained here only as history; it is superseded by the pin above.
+The previous pin was `257e79b` (merge of PR #131). Re-pinned after CR-DD-013's
+documentation-only closeout; no production, test, workflow, schema, or architecture file
+changed between the two pins. The still earlier `ac851d5` and `72c070f` bases are retained
+only as history; all are superseded by the pin above.
 
 If this spec is revisited later, re-pin the commit and re-verify with `merge-base` before
 treating any readiness claim as current.
 
-Current implementation note (2026-07-25): CR-DD-009 has landed and `tc run` now
+Current implementation note (2026-08-01): CR-DD-009 has landed and `tc run` now
 provides the governed execution surface described as M0 below. CR-DD-010 now implements
 the deterministic, non-executing run-plan preview. CR-DD-011 implements a durable
 privacy-safe plan artifact, independent semantic and exact-byte digests, exact review
@@ -34,13 +35,18 @@ implementation is withheld. **CR-DD-012A is complete and merged through PR #107 
 bytes under current UTF-8/text semantics, and authoritative assembled worker-execution
 bytes, but grants no integration authority; no public command consumes it. CR-DD-012B
 remains blocked pending an implemented and reviewed CR-YK-002 atomic-claiming foundation
-plus its own explicit approval. Plan v2, durable observation/execution schemas, and
-confirmed-plan execution remain deferred. The readiness percentages below remain
-historical planning estimates, not current measurements; this re-pin does not recompute
-them.
+plus its own explicit approval. **CR-DD-013 is implemented and merged through PR #116 as
+`98df9c1`.** `tc run` now resolves recorded capability evidence and binds that resolution
+into route selection; configured route declarations and observed reachability remain
+separate inputs. Its documentation-only closeout merged through PR #132 at `6d585268` and
+records the change as complete, accepted, and merged; its implementation and merge
+authority are spent, and it grants no standing authority for downstream integration. Plan
+v2, durable observation/execution schemas, and confirmed-plan execution remain deferred.
+The readiness percentages below remain historical planning estimates, not current
+measurements; this re-pin does not recompute them.
 
-An earlier revision of this note described CR-DD-012A as validated on its branch with
-"merge is pending." That wording predates PR #107 and is superseded here.
+Earlier pre-PR #107 branch-only wording for CR-DD-012A is superseded by the merged status
+recorded above.
 
 ## Thesis
 
@@ -53,7 +59,7 @@ privacy, routing, and evidence layers.
 
 | Dimension | Readiness | Basis |
 |---|---|---|
-| Local-first daily driver | ~60% | Governed loop is available through `tc run`; live capability signals and enforced budgets remain absent. |
+| Local-first daily driver | ~60% | Governed loop and recorded capability binding are available through `tc run`; distinct real route/backend bindings, circuit breakers, runtime revalidation, and enforced budgets remain absent. |
 | Frontier-cloud orchestrator | ~35% | Only live cloud backend is `QwenCloudBackend`; Claude/GPT/Gemini exist solely as after-the-fact file handoffs (Codex/Antigravity). |
 | Token efficiency | Measured, not enforced | `context_budget.py` / context packs record usage; budgets are advisory, no pre-send compaction is bound into the run path. |
 
@@ -90,17 +96,13 @@ after M0 (below) produces daily-use evidence. See **Evidence Requirements**.
   abstraction beyond OpenAI-compatible, no per-provider cost/credit model.
 - **G3 — Route decisions outrun execution bindings.** `local_heavy`/`local_fast` and
   `cloud_primary`/`cloud_secondary` collapse to one local backend and Qwen respectively.
-- **G4 — Observed capability is not bound into route selection.** Observation itself now
-  exists: `triage_core/local_backend_probe.py`, surfaced as `tc probe`, produces a
-  read-only metadata-only capability record without invoking a model. The remaining gap is
-  that nothing consumes it. `TriageClient._build_resilience_route_input` still supplies
-  `lm_studio_ok=True`, `local_heavy_available=True`, and `local_fast_available=True` as
-  literals, omits `memory_headroom_mb` and every `recent_*_failures` value so the
-  dataclass defaults apply, and derives only the cloud flags from static configuration
-  rather than observation. Route selection therefore asserts local availability it has
-  never checked. That optimistic default — not the absence of a probe — is the risk to
-  retire, and it is optimistic rather than fail-closed, so a selected local route can be
-  one that cannot actually execute.
+- **G4 — Closed: observed capability is bound into route selection.** CR-DD-013 is
+  implemented and merged through PR #116 as `98df9c1`. `tc run` resolves capability
+  evidence through `resolve_from_config` and passes the result into route-input
+  construction. Fresh observed unavailability overrides configured declarations; fresh
+  reachability is evidence of reachability only, while route classes still require their
+  corresponding configured declarations. Stale, missing, malformed, or provenance-invalid
+  observations fail closed rather than restoring the former optimistic local literals.
 - **G5 — Budgets warn but do not act.** `compression.py` is not bound into the send path.
 - **G6 — No circuit breakers / degraded modes** (backlog Story 13.6 open).
 - **G7 — TriageDesk cannot act** (read-only by invariant).
@@ -126,8 +128,8 @@ backwards.
    execution still requires a separately approved later CR.
 4. **M0.3 — Shared governed run decision (architecture approved by CR-DD-012;
    monolithic implementation withheld).** Required sequence:
-   **M0.3a / CR-DD-012A**, implementation complete and validated on the branch with merge
-   pending, establishes the immutable input snapshot around `SourceBytes`,
+   **M0.3a / CR-DD-012A**, complete and merged through PR #107 as `bccaaad`, establishes
+   the immutable input snapshot around `SourceBytes`,
    `NormalizedComponentBytes`, and authoritative `AssembledExecutionBytes`, plus the
    canonical decision, pure normalizer/builder, identity, and focused tests with no CLI,
    ledger, worker, route, or plan-v2 change; then **M0.3b / CR-DD-012B**, still blocked
@@ -135,14 +137,14 @@ backwards.
    consumption, envelope enforcement, bounded decision-ID linkage, and parity/fail-closed
    tests. `governed_run_plan.v2`, durable `RuntimeObservation`/`ExecutionRecord` contracts,
    and confirmed-plan execution remain deferred.
-5. **M1 — Capability binding + real route bindings + circuit breakers** (G3, G4, G6). The
-   live probe component of this milestone already exists (`tc probe` /
-   `local_backend_probe.py`), so M1's first slice is narrower than originally scoped: bind
-   an existing capability observation into `ResilienceRouteInput` so observed
-   unavailability and unknown state stop being reported as available. That first slice is
-   proposed as CR-DD-013 (documentation only; implementation unauthorized). Real per-route
-   backend bindings (G3) and circuit breakers (G6) remain separate, later work. Binding
-   capability does not depend on CR-DD-012A/012B and carries no CR-YK prerequisite.
+5. **M1 — Capability binding complete; real route bindings and circuit breakers remain
+   open** (G3, G4, G6).
+   - **G4 / CR-DD-013 is complete**, merged through PR #116 as `98df9c1`: recorded
+     capability resolution is bound into `ResilienceRouteInput`.
+   - **G3 remains open:** route classes still collapse onto one local backend or Qwen
+     rather than distinct real execution bindings.
+   - **G6 remains open:** circuit breakers, degraded-mode policy, and execution-time
+     capability revalidation are not integrated.
 6. **M2 — Frontier provider backends** (G2). *Future work; see boundary below.*
 7. **M3 — Budget enforcement + prefer-local economics** (G5).
 8. **M4 — Actionable cockpit + interactive session** (G7, G8).
@@ -198,12 +200,13 @@ A formatted long-form version of this assessment is maintained as
 `TriageCore_DailyDriver_Spec.docx` at the repo root for review/sharing. This markdown file is
 the repo-canonical, commit-pinned planning record.
 
-**Mirror drift (recorded 2026-07-25).** No reproducible generation path for the DOCX exists
+**Mirror drift (recorded 2026-08-01).** No reproducible generation path for the DOCX exists
 in this repository: there is no Makefile target, script, packaging entry point, or CI step
 that produces it, and no code references it. It was therefore not regenerated alongside this
 revision and was deliberately left unmodified rather than hand-edited. The DOCX currently
-lags this markdown by the `ac851d5` re-pin, the CR-DD-012A merged-status correction, the
-G4/M1 rewrite, and the CR-DD-013 pointer. It also lagged before this revision. Closing the
-drift — either by establishing a reproducible generation path or by retiring the mirror — is
-bounded follow-up work and is not authorized here. Until then, this markdown file remains
-authoritative wherever the two disagree.
+lags this markdown by the `6d585268` re-pin, the CR-DD-012A merged-status correction, the
+CR-DD-013 completion record, and the split between completed G4 capability binding and the
+still-open G3/G6 work. It also lagged before this revision. Closing the drift — either by
+establishing a reproducible generation path or by retiring the mirror — is bounded follow-up
+work and is not authorized here. Until then, this markdown file remains authoritative
+wherever the two disagree.
