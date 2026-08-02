@@ -282,6 +282,52 @@ Scope test: `Does this strengthen the evidence-bound governance kernel, or is it
   - Scope test: `Does this strengthen the evidence-bound governance kernel, or is
     it merely an interesting adjacent capability?`
 
+- Adversarial multimodal canary authority-boundary research
+  - Source: Track 2 agentic boundary governance research candidate
+  - Status: candidate research-only; inert synthetic fixture and study design
+    only. No slice is approved or active, and this entry grants no
+    implementation, ingestion, runtime-enforcement, integration, branch, merge,
+    or standing authority.
+  - Scope: governance-kernel research into identity and authority, capability and
+    effect bounds, and review and human control.
+  - Purpose: define bounded studies using inert canary instructions deliberately
+    hidden in synthetic, repository-owned JPEG, PDF, and other common-container
+    fixtures to test whether a future ingestion boundary treats embedded
+    instructions strictly as untrusted data and preserves existing capability,
+    route, target-file, approval, and effect-authority bounds.
+  - Exclusions and limitations: no OCR or parser implementation; macros or other
+    active content; malformed-file or parser exploits; offensive payloads;
+    third-party systems, data, or targets; runtime enforcement; authority
+    expansion; or safety or certification claims. A passing study would support
+    only the named fixture, container, and ingestion assumptions.
+
+- Docker microVM execution-venue evaluation
+  - Source: operator request during the 2026-08-01 daily-use evidence window
+  - Status: candidate research-only; architecture and trust-boundary
+    specification only. No slice is approved or active, and this entry grants no
+    implementation, runtime-integration, container-provisioning, network-policy,
+    credential, branch, merge, or standing authority.
+  - Scope: supporting containment subsystem (execution-venue isolation). Venue
+    isolation is orthogonal to governance-kernel authority decisions and does
+    not substitute for them.
+  - Purpose: define a bounded evaluation of hypervisor-isolated microVM
+    sandboxes (for example Docker Sandboxes) as a worker execution venue:
+    trust-boundary definition; clone-mode workspaces; default-deny egress with
+    explicitly enumerated host-endpoint apertures; a TriageCore-owned broker
+    that mediates model access as an allowlisted, budgeted, ledger-evidenced
+    capability rather than a raw network aperture; artifact-only supervision
+    that keeps evaluator models outside the contained worker's reach; in-venue
+    council serving against digest-pinned model weights; venue evidence capture
+    (sandbox identity, workspace mode, network policy, reachability
+    observations, lifecycle disposition); and comparative host-versus-microVM
+    trials.
+  - Exclusions and limitations: no execution-venue adapter implementation; no
+    changes to routing, authority, privacy, or ledger code; no serving-stack
+    migration; no cloud execution; no third-party targets. Contained-execution
+    success remains a worker result requiring validation and human disposition.
+    MicroVM isolation bounds host exposure only; it establishes no workload
+    safety, authority-enforcement, model-behavior, or certification claim.
+
 - Agent authority and delegation boundary
   - Source: CR-095 task-scoped agent authority manifest
   - Status: authority manifest contract, reviewer-style example, invalid example, and metadata-only CLI validation complete; identity-registry binding, manifest signing, admission enforcement, and route enforcement remain future slices
