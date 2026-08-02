@@ -33,6 +33,32 @@ runtime revalidation remain outside the slice. Implementation and merge
 authority are spent; CR-DD-012B is unaffected and receives no authority from
 this closeout. Detailed design history lives in the CR document.
 
+## Backlog Scope Taxonomy
+
+This taxonomy classifies backlog work by relationship to TriageCore's identity.
+It does not assign priority, status, approval, implementation or execution
+permission, or standing authority.
+
+- **Governance kernel**: decision integrity; identity and authority; capability
+  and effect bounds; evidence and reconstruction; review and human control;
+  evaluator independence; privacy and provenance.
+- **Supporting subsystems**: resource-aware routing; tokens and context; energy;
+  telemetry; workspace and presentation surfaces; provider adapters.
+- **Adjacent applications**: software agents; environmental and edge workflows;
+  external agent frameworks and automation tools.
+
+Mixed items must be decomposed into separately reviewable slices. Each slice
+must be classified by the governance invariant it strengthens; if no invariant
+can be named, it remains a supporting subsystem or adjacent application rather
+than inheriting governance-kernel status.
+
+Category is recorded separately from maturity and integration status. Current,
+optional/separate-lane, implemented-but-disconnected, future, and conceptual
+components may occur in any category. Dependencies do not promote supporting or
+adjacent work into the governance kernel.
+
+Scope test: `Does this strengthen the evidence-bound governance kernel, or is it merely an interesting adjacent capability?`
+
 ## Active GitHub Backlog
 
 - CR-OC-001B: Atomic Client-Request Reservation
@@ -207,9 +233,10 @@ this closeout. Detailed design history lives in the CR document.
 ## Candidate Future Work
 
 - TriageCore identity consolidation and agentic boundary governance
-  - Status: candidate epic, backlog-only; no slice is approved or active. This
-    entry grants no implementation, runtime integration, branch, merge, or
-    standing authority for any slice.
+  - Status: Track 1 documentation is complete through PRs #137-#143 plus this
+    backlog taxonomy slice. Track 2 remains candidate research-only. This entry
+    grants no implementation, runtime integration, branch, merge, or standing
+    authority for any code-bearing or integration slice.
   - Identity thesis: TriageCore is a local-first, evidence-bound research
     workbench for governing AI-assisted decisions and consequential actions
     through explicit authority, reviewable artifacts, bounded execution
@@ -226,35 +253,28 @@ this closeout. Detailed design history lives in the CR document.
     claims, explicit authority, fail-closed uncertainty, reviewable artifacts,
     and the separation of observation, recommendation, authorization,
     execution, and evaluation.
-  - Scope taxonomy:
-    - **Governance kernel**: decision integrity; identity and authority;
-      capability and effect bounds; evidence and reconstruction; review and
-      human control; evaluator independence; privacy and provenance.
-    - **Supporting subsystems**: routing; tokens and context; energy; telemetry;
-      workspace and presentation surfaces; provider adapters.
-    - **Adjacent applications**: software agents, environmental or edge
-      workflows, and external agent frameworks.
-  - Sequenced track 1 — **Identity consolidation**: inventory the enduring
-    architectural pillars, preserve the category distinctions above, and use
-    this candidate documentation order: canonical identity document;
-    `pyproject.toml`; README; `AGENTS.md` supervisor terminology; claim
-    boundaries; architecture overview/index; portfolio/submission language; and
-    backlog taxonomy. Each item is a separately reviewable documentation slice,
-    not authorization to perform it now.
-  - `AGENTS.md` terminology checkpoint: a cloud supervisor's quality verdict
-    must not be confused with human authorization for mutation or consequential
-    effects. Future consolidation should distinguish artifact-review
-    pass/revise/escalate outcomes from approval authority.
-  - Sequenced track 2 — **Agentic boundary governance**: after the identity work,
-    investigate evaluation-environment assurance, evaluator-harness threat
+  - Scope taxonomy: use the stable **Backlog Scope Taxonomy** above. Mixed work
+    must be decomposed and classified by the governance invariant strengthened.
+  - Sequenced track 1 — **Identity consolidation**: complete through the
+    canonical identity (PR #137), package description (PR #138), README (PR
+    #139), `AGENTS.md` supervisor-verdict terminology (PR #140), public claim
+    boundaries (PR #141), architecture identity/index linkage (PR #142),
+    submission and portfolio entry point (PR #143), and this backlog taxonomy.
+    These were separately reviewed documentation slices and grant no runtime or
+    implementation authority.
+  - `AGENTS.md` terminology checkpoint: completed in PR #140. An
+    `ARTIFACT_REVIEW_PASSED` quality verdict remains evidence only and must not
+    be confused with human authorization for mutation or consequential effects.
+  - Sequenced track 2 — **Agentic boundary governance**: candidate research-only
+    work covering evaluation-environment assurance, evaluator-harness threat
     modeling, incident-derived adversarial fixtures, delegation-chain
     capability attenuation building on CR-095, reality-and-scope uncertainty
     handling, trajectory-level policy evaluation, and incident reconstruction
     and recovery.
-  - Sequence boundary: near-term work is documentary and research-only. Later
-    implementation candidates must remain separate slices; every code-bearing
-    or integration slice requires its own approved CR and authoritative evidence
-    or versioned profile, as applicable.
+  - Sequence boundary: Track 2 grants research classification only. Every
+    code-bearing or integration slice must remain separate and requires its own
+    approved CR plus authoritative evidence or a versioned profile, as
+    applicable.
   - Uncertainty and limitations: preserve the distinctions among current,
     implemented-but-disconnected, and future components. Do not claim that
     TriageCore solves alignment, certifies safety, or currently composes
