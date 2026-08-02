@@ -27,8 +27,16 @@ canonical specification remain historical planning estimates.
 
 ## Window Protocol
 
+An eligible real task must be materially useful to a current or plausible future project. It
+must support an actual deliverable, bounded decision, review, evidence analysis, or planned
+next action that the operator would reasonably pursue without the trial. A task invented only
+to exercise `tc run` is a synthetic control and does not count. Paired retries may diagnose a
+failure but are not independent material-use observations.
+
 Each eligible attempt records:
 
+- project lane, intended downstream use, and operator disposition (`accepted`, `revised`,
+  `rejected`, `bypassed`, or `not produced`);
 - task purpose and observable success criterion;
 - plan and context posture;
 - configuration and capability evidence used;
@@ -202,6 +210,14 @@ Retry results are included for completeness but are not independent-task observa
 
 These findings do not authorize implementation changes.
 
+## Future Task Selection Gate
+
+Before each future run, record the project lane, material outcome sought, why the task is
+timely, its observable usefulness criterion, its privacy class, and the ordinary tool or path
+the operator would use if `tc run` is not useful. Keep prompt contents and sensitive project
+data out of persistent evidence. Project diversity is useful but does not override privacy,
+authority, or file-scope boundaries.
+
 ## Next Gate
 
 Do not create model aliases, change routing code, or commit configuration fixes in this
@@ -215,6 +231,8 @@ been performed or authorized by this record.
 ## Uncertainty and Limitations
 
 - This record covers one day only; the declared 7–14 day window remains open.
+- Day-1 tasks were selected as initial controlled utility tasks, but no governed output was
+  produced, so material usefulness through `tc run` remains unobserved.
 - Retry attempts are not independent observations.
 - There was no successful governed execution on Day 1.
 - The successful direct control bypassed TriageCore governance and is not eligible
