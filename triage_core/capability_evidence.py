@@ -38,6 +38,12 @@ ROUTE_CLASS_LOCAL_FAST = "local_fast"
 ROUTE_CLASS_LOCAL_HEAVY = "local_heavy"
 ROUTE_CLASSES: Tuple[str, ...] = (ROUTE_CLASS_LOCAL_FAST, ROUTE_CLASS_LOCAL_HEAVY)
 
+BINDING_ISSUE_MISSING_MODEL = "missing_model_binding"
+BINDING_ISSUE_MODEL_NOT_OBSERVED = "model_not_observed"
+BINDING_ISSUES = frozenset(
+    {BINDING_ISSUE_MISSING_MODEL, BINDING_ISSUE_MODEL_NOT_OBSERVED}
+)
+
 OPERATOR_CONFIG_SOURCE = "operator_config"
 
 STATE_OBSERVED_AVAILABLE = "observed_available"
@@ -83,6 +89,53 @@ def _validate_route_classes(value: Any, field_name: str) -> None:
             raise CapabilityEvidenceError(
                 f"{field_name} contains unknown route class: {route_class}"
             )
+
+
+def _validate_route_model_bindings(value: Any, field_name: str) -> None:
+    if not isinstance(value, tuple):
+        raise CapabilityEvidenceError(f"{field_name} must be a tuple")
+    seen = set()
+    for binding in value:
+        if not isinstance(binding, tuple) or len(binding) != 2:
+            raise CapabilityEvidenceError(
+                f"{field_name} entries must be (route_class, model_id) tuples"
+            )
+        route_class, model_id = binding
+        if route_class not in ROUTE_CLASSES:
+            raise CapabilityEvidenceError(
+                f"{field_name} contains unknown route class: {route_class}"
+            )
+        _require_text(model_id, f"{field_name}.{route_class}")
+        if route_class in seen:
+            raise CapabilityEvidenceError(
+                f"{field_name} contains duplicate route class: {route_class}"
+            )
+        seen.add(route_class)
+
+
+def _validate_binding_issues(value: Any, field_name: str) -> None:
+    if not isinstance(value, tuple):
+        raise CapabilityEvidenceError(f"{field_name} must be a tuple")
+    seen = set()
+    for issue in value:
+        if not isinstance(issue, tuple) or len(issue) != 2:
+            raise CapabilityEvidenceError(
+                f"{field_name} entries must be (route_class, issue_code) tuples"
+            )
+        route_class, issue_code = issue
+        if route_class not in ROUTE_CLASSES:
+            raise CapabilityEvidenceError(
+                f"{field_name} contains unknown route class: {route_class}"
+            )
+        if issue_code not in BINDING_ISSUES:
+            raise CapabilityEvidenceError(
+                f"{field_name} contains unknown binding issue: {issue_code}"
+            )
+        if route_class in seen:
+            raise CapabilityEvidenceError(
+                f"{field_name} contains duplicate route class: {route_class}"
+            )
+        seen.add(route_class)
 
 
 def _validate_freshness(value: Any) -> None:
@@ -160,6 +213,8 @@ class Configured:
 
     config_reference: str
     declared_route_classes: Tuple[str, ...]
+    route_model_bindings: Tuple[Tuple[str, str], ...]
+    binding_issues: Tuple[Tuple[str, str], ...] = ()
     config_digest: Optional[str] = None
     source_type: str = OPERATOR_CONFIG_SOURCE
 
@@ -172,9 +227,30 @@ class Configured:
             )
         _require_text(self.config_reference, "config_reference")
         _validate_route_classes(self.declared_route_classes, "declared_route_classes")
+        _validate_route_model_bindings(
+            self.route_model_bindings, "route_model_bindings"
+        )
+        _validate_binding_issues(self.binding_issues, "binding_issues")
         if not self.declared_route_classes:
             raise CapabilityEvidenceError(
                 "declared_route_classes must name at least one route class"
+            )
+        declared_routes = set(self.declared_route_classes)
+        bound_routes = {route_class for route_class, _ in self.route_model_bindings}
+        issue_routes = {route_class for route_class, _ in self.binding_issues}
+        if not bound_routes.issubset(declared_routes) or not issue_routes.issubset(
+            declared_routes
+        ):
+            raise CapabilityEvidenceError(
+                "bindings and binding issues must refer to declared route classes"
+            )
+        if bound_routes & issue_routes:
+            raise CapabilityEvidenceError(
+                "a declared route class cannot have both a resolved binding and an issue"
+            )
+        if bound_routes | issue_routes != declared_routes:
+            raise CapabilityEvidenceError(
+                "every declared route class must have a binding or binding issue"
             )
         if self.config_digest is not None:
             _require_text(self.config_digest, "config_digest")
@@ -206,7 +282,22 @@ class CapabilityResolution:
     local_fast_available: bool
     local_heavy_available: bool
     declared_route_classes: Tuple[str, ...] = ()
+    route_model_bindings: Tuple[Tuple[str, str], ...] = ()
+    binding_issues: Tuple[Tuple[str, str], ...] = ()
     freshness_seconds: Optional[int] = None
+
+    def __post_init__(self) -> None:
+        _validate_route_model_bindings(
+            self.route_model_bindings, "route_model_bindings"
+        )
+        _validate_binding_issues(self.binding_issues, "binding_issues")
+
+    def model_for_route(self, route_class: str) -> Optional[str]:
+        """Return only the model binding authorized by this resolution."""
+        for bound_route, model_id in self.route_model_bindings:
+            if bound_route == route_class:
+                return model_id
+        return None
 
     def to_evidence_payload(self) -> dict:
         """Privacy-safe provenance for the existing route_decision payload."""
@@ -214,6 +305,8 @@ class CapabilityResolution:
         payload: dict = {
             "capability_state": evidence.state,
             "capability_declared_route_classes": list(self.declared_route_classes),
+            "capability_route_model_bindings": dict(self.route_model_bindings),
+            "capability_route_binding_issues": dict(self.binding_issues),
         }
         if self.freshness_seconds is not None:
             payload["capability_freshness_seconds"] = self.freshness_seconds
@@ -317,6 +410,8 @@ def resolve_capability(
     config_reference: str,
     now: Optional[datetime] = None,
     freshness_seconds: int,
+    local_fast_model: str = "",
+    local_heavy_model: str = "",
     record_invalid: bool = False,
 ) -> CapabilityResolution:
     """Apply the CR-DD-013 resolution precedence.
@@ -336,6 +431,19 @@ def resolve_capability(
         )
         if declared_flag
     )
+    configured_bindings = tuple(
+        (route_class, model_id.strip())
+        for route_class, declared_flag, model_id in (
+            (ROUTE_CLASS_LOCAL_FAST, declare_local_fast, local_fast_model),
+            (ROUTE_CLASS_LOCAL_HEAVY, declare_local_heavy, local_heavy_model),
+        )
+        if declared_flag and isinstance(model_id, str) and model_id.strip()
+    )
+    binding_issues = tuple(
+        (route_class, BINDING_ISSUE_MISSING_MODEL)
+        for route_class in declared
+        if route_class not in {bound_route for bound_route, _ in configured_bindings}
+    )
 
     if record_invalid:
         observation: CapabilityEvidence = Unknown(UNKNOWN_INVALID_RECORD)
@@ -352,20 +460,44 @@ def resolve_capability(
             local_fast_available=False,
             local_heavy_available=False,
             declared_route_classes=declared,
+            route_model_bindings=(),
+            binding_issues=binding_issues,
             freshness_seconds=freshness_seconds,
         )
 
-    fast = ROUTE_CLASS_LOCAL_FAST in declared
-    heavy = ROUTE_CLASS_LOCAL_HEAVY in declared
+    fast = any(route == ROUTE_CLASS_LOCAL_FAST for route, _ in configured_bindings)
+    heavy = any(route == ROUTE_CLASS_LOCAL_HEAVY for route, _ in configured_bindings)
 
     # 2. Fresh reachable: runtime confirmed; classes still require declarations.
     if isinstance(observation, ObservedAvailable):
+        resolved_bindings = configured_bindings
+        if record is not None and record.observed_models is not None:
+            observed_models = set(record.observed_models)
+            mismatched_routes = {
+                route_class
+                for route_class, model_id in configured_bindings
+                if model_id not in observed_models
+            }
+            resolved_bindings = tuple(
+                binding
+                for binding in configured_bindings
+                if binding[1] in observed_models
+            )
+            binding_issues = binding_issues + tuple(
+                (route_class, BINDING_ISSUE_MODEL_NOT_OBSERVED)
+                for route_class in declared
+                if route_class in mismatched_routes
+            )
+        fast = any(route == ROUTE_CLASS_LOCAL_FAST for route, _ in resolved_bindings)
+        heavy = any(route == ROUTE_CLASS_LOCAL_HEAVY for route, _ in resolved_bindings)
         return CapabilityResolution(
             evidence=observation,
             lm_studio_ok=True,
             local_fast_available=fast,
             local_heavy_available=heavy,
             declared_route_classes=declared,
+            route_model_bindings=resolved_bindings,
+            binding_issues=binding_issues,
             freshness_seconds=freshness_seconds,
         )
 
@@ -376,11 +508,15 @@ def resolve_capability(
             evidence=Configured(
                 config_reference=config_reference,
                 declared_route_classes=declared,
+                route_model_bindings=configured_bindings,
+                binding_issues=binding_issues,
             ),
-            lm_studio_ok=True,
+            lm_studio_ok=bool(configured_bindings),
             local_fast_available=fast,
             local_heavy_available=heavy,
             declared_route_classes=declared,
+            route_model_bindings=configured_bindings,
+            binding_issues=binding_issues,
             freshness_seconds=freshness_seconds,
         )
 
@@ -391,6 +527,8 @@ def resolve_capability(
         local_fast_available=False,
         local_heavy_available=False,
         declared_route_classes=(),
+        route_model_bindings=(),
+        binding_issues=(),
         freshness_seconds=freshness_seconds,
     )
 
@@ -431,6 +569,12 @@ def resolve_from_config(config, *, now: Optional[datetime] = None) -> Capability
         record=record,
         declare_local_fast=config.get_capability_declare_local_fast(),
         declare_local_heavy=config.get_capability_declare_local_heavy(),
+        local_fast_model=getattr(
+            config, "get_capability_local_fast_model", lambda: ""
+        )(),
+        local_heavy_model=getattr(
+            config, "get_capability_local_heavy_model", lambda: ""
+        )(),
         config_reference="triagecore.toml:[capability]",
         now=now,
         freshness_seconds=config.get_capability_freshness_seconds(),
@@ -445,6 +589,8 @@ def unknown_resolution(reason: str = UNKNOWN_MISSING) -> CapabilityResolution:
         lm_studio_ok=False,
         local_fast_available=False,
         local_heavy_available=False,
+        route_model_bindings=(),
+        binding_issues=(),
     )
 
 

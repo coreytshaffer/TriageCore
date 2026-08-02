@@ -186,11 +186,11 @@ def test_plan_renders_deterministic_route_shapes(
 def test_plan_reports_specialist_risk_conditions_and_model_binding(capsys):
     tc_cli.tc_run(_args(prompt="Update the docs"))
     docs_out = capsys.readouterr().out
-    assert "specialist_model_forecast: deepseek/deepseek-r1-0528-qwen3-8b" in docs_out
+    assert "specialist_model_forecast: qwen2.5-coder:7b-triagecore" in docs_out
     assert (
         "configured_backend_binding: "
         + tc_cli.default_config.get_backend_type()
-        + ":deepseek/deepseek-r1-0528-qwen3-8b"
+        + ":qwen2.5-coder:7b-triagecore"
     ) in docs_out
 
     tc_cli.tc_run(_args(prompt="pip install requests"))

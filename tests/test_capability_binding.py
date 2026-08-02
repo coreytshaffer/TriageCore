@@ -48,6 +48,8 @@ def _resolve(record=None, *, fast=False, heavy=False, now=NOW, invalid=False):
         config_reference="triagecore.toml:[capability]",
         now=now,
         freshness_seconds=FRESHNESS,
+        local_fast_model="qwen2.5-coder:7b-triagecore" if fast else "",
+        local_heavy_model="deepseek-r1:latest" if heavy else "",
         record_invalid=invalid,
     )
 
@@ -59,9 +61,11 @@ class RecordingBackend:
 
     def __init__(self):
         self.called = False
+        self.model_seen = None
 
     def generate(self, messages, temperature=0.1, timeout=45, **kwargs):
         self.called = True
+        self.model_seen = self.model
         return BackendResponse(
             text="LOCAL_RAN", raw={}, usage={}, backend_name=self.name
         )
@@ -147,6 +151,47 @@ def test_reachable_with_one_declared_class_enables_only_that_class():
     resolution = _resolve(_record(), heavy=True)
     assert resolution.local_heavy_available is True
     assert resolution.local_fast_available is False
+    assert resolution.model_for_route("local_heavy") == "deepseek-r1:latest"
+
+
+def test_declaration_without_model_binding_is_not_available():
+    resolution = cap.resolve_capability(
+        record=None,
+        declare_local_fast=True,
+        declare_local_heavy=False,
+        local_fast_model="",
+        config_reference="test:[capability]",
+        now=NOW,
+        freshness_seconds=FRESHNESS,
+    )
+    assert resolution.declared_route_classes == ("local_fast",)
+    assert resolution.local_fast_available is False
+    assert resolution.model_for_route("local_fast") is None
+    assert resolution.binding_issues == (
+        ("local_fast", cap.BINDING_ISSUE_MISSING_MODEL),
+    )
+    assert resolution.to_evidence_payload()["capability_route_binding_issues"] == {
+        "local_fast": "missing_model_binding"
+    }
+
+
+def test_fresh_inventory_mismatch_disables_only_affected_route():
+    resolution = _resolve(
+        _record(observed_models=["qwen2.5-coder:7b-triagecore"]),
+        fast=True,
+        heavy=True,
+    )
+    assert resolution.local_fast_available is True
+    assert resolution.local_heavy_available is False
+    assert resolution.declared_route_classes == ("local_fast", "local_heavy")
+    assert resolution.model_for_route("local_fast") == "qwen2.5-coder:7b-triagecore"
+    assert resolution.model_for_route("local_heavy") is None
+    assert resolution.binding_issues == (
+        ("local_heavy", cap.BINDING_ISSUE_MODEL_NOT_OBSERVED),
+    )
+    assert resolution.to_evidence_payload()["capability_route_binding_issues"] == {
+        "local_heavy": "model_not_observed"
+    }
 
 
 def test_model_count_and_observed_models_do_not_imply_class_availability():
@@ -238,6 +283,9 @@ def test_configured_evidence_carries_no_probe_provenance():
     assert "capability_observed_at" not in payload
     assert "capability_evidence_tier" not in payload
     assert payload["capability_config_reference"] == "triagecore.toml:[capability]"
+    assert payload["capability_route_model_bindings"] == {
+        "local_fast": "qwen2.5-coder:7b-triagecore"
+    }
 
 
 def test_ordinary_backend_configuration_is_not_a_declaration():
@@ -248,6 +296,8 @@ def test_ordinary_backend_configuration_is_not_a_declaration():
         # Ordinary backend settings exist, but no capability declaration.
         get_capability_declare_local_fast=lambda: False,
         get_capability_declare_local_heavy=lambda: False,
+        get_capability_local_fast_model=lambda: "",
+        get_capability_local_heavy_model=lambda: "",
         get_backend_type=lambda: "ollama",
         get_backend_model=lambda: "llama3",
         get_backend_base_url=lambda: "http://localhost:11434",
@@ -257,11 +307,16 @@ def test_ordinary_backend_configuration_is_not_a_declaration():
     assert resolution.lm_studio_ok is False
 
 
-def test_config_defaults_declare_nothing():
+def test_project_config_declares_both_bound_local_routes():
     from triage_core.config import default_config
 
-    assert default_config.get_capability_declare_local_fast() is False
-    assert default_config.get_capability_declare_local_heavy() is False
+    assert default_config.get_capability_declare_local_fast() is True
+    assert default_config.get_capability_declare_local_heavy() is True
+    assert (
+        default_config.get_capability_local_fast_model()
+        == "qwen2.5-coder:7b-triagecore"
+    )
+    assert default_config.get_capability_local_heavy_model() == "deepseek-r1:latest"
     assert default_config.get_capability_freshness_seconds() == 300
     assert default_config.get_capability_probe_record_path() == ""
 
@@ -274,6 +329,7 @@ def test_configured_cannot_carry_observed_at():
         cap.Configured(
             config_reference="ref",
             declared_route_classes=("local_fast",),
+            route_model_bindings=(("local_fast", "fast-model"),),
             observed_at=NOW.isoformat(),
         )
 
@@ -283,6 +339,7 @@ def test_configured_cannot_carry_probe_evidence_tier():
         cap.Configured(
             config_reference="ref",
             declared_route_classes=("local_fast",),
+            route_model_bindings=(("local_fast", "fast-model"),),
             evidence_tier="local_metadata_probe",
         )
 
@@ -292,6 +349,7 @@ def test_configured_requires_operator_config_source():
         cap.Configured(
             config_reference="ref",
             declared_route_classes=("local_fast",),
+            route_model_bindings=(("local_fast", "fast-model"),),
             source_type="lm_studio",
         )
 
@@ -415,6 +473,45 @@ def test_run_task_without_capability_preserves_previous_route_input():
     assert route_input.capability_evidence is None
 
 
+def test_governed_run_executes_and_records_selected_route_binding():
+    class RecordingLedger:
+        def __init__(self):
+            self.events = []
+
+        def append_event(self, task_id, event_type, payload):
+            self.events.append((event_type, payload))
+
+    backend = RecordingBackend()
+    backend.name = "ollama"
+    backend.model = "initial-model"
+    client = TriageClient(backend=backend)
+    resolution = _resolve(None, heavy=True)
+    ledger = RecordingLedger()
+
+    result = client.run_task(
+        prompt="Update the docs",
+        data="",
+        capability=resolution,
+        ledger=ledger,
+        task_id="binding-test",
+    )
+
+    route_payload = next(
+        payload for kind, payload in ledger.events if kind == "route_decision"
+    )
+    worker_payload = next(
+        payload for kind, payload in ledger.events if kind == "worker_result"
+    )
+    assert result["selected_route"] == "local_heavy"
+    assert result["selected_model"] == "deepseek-r1:latest"
+    assert route_payload["selected_route"] == "local_heavy"
+    assert route_payload["selected_model"] == "deepseek-r1:latest"
+    assert worker_payload["selected_route"] == "local_heavy"
+    assert worker_payload["selected_model"] == "deepseek-r1:latest"
+    assert backend.model_seen == "deepseek-r1:latest"
+    assert backend.model == "initial-model"
+
+
 # --- 11. evidence distinguishes all four states ---------------------------
 
 
@@ -479,12 +576,14 @@ def test_configured_variant_requires_declared_route_classes():
     evidence = cap.Configured(
         config_reference="triagecore.toml:[capability]",
         declared_route_classes=("local_fast",),
+        route_model_bindings=(("local_fast", "fast-model"),),
     )
     assert evidence.declared_route_classes == ("local_fast",)
     with pytest.raises(cap.CapabilityEvidenceError):
         cap.Configured(
             config_reference="triagecore.toml:[capability]",
             declared_route_classes=(),
+            route_model_bindings=(),
         )
 
 

@@ -143,5 +143,13 @@ class Config:
     def get_capability_declare_local_heavy(self) -> bool:
         return bool(self.get_global("capability", "declare_local_heavy", False))
 
+    def get_capability_local_fast_model(self) -> str:
+        """Explicit model binding for the ``local_fast`` route class."""
+        return str(self.get_global("capability", "local_fast_model", "")).strip()
+
+    def get_capability_local_heavy_model(self) -> str:
+        """Explicit model binding for the ``local_heavy`` route class."""
+        return str(self.get_global("capability", "local_heavy_model", "")).strip()
+
 
 default_config = Config()

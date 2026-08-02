@@ -14,6 +14,12 @@ def test_config_reads_project_defaults(tmp_path):
                 'base_url = "http://localhost:1234/v1"',
                 "timeout_seconds = 45",
                 "",
+                "[capability]",
+                "declare_local_fast = true",
+                'local_fast_model = "fast-model"',
+                "declare_local_heavy = true",
+                'local_heavy_model = "heavy-model"',
+                "",
                 "[paths]",
                 'ledger_dir = ".custom-ledger"',
                 'tasks_dir = ".custom-tasks"',
@@ -31,6 +37,10 @@ def test_config_reads_project_defaults(tmp_path):
     assert config.get_backend_model() == "local-test-model"
     assert config.get_backend_base_url() == "http://localhost:1234/v1"
     assert config.get_timeout_seconds() == 45
+    assert config.get_capability_declare_local_fast() is True
+    assert config.get_capability_local_fast_model() == "fast-model"
+    assert config.get_capability_declare_local_heavy() is True
+    assert config.get_capability_local_heavy_model() == "heavy-model"
     assert config.get_ledger_dir() == ".custom-ledger"
     assert config.get_tasks_dir() == ".custom-tasks"
     assert config.get_codex_tasks_dir() == "custom-codex-tasks"

@@ -127,6 +127,16 @@ class TriageClient:
         resilience_decision = choose_resilience_route(resilience_input)
         selected_route = resilience_decision.selected_route
         selected_backend_name = self._selected_backend_name(selected_route)
+        if selected_route in {"cloud_primary", "cloud_secondary"}:
+            selected_model = default_config.get_qwen_model()
+        elif selected_route in {"local_fast", "local_heavy"}:
+            selected_model = (
+                route_decision.get("model")
+                if capability is None
+                else capability.model_for_route(selected_route)
+            ) or ""
+        else:
+            selected_model = ""
         
         # Ensure local-only packets only use explicitly local routes
         if is_local_only:
@@ -155,11 +165,7 @@ class TriageClient:
             resilience_input,
             resilience_decision,
             selected_backend=selected_backend_name,
-            selected_model=(
-                default_config.get_qwen_model()
-                if selected_route in {"cloud_primary", "cloud_secondary"}
-                else route_decision.get("model") or getattr(self.engine.backend, "model", "")
-            ),
+            selected_model=selected_model,
         )
         self._append_route_decision_event(
             ledger=ledger,
@@ -271,7 +277,25 @@ class TriageClient:
         # Step 2: Local execution
         post_processor = route_decision.get("post_processor")
         original_model = self.engine.backend.model
-        requested_model = route_decision.get("model")
+        requested_model = selected_model
+
+        if capability is not None and not requested_model:
+            result = {
+                "status": "handoff_required",
+                "source": "router",
+                "reason": "Selected local route has no resolved model binding.",
+                "handoff_reason": "Selected local route has no resolved model binding.",
+                "worker_result_status": "not_attempted",
+                "failure_type": "backend_unavailable",
+                "failure_stage": "router",
+            }
+            self._append_optional_event(
+                ledger=ledger,
+                task_id=task_id,
+                event_type="worker_result",
+                payload=build_worker_result_payload(route_payload, result),
+            )
+            return self._merge_route_fields(result, route_payload)
         
         # Swapping model dynamically for real backends, but preserving mock backend names in tests
         if getattr(self.engine.backend, "name", "") != "fake" and requested_model and requested_model != original_model:
@@ -330,6 +354,8 @@ class TriageClient:
     def _merge_route_fields(result: Dict[str, Any], route_payload: Dict[str, Any]) -> Dict[str, Any]:
         merged = dict(result)
         merged["selected_route"] = route_payload.get("selected_route")
+        merged["selected_backend"] = route_payload.get("selected_backend", "")
+        merged["selected_model"] = route_payload.get("selected_model", "")
         merged["route_reason"] = route_payload.get("reason")
         merged["fallback_depth"] = route_payload.get("fallback_depth")
         return merged

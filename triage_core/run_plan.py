@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Sequence
 
 from triage_core.classifier import DangerDetector, TaskClassifier
+from triage_core import capability_evidence
 from triage_core.client import TriageClient
 from triage_core.config import default_config
 from triage_core.context_planner import plan_context_for_text
@@ -65,8 +66,9 @@ def build_run_plan(
     qwen_enabled = default_config.get_qwen_enabled()
     qwen_model = default_config.get_qwen_model() if qwen_enabled else "not_enabled"
     local_backend_type = default_config.get_backend_type()
+    capability = capability_evidence.resolve_from_config(default_config)
     route_input = TriageClient._build_resilience_route_input(
-        category=category, validator=None
+        category=category, validator=None, capability=capability
     )
     route_input.privacy_level = (
         "local_only" if privacy == "local_only" else "external_safe"
@@ -84,7 +86,7 @@ def build_run_plan(
     context = plan_context_for_text(
         "assembled tc run input", f"{prompt}\n{data}", budget
     )
-    specialist_model, specialist_timeout = _specialist_forecast(category)
+    specialist_timeout = _specialist_timeout_forecast(category)
     selected_route = decision.selected_route
     route_reason = decision.reason
     fallback_depth = decision.fallback_depth
@@ -94,6 +96,13 @@ def build_run_plan(
         route_reason = "ethical_firewall_requires_human_review"
         fallback_depth = 0
         human_review_required = True
+
+    if selected_route.startswith("local_"):
+        specialist_model = capability.model_for_route(selected_route) or "none"
+    elif selected_route.startswith("cloud_"):
+        specialist_model = qwen_model
+    else:
+        specialist_model = "none"
 
     selected_backend = (
         "qwen:" + qwen_model
@@ -164,12 +173,12 @@ def build_run_plan(
     }
 
 
-def _specialist_forecast(category: str) -> tuple[str, int]:
+def _specialist_timeout_forecast(category: str) -> int:
     if category in {"bugfix", "test_addition", "refactor"}:
-        return "qwen2.5-coder-7b-instruct", 30
+        return 30
     if category in {"docs_update", "architecture_planning"}:
-        return "deepseek/deepseek-r1-0528-qwen3-8b", 120
-    return "qwen2.5-coder-7b-instruct", 45
+        return 120
+    return 45
 
 
 def _ascii(value: object) -> str:

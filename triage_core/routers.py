@@ -67,7 +67,7 @@ class SpecialistRouter:
                 "reason": f"Risk level medium offline fallback. Category: {category}. {'; '.join(danger_info.reasons)}",
                 "timeout": 45,
                 "post_processor": None,
-                "model": "qwen2.5-coder-7b-instruct",
+                "model": "qwen2.5-coder:7b-triagecore",
                 "offline_fallback": True
             }
         
@@ -89,7 +89,7 @@ class SpecialistRouter:
                 "offload_recommended": False,
                 "timeout": 30,
                 "post_processor": None,
-                "model": "qwen2.5-coder-7b-instruct",
+                "model": "qwen2.5-coder:7b-triagecore",
                 "offline_fallback": not internet_up
             }
         elif category in ["structured_extraction", "log_summary", "docs_update", "architecture_planning"]:
@@ -97,7 +97,7 @@ class SpecialistRouter:
                 "offload_recommended": False,
                 "timeout": 120,
                 "post_processor": extract_first_code_block,
-                "model": "deepseek/deepseek-r1-0528-qwen3-8b",
+                "model": "deepseek-r1:latest",
                 "offline_fallback": not internet_up
             }
             
@@ -105,7 +105,7 @@ class SpecialistRouter:
             "offload_recommended": False,
             "timeout": 45,
             "post_processor": None,
-            "model": "qwen2.5-coder-7b-instruct",
+            "model": "qwen2.5-coder:7b-triagecore",
             "offline_fallback": not internet_up
         }
 
