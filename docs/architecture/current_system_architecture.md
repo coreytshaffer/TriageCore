@@ -3,8 +3,12 @@
 ## Status and Verification Basis
 
 **Level 1 — current system architecture.** Verified against local `main` at
-`6d585268` on 2026-08-01. Re-pinned after CR-DD-013's documentation-only closeout; no
-production, test, workflow, schema, or architecture file changed between the two pins.
+`1c2d6242ab18cf0d961b06994cf37c7c59ea38a5` on 2026-08-01. This pin follows
+the identity-consolidation documentation sequence through the submission
+claim-boundary slice. No production, test, workflow, or schema files changed
+since the prior `6d585268` behavior pin; the only non-document path change
+was the `pyproject.toml` description, which changed no runtime-integration
+behavior.
 This page distinguishes current integrated paths,
 implemented-but-disconnected foundations, and conceptual or external actors.
 
@@ -12,6 +16,16 @@ implemented-but-disconnected foundations, and conceptual or external actors.
 
 The SVG is a presentation rendering of this page. This Markdown is authoritative if the
 two drift.
+
+## Identity Versus Integration
+
+The [canonical identity](triagecore_identity.md) is authoritative for
+repository-level identity wording. This page is authoritative for integration
+status and topology. Detailed component documents and tests control exact
+behavior, while public claims must remain within the
+[submission claim boundaries](../submission/claim_boundaries.md). Neither this
+page nor those identity and claim documents grants implementation, integration,
+mutation, merge, or standing authority.
 
 ## Claim Supported
 
@@ -67,6 +81,7 @@ reservation, capability-claim, and constrained replacement components are implem
 
 ## Progressive Zoom
 
+- **Level 0 — identity and scope taxonomy:** [TriageCore Identity](triagecore_identity.md)
 - **Level 2:** [Workspace Unifier Architecture](workspace_unifier_architecture.md)
 - **Level 3:** [Current Governed Run Flow](governed_run_flow.md)
 - **Level 3:** [Human Authorization and Atomic Capability Lifecycle](human_authorization_lifecycle.md)
@@ -109,6 +124,6 @@ reservation, capability-claim, and constrained replacement components are implem
 
 - This diagram describes repository integration, not host deployment, network topology, or
   operator practice.
-- `main@6d585268` is the evidence pin. Re-verify call sites and import relationships when the
-  pin changes.
+- `main@1c2d624` is the evidence pin. Re-verify call sites, import relationships,
+  and integration claims when the pin changes.
 - Detailed pages and tests remain authoritative for ordering and reason-code behavior.
