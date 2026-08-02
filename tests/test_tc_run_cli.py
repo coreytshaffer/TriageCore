@@ -13,6 +13,7 @@ contract:
 
 import json
 import re
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -22,6 +23,7 @@ import requests
 from triage_core import capability_evidence, tc_cli
 from triage_core.backends import BackendResponse
 from triage_core.client import TriageClient
+from triage_core.local_backend_probe import LocalBackendProbeRecord
 from triage_core.routing.resilience_router import ResilienceRouteDecision
 from triage_core.task_packet import PrivacyMetadata
 
@@ -41,6 +43,8 @@ def declared_local_capability(monkeypatch):
         declare_local_heavy=True,
         config_reference="test:[capability]",
         freshness_seconds=300,
+        local_fast_model="qwen2.5-coder:7b-triagecore",
+        local_heavy_model="deepseek-r1:latest",
     )
     monkeypatch.setattr(
         capability_evidence, "resolve_from_config", lambda *a, **k: resolution
@@ -209,6 +213,47 @@ def test_tc_run_privacy_block_leaves_no_ledger_event(tmp_path):
     assert exc.value.code == 2
     assert backend.called is False
     assert not (tmp_path / "ledger.jsonl").exists()
+
+
+def test_early_local_block_records_binding_issue_on_runner_selected(
+    tmp_path, monkeypatch
+):
+    record = LocalBackendProbeRecord(
+        source_type="lm_studio",
+        base_url="http://localhost:11434",
+        reachable=True,
+        evidence_tier="operator_recorded",
+        observed_at=datetime.now(timezone.utc).isoformat(),
+        observed_models=["qwen2.5-coder:7b-triagecore"],
+    )
+    resolution = capability_evidence.resolve_capability(
+        record=record,
+        declare_local_fast=False,
+        declare_local_heavy=True,
+        local_heavy_model="deepseek-r1:latest",
+        config_reference="test:[capability]",
+        freshness_seconds=300,
+    )
+    monkeypatch.setattr(
+        capability_evidence, "resolve_from_config", lambda *a, **k: resolution
+    )
+    backend = RecordingBackend()
+
+    with pytest.raises(SystemExit) as exc:
+        tc_cli.tc_run(
+            _args("Update the docs", ledger_dir=str(tmp_path)),
+            client=TriageClient(backend=backend),
+        )
+
+    assert exc.value.code == 2
+    assert backend.called is False
+    events = _ledger_events(tmp_path / "ledger.jsonl")
+    runner = next(event for event in events if event["event_type"] == "runner_selected")
+    assert runner["payload"]["capability_declared_route_classes"] == ["local_heavy"]
+    assert runner["payload"]["capability_route_binding_issues"] == {
+        "local_heavy": "model_not_observed"
+    }
+    assert not any(event["event_type"] == "route_decision" for event in events)
 
 
 def test_handoff_required_exits_3(tmp_path):

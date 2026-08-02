@@ -1164,6 +1164,13 @@ def tc_run(args, client=None) -> None:
         print(f"Blocked (privacy fail-closed): {exc}")
         sys.exit(2)
 
+    # Resolve metadata-only capability evidence after privacy preflight and
+    # before any ledger append. The same immutable resolution is reused by the
+    # governed router below.
+    from triage_core import capability_evidence as capability_module
+
+    capability = capability_module.resolve_from_config(default_config)
+
     # 4. Ledger wiring (enabled by default; --no-ledger warns).
     ledger = None
     if args.no_ledger:
@@ -1193,7 +1200,9 @@ def tc_run(args, client=None) -> None:
                     "target_files": args.files,
                 },
             )
-        ledger.append_event(task_id, "runner_selected", {"runner": "tc_run"})
+        runner_payload = {"runner": "tc_run"}
+        runner_payload.update(capability.to_evidence_payload())
+        ledger.append_event(task_id, "runner_selected", runner_payload)
 
     # 6. Build the client from config unless one was injected (tests inject).
     if client is None:
@@ -1213,9 +1222,6 @@ def tc_run(args, client=None) -> None:
     # probe record when one is configured; it never probes and never invokes a
     # model. Missing, disabled, stale, or invalid evidence stays unknown rather
     # than being synthesized into local health.
-    from triage_core import capability_evidence as capability_module
-
-    capability = capability_module.resolve_from_config(default_config)
     print(capability_module.describe_for_operator(capability))
 
     # 7. Governed loop. Privacy/safety failures fail closed (exit 2).

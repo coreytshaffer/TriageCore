@@ -2,9 +2,15 @@
 
 [backend]
 default_type = "ollama"
-default_model = "qwen2.5-coder-7b-instruct"
-base_url = "http://localhost:11434/v1"
+default_model = "qwen2.5-coder:7b-triagecore"
+base_url = "http://localhost:11434"
 timeout_seconds = 30
+
+[capability]
+declare_local_fast = true
+local_fast_model = "qwen2.5-coder:7b-triagecore"
+declare_local_heavy = true
+local_heavy_model = "deepseek-r1:latest"
 
 [paths]
 ledger_dir = ".triagecore"
