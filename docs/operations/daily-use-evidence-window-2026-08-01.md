@@ -353,11 +353,18 @@ authority, or file-scope boundaries.
 ## Next Gate
 
 The original Day-1 gate required a separately approved correction before success-path
-trials resumed. That correction now exists as the CR-DD-014 candidate on
+trials resumed. That correction was authored as the CR-DD-014 candidate on
 `codex/daily-use-local-binding-correction` at commit `23bf17a`, and the corrected-binding
-session above reran governed tasks under it. The candidate remains unmerged; its human
-review and merge decision are a separate gate that this record does not grant. This slice
-still creates no model aliases, routing changes, or committed configuration fixes.
+session above reran governed tasks under it while it was still unmerged. Trials 006–008
+therefore remain evidence about the then-unmerged candidate and are not restated as
+evidence about `main`.
+
+CR-DD-014 has since been merged through pull request #146, and `main` now resolves to merge
+commit `3f1cce0`, of which `23bf17a` is an ancestor. That merge closes the correction gate
+this record left open. It does not retroactively convert the Trials 006–008 observations
+into observations of merged code, and it establishes no result that was not observed at
+trial time. Any new evidence session must baseline the merged `main` and record its own
+observations rather than carrying these forward.
 
 Remaining gates: diagnose the `local_heavy` pre-generation failures without inferring a
 cause from this record; continue the declared evidence window across distinct days with
@@ -365,6 +372,9 @@ materially useful tasks; and, when Docker Desktop is available, verify actual co
 topology and in-container LM Studio and Ollama reachability before any claim that the
 supervisor/council architecture is retained as a working containerized deployment. No cloud
 trial has been performed or authorized by this record.
+
+This slice still creates no model aliases, routing changes, or committed configuration
+fixes, and this amendment grants no fix, readiness, cloud, or implementation authority.
 
 ## Uncertainty and Limitations
 
