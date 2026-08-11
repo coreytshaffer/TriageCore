@@ -2,19 +2,27 @@
 
 ## Status
 
-- **Status:** Proposed.
+- **Status:** Requirements contract merged to `main`; implementation candidate
+  verified. Completion of this CR is defined by merge of the implementation PR into
+  `main`.
 - **Type:** Evidence / Observability (Governance-kernel — evidence and reconstruction).
 - **Priority:** Research backlog. Downstream of the CR-DD-016 investigation, which
   surfaced this gap while reconciling that CR's own motivating evidence; does not
   reopen or amend CR-DD-016, CR-DD-013, or any routing/capability-resolution CR.
-- **Implementation authority:** Not authorized. This document records a requirements
-  contract only. It grants no execution, integration, or standing authority.
+- **Implementation authority:** Single-slice implementation authority explicitly
+  granted by the human operator on 2026-08-11, scoped to the Provisional
+  Implementation Allowlist below. The implementation-authority grant covered
+  preparation of the bounded candidate through opening the implementation PR and is
+  now spent. Merge authority is separate from that grant and must be granted
+  independently. The grant was amended once, in review, to add exactly one additional
+  path (`tests/test_tc_run_cli.py`) to the allowlist — see that section for why.
 - **Human approval requirement:** Explicit human review and approval of this Change
   Request is required before any implementation begins. For this Change Request,
   approval records acceptance of the requirements contract but does not by itself
   grant implementation authority. A separate, explicit human implementation-authority
   grant scoped to the Provisional Implementation Allowlist is required before code
-  changes begin.
+  changes begin. Merge of the implementation PR is a distinct human decision and is
+  not authorized by the implementation-authority grant recorded above.
 
 ## Scope
 
@@ -175,18 +183,19 @@ that weakens, any of the following:
   acceptance-evidence surfaces into one CR; it is named here and left untouched.
 - **No change to privacy enforcement, execution gating, or whether execution
   proceeds.**
-- **No implementation authority of any kind.** Acceptance of this CR does not authorize
-  implementation; a separate, explicit human implementation-authority grant, scoped to
-  the Provisional Implementation Allowlist, is required before any code change begins.
+- **No standing or broader implementation authority.** The single-slice grant recorded
+  above applies only to the bounded implementation candidate and does not authorize
+  the sibling branch, additional files, merge, release, or future changes.
 
 ## Provisional Implementation Allowlist
 
 If this requirements contract is separately approved, the bounded implementation is
-proposed to touch exactly these three paths — nothing else:
+authorized to touch exactly these four paths — nothing else:
 
 ```text
 triage_core/client.py
 tests/test_route_decision_audit.py
+tests/test_tc_run_cli.py
 docs/change/requests/CR-DD-017-blocked-route-evidence-parity.md
 ```
 
@@ -196,6 +205,17 @@ Within `triage_core/client.py`, the change is limited to the
 used elsewhere in this same function, in the same form. No other branch, function, or
 file changes. The CR file itself would receive only implementation/status/evidence
 updates.
+
+**`tests/test_tc_run_cli.py` was added to this allowlist during implementation, by an
+explicit scope-amendment grant, not assumed at drafting time.** Running the full test
+suite against the candidate implementation surfaced one pre-existing test,
+`test_early_local_block_records_binding_issue_on_runner_selected`, whose purpose is
+unrelated to this CR (it verifies `runner_selected` records capability
+declared-route-classes and binding issues on an early local-only block) but which also
+carried an incidental negative assertion — `assert not any(event["event_type"] ==
+"route_decision" for event in events)` — asserting the absence of exactly the evidence
+this CR adds. The fix touches only that one assertion line, inverting it to `assert
+any(...)`; no other assertion, fixture, or behavior in that test changed.
 
 Named exclusions — files a future implementer might be tempted to touch, and explicitly
 must not, because this CR persists existing evidence rather than changing what is
@@ -208,44 +228,49 @@ triage_core/capability_evidence.py
 triage_core/route_audit.py
 ```
 
-This allowlist is provisional and proposed only. Listing it here grants no
-implementation authority; a separate, explicit approval is still required before any
-file on it may be modified.
+This allowlist records the bounded scope of the single-slice implementation authority
+granted on 2026-08-11. That authority was exercised only within these four paths and
+is spent upon presentation of the candidate for review. It grants no merge, release,
+or standing authority.
 
 ## Acceptance Criteria
 
-- [ ] `route_audit.reason_code` for the `ambiguous_or_remote_route` branch remains
+- [x] `route_audit.reason_code` for the `ambiguous_or_remote_route` branch remains
       exactly `ambiguous_or_remote_route`, unchanged from current behavior.
-- [ ] When evidence persistence succeeds, a `route_decision` ledger event is persisted
+- [x] When evidence persistence succeeds, a `route_decision` ledger event is persisted
       on this branch, via the existing
       `build_route_decision_payload`/`_append_route_decision_event` path, before
       `LocalRouteUnavailableError` is raised.
-- [ ] For an `ambiguous_or_remote_route` block where evidence persistence succeeds,
+- [x] For an `ambiguous_or_remote_route` block where evidence persistence succeeds,
       evidence order and integrity are exact:
       emit exactly one existing `route_audit` event, then exactly one existing
       `route_decision` event via `_append_route_decision_event` (never a direct
       `ledger.append_event(..., "route_decision", ...)` call, so optional route-decision
       signing is preserved unchanged), then raise `LocalRouteUnavailableError`. No
       `worker_result` event is synthesized, because no worker was attempted.
-- [ ] A sensitivity-case end-to-end test (real `choose_resilience_route`, not mocked)
+- [x] A sensitivity-case end-to-end test (real `choose_resilience_route`, not mocked)
       proves: usable local capability + high sensitivity → `human_handoff`; ledger shows
       `route_audit.reason_code=ambiguous_or_remote_route` and
       `route_decision.reason=sensitivity_requires_human_review`.
-- [ ] A capability-exhaustion-case end-to-end test (real `choose_resilience_route`, not
+- [x] A capability-exhaustion-case end-to-end test (real `choose_resilience_route`, not
       mocked) proves: normal sensitivity + no usable local capability → `human_handoff`;
       ledger shows the same `route_audit` code, `route_decision.reason=
       no_reliable_automated_route_available`, and capability evidence fields sufficient
       to reconstruct whether the state was `Unknown` or `ObservedUnavailable`.
-- [ ] No distinct reason codes are introduced for `Unknown` vs `ObservedUnavailable`.
-- [ ] No change to `choose_resilience_route`, `resolve_capability`, capability
+- [x] No distinct reason codes are introduced for `Unknown` vs `ObservedUnavailable`.
+- [x] No change to `choose_resilience_route`, `resolve_capability`, capability
       resolution, or any routing decision.
-- [ ] The sibling `offload_recommended_for_local_only` branch is not modified and is not
+- [x] The sibling `offload_recommended_for_local_only` branch is not modified and is not
       referenced as resolved by this CR.
-- [ ] When `_append_route_decision_event` (or the ledger call it makes) raises on this
+- [x] When `_append_route_decision_event` (or the ledger call it makes) raises on this
       branch, no worker executes, no `worker_result` event is synthesized, control does
       not fall through, and the failure propagates rather than being masked as
       `LocalRouteUnavailableError`.
-- [ ] All six invariants listed above remain true and unmodified by this slice.
+- [x] All six invariants listed above remain true and unmodified by this slice.
+- [x] The full test suite passes on the candidate, including the one pre-existing test
+      (`tests/test_tc_run_cli.py::test_early_local_block_records_binding_issue_on_runner_selected`)
+      whose stale negative assertion required the one-line scope-amendment fix recorded
+      in the Provisional Implementation Allowlist above.
 
 ## Non-Goals
 

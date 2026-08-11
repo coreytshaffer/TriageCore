@@ -143,6 +143,19 @@ class TriageClient:
             if selected_route not in ["local_heavy", "local_fast", "deterministic"]:
                 audit = RouteDecisionAudit(task_id, privacy_level, True, True, selected_route, selected_backend_name, "blocked", "ambiguous_or_remote_route")
                 self._append_optional_event(ledger, task_id, "route_audit", audit.to_dict())
+                blocked_route_payload = build_route_decision_payload(
+                    resilience_input,
+                    resilience_decision,
+                    selected_backend=selected_backend_name,
+                    selected_model=selected_model,
+                )
+                self._append_route_decision_event(
+                    ledger=ledger,
+                    task_id=task_id,
+                    payload=blocked_route_payload,
+                    signing_registry=route_decision_signing_registry,
+                    signing_agent_id=route_decision_signing_agent_id,
+                )
                 raise LocalRouteUnavailableError(f"Local backend unavailable or route '{selected_route}' is not proven local-safe for local-only packet. Failing closed.")
             if route_decision.get("offload_recommended", False):
                 audit = RouteDecisionAudit(task_id, privacy_level, True, True, selected_route, selected_backend_name, "blocked", "offload_recommended_for_local_only")
