@@ -127,10 +127,13 @@ that weakens, any of the following:
    - Persist that payload via the existing `_append_route_decision_event` helper —
      never a direct `ledger.append_event(..., "route_decision", ...)` call, which would
      bypass the helper's optional-signing switch to
-     `ledger.append_signed_route_decision_event(...)` — before raising
-     `LocalRouteUnavailableError`. Evidence order is exact: one `route_audit`, then one
-     `route_decision`, then the raise. No `worker_result` is synthesized.
-   - Change nothing else about this branch's control flow.
+     `ledger.append_signed_route_decision_event(...)`. When evidence persistence
+     succeeds, evidence order is exact: one `route_audit`, then one `route_decision`,
+     then the `LocalRouteUnavailableError` raise. No `worker_result` is synthesized.
+   - Change no routing, privacy-enforcement, or worker-execution control flow. The only
+     newly reachable exceptional outcome is the evidence-persistence/signing failure
+     permitted by Invariant 3, which propagates without worker execution or
+     fallthrough.
 2. **Tests.** At least two end-to-end routing tests in `tests/test_route_decision_audit.py`
    that exercise the real `choose_resilience_route` (not a mock returning
    `reason=""`):
@@ -213,10 +216,12 @@ file on it may be modified.
 
 - [ ] `route_audit.reason_code` for the `ambiguous_or_remote_route` branch remains
       exactly `ambiguous_or_remote_route`, unchanged from current behavior.
-- [ ] A `route_decision` ledger event is persisted on this branch, via the existing
+- [ ] When evidence persistence succeeds, a `route_decision` ledger event is persisted
+      on this branch, via the existing
       `build_route_decision_payload`/`_append_route_decision_event` path, before
       `LocalRouteUnavailableError` is raised.
-- [ ] For an `ambiguous_or_remote_route` block, evidence order and integrity are exact:
+- [ ] For an `ambiguous_or_remote_route` block where evidence persistence succeeds,
+      evidence order and integrity are exact:
       emit exactly one existing `route_audit` event, then exactly one existing
       `route_decision` event via `_append_route_decision_event` (never a direct
       `ledger.append_event(..., "route_decision", ...)` call, so optional route-decision
