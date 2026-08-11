@@ -19,7 +19,10 @@ TriageCore maintains two distinct types of history to avoid confusing operationa
 Any new feature, systemic adjustment, or significant code modification must be proposed as a Change Request.
 - CRs reside in `docs/change/requests/`.
 - A CR must define: Status, Scope, Implementation authority, Human approval requirement, and Acceptance criteria.
-- Only CRs with an `Approved` status authorize code changes.
+- `Status` records a CR's lifecycle or acceptance state. An `Approved` status may record acceptance of the proposal, design, or architecture for the purpose stated in the CR, but status alone does not authorize code changes.
+- Code changes require explicit human implementation authority recorded for the CR and scoped to the named change plus bounded files, systems, or actions.
+- Design or architecture acceptance, implementation authority, implementation acceptance, merge authority, release authority, and closeout are separate decisions unless an explicit human grant deliberately names and bundles particular stages.
+- A grant explicitly defined as single-slice, single-use, or stage-bound is exhausted when its authorized action or stage is completed. No grant creates standing authority beyond its recorded scope, conditions, and duration.
 
 ## Architectural Decision Records (ADR)
 Significant architectural shifts, especially those concerning privacy, routing, or task structure, must be captured in an ADR.
