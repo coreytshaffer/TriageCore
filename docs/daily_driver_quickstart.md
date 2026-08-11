@@ -79,6 +79,36 @@ Start your work sessions by inspecting the state of your workspace and routing p
    ```
    Gathers tasks and included files into a single structured Markdown packet, enforcing token budget boundaries.
 
+11. **Understand local-capability probing**
+
+   A `[capability]` declaration in `triagecore.toml` with a resolved model binding
+   (`declare_local_fast`/`declare_local_heavy` plus `local_fast_model`/`local_heavy_model`)
+   is, by itself, enough for `tc run` to consider `local_fast`/`local_heavy` for
+   `--privacy local_only` work. No probe is required for that. What a probe changes is
+   the *assurance level* behind that declaration:
+
+   ```powershell
+   python -m triage_core.tc_cli probe --source-type ollama --base-url http://localhost:11434 --output .triagecore/local-backend-probe.json
+   ```
+   Then set the resulting path as `[capability].local_probe_record_path` in
+   `triagecore.toml`. Writing the `--output` file alone has no effect on `tc run` — it
+   only takes effect once that config key points at it.
+
+   Three cases follow:
+   - **Declaration only, no usable probe** — route consideration is permitted; the
+     recorded evidence state is `Configured`, an operator assertion, not a checked
+     observation.
+   - **A fresh probe exists** — a reachable result upgrades the evidence to
+     `ObservedAvailable` (and, if run with `--include-model-names`, can catch a declared
+     model that isn't actually loaded). An unreachable result conclusively suppresses the
+     declared route, overriding the declaration.
+   - **Neither a usable declaration nor a usable probe** — local capability is `Unknown`
+     and `local_only` work fails closed.
+
+   Probing is a manual, repeatable step, not a one-time setup: a probe record older than
+   the 300-second default `freshness_seconds` window is treated identically to no probe
+   at all.
+
 ## Meaning of Outputs
 
 - **Repo: dirty/clean**: A "dirty" repo means there are uncommitted changes in your workspace. TriageCore uses Git status to track workspace cleanliness.
