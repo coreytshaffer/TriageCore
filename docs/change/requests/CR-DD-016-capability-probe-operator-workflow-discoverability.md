@@ -2,27 +2,24 @@
 
 ## Status
 
-- **Status:** Implementation drafted and verified on a branch; PR open against `main`,
-  not yet merged. This CR is not complete until that PR lands.
+- **Status:** Implementation candidate verified; completion is defined by merge of the
+  implementation PR into `main`.
 - **Type:** Documentation / Operator Workflow.
 - **Priority:** Research backlog. Downstream of CR-DD-013; does not reopen or amend it.
 - **Implementation authority:** Authorized for exactly the four-path Implementation
-  Allowlist below, and exercised only within it on the implementation branch. Authority
-  is not yet closed out — merging the implementation PR into `main` is a separate,
-  still-pending human gate. Regardless of that outcome, it authorizes nothing further:
-  no additional change to `triage_core/tc_cli.py` beyond the `tc probe` argparse help
-  text drafted, and no change of any kind to capability resolution, routing, probe
-  behavior, config defaults, or persistence semantics.
+  Allowlist below, exercised only within it. No further changes are authorized. Merge of
+  the implementation PR is the final human gate; once merged, that bounded authority is
+  spent.
 - **Human approval requirement:** Explicit human review and approval of this Change
-  Request was required before implementation began, and was given. A separate PR-review
-  and merge decision is still pending.
+  Request was required before implementation began, and was given separately. Merge of
+  the implementation PR is the final acceptance gate.
 
-This document records a requirements contract. The bounded implementation described
-below has been drafted and verified on branch, within the stated bounds, but is not yet
-merged into `main`. It grants no further execution, integration, or standing authority
-beyond that bounded, not-yet-merged implementation.
+This document records a requirements contract with a verified implementation candidate,
+bounded to exactly the allowlist below. It grants no execution, integration, or standing
+authority beyond that bounded implementation.
 
-**Implementation evidence (on branch, pending PR review and merge):**
+**Implementation evidence:** commit `01e8b14` on PR #157
+(`claude/cr-dd-016-implementation` → `main`).
 `docs/daily_driver_quickstart.md` gained a new "Understand
 local-capability probing" section documenting the three-case contract below and the
 300-second freshness consequence. `triage_core/tc_cli.py`'s `tc probe --output` argparse
@@ -171,11 +168,10 @@ weakens, any of the following:
    `[capability].local_probe_record_path` in `triagecore.toml`. Text only; no new flags, no
    new behavior.
 
-## Implementation Allowlist (Drafted — Pending PR Review and Merge)
+## Authorized Implementation Allowlist
 
-The bounded implementation, separately approved, has been drafted on branch to touch
-exactly these four paths — nothing else. The branch is on an open PR against `main`,
-not yet merged:
+The bounded implementation, separately approved, touches exactly these four paths —
+nothing else:
 
 ```text
 docs/daily_driver_quickstart.md
@@ -201,10 +197,11 @@ triage_core/client.py
 triage_core/routing/resilience_router.py
 ```
 
-Implementation authority for this allowlist has been exercised, on branch, strictly
-within these four paths; it is not yet closed out, since the implementation PR has not
-merged. Regardless of merge outcome, no further file on this list — or any other file —
-may be touched under this authorization without a separate, explicit approval.
+Implementation authority for this allowlist has been exercised strictly within these
+four paths. Merge of the implementation PR is the final human gate; once merged, that
+bounded authority is spent. No further file on this list — or any other file — may be
+touched under this authorization, before or after merge, without a separate, explicit
+approval.
 
 ## Explicitly Out of Scope
 
