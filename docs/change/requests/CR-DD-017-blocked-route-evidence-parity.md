@@ -2,30 +2,27 @@
 
 ## Status
 
-- **Status:** Proposed (requirements contract, merged to `main`); implementation
-  candidate in review under a separate, single-slice implementation-authority grant.
-  This status line does not assert merge, completion, or closeout of the
-  implementation — see the implementation PR opened from this branch for the diff,
-  test results, and CI outcome.
+- **Status:** Requirements contract merged to `main`; implementation candidate
+  verified. Completion of this CR is defined by merge of the implementation PR into
+  `main`.
 - **Type:** Evidence / Observability (Governance-kernel — evidence and reconstruction).
 - **Priority:** Research backlog. Downstream of the CR-DD-016 investigation, which
   surfaced this gap while reconciling that CR's own motivating evidence; does not
   reopen or amend CR-DD-016, CR-DD-013, or any routing/capability-resolution CR.
 - **Implementation authority:** Single-slice implementation authority explicitly
   granted by the human operator on 2026-08-11, scoped to the Provisional
-  Implementation Allowlist below. The grant covers preparing a reviewable
-  implementation candidate — branching, the bounded edits, tests, staging, commit,
-  push, and opening the implementation PR. It does not include merge authority, which
-  remains a separate, later human decision. The grant was amended once, in review, to
-  add exactly one additional path (`tests/test_tc_run_cli.py`) to the allowlist — see
-  that section for why.
+  Implementation Allowlist below. The implementation-authority grant covered
+  preparation of the bounded candidate through opening the implementation PR and is
+  now spent. Merge authority is separate from that grant and must be granted
+  independently. The grant was amended once, in review, to add exactly one additional
+  path (`tests/test_tc_run_cli.py`) to the allowlist — see that section for why.
 - **Human approval requirement:** Explicit human review and approval of this Change
   Request is required before any implementation begins. For this Change Request,
   approval records acceptance of the requirements contract but does not by itself
   grant implementation authority. A separate, explicit human implementation-authority
   grant scoped to the Provisional Implementation Allowlist is required before code
-  changes begin. Merge of the implementation PR is a distinct, still-pending human
-  decision.
+  changes begin. Merge of the implementation PR is a distinct human decision and is
+  not authorized by the implementation-authority grant recorded above.
 
 ## Scope
 
@@ -186,9 +183,9 @@ that weakens, any of the following:
   acceptance-evidence surfaces into one CR; it is named here and left untouched.
 - **No change to privacy enforcement, execution gating, or whether execution
   proceeds.**
-- **No implementation authority of any kind.** Acceptance of this CR does not authorize
-  implementation; a separate, explicit human implementation-authority grant, scoped to
-  the Provisional Implementation Allowlist, is required before any code change begins.
+- **No standing or broader implementation authority.** The single-slice grant recorded
+  above applies only to the bounded implementation candidate and does not authorize
+  the sibling branch, additional files, merge, release, or future changes.
 
 ## Provisional Implementation Allowlist
 
@@ -231,9 +228,10 @@ triage_core/capability_evidence.py
 triage_core/route_audit.py
 ```
 
-This allowlist is provisional and proposed only. Listing it here grants no
-implementation authority; a separate, explicit approval is still required before any
-file on it may be modified.
+This allowlist records the bounded scope of the single-slice implementation authority
+granted on 2026-08-11. That authority was exercised only within these four paths and
+is spent upon presentation of the candidate for review. It grants no merge, release,
+or standing authority.
 
 ## Acceptance Criteria
 
