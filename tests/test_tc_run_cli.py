@@ -253,7 +253,7 @@ def test_early_local_block_records_binding_issue_on_runner_selected(
     assert runner["payload"]["capability_route_binding_issues"] == {
         "local_heavy": "model_not_observed"
     }
-    assert not any(event["event_type"] == "route_decision" for event in events)
+    assert any(event["event_type"] == "route_decision" for event in events)
 
 
 def test_handoff_required_exits_3(tmp_path):
