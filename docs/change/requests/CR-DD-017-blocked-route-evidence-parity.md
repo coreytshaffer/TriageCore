@@ -165,8 +165,9 @@ that weakens, any of the following:
   acceptance-evidence surfaces into one CR; it is named here and left untouched.
 - **No change to privacy enforcement, execution gating, or whether execution
   proceeds.**
-- **No implementation authority of any kind.** Acceptance of this CR authorizes writing
-  the client.py/test slice only once separately approved; it authorizes nothing else.
+- **No implementation authority of any kind.** Acceptance of this CR does not authorize
+  implementation; a separate, explicit human implementation-authority grant, scoped to
+  the Provisional Implementation Allowlist, is required before any code change begins.
 
 ## Provisional Implementation Allowlist
 
