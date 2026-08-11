@@ -10,12 +10,11 @@
 - **Implementation authority:** Not authorized. This document records a requirements
   contract only. It grants no execution, integration, or standing authority.
 - **Human approval requirement:** Explicit human review and approval of this Change
-  Request is required before any implementation begins. Per
-  `docs/change/change_management.md`, approving this Change Request records acceptance
-  of the proposal only and does not itself authorize implementation; a separate,
-  explicit human grant of implementation authority — scoped to this change and the
-  files listed under Provisional Implementation Allowlist — is additionally required
-  before any code change begins.
+  Request is required before any implementation begins. For this Change Request,
+  approval records acceptance of the requirements contract but does not by itself
+  grant implementation authority. A separate, explicit human implementation-authority
+  grant scoped to the Provisional Implementation Allowlist is required before code
+  changes begin.
 
 ## Scope
 
@@ -97,8 +96,11 @@ that weakens, any of the following:
    byte-identical to current behavior — it is not renamed, split, or parameterized.
 2. No routing decision, capability resolution, or privacy-enforcement outcome changes
    for any input.
-3. `LocalRouteUnavailableError` continues to be raised in exactly the same conditions as
-   today, with exactly the same message.
+3. When required evidence persistence succeeds, `LocalRouteUnavailableError` continues
+   to be raised under the same routing/privacy conditions and with the same message.
+   An evidence-persistence or signing failure MUST NOT permit worker execution or fall
+   through to an allowed route; such an integrity failure may propagate rather than
+   being masked as `LocalRouteUnavailableError`.
 4. Distinguishing `Unknown` from `ObservedUnavailable` capability evidence remains the
    job of the existing capability-evidence payload fields carried on `route_decision`,
    not a new reason-code vocabulary on `route_audit`.
@@ -146,6 +148,11 @@ that weakens, any of the following:
      example, an event-count assertion that previously assumed only `route_audit` was
      written on this branch), the update may only make the assertion match reality — it
      may not weaken or remove any existing `reason_code` assertion.
+   - **Evidence-persistence-failure case:** with `_append_route_decision_event` (or the
+     ledger call it makes) forced to raise, prove no worker executes, no `worker_result`
+     event is synthesized, and control does not fall through to an allowed route or a
+     masked `LocalRouteUnavailableError`; the failure propagates instead. No
+     signing-specific sub-case is required.
 
 ## Explicitly Out of Scope
 
@@ -229,6 +236,10 @@ file on it may be modified.
       resolution, or any routing decision.
 - [ ] The sibling `offload_recommended_for_local_only` branch is not modified and is not
       referenced as resolved by this CR.
+- [ ] When `_append_route_decision_event` (or the ledger call it makes) raises on this
+      branch, no worker executes, no `worker_result` event is synthesized, control does
+      not fall through, and the failure propagates rather than being masked as
+      `LocalRouteUnavailableError`.
 - [ ] All six invariants listed above remain true and unmodified by this slice.
 
 ## Non-Goals
