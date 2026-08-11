@@ -10,7 +10,12 @@
 - **Implementation authority:** Not authorized. This document records a requirements
   contract only. It grants no execution, integration, or standing authority.
 - **Human approval requirement:** Explicit human review and approval of this Change
-  Request is required before any implementation begins.
+  Request is required before any implementation begins. Per
+  `docs/change/change_management.md`, approving this Change Request records acceptance
+  of the proposal only and does not itself authorize implementation; a separate,
+  explicit human grant of implementation authority — scoped to this change and the
+  files listed under Provisional Implementation Allowlist — is additionally required
+  before any code change begins.
 
 ## Scope
 
@@ -238,8 +243,12 @@ file on it may be modified.
 
 Downstream of CR-DD-016 — the investigation that surfaced this gap while reconciling
 that CR's Aug-8 motivating-evidence misdiagnosis. Independent of CR-DD-015A/B (the
-separate evidence-fidelity lane already approved for drafting, scoped to
-`local_heavy` timeout/failure-classification evidence) and of Tracks B and C named in
+separate evidence-fidelity lane proposed for `local_heavy` timeout/failure-
+classification evidence). Per `docs/operations/daily-use-evidence-window-2026-08-02.md`,
+neither `CR-DD-015A` nor `CR-DD-015B` exists as a record, and CR-DD-015A's drafting is
+not authorized — it remains proposed only, pending separate authorization to draft.
+This CR does not draft, authorize, or depend on that sequence. Also independent of
+Tracks B and C named in
 CR-DD-016 (classifier terminal fallback; `privacy_level` normalization) — related in
 spirit (all are evidence-fidelity gaps) but each independently scoped, evidenced, and
 authorized, per the standing correction-lane sequencing rule: do not bundle unrelated
