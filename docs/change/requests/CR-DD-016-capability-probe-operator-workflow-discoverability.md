@@ -2,18 +2,38 @@
 
 ## Status
 
-- **Status:** Proposed.
+- **Status:** Implementation drafted and verified on a branch; PR open against `main`,
+  not yet merged. This CR is not complete until that PR lands.
 - **Type:** Documentation / Operator Workflow.
 - **Priority:** Research backlog. Downstream of CR-DD-013; does not reopen or amend it.
-- **Implementation authority:** Not authorized. This proposal PR changes no
-  source code. If separately approved, the bounded implementation described
-  below may modify `triage_core/tc_cli.py` only for the specified argparse
-  help text; this CR itself grants no authority to make that change.
+- **Implementation authority:** Authorized for exactly the four-path Implementation
+  Allowlist below, and exercised only within it on the implementation branch. Authority
+  is not yet closed out — merging the implementation PR into `main` is a separate,
+  still-pending human gate. Regardless of that outcome, it authorizes nothing further:
+  no additional change to `triage_core/tc_cli.py` beyond the `tc probe` argparse help
+  text drafted, and no change of any kind to capability resolution, routing, probe
+  behavior, config defaults, or persistence semantics.
 - **Human approval requirement:** Explicit human review and approval of this Change
-  Request is required before any implementation begins.
+  Request was required before implementation began, and was given. A separate PR-review
+  and merge decision is still pending.
 
-This document records a requirements contract only. It grants no execution, integration,
-or standing authority.
+This document records a requirements contract. The bounded implementation described
+below has been drafted and verified on branch, within the stated bounds, but is not yet
+merged into `main`. It grants no further execution, integration, or standing authority
+beyond that bounded, not-yet-merged implementation.
+
+**Implementation evidence (on branch, pending PR review and merge):**
+`docs/daily_driver_quickstart.md` gained a new "Understand
+local-capability probing" section documenting the three-case contract below and the
+300-second freshness consequence. `triage_core/tc_cli.py`'s `tc probe --output` argparse
+help text now names `[capability].local_probe_record_path` as the required follow-up
+config key. `tests/test_tc_cli.py` gained
+`test_tc_probe_help_names_capability_probe_record_path`, asserting (against
+whitespace-normalized output, so it does not depend on the ambient terminal width) that
+the help text names `[capability].local_probe_record_path`, `triagecore.toml`, and
+explains that persisted `--output` has no effect on `tc run` by itself. No other file was
+touched; no schema, CLI flag, default value, command dispatch, probe execution,
+capability resolution, or routing decision changed.
 
 ## Corrective Amendment — Capability Observation Semantics
 
@@ -151,10 +171,11 @@ weakens, any of the following:
    `[capability].local_probe_record_path` in `triagecore.toml`. Text only; no new flags, no
    new behavior.
 
-## Provisional Implementation Allowlist
+## Implementation Allowlist (Drafted — Pending PR Review and Merge)
 
-If this requirements contract is separately approved, the bounded implementation
-is proposed to touch exactly these four paths — nothing else:
+The bounded implementation, separately approved, has been drafted on branch to touch
+exactly these four paths — nothing else. The branch is on an open PR against `main`,
+not yet merged:
 
 ```text
 docs/daily_driver_quickstart.md
@@ -163,15 +184,14 @@ tests/test_tc_cli.py
 docs/change/requests/CR-DD-016-capability-probe-operator-workflow-discoverability.md
 ```
 
-Within `triage_core/tc_cli.py`, the permitted change is limited to `argparse`
-help/description text for `tc probe`; no command dispatch, function body, flag
-shape, default value, probe behavior, routing behavior, capability-resolution
-behavior, or execution path change. The CR file itself would receive only
-implementation/status/evidence updates.
+Within `triage_core/tc_cli.py`, the change is limited to `argparse` help/description
+text for `tc probe`; no command dispatch, function body, flag shape, default value,
+probe behavior, routing behavior, capability-resolution behavior, or execution path
+changed. The CR file itself received only implementation/status/evidence updates.
 
-Named exclusions — files a future implementer might be tempted to touch, and
-explicitly must not, because this CR changes only how the existing workflow
-explains itself, not how the workflow operates:
+Named exclusions — files a future implementer might be tempted to touch, and which were
+not touched, because this CR changes only how the existing workflow explains itself, not
+how the workflow operates:
 
 ```text
 triage_core/local_backend_probe.py
@@ -181,9 +201,10 @@ triage_core/client.py
 triage_core/routing/resilience_router.py
 ```
 
-This allowlist is provisional and proposed only. Listing it here grants no
-implementation authority; a separate, explicit approval is still required
-before any file on it may be modified.
+Implementation authority for this allowlist has been exercised, on branch, strictly
+within these four paths; it is not yet closed out, since the implementation PR has not
+merged. Regardless of merge outcome, no further file on this list — or any other file —
+may be touched under this authorization without a separate, explicit approval.
 
 ## Explicitly Out of Scope
 
@@ -238,27 +259,29 @@ investigation or CR even if both eventually warrant changes.
 
 ## Acceptance Criteria
 
-- [ ] `docs/daily_driver_quickstart.md` (or a linked operations document) documents the
+- [x] `docs/daily_driver_quickstart.md` (or a linked operations document) documents the
       full `tc probe` → `[capability].local_probe_record_path` procedure and the
       three-case contract above (declaration-only permits route consideration; a fresh
       probe upgrades or conclusively overrides it; neither usable fails `local_only`
       closed), including the 300-second freshness consequence, in language an operator
       could act on without reading source code.
-- [ ] `tc probe --help` text references `[capability].local_probe_record_path` by name as
+- [x] `tc probe --help` text references `[capability].local_probe_record_path` by name as
       the required follow-up step for persisted output to take effect.
-- [ ] `triage_core/tc_cli.py` is the only permitted file under `triage_core/`,
+- [x] `triage_core/tc_cli.py` is the only permitted file under `triage_core/`,
       and changes to it are limited to `argparse` help/description text for
       `tc probe`; no command dispatch, function body, flag shape, default value,
       probe behavior, routing behavior, capability-resolution behavior, or
       execution path changes.
-- [ ] No schema, CLI command or flag shape, default value, command dispatch,
+- [x] No schema, CLI command or flag shape, default value, command dispatch,
       probe execution, capability resolution, routing decision, persistence
       behavior, or runtime semantics change.
-- [ ] A focused CLI regression test proves that `tc probe --help` names
+- [x] A focused CLI regression test proves that `tc probe --help` names
       `[capability].local_probe_record_path` and explains that persisted
       `--output` does not affect `tc run` until that configuration path is set.
-- [ ] All five invariants listed above remain true and unmodified by this slice.
-- [ ] The two adjacent findings (classifier fallback, `privacy_level` normalization) are
+      (`tests/test_tc_cli.py::test_tc_probe_help_names_capability_probe_record_path`,
+      whitespace-normalized to be independent of ambient terminal width.)
+- [x] All five invariants listed above remain true and unmodified by this slice.
+- [x] The two adjacent findings (classifier fallback, `privacy_level` normalization) are
       not addressed, referenced as resolved, or folded into this CR's acceptance.
 
 ## Non-Goals

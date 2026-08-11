@@ -5,6 +5,9 @@ import unittest.mock
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
+import pytest
+
+from triage_core import tc_cli
 from triage_core.tc_cli import tc_preflight, tc_handoff
 
 def test_tc_preflight_creates_files(tmp_path):
@@ -184,3 +187,24 @@ def test_tc_workspace_export_eval(tmp_path):
     assert data["focus_context"]["in_today_focus"] is True
     assert data["boundary"]["triagecore_scores_packet"] is False
     assert "Read-only context feature" not in json.dumps(data, sort_keys=True)
+
+
+def test_tc_probe_help_names_capability_probe_record_path(capsys, monkeypatch):
+    """CR-DD-016: tc probe --help must name the required follow-up config key."""
+    monkeypatch.setattr(sys, "argv", ["tc", "probe", "--help"])
+    # Pin a wide terminal width so argparse's line-wrapping can't split the
+    # asserted phrases regardless of the ambient environment's COLUMNS.
+    monkeypatch.setenv("COLUMNS", "200")
+
+    with pytest.raises(SystemExit) as exc:
+        tc_cli.main()
+
+    assert exc.value.code == 0
+    captured = capsys.readouterr()
+    # argparse line-wraps help text at terminal width, which varies by
+    # environment, so compare against whitespace-normalized output rather
+    # than relying on any particular wrap point.
+    normalized = " ".join(captured.out.split())
+    assert "[capability].local_probe_record_path" in normalized
+    assert "triagecore.toml" in normalized
+    assert "no effect on 'tc run'" in normalized

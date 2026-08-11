@@ -2435,7 +2435,12 @@ def main():
     )
     probe_parser.add_argument(
         "--output", type=str, default=None,
-        help="Write the rendered record to this operator-named file (no default write location)",
+        help=(
+            "Write the rendered record to this operator-named file (no default write "
+            "location). Writing here has no effect on 'tc run' by itself -- also set "
+            "[capability].local_probe_record_path to this path in triagecore.toml for "
+            "tc run to read it."
+        ),
     )
 
     # audit
