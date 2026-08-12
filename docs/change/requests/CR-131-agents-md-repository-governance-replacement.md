@@ -2,8 +2,8 @@
 
 ## Status
 
-- **Status:** Approved — proposal accepted, design accepted, implementation accepted
-  for PR #168; merge authority for PR #168 pending.
+- **Status:** Approved — proposal accepted, design accepted, implementation
+  accepted, and PR #168 merged; release applicability and closeout undecided.
 - **Proposal acceptance:** Granted by the human operator on 2026-08-12 for the
   problem statement and design-review boundaries recorded in this CR — the
   repository-governance-mismatch finding, use of CR-131 in the plain-numeric lineage,
@@ -50,13 +50,24 @@
   only; any subsequent modification to PR #168 would require a new implementation-
   acceptance decision. It does not grant merge authority for PR #168, release
   authority, or closeout.
+- **Merge authority:** Granted by the human operator on 2026-08-12 for PR #168 at
+  exact accepted head `1da8bc03a2347992d910d9907e193d3050b0e47a`, and exercised the
+  same day. Merge commit `2ac5814b37401d3c5ec13b44d9ac961a04bdfbf4` (parents
+  `25734855afd4aca9e28dcfd344731637b2ead39e` and `1da8bc03a2347992d910d9907e193d3050b0e47a`)
+  landed on `main`. `main` now contains the accepted 61-line `AGENTS.md`, SHA-256
+  `58d83280245b053718b04cab0fe84c8d9640c09780018761bcf880add088a77e`, matching the
+  design-accepted fingerprint recorded above exactly. This grant is spent: it
+  authorized merging that exact head only and does not authorize any further
+  `AGENTS.md` edit, release action, or closeout.
 - **Human approval requirement:** Proposal acceptance, design acceptance,
-  implementation authority, and implementation acceptance have all been granted as
-  recorded above; together they record acceptance of the problem statement, scope
-  boundaries, exact replacement text, authorization to produce one implementation
-  candidate, and acceptance of that exact candidate at its accepted head. They do
-  not by themselves grant merge authority. Merge authority for PR #168, release
-  authority, and closeout all remain separate, ungranted decisions.
+  implementation authority, implementation acceptance, and merge authority have all
+  been granted as recorded above; together they record acceptance of the problem
+  statement, scope boundaries, exact replacement text, authorization to produce one
+  implementation candidate, acceptance of that exact candidate, and its merge onto
+  `main`. They do not by themselves resolve release applicability or grant closeout.
+  Release authority (including whether release applies at all to this
+  repository-governance-only change) and closeout remain separate, undecided
+  decisions.
 
 ## CR Namespace Census (evidence, not assumption)
 
