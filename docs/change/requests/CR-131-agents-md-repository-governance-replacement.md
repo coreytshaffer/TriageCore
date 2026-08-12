@@ -79,8 +79,8 @@
   implementation authority, implementation acceptance, merge authority, the
   release-applicability decision, and closeout have all been granted or decided as
   recorded above; together they record the complete CR-131 lifecycle through
-  closeout. Merge authority for the closeout PR itself remains a separate,
-  ungranted decision.
+  closeout. This closeout grant does not itself grant merge authority for the
+  closeout PR; that authority remains a separate human decision.
 
 ## CR Namespace Census (evidence, not assumption)
 
