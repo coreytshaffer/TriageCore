@@ -2,7 +2,8 @@
 
 ## Status
 
-- **Status:** Approved — proposal accepted; design review pending.
+- **Status:** Approved — proposal accepted, design accepted, implementation produced
+  as a candidate; implementation acceptance pending.
 - **Proposal acceptance:** Granted by the human operator on 2026-08-12 for the
   problem statement and design-review boundaries recorded in this CR — the
   repository-governance-mismatch finding, use of CR-131 in the plain-numeric lineage,
@@ -10,22 +11,44 @@
   stale uncommitted draft as source material only, the reconstruction requirement,
   and the writable-mutation/read-only-verification separation — at exact accepted
   head `ebf462903d5e67259d07abb6cd13f3aacd4dcb09`.
+- **Design acceptance:** Granted by the human operator on 2026-08-12 for the exact
+  61-line `AGENTS.md` replacement text drafted, reviewed, and corrected in the
+  CR-131 design-review conversation following read-only investigation against `main`
+  at `f807a6e6319ab49761985140a73d1d4469efeaec`. That text is frozen as the accepted
+  design. Its SHA-256 is
+  `58d83280245b053718b04cab0fe84c8d9640c09780018761bcf880add088a77e`, recorded here
+  as an integrity fingerprint of that conversation-only artifact — it lets an equal
+  copy be verified byte-for-byte if reproduced, but the hash alone does not make the
+  accepted text independently reconstructible from this CR, this PR, or any other
+  repository artifact. The exact bytes exist only in the design-review conversation
+  record. This grant authorizes only recording design acceptance and directly
+  corresponding status metadata in this CR; it does not modify the accepted text and
+  grants no implementation, runtime, schema, test, or broader documentation change.
 - **Type:** Documentation / Governance (repository-level agent guidance — no runtime,
   routing, capability, or schema component).
 - **Priority:** Design review. Raised from a read-only investigation of an existing
   uncommitted working-tree draft; see Source Material below.
-- **Implementation authority:** Not authorized. Explicitly withheld, and unchanged by
-  proposal acceptance. No `AGENTS.md` edit, implementation commit, implementation
-  branch, or implementation PR is authorized by this CR.
-- **Design acceptance:** Not granted. Remains a separate, later human decision.
-- **Human approval requirement:** Proposal acceptance has been granted as recorded
-  above; it records acceptance of the *problem statement and scope boundaries* only
-  and does not by itself grant implementation authority. A separate, explicit human
-  implementation-authority grant — scoped to the exact final text and bounded to the
-  single file `AGENTS.md` — is required before any edit begins, per
-  `docs/change/change_management.md` and CR-130's stage-separation rule. Design
-  acceptance, implementation authority, implementation acceptance, and merge
-  authority remain separate, ungranted decisions.
+- **Implementation authority:** Granted by the human operator on 2026-08-12, scoped
+  to exactly one path — `AGENTS.md` — for reconstructing the CR-131 design-accepted
+  text on a fresh branch/worktree from then-current `main`. The grant included the
+  operational steps needed to produce a reviewable candidate: creating the fresh
+  implementation branch/worktree, writing the frozen 61-line artifact, bounded
+  verification, commit, push, and opening an implementation PR. It produced
+  implementation PR #168 at exact head `1da8bc03a2347992d910d9907e193d3050b0e47a`,
+  whose committed `AGENTS.md` has SHA-256
+  `58d83280245b053718b04cab0fe84c8d9640c09780018761bcf880add088a77e`, matching the
+  design-accepted fingerprint recorded above. This grant is spent: it authorized
+  producing that one implementation candidate and does not authorize any further
+  `AGENTS.md` edit, implementation acceptance, or merge authority for PR #168. This
+  lifecycle-record correction itself grants nothing further — it records what was
+  already authorized and produced; it is not a new grant.
+- **Human approval requirement:** Proposal acceptance, design acceptance, and
+  implementation authority have all been granted as recorded above; together they
+  record acceptance of the problem statement, scope boundaries, exact replacement
+  text, and authorization to produce one implementation candidate. They do not by
+  themselves grant implementation acceptance or merge authority. Implementation
+  acceptance of PR #168, merge authority for PR #167, merge authority for PR #168,
+  release authority, and closeout all remain separate, ungranted decisions.
 
 ## CR Namespace Census (evidence, not assumption)
 
