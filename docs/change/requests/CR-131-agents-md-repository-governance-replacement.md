@@ -8,8 +8,9 @@
 - **Priority:** Design review. Raised from a read-only investigation of an existing
   uncommitted working-tree draft; see Source Material below.
 - **Implementation authority:** Not authorized. Explicitly withheld. This document
-  proposes a problem statement and design boundaries only. No AGENTS.md edit, commit,
-  branch, or PR is authorized by this CR.
+  proposes a problem statement and design boundaries only. No `AGENTS.md` edit,
+  implementation commit, implementation branch, or implementation PR is authorized by
+  this CR.
 - **Human approval requirement:** Explicit human review and approval of this proposal
   is required before any design-review stage begins. Approval of this CR, if granted,
   records acceptance of the *problem statement and scope boundaries* only and does not
@@ -72,9 +73,9 @@ resulting `AGENTS.md` is intended to define, and only to define:
 1. **Repository authority precedence** — higher-priority system and user instructions
    prevail first; any nested-`AGENTS.md` precedence applies where the active agent
    environment supports it, without assuming every client implements nested-file
-   precedence identically. The repository's own canonical governance documents
-   (`docs/change/change_management.md`, this backlog, and related CRs) remain
-   authoritative independent of a particular client's file-precedence behavior.
+   precedence identically. The repository's canonical governance documents, including
+   `docs/change/change_management.md` and relevant accepted CRs, remain authoritative
+   independent of a particular client's file-precedence behavior.
 2. **Stage separation** — restate, in agent-facing terms, the
    `Proposed ≠ Authorized ≠ Implemented` chain already codified in
    `docs/change/change_management.md` and CR-130: a CR, an `Approved` status, a
