@@ -2,29 +2,39 @@
 
 ## Status
 
-- **Status:** Proposed.
+- **Status:** Approved — design accepted. The original proposal deliberately left the
+  event/payload schema unsettled; this document records the settled design contract
+  produced by the read-only schema/design review. That contract is settled for its
+  stated purpose. No code exists, and this status authorizes none.
+- **Design acceptance:** Granted by the human operator on 2026-08-11 for the settled
+  specialist-offload evidence contract recorded here — dedicated
+  `specialist_offload_decision` event; closed discriminated payload and cross-field
+  semantic constraints; single-decision provenance; privacy-safe bounded evidence;
+  per-call-site event ordering; integrity-failure behavior; intentionally unsigned first
+  slice with separately governed future signing; and the local-only blocked path
+  nominated as the first implementation slice.
 - **Type:** Evidence / Observability (Governance-kernel — evidence and reconstruction),
   with a privacy-sensitive schema-design component.
 - **Priority:** Design. Downstream of a read-only investigation of the
   `offload_recommended_for_local_only` branch conducted after CR-DD-017's
   implementation merged to `main` (`424bc7a66dc51d73a46dd0980969d8312c553d4e`). Does
   not reopen or amend CR-DD-017, CR-DD-016, CR-DD-013, or any routing/capability-
-  resolution CR.
-- **Implementation authority:** Not authorized. Explicitly withheld. Unlike CR-DD-017,
-  this CR does not yet have a sufficiently settled payload/event contract to
-  responsibly authorize code — the schema itself is the thing under review. This
-  document grants no execution, integration, or standing authority.
-- **Human approval requirement:** Explicit human review and approval of this Change
-  Request is required before any implementation begins. Approval of this CR, if
-  granted, records acceptance of the requirements/design contract only and does not
-  by itself grant implementation authority. A separate, explicit human
-  implementation-authority grant — scoped to a settled payload/event schema and
-  bounded files — is required before any code change begins, per
-  `docs/change/change_management.md` and CR-130's stage-separation rule. Merge of this
-  proposal PR records the design problem, preferred direction, and design-review
-  requirements only. It does not move this CR out of `Proposed`, satisfy the unchecked
-  design-review acceptance criteria, settle the payload/event schema, or grant
-  implementation authority.
+  resolution CR, and does not rewrite CR-078 or CR-082.
+- **Implementation authority:** Not granted. Explicitly withheld, including after design
+  acceptance. Settling and accepting the design removes the original reason
+  implementation could not responsibly be authorized; it does not itself authorize
+  implementation. This document grants no execution, integration, signing-path, or
+  standing authority.
+- **Signing-path authority:** Not granted. The separately governed signing path
+  described below is not authorized by design acceptance of this contract.
+- **Human approval requirement:** Design acceptance is recorded above and is granted.
+  Under `docs/change/change_management.md` and CR-130's stage-separation rule, design
+  acceptance remains distinct from implementation authority, implementation acceptance,
+  merge authority, release, and closeout. A separate, explicit human
+  implementation-authority grant — scoped to bounded files and naming which call
+  site(s) it covers — is required before any code change begins. Merge of this PR
+  records the accepted design contract only; it grants no implementation authority and
+  does not authorize the separately governed signing path described below.
 
 ## Scope
 
@@ -56,10 +66,10 @@ routing behavior.
 Today, the second decision can veto an otherwise-valid local-safe route chosen by the
 first, but only the generic policy-gate outcome survives in the ledger. On the
 local-only blocked path, a single `route_audit.reason_code=
-offload_recommended_for_local_only` stands in for three structurally distinct causes
-(high risk, medium risk while online, oversized context), each carrying a different
-`route_decision["reason"]` string that is computed and then discarded one call site
-away. The identical loss exists on the *allowed* path: `build_worker_result_payload`'s
+offload_recommended_for_local_only` stands in for four structurally distinct causes
+(explicit safety handoff, high risk, medium risk while online, oversized context), each
+carrying a different `route_decision["reason"]` string that is computed and then
+discarded one call site away. The identical loss exists on the *allowed* path: `build_worker_result_payload`'s
 persisted `"reason"` field is populated from the resilience router's reason, not from
 `result["reason"]` (the specialist/danger string) — so even where the task *does* get
 offloaded rather than blocked, the specialist's causal reason never reaches durable
@@ -85,6 +95,18 @@ file paths. This CR's design must not assume today's formatted reason string wil
 remain safe merely because `target_files` happens not to be passed today; persisting
 `reasons` verbatim, under any field name, would create exactly the kind of schema that
 both leaks under a future caller and needs replacing immediately after being added.
+
+**The ledger's persistent-privacy invariant is defense in depth, not the primary
+guarantee.** `TaskLedger.append_event()` calls `assert_persistent_privacy_safe()`
+(`triage_core/privacy_invariants.py`) on every payload, and that check is *both* a
+forbidden-key denylist (`prompt`, `data`, `content`, `token`, `secret`, and similar) and
+a recursive scan of string *values* for SSN, email, phone, secret-key, precise-location,
+and Luhn-valid payment-card patterns. It is therefore stronger than a key-name check.
+But it is pattern-limited and not provenance-aware: arbitrary input-derived prose, file
+paths that trip no detector, and other free-form reason material pass it cleanly under
+any field name not on the denylist. The bounded specialist schema below is consequently
+the primary privacy control for this event; the ledger scanner is a secondary net that
+must not be relied on to catch a schema mistake.
 
 ## Motivating Evidence
 
@@ -119,52 +141,208 @@ From the read-only investigation (main at `424bc7a`):
 **What is the smallest structured, privacy-safe, durable representation of a
 `SpecialistRouter` offload decision?**
 
-## Preferred Direction (design lean, not an implementation contract)
+## Settled Design Contract
 
-**This section is a preferred design direction, not a settled implementation
-contract.** It nominates a shape and bounded candidate fields to argue against the
-alternatives (stretching `route_audit`, overloading resilience `route_decision`), but
-final event/payload naming, the exact field set, and the exact schema shape remain
-subject to proposal review and may change materially before any implementation
-authority is considered. Nothing below is final wording.
+This section replaces the original provisional "preferred direction." It records the
+settled contract produced by the read-only schema/design review, design-accepted by the
+human operator on 2026-08-11. It grants no implementation authority.
 
-- A **separate specialist-decision evidence object/event**, rather than stretching
-  either existing structure:
-  - `route_audit.reason_code="offload_recommended_for_local_only"` stays exactly as
-    the policy-gate explanation on the local-only branch — unchanged, not
+### Event boundary
+
+- **Event type: `specialist_offload_decision`** — a dedicated event, not a stretch of
+  `route_audit` and not a fold into the resilience `route_decision`.
+  - `route_audit.reason_code="offload_recommended_for_local_only"` stays exactly as the
+    policy-gate explanation on the local-only branch — unchanged, not
     renamed/split/parameterized.
   - The resilience `route_decision` event is **not** overloaded with specialist-router
     fields — that would blur two independent decision systems into one schema.
-- `SpecialistRouter` would expose bounded, structured cause fields instead of (or in
-  addition to, pending review) its current free-form `"reason"` string. Candidate
-  fields, offered to anchor review discussion rather than as final names:
-  - `offload_reason_code`: a closed enum, e.g. `high_risk`, `medium_risk_online`,
-    `context_limit_online`.
-  - `risk_level`: `DangerDetector`'s existing `high`/`medium`/`low` vocabulary.
-  - `risk_categories`: the existing bounded category set (`destructive_ops`,
-    `system_modifications`, `secrets_and_auth`, `package_management`,
-    `deployment_config`) — no free-form category text.
-  - `internet_available`: boolean, where causally relevant (medium-risk and
-    context-size triggers only).
-  - `context_limit_exceeded`: boolean, not raw data length or content.
-- **Explicit privacy exclusions, unconditionally and not contingent on today's call
-  sites:** no prompt text, no `data` text, no raw matched substrings, no secrets, no
-  `target_files` paths, and no free-form `DangerInfo.reasons` strings ever enter
-  durable evidence under this contract — regardless of what future callers of
-  `DangerDetector.analyze` or `route_task` pass in.
+- **The event is policy-outcome-agnostic.** It records what `SpecialistRouter`
+  concluded and why. It never records whether privacy policy subsequently blocked the
+  task or handed it off; that outcome already lives in the neighboring `route_audit`
+  and `worker_result` events, correlated by `task_id` and event order.
+- **`TaskLedger.append_event()` remains the transport.** The ledger does not restrict
+  event-type names, so no ledger schema migration is required.
+- **Because generic append enforces no closed payload, the eventual implementation MUST
+  use a dedicated builder/validator** that rejects unknown fields, invalid enum values,
+  noncanonical category lists, and semantically impossible cross-field combinations
+  before calling the ledger — the same discipline
+  `triage_core/route_worker_ledger.py` already demonstrates with its closed
+  payload-field sets. Exact module placement is deliberately **not** settled here.
+
+### Evidence source: one decision, never recomputed
+
+The original defect is that structured causal state stays trapped inside
+`SpecialistRouter`. Settling the payload does not fix that unless the payload's *source*
+is also normative, so:
+
+> The durable specialist payload MUST be constructed from bounded structured cause data
+> exposed by the same `SpecialistRouter.route_task()` invocation whose decision is being
+> recorded. Evidence construction MUST NOT parse the free-form `reason` string, rerun
+> `DangerDetector.analyze()`, rerun `is_internet_available()`, or re-derive the decision
+> from raw prompt/data at persistence time.
+
+`route_task()` evaluates danger and connectivity exactly once, before branching. Those
+observations must be carried forward, not recreated. Recomputing at persistence time
+would make the evidence a second, independently-evaluated routing decision that can
+silently diverge from the one that actually controlled execution — particularly for
+`is_internet_available()`, which performs a live socket probe whose result can change
+between the branch and the append.
+
+This settles the *source* obligation only. Whether the structured result is a dataclass,
+a nested dict, or a separate module is deliberately **not** settled here.
+
+### Closed payload (discriminated by `offload_reason_code`)
+
+Common fields, always present:
+
+- `offload_reason_code` — exactly one of:
+  `high_risk | safety_handoff | medium_risk_online | context_limit_online`
+- `risk_level` — exactly one of `low | medium | high`. Always present: `route_task()`
+  evaluates `DangerDetector.analyze()` before every offload branch, so risk is assessed
+  for every decision this event can describe. Reaching the context-size branch means
+  the high and medium branches did not return, i.e. `risk_level="low"`.
+- `risk_categories` — always present; **sorted and deduplicated**, restricted to
+  `destructive_ops | system_modifications | secrets_and_auth | package_management |
+  deployment_config`. An empty list is valid. Canonical ordering is required because
+  `DangerDetector` accumulates categories in a `set` before converting to a list
+  (`categories_list = list(categories)`), so its raw list ordering is not a stable
+  evidence property — and would become a correctness problem if this event is signed
+  later.
+
+**Builder canonicalizes; validator rejects.** These are distinct obligations and must not
+be collapsed: the *builder* validates category membership, deduplicates, and sorts into
+canonical order when constructing the payload; the *validator* rejects a persisted
+payload containing unknown categories, duplicates, noncanonical ordering, or an
+impossible cross-field combination. A validator that silently re-sorts instead of
+rejecting would mask exactly the drift the canonical form exists to detect.
+
+Variant-required fields:
+
+| `offload_reason_code` | `internet_available` | `context_limit_exceeded` |
+|---|---|---|
+| `high_risk` | absent | absent |
+| `safety_handoff` | absent | absent |
+| `medium_risk_online` | required, `true` | absent |
+| `context_limit_online` | required, `true` | required, `true` |
+
+Fields not permitted by a variant MUST be **absent, never `null`**. A `null` placeholder
+would reintroduce exactly the "absent means what?" ambiguity this discriminated shape
+exists to remove.
+
+### Cross-field semantic constraints
+
+Closing each field's vocabulary and controlling presence/absence is not sufficient: a
+validator satisfying only those rules would still accept semantically impossible evidence
+such as `offload_reason_code=high_risk` with `risk_level=low`, or
+`context_limit_online` with `risk_level=medium`. The builder/validator MUST additionally
+enforce the relationships `DangerDetector` and `SpecialistRouter` actually establish:
+
+| `offload_reason_code` | Required `risk_level` | Required `risk_categories` |
+|---|---|---|
+| `high_risk` | `high` | at least one of `destructive_ops`, `system_modifications`, `secrets_and_auth` |
+| `medium_risk_online` | `medium` | at least one of `package_management`, `deployment_config`, and **no** high-risk category |
+| `context_limit_online` | `low` | empty (`[]`) |
+| `safety_handoff` | any valid level | must be consistent with the recorded `risk_level` under the three rules above |
+
+These mirror `DangerDetector.analyze()`: it returns `high` when a high-risk category is
+present, `medium` when a package/deployment category is present *and* no high-risk
+category is, and `low` otherwise — and both `low` return paths emit an empty
+`risk_categories` list. `safety_handoff` admits any valid risk level because the explicit
+category triggers the branch independently of risk assessment; its categories must still
+be internally consistent with whatever `risk_level` is recorded.
+
+### Discriminant normalization (`safety_handoff` / `high_risk` overlap)
+
+`route_task()`'s first branch is `risk_level == "high" OR category == "safety_handoff"`,
+so both conditions can hold simultaneously and a single discriminant needs an explicit
+rule:
+
+> If `category == "safety_handoff"`, record `offload_reason_code="safety_handoff"`.
+> Otherwise normalize in order: `high_risk`, then `medium_risk_online`, then
+> `context_limit_online`.
+
+This does not erase coincident high risk — `risk_level="high"` and the bounded
+`risk_categories` still preserve it. What it prevents is the explicit safety-handoff
+trigger vanishing from evidence whenever both conditions are true.
+
+`safety_handoff` is included now, though it is **not presently reachable through
+`TriageClient`**: `TaskClassifier.CATEGORIES` contains eight values and
+`safety_handoff` is not among them (the nearest is `blocked_or_high_risk`). The
+`SpecialistRouter.route_task()` API nonetheless accepts it explicitly, and
+`triage_core/context_budget.py` already carries a `safety_handoff` task-class budget
+entry. Recording it now avoids designing an event whose vocabulary needs extending the
+moment that trigger becomes reachable.
+
+### Deliberately excluded from the payload
+
+- **No raw task category.** `route_task()` accepts a plain string, so persisting it to
+  explain `safety_handoff` would quietly convert a bounded schema back into an unbounded
+  string surface. The bounded reason code carries that meaning instead.
+- **No prompt text, no `data` text, no raw matched substrings, no secrets, no
+  `target_files` paths, and no free-form `DangerInfo.reasons` strings** — unconditionally,
+  and not contingent on what today's call sites happen to pass to
+  `DangerDetector.analyze` or `route_task`.
+
+### Event ordering
+
+Sharing a payload schema across both call sites does not imply a shared event sequence.
+Exact placement per call site:
+
+- **Local-only blocked path:**
+  `route_audit(blocked)` → `specialist_offload_decision` → raise
+  `LocalRouteUnavailableError`
+- **Allowed specialist-offload path:**
+  `route_audit(allowed)` → `route_decision` → `specialist_offload_decision` →
+  `worker_result(handoff_required)`
+
+This preserves the distinction between specialist cause, resilience cause, and eventual
+policy/execution outcome.
+
+### Integrity invariant
+
+> A required specialist-evidence persistence failure MUST propagate before worker
+> execution, fallthrough, `LocalRouteUnavailableError`, or a successfully recorded
+> `handoff_required` outcome is emitted. A future explicitly requested signing failure
+> follows the same rule.
+
+On the local-only blocked path this failure must not be masked as
+`LocalRouteUnavailableError`; on the allowed path it must not proceed to emit
+`worker_result` as though the causal evidence chain completed. One rule for both sites:
+an evidence-integrity failure cannot turn into execution, fallthrough, or a
+successfully recorded routing outcome.
+
+### Signing decision
+
+Recorded in the CR-078 coverage-table style. **CR-078 and CR-082 are historical records
+and are not rewritten by this CR.**
+
+| Event type | Signing status | Capability | Reason |
+|---|---|---|---|
+| `specialist_offload_decision` | Intentionally unsigned for the first implementation slice | Not assigned to that slice | Dedicated signing endpoint is `specialist_offload_decision:sign`. `route_decision:sign` MUST NOT be borrowed — a signature under that capability would misattribute one subsystem's evidence to another subsystem's authority. Signing implementation requires a separately governed verification/readiness path, following the CR-078 → CR-082 precedent in which a signed event type arrives together with its dedicated helper, capability, and operator-facing verification rather than silently widening an existing signature's meaning. |
+
+**Unenabled/unprovisioned signing is not a failure.** Before specialist signing exists
+or has been enabled, `specialist_offload_decision` is intentionally unsigned: no signing
+capability is required, and there is no runtime error merely because
+`specialist_offload_decision:sign` has not been provisioned. A future signing
+implementation should include a readiness/preflight path capable of surfacing an
+unprovisioned signer *before* task execution.
+
+**A failure of explicitly requested signing is an integrity failure.** Once signing is
+explicitly requested, a missing `specialist_offload_decision:sign` capability, a revoked
+identity, a cryptographic failure, or any other signing failure is an
+integrity/authorization failure. It MUST propagate under the integrity invariant above.
+The system MUST NOT silently downgrade an explicitly requested signed event to unsigned.
 
 ## Scope of the Design (this CR's deliverable)
 
-This CR is a design/requirements contract. Its deliverable, if approved, is the
-settled schema — not code. It must:
+This CR is a design/requirements contract. Its deliverable is the settled schema — not
+code. The Settled Design Contract above now discharges that deliverable:
 
-1. Define the exact field set and bounded vocabulary for each enum-like field above
-   (or a reviewed alternative).
-2. Define which `client.py` call sites the schema is intended to eventually cover —
-   both the local-only-blocked path and the allowed/offload path — so that a schema
-   designed for one call site does not need replacing when later extended to the
-   other.
-3. **Nominate, without authorizing, the local-only-blocked branch as a first
+1. The exact field set and bounded vocabulary for every enum-like field is defined.
+2. Both `client.py` call sites the schema covers — local-only-blocked and
+   allowed/offload — are named, with per-site event ordering settled, so a schema
+   implemented at one site does not need replacing when later extended to the other.
+3. **The local-only-blocked branch is nominated, without authorization, as the first
    candidate implementation slice**, consistent with CR-DD-017's sequencing. Design
    coverage of both call sites is not implementation authorization for both: approval
    of this CR's schema does not itself authorize implementing coverage for either
@@ -172,9 +350,18 @@ settled schema — not code. It must:
    implementation-authority grant must independently name and bound which call
    site(s) it covers; a grant scoped to the local-only-blocked branch does not extend
    to the allowed/offload path merely because both are described here, and the
-   reverse holds equally.
-4. Define the acceptance-test scenarios needed to prove the design closes the gap
-   (below).
+   reverse holds equally. Describing the allowed path and its ordering above
+   authorizes nothing.
+4. The acceptance-test scenarios needed to prove the design closes the gap are defined
+   below.
+
+**Future implementation surface is wider than one slice.** The first implementation
+slice is expected to touch `triage_core/client.py`, `triage_core/routers.py`, and
+tests. The separately governed signing path described above would additionally reach
+`triage_core/task_ledger.py` (dedicated helper, capability constant, signature-payload
+wrapper), operator-facing verification, and operator identity provisioning. That
+breadth is recorded here so it is visible before any implementation allowlist is
+proposed — it is not an allowlist and authorizes nothing.
 
 ## Explicitly Out of Scope
 
@@ -194,29 +381,54 @@ settled schema — not code. It must:
 
 ## Acceptance Criteria (design-review level — no code exists to test yet)
 
-- [ ] The proposal defines a complete, closed field set for the specialist-offload
+- [x] The proposal defines a complete, closed field set for the specialist-offload
       evidence contract, with an explicit bounded vocabulary for every enum-like
-      field (`offload_reason_code`, `risk_level`, `risk_categories`).
-- [ ] The proposal explicitly and unconditionally excludes prompt text, raw matched
+      field (`offload_reason_code`, `risk_level`, `risk_categories`). *Satisfied by the
+      Settled Design Contract: a discriminated payload keyed by `offload_reason_code`,
+      with per-variant required/absent fields and no `null` placeholders.*
+- [x] The contract closes the schema semantically, not only structurally: cross-field
+      constraints bind each `offload_reason_code` to its required `risk_level` and
+      `risk_categories`, so semantically impossible evidence (e.g. `high_risk` with
+      `risk_level=low`) is rejected rather than merely well-formed. Builder
+      canonicalization and validator rejection are defined as distinct obligations.
+- [x] The contract makes the evidence *source* normative: the payload must be built from
+      the same `SpecialistRouter.route_task()` invocation that controlled the branch,
+      with parsing the free-form `reason`, rerunning `DangerDetector.analyze()`,
+      rerunning `is_internet_available()`, and re-deriving from raw prompt/data at
+      persistence time all prohibited.
+- [x] The proposal explicitly and unconditionally excludes prompt text, raw matched
       substrings, secrets, file paths, and free-form `DangerInfo.reasons` from every
       durable field it defines, and states this exclusion does not rest on any
       assumption that today's call sites (e.g. `route_task()` not passing
-      `target_files`) will remain unchanged.
-- [ ] The proposal states which `client.py` call sites the schema is intended to
+      `target_files`) will remain unchanged. *Satisfied, and extended to exclude the raw
+      task category string; the ledger's persistent-privacy check is recorded as
+      pattern-limited defense in depth rather than the primary guarantee.*
+- [x] The proposal states which `client.py` call sites the schema is intended to
       cover (local-only-blocked and allowed/offload), confirms the schema shape does
       not depend on which call site emits it first, and states explicitly that
       describing both call sites here does not authorize implementing either — any
       future implementation-authority grant must independently name and bound which
-      call site(s) it covers.
-- [ ] The proposal defines four acceptance-test scenarios that exercise the real
-      `SpecialistRouter.route_task` / `DangerDetector` decision logic rather than
-      mocking the specialist decision result. External connectivity may be
-      deterministically controlled at the `is_internet_available()` boundary; tests
-      MUST NOT depend on ambient network availability.
+      call site(s) it covers. *Satisfied, with per-site event ordering settled
+      separately from the shared payload shape.*
+- [x] The signing posture is explicitly settled rather than left accidental: a
+      dedicated `specialist_offload_decision:sign` endpoint is named, borrowing
+      `route_decision:sign` is prohibited, the first slice is recorded as intentionally
+      unsigned in CR-078 coverage-table style, and unenabled/unprovisioned signing is
+      distinguished from failure of an explicitly requested signing operation.
+- [x] A single integrity invariant covers both call sites: a required
+      specialist-evidence persistence failure — and any explicitly requested signing
+      failure — propagates before worker execution, fallthrough,
+      `LocalRouteUnavailableError`, or a successfully recorded `handoff_required`
+      outcome.
+- [x] The proposal defines five acceptance-test scenarios — one per causal variant, plus
+      privacy — that exercise the real `SpecialistRouter.route_task` / `DangerDetector`
+      decision logic rather than mocking the specialist decision result. External
+      connectivity may be deterministically controlled at the `is_internet_available()`
+      boundary; tests MUST NOT depend on ambient network availability.
       1. **High-risk case:** a prompt matching a high-risk category (e.g.
          `destructive_ops`) resolves to specialist-offload evidence identifying the
          bounded risk cause (`offload_reason_code=high_risk`, correct
-         `risk_categories`).
+         `risk_categories`, asserted in canonical sorted/deduplicated order).
       2. **Medium-risk + internet-available case:** a prompt matching a medium-risk
          category, with `is_internet_available()` deterministically controlled true at
          the external boundary, distinguishes the connectivity-dependent offload
@@ -228,15 +440,32 @@ settled schema — not code. It must:
          the external boundary, distinguishes context-pressure offload
          (`offload_reason_code=context_limit_online`, `context_limit_exceeded=true`)
          from the risk-driven cases.
-      4. **Privacy case:** uses unique sentinel content in the prompt and `data` and
+      4. **Safety-handoff case (direct router):** calls the real
+         `SpecialistRouter.route_task()` with `category="safety_handoff"`, a low-risk
+         prompt, and bounded `data`, with connectivity deterministically controlled
+         (the router probes it even though the safety branch does not depend on it).
+         Asserts the structured cause normalizes to
+         `offload_reason_code=safety_handoff`, `risk_level=low`, and empty
+         `risk_categories`. This variant is exercised directly at the router rather than
+         end-to-end through `TriageClient` precisely because `SpecialistRouter` supports
+         `safety_handoff` while `TaskClassifier` currently cannot emit it — **no
+         `TaskClassifier` change is required or authorized to obtain this coverage.**
+         **Overlap-precedence coverage** is required as either a subcase of this
+         scenario or an explicit assertion within it: a high-risk prompt *plus*
+         `category="safety_handoff"` proves the normalization rule —
+         `offload_reason_code=safety_handoff` while `risk_level=high` and the high-risk
+         `risk_categories` remain preserved, in canonical order.
+      5. **Privacy case:** uses unique sentinel content in the prompt and `data` and
          proves that no input-derived free-form sentinel content, no raw matched
          content, and no raw `DangerInfo.reasons` text appears anywhere in persisted
          evidence for any of the above scenarios. Bounded contract vocabulary is not
          treated as leakage merely because the same literal token happens to occur in
          an input.
-- [ ] No implementation authority is granted by this CR. A separate, explicit,
-      scoped implementation-authority grant — naming exact files — is required before
-      any code change begins, per `docs/change/change_management.md` and CR-130.
+- [x] No implementation authority is granted by this CR. A separate, explicit,
+      scoped implementation-authority grant — naming exact files and which call
+      site(s) it covers — is required before any code change begins, per
+      `docs/change/change_management.md` and CR-130. The signing path is separately
+      governed and is likewise not authorized here.
 
 ## Non-Goals
 
