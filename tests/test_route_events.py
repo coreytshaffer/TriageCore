@@ -252,3 +252,52 @@ def test_validate_specialist_offload_payload_safety_handoff_accepts_any_risk_lev
         validate_specialist_offload_payload(
             {"offload_reason_code": "safety_handoff", "risk_level": "high", "risk_categories": []}
         )
+
+
+# --- CR-DD-018: malformed types must reject via the dedicated error, never TypeError
+
+def test_validate_specialist_offload_payload_rejects_unhashable_reason_code():
+    with pytest.raises(SpecialistOffloadPayloadError):
+        validate_specialist_offload_payload(
+            _high_risk_cause(offload_reason_code=["high_risk"])
+        )
+
+
+def test_validate_specialist_offload_payload_rejects_unhashable_risk_level():
+    with pytest.raises(SpecialistOffloadPayloadError):
+        validate_specialist_offload_payload(
+            _high_risk_cause(risk_level={"level": "high"})
+        )
+
+
+def test_validate_specialist_offload_payload_rejects_unhashable_category_element():
+    with pytest.raises(SpecialistOffloadPayloadError):
+        validate_specialist_offload_payload(
+            _high_risk_cause(risk_categories=[["destructive_ops"]])
+        )
+
+
+def test_validate_specialist_offload_payload_rejects_non_string_category_element():
+    with pytest.raises(SpecialistOffloadPayloadError):
+        validate_specialist_offload_payload(_high_risk_cause(risk_categories=[42]))
+
+
+def test_build_specialist_offload_payload_rejects_unhashable_reason_code():
+    with pytest.raises(SpecialistOffloadPayloadError):
+        build_specialist_offload_payload({
+            "specialist_offload_cause": _high_risk_cause(offload_reason_code={"x": 1})
+        })
+
+
+def test_build_specialist_offload_payload_rejects_unhashable_risk_level():
+    with pytest.raises(SpecialistOffloadPayloadError):
+        build_specialist_offload_payload({
+            "specialist_offload_cause": _high_risk_cause(risk_level=["high"])
+        })
+
+
+def test_build_specialist_offload_payload_rejects_unhashable_category_element():
+    with pytest.raises(SpecialistOffloadPayloadError):
+        build_specialist_offload_payload({
+            "specialist_offload_cause": _high_risk_cause(risk_categories=[{"a": 1}])
+        })

@@ -154,6 +154,12 @@ def test_normal_non_sensitive_routing_audit(client, ledger):
     assert "prompt" not in audit
     assert "data" not in audit
 
+    # CR-DD-018 first-slice boundary: the allowed/non-local-only offload path is not
+    # wired for specialist evidence. The bare {"offload_recommended": True} mock above
+    # (carrying no specialist_offload_cause) proves this path never even attempts to
+    # consume the new structured cause.
+    assert not any(e == "specialist_offload_decision" for e, _ in ledger.events)
+
 # --- CR-DD-017: blocked local-only route evidence parity -------------------
 
 def test_sensitivity_blocked_route_records_route_decision(client, ledger):
@@ -349,6 +355,9 @@ def test_specialist_offload_no_input_derived_content_in_evidence(client, ledger)
 
 
 def test_specialist_offload_evidence_persistence_failure_propagates_without_worker(client, ledger):
+    """The integrity invariant covers append/persistence itself, not just payload
+    construction: route_audit must still append successfully, and only the
+    specialist_offload_decision append fails and propagates."""
     packet = TaskPacket(
         task_id="task-133",
         prompt="please rm -rf everything",
@@ -358,17 +367,22 @@ def test_specialist_offload_evidence_persistence_failure_propagates_without_work
     decision = ResilienceRouteDecision(
         selected_route="local_heavy", reason="", fallback_depth=0, human_review_required=False
     )
+
+    def failing_append(task_id, event_type, payload):
+        if event_type == "specialist_offload_decision":
+            raise RuntimeError("specialist evidence persistence failed")
+        ledger.events.append((event_type, payload))
+
+    ledger.append_event = failing_append
+
     with patch("triage_core.classifier.TaskClassifier.classify", return_value="general"):
         with patch("triage_core.client.choose_resilience_route", return_value=decision):
             with patch("triage_core.routers.is_internet_available", return_value=True):
-                with patch(
-                    "triage_core.client.build_specialist_offload_payload",
-                    side_effect=RuntimeError("specialist evidence persistence failed"),
-                ):
-                    with pytest.raises(RuntimeError):
-                        client.run_task(task_packet=packet, ledger=ledger)
+                with pytest.raises(RuntimeError, match="specialist evidence persistence failed"):
+                    client.run_task(task_packet=packet, ledger=ledger)
 
     # No masking as LocalRouteUnavailableError, no worker executed, no fallthrough:
-    # only the route_audit written before the failing call survives.
+    # route_audit's own append succeeded, and only it survives.
     assert [e for e, _ in ledger.events] == ["route_audit"]
     assert ledger.events[0][1]["reason_code"] == "offload_recommended_for_local_only"
+    assert not any(e == "worker_result" for e, _ in ledger.events)

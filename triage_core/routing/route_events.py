@@ -37,6 +37,20 @@ class SpecialistOffloadPayloadError(ValueError):
     """Raised when specialist-offload evidence violates the accepted contract."""
 
 
+def _require_str(value: Any, field_name: str) -> None:
+    """Reject a wrong-typed value before it reaches a membership/set operation.
+
+    `value not in a_frozenset` and `set(a_list_with_this_value)` both raise a raw
+    ``TypeError`` for an unhashable value (e.g. a list or dict) instead of the
+    dedicated contract error. Calling this first ensures every malformed input is
+    rejected as ``SpecialistOffloadPayloadError``, never a bare ``TypeError``.
+    """
+    if not isinstance(value, str):
+        raise SpecialistOffloadPayloadError(
+            f"{field_name} must be a string, got {type(value).__name__}"
+        )
+
+
 def _require_risk_consistency(reason_code: str, risk_level: str, categories: list) -> None:
     """Cross-field rules mirroring what DangerDetector actually establishes."""
     category_set = set(categories)
@@ -90,18 +104,22 @@ def build_specialist_offload_payload(route_task_result: Dict[str, Any]) -> Dict[
         )
 
     reason_code = cause.get("offload_reason_code")
+    _require_str(reason_code, "offload_reason_code")
     if reason_code not in SPECIALIST_REASON_CODES:
         raise SpecialistOffloadPayloadError(
             f"unknown offload_reason_code: {reason_code!r}"
         )
 
     risk_level = cause.get("risk_level")
+    _require_str(risk_level, "risk_level")
     if risk_level not in SPECIALIST_RISK_LEVELS:
         raise SpecialistOffloadPayloadError(f"unknown risk_level: {risk_level!r}")
 
     raw_categories = cause.get("risk_categories")
     if not isinstance(raw_categories, (list, tuple)):
         raise SpecialistOffloadPayloadError("risk_categories must be a list")
+    for element in raw_categories:
+        _require_str(element, "risk_categories element")
     unknown = set(raw_categories) - SPECIALIST_RISK_CATEGORIES
     if unknown:
         raise SpecialistOffloadPayloadError(
@@ -138,6 +156,7 @@ def validate_specialist_offload_payload(payload: Any) -> None:
         raise SpecialistOffloadPayloadError("payload must be a dict")
 
     reason_code = payload.get("offload_reason_code")
+    _require_str(reason_code, "offload_reason_code")
     if reason_code not in SPECIALIST_REASON_CODES:
         raise SpecialistOffloadPayloadError(
             f"unknown offload_reason_code: {reason_code!r}"
@@ -156,12 +175,15 @@ def validate_specialist_offload_payload(payload: Any) -> None:
         )
 
     risk_level = payload["risk_level"]
+    _require_str(risk_level, "risk_level")
     if risk_level not in SPECIALIST_RISK_LEVELS:
         raise SpecialistOffloadPayloadError(f"unknown risk_level: {risk_level!r}")
 
     categories = payload["risk_categories"]
     if not isinstance(categories, list):
         raise SpecialistOffloadPayloadError("risk_categories must be a list")
+    for element in categories:
+        _require_str(element, "risk_categories element")
     unknown = set(categories) - SPECIALIST_RISK_CATEGORIES
     if unknown:
         raise SpecialistOffloadPayloadError(
