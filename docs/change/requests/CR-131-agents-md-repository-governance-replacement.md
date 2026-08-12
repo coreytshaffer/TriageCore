@@ -2,24 +2,30 @@
 
 ## Status
 
-- **Status:** Proposed.
+- **Status:** Approved — proposal accepted; design review pending.
+- **Proposal acceptance:** Granted by the human operator on 2026-08-12 for the
+  problem statement and design-review boundaries recorded in this CR — the
+  repository-governance-mismatch finding, use of CR-131 in the plain-numeric lineage,
+  the eight proposed design boundaries, the explicit exclusions, treatment of the
+  stale uncommitted draft as source material only, the reconstruction requirement,
+  and the writable-mutation/read-only-verification separation — at exact accepted
+  head `ebf462903d5e67259d07abb6cd13f3aacd4dcb09`.
 - **Type:** Documentation / Governance (repository-level agent guidance — no runtime,
   routing, capability, or schema component).
 - **Priority:** Design review. Raised from a read-only investigation of an existing
   uncommitted working-tree draft; see Source Material below.
-- **Implementation authority:** Not authorized. Explicitly withheld. This document
-  proposes a problem statement and design boundaries only. No `AGENTS.md` edit,
-  implementation commit, implementation branch, or implementation PR is authorized by
-  this CR.
-- **Human approval requirement:** Explicit human review and approval of this proposal
-  is required before any design-review stage begins. Approval of this CR, if granted,
-  records acceptance of the *problem statement and scope boundaries* only and does not
-  by itself grant implementation authority. A separate, explicit human
+- **Implementation authority:** Not authorized. Explicitly withheld, and unchanged by
+  proposal acceptance. No `AGENTS.md` edit, implementation commit, implementation
+  branch, or implementation PR is authorized by this CR.
+- **Design acceptance:** Not granted. Remains a separate, later human decision.
+- **Human approval requirement:** Proposal acceptance has been granted as recorded
+  above; it records acceptance of the *problem statement and scope boundaries* only
+  and does not by itself grant implementation authority. A separate, explicit human
   implementation-authority grant — scoped to the exact final text and bounded to the
   single file `AGENTS.md` — is required before any edit begins, per
-  `docs/change/change_management.md` and CR-130's stage-separation rule. Proposal
-  acceptance, design acceptance, implementation authority, implementation acceptance,
-  and merge authority remain separate decisions.
+  `docs/change/change_management.md` and CR-130's stage-separation rule. Design
+  acceptance, implementation authority, implementation acceptance, and merge
+  authority remain separate, ungranted decisions.
 
 ## CR Namespace Census (evidence, not assumption)
 
@@ -215,21 +221,23 @@ material, not an approved final text.
 
 ## Acceptance Criteria (for this proposal-only gate)
 
-- [ ] CR-131 is opened for human review with an allocated, collision-free identifier
+- [x] CR-131 is opened for human review with an allocated, collision-free identifier
       supported by a recorded namespace census.
-- [ ] The problem statement is grounded in the current committed `AGENTS.md` content
+- [x] The problem statement is grounded in the current committed `AGENTS.md` content
       and in the read-only-observed uncommitted draft, with no claim beyond what was
       directly observed.
-- [ ] Proposed eventual scope and explicit exclusions are stated clearly enough that a
+- [x] Proposed eventual scope and explicit exclusions are stated clearly enough that a
       later design-review stage has unambiguous boundaries.
-- [ ] The six skill references are flagged as not repository-guaranteed and excluded
+- [x] The six skill references are flagged as not repository-guaranteed and excluded
       from mandatory dependency status.
-- [ ] No code, test, schema, routing, or `AGENTS.md` change is made by this CR.
-- [ ] The `codex/agents-governance-separation` checkout remains exactly as found —
+- [x] No code, test, schema, routing, or `AGENTS.md` change is made by this CR.
+- [x] The `codex/agents-governance-separation` checkout remains exactly as found —
       same uncommitted diff, no new commit, no stash, no reset, no clean.
-- [ ] This document records that proposal acceptance, design acceptance, implementation
+- [x] This document records that proposal acceptance, design acceptance, implementation
       authority, implementation acceptance, and merge authority are separate, later,
-      explicit human decisions.
+      explicit human decisions. Proposal acceptance is now granted (see Status);
+      design acceptance, implementation authority, implementation acceptance, and
+      merge authority remain separate and ungranted.
 
 ## Verification Plan
 
