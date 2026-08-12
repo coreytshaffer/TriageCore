@@ -2,10 +2,17 @@
 
 ## Status
 
-- **Status:** Proposed — design-settlement candidate. The original proposal deliberately
-  left the event/payload schema unsettled; this amendment records the settled design
-  contract produced by the read-only schema/design review. It remains `Proposed`: the
-  settled contract is itself the thing now under review, and no code exists.
+- **Status:** Approved — design accepted. The original proposal deliberately left the
+  event/payload schema unsettled; this document records the settled design contract
+  produced by the read-only schema/design review. That contract is settled for its
+  stated purpose. No code exists, and this status authorizes none.
+- **Design acceptance:** Granted by the human operator on 2026-08-11 for the settled
+  specialist-offload evidence contract recorded here — dedicated
+  `specialist_offload_decision` event; closed discriminated payload and cross-field
+  semantic constraints; single-decision provenance; privacy-safe bounded evidence;
+  per-call-site event ordering; integrity-failure behavior; intentionally unsigned first
+  slice with separately governed future signing; and the local-only blocked path
+  nominated as the first implementation slice.
 - **Type:** Evidence / Observability (Governance-kernel — evidence and reconstruction),
   with a privacy-sensitive schema-design component.
 - **Priority:** Design. Downstream of a read-only investigation of the
@@ -13,20 +20,21 @@
   implementation merged to `main` (`424bc7a66dc51d73a46dd0980969d8312c553d4e`). Does
   not reopen or amend CR-DD-017, CR-DD-016, CR-DD-013, or any routing/capability-
   resolution CR, and does not rewrite CR-078 or CR-082.
-- **Implementation authority:** Not authorized. Explicitly withheld, including after
-  this design settlement. Settling the schema removes the original reason implementation
-  could not responsibly be authorized; it does not itself authorize implementation. This
-  document grants no execution, integration, signing-path, or standing authority.
-- **Human approval requirement:** Explicit human review and approval of this Change
-  Request is required before any implementation begins. Approval of this CR, if
-  granted, records acceptance of the requirements/design contract only and does not
-  by itself grant implementation authority. A separate, explicit human
+- **Implementation authority:** Not granted. Explicitly withheld, including after design
+  acceptance. Settling and accepting the design removes the original reason
+  implementation could not responsibly be authorized; it does not itself authorize
+  implementation. This document grants no execution, integration, signing-path, or
+  standing authority.
+- **Signing-path authority:** Not granted. The separately governed signing path
+  described below is not authorized by design acceptance of this contract.
+- **Human approval requirement:** Design acceptance is recorded above and is granted.
+  Under `docs/change/change_management.md` and CR-130's stage-separation rule, design
+  acceptance remains distinct from implementation authority, implementation acceptance,
+  merge authority, release, and closeout. A separate, explicit human
   implementation-authority grant — scoped to bounded files and naming which call
-  site(s) it covers — is required before any code change begins, per
-  `docs/change/change_management.md` and CR-130's stage-separation rule. Merge of the
-  design-settlement amendment PR records the settled design contract only. It does not
-  move this CR out of `Proposed`, constitute design acceptance, grant implementation
-  authority, or authorize the separately governed signing path described below.
+  site(s) it covers — is required before any code change begins. Merge of this PR
+  records the accepted design contract only; it grants no implementation authority and
+  does not authorize the separately governed signing path described below.
 
 ## Scope
 
@@ -136,8 +144,8 @@ From the read-only investigation (main at `424bc7a`):
 ## Settled Design Contract
 
 This section replaces the original provisional "preferred direction." It records the
-settled contract produced by the read-only schema/design review. It remains subject to
-design acceptance, and it grants no implementation authority.
+settled contract produced by the read-only schema/design review, design-accepted by the
+human operator on 2026-08-11. It grants no implementation authority.
 
 ### Event boundary
 
