@@ -4,7 +4,9 @@ from .routers import TriageRouter
 from .backends import LocalBackend, create_backend
 from .routing import (
     ResilienceRouteInput,
+    SPECIALIST_OFFLOAD_EVENT_TYPE,
     build_route_decision_payload,
+    build_specialist_offload_payload,
     build_worker_result_payload,
     choose_resilience_route,
 )
@@ -160,6 +162,16 @@ class TriageClient:
             if route_decision.get("offload_recommended", False):
                 audit = RouteDecisionAudit(task_id, privacy_level, True, True, selected_route, selected_backend_name, "blocked", "offload_recommended_for_local_only")
                 self._append_optional_event(ledger, task_id, "route_audit", audit.to_dict())
+                # CR-DD-018: persist the specialist decision's bounded structured cause
+                # from this same route_task result -- never re-derived, never parsed
+                # from the free-form reason. No try/except: an evidence-persistence
+                # failure must propagate rather than be masked as a routing block.
+                self._append_optional_event(
+                    ledger,
+                    task_id,
+                    SPECIALIST_OFFLOAD_EVENT_TYPE,
+                    build_specialist_offload_payload(route_decision),
+                )
                 raise LocalRouteUnavailableError("Specialist router recommended offload for a local-only packet. Failing closed.")
         
         # Allowed Route Audit

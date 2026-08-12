@@ -25,9 +25,39 @@ def strip_code_fences(text: str) -> str:
     """Post-processor that strips markdown code fences while keeping surrounding text."""
     return re.sub(r'```(?:[a-zA-Z0-9_]+)?\n?|\n?```', '', text).strip()
 
+SPECIALIST_OFFLOAD_CAUSE_KEY = "specialist_offload_cause"
+
+
+def _offload_cause(
+    *,
+    offload_reason_code: str,
+    danger_info,
+    internet_available: bool = None,
+    context_limit_exceeded: bool = None,
+) -> Dict[str, Any]:
+    """Bounded structured cause for an offload decision (CR-DD-018).
+
+    Carries only closed-vocabulary decision state observed by the single
+    ``route_task`` invocation that produced it. It never carries prompt or data
+    text, the raw task category, ``DangerInfo.reasons``, matched substrings, or
+    target paths. Variant fields are omitted rather than set to ``None`` so the
+    durable event can preserve absent-not-null.
+    """
+    cause: Dict[str, Any] = {
+        "offload_reason_code": offload_reason_code,
+        "risk_level": danger_info.risk_level,
+        "risk_categories": list(danger_info.risk_categories or []),
+    }
+    if internet_available is not None:
+        cause["internet_available"] = internet_available
+    if context_limit_exceeded is not None:
+        cause["context_limit_exceeded"] = context_limit_exceeded
+    return cause
+
+
 class SpecialistRouter:
     """Routes tasks based on classified category to the appropriate model, timeout, and post-processor."""
-    
+
     def route_task(self, category: str, prompt: str, data: str) -> Dict[str, Any]:
         """
         Determines the routing details for a classified category.
@@ -35,6 +65,8 @@ class SpecialistRouter:
             A dict containing:
             - "offload_recommended": bool
             - "reason": str (if offload is recommended)
+            - "specialist_offload_cause": Dict[str, Any] (only when offload is
+              recommended) -- bounded structured cause for CR-DD-018 evidence.
             - "timeout": int
             - "post_processor": Optional[Callable[[str], str]]
             - "model": Optional[str]
@@ -42,21 +74,37 @@ class SpecialistRouter:
         """
         danger_info = DangerDetector.analyze(prompt)
         internet_up = is_internet_available()
-        
+
         # High risk or explicit safety handoffs are always blocked/offloaded for safety
         if danger_info.risk_level == "high" or category == "safety_handoff":
+            # CR-DD-018 precedence: an explicit safety_handoff category is recorded as
+            # such even when risk is independently high, so the explicit trigger does
+            # not disappear. Coincident high risk stays visible via risk_level and
+            # risk_categories.
+            reason_code = (
+                "safety_handoff" if category == "safety_handoff" else "high_risk"
+            )
             return {
                 "offload_recommended": True,
                 "reason": f"Risk level {danger_info.risk_level} detected. Category: {category}. {'; '.join(danger_info.reasons)}",
+                SPECIALIST_OFFLOAD_CAUSE_KEY: _offload_cause(
+                    offload_reason_code=reason_code,
+                    danger_info=danger_info,
+                ),
                 "offline_fallback": False
             }
-            
+
         # Medium risk tasks: offload if online, fall back to local if offline
         if danger_info.risk_level == "medium":
             if internet_up:
                 return {
                     "offload_recommended": True,
                     "reason": f"Risk level medium detected. Category: {category}. {'; '.join(danger_info.reasons)}",
+                    SPECIALIST_OFFLOAD_CAUSE_KEY: _offload_cause(
+                        offload_reason_code="medium_risk_online",
+                        danger_info=danger_info,
+                        internet_available=True,
+                    ),
                     "offline_fallback": False
                 }
             
@@ -77,6 +125,12 @@ class SpecialistRouter:
                 return {
                     "offload_recommended": True,
                     "reason": "Context exceeds local execution window (30k chars). Handoff required.",
+                    SPECIALIST_OFFLOAD_CAUSE_KEY: _offload_cause(
+                        offload_reason_code="context_limit_online",
+                        danger_info=danger_info,
+                        internet_available=True,
+                        context_limit_exceeded=True,
+                    ),
                     "offline_fallback": False
                 }
             else:

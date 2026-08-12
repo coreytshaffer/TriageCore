@@ -20,21 +20,60 @@
   implementation merged to `main` (`424bc7a66dc51d73a46dd0980969d8312c553d4e`). Does
   not reopen or amend CR-DD-017, CR-DD-016, CR-DD-013, or any routing/capability-
   resolution CR, and does not rewrite CR-078 or CR-082.
-- **Implementation authority:** Not granted. Explicitly withheld, including after design
-  acceptance. Settling and accepting the design removes the original reason
-  implementation could not responsibly be authorized; it does not itself authorize
-  implementation. This document grants no execution, integration, signing-path, or
-  standing authority.
+- **Implementation authority:** Single-slice implementation authority was granted by
+  the human operator on 2026-08-11, from exact base `main`
+  `96c25870ae5e0efad1118683a830783f5b78aaff`, branch
+  `claude/cr-dd-018-local-only-implementation`. The authorized implementation was only
+  the **local-only blocked specialist-offload evidence path** — the
+  `offload_recommended_for_local_only` branch in `triage_core/client.py` — not the
+  allowed/non-local-only offload path, which remains unwired for
+  `specialist_offload_decision` persistence. The writable allowlist for this grant was
+  exactly nine paths:
+  ```text
+  triage_core/routers.py
+  triage_core/routing/route_events.py
+  triage_core/routing/__init__.py
+  triage_core/client.py
+  tests/test_routers.py
+  tests/test_route_events.py
+  tests/test_route_decision_audit.py
+  tests/test_local_only_routing.py
+  docs/change/requests/CR-DD-018-specialist-offload-decision-evidence.md
+  ```
+  **This grant has completed its purpose and is spent/exhausted.** It authorized
+  producing a reviewable implementation candidate through opening and amending a draft
+  PR; it is not standing authority for any further code change, in this slice's files
+  or any other.
+- **Implementation acceptance:** Granted by the human operator on 2026-08-12 for the
+  CR-DD-018 first slice at exact accepted candidate head
+  `e2c05c8e10acedee29df8297da441ce0f4f018ce` (branch
+  `claude/cr-dd-018-local-only-implementation`, PR #162). The accepted implementation
+  is specifically: bounded structured cause emitted by the existing three
+  specialist-offload decisions; same-invocation provenance with no causal
+  recomputation; the dedicated closed builder/validator contract;
+  `specialist_offload_decision` persistence only on the local-only blocked path; exact
+  blocked ordering `route_audit → specialist_offload_decision →
+  LocalRouteUnavailableError`; persistence failure propagating rather than falling
+  through; no blocked-path `worker_result`; the allowed/non-local-only path remaining
+  unwired; and signing remaining intentionally outside this slice. Focused evidence:
+  57 passed. Full-suite evidence: 1709 passed, 6 skipped, 0 failed. Implementation
+  acceptance applies only to this local-only blocked first slice — it does not extend
+  to the allowed/offload path or to signing.
 - **Signing-path authority:** Not granted. The separately governed signing path
-  described below is not authorized by design acceptance of this contract.
-- **Human approval requirement:** Design acceptance is recorded above and is granted.
-  Under `docs/change/change_management.md` and CR-130's stage-separation rule, design
-  acceptance remains distinct from implementation authority, implementation acceptance,
-  merge authority, release, and closeout. A separate, explicit human
-  implementation-authority grant — scoped to bounded files and naming which call
-  site(s) it covers — is required before any code change begins. Merge of this PR
-  records the accepted design contract only; it grants no implementation authority and
-  does not authorize the separately governed signing path described below.
+  described below is not authorized by design acceptance, by the exhausted
+  implementation-authority grant, or by implementation acceptance.
+- **Allowed-path implementation authority:** Not granted. Implementing
+  `specialist_offload_decision` persistence on the allowed/non-local-only offload path
+  requires its own separate, explicit, scoped grant.
+- **Merge / release / closeout authority:** Not granted. All remain separate, still-
+  pending human decisions.
+- **Human approval requirement:** Design acceptance and implementation acceptance are
+  both recorded above and both granted. Under `docs/change/change_management.md` and
+  CR-130's stage-separation rule, design acceptance, implementation authority,
+  implementation acceptance, merge authority, release, and closeout all remain
+  distinct decisions — implementation acceptance of this slice does not itself confer
+  merge, release, or closeout authority, and does not revive the now-exhausted
+  implementation-authority grant for any further change.
 
 ## Scope
 

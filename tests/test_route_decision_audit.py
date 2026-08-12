@@ -154,6 +154,12 @@ def test_normal_non_sensitive_routing_audit(client, ledger):
     assert "prompt" not in audit
     assert "data" not in audit
 
+    # CR-DD-018 first-slice boundary: the allowed/non-local-only offload path is not
+    # wired for specialist evidence. The bare {"offload_recommended": True} mock above
+    # (carrying no specialist_offload_cause) proves this path never even attempts to
+    # consume the new structured cause.
+    assert not any(e == "specialist_offload_decision" for e, _ in ledger.events)
+
 # --- CR-DD-017: blocked local-only route evidence parity -------------------
 
 def test_sensitivity_blocked_route_records_route_decision(client, ledger):
@@ -273,3 +279,110 @@ def test_blocked_route_evidence_persistence_failure_propagates_without_worker(cl
 
     assert [e for e, _ in ledger.events] == ["route_audit"]
     assert ledger.events[0][1]["reason_code"] == "ambiguous_or_remote_route"
+
+
+# --- CR-DD-018: specialist-offload evidence on the local-only blocked path ----
+
+def test_specialist_offload_local_only_blocked_event_order(client, ledger):
+    packet = TaskPacket(
+        task_id="task-131",
+        prompt="please rm -rf everything",
+        data="",
+        privacy_metadata=PrivacyMetadata(contains_pii=True)
+    )
+    decision = ResilienceRouteDecision(
+        selected_route="local_heavy", reason="", fallback_depth=0, human_review_required=False
+    )
+    route_task_result = {
+        "offload_recommended": True,
+        "reason": "Risk level high detected. Category: bugfix. Prompt contains destructive_ops keyword.",
+        "specialist_offload_cause": {
+            "offload_reason_code": "high_risk",
+            "risk_level": "high",
+            "risk_categories": ["destructive_ops"],
+        },
+        "offline_fallback": False,
+    }
+    with patch("triage_core.classifier.TaskClassifier.classify", return_value="general"):
+        with patch("triage_core.client.choose_resilience_route", return_value=decision):
+            with patch.object(client.router.specialist, "route_task", return_value=route_task_result):
+                with pytest.raises(LocalRouteUnavailableError, match="Specialist router recommended offload"):
+                    client.run_task(task_packet=packet, ledger=ledger)
+
+    assert [e for e, _ in ledger.events] == ["route_audit", "specialist_offload_decision"]
+    audit = ledger.events[0][1]
+    specialist = ledger.events[1][1]
+
+    assert audit["decision"] == "blocked"
+    assert audit["reason_code"] == "offload_recommended_for_local_only"
+
+    # Same-decision provenance: the persisted payload is exactly the bounded cause
+    # from this route_task invocation, not recomputed or reinterpreted.
+    assert specialist == {
+        "offload_reason_code": "high_risk",
+        "risk_level": "high",
+        "risk_categories": ["destructive_ops"],
+    }
+
+
+def test_specialist_offload_no_input_derived_content_in_evidence(client, ledger):
+    """Real SpecialistRouter/DangerDetector logic; only connectivity is controlled."""
+    sentinel_prompt = "zzqqxx-sentinel-prompt please rm -rf everything"
+    sentinel_data = "zzqqxx-sentinel-data"
+    packet = TaskPacket(
+        task_id="task-132",
+        prompt=sentinel_prompt,
+        data=sentinel_data,
+        privacy_metadata=PrivacyMetadata(contains_pii=True)
+    )
+    decision = ResilienceRouteDecision(
+        selected_route="local_heavy", reason="", fallback_depth=0, human_review_required=False
+    )
+    with patch("triage_core.classifier.TaskClassifier.classify", return_value="general"):
+        with patch("triage_core.client.choose_resilience_route", return_value=decision):
+            with patch("triage_core.routers.is_internet_available", return_value=True):
+                with pytest.raises(LocalRouteUnavailableError):
+                    client.run_task(task_packet=packet, ledger=ledger)
+
+    rendered = repr(ledger.events)
+    assert "zzqqxx-sentinel-prompt" not in rendered
+    assert "zzqqxx-sentinel-data" not in rendered
+
+    specialist_events = [p for e, p in ledger.events if e == "specialist_offload_decision"]
+    assert len(specialist_events) == 1
+    assert specialist_events[0]["offload_reason_code"] == "high_risk"
+    assert specialist_events[0]["risk_categories"] == ["destructive_ops"]
+
+
+def test_specialist_offload_evidence_persistence_failure_propagates_without_worker(client, ledger):
+    """The integrity invariant covers append/persistence itself, not just payload
+    construction: route_audit must still append successfully, and only the
+    specialist_offload_decision append fails and propagates."""
+    packet = TaskPacket(
+        task_id="task-133",
+        prompt="please rm -rf everything",
+        data="",
+        privacy_metadata=PrivacyMetadata(contains_pii=True)
+    )
+    decision = ResilienceRouteDecision(
+        selected_route="local_heavy", reason="", fallback_depth=0, human_review_required=False
+    )
+
+    def failing_append(task_id, event_type, payload):
+        if event_type == "specialist_offload_decision":
+            raise RuntimeError("specialist evidence persistence failed")
+        ledger.events.append((event_type, payload))
+
+    ledger.append_event = failing_append
+
+    with patch("triage_core.classifier.TaskClassifier.classify", return_value="general"):
+        with patch("triage_core.client.choose_resilience_route", return_value=decision):
+            with patch("triage_core.routers.is_internet_available", return_value=True):
+                with pytest.raises(RuntimeError, match="specialist evidence persistence failed"):
+                    client.run_task(task_packet=packet, ledger=ledger)
+
+    # No masking as LocalRouteUnavailableError, no worker executed, no fallthrough:
+    # route_audit's own append succeeded, and only it survives.
+    assert [e for e, _ in ledger.events] == ["route_audit"]
+    assert ledger.events[0][1]["reason_code"] == "offload_recommended_for_local_only"
+    assert not any(e == "worker_result" for e, _ in ledger.events)

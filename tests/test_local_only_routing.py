@@ -80,8 +80,19 @@ def test_local_only_packet_offload_recommended_fails_closed(client):
             selected_route="local_heavy", reason="", fallback_depth=0, human_review_required=False
         )
         with patch("triage_core.client.choose_resilience_route", return_value=decision):
-            # If specialist router recommends offload
-            with patch.object(client.router.specialist, "route_task", return_value={"offload_recommended": True}):
+            # If specialist router recommends offload. CR-DD-018: the mocked result
+            # must supply the bounded structured cause a real route_task() invocation
+            # would carry, since specialist evidence is built from this same result
+            # and is never re-derived.
+            offload_result = {
+                "offload_recommended": True,
+                "specialist_offload_cause": {
+                    "offload_reason_code": "high_risk",
+                    "risk_level": "high",
+                    "risk_categories": ["destructive_ops"],
+                },
+            }
+            with patch.object(client.router.specialist, "route_task", return_value=offload_result):
                 with pytest.raises(LocalRouteUnavailableError, match="Specialist router recommended offload"):
                     client.run_task(task_packet=packet)
 
