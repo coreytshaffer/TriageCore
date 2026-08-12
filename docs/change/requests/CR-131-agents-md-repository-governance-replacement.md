@@ -2,9 +2,9 @@
 
 ## Status
 
-- **Status:** Approved — proposal accepted, design accepted, implementation
-  accepted, PR #168 merged, and release determined not applicable; closeout
-  undecided.
+- **Status:** Complete. Proposal, design, implementation, and merge accepted and
+  exercised; release determined not applicable; closeout granted and recorded. All
+  CR-131 authorities are spent; this CR creates no standing authority.
 - **Proposal acceptance:** Granted by the human operator on 2026-08-12 for the
   problem statement and design-review boundaries recorded in this CR — the
   repository-governance-mismatch finding, use of CR-131 in the plain-numeric lineage,
@@ -66,14 +66,21 @@
   action associated with this change. This decision resolves the release gate by
   determining that no release-stage action applies to CR-131; it creates no release
   authority for any other change or action, and does not itself grant closeout.
+- **Closeout:** Granted by the human operator on 2026-08-12. This closeout-recording
+  grant separately and explicitly authorized exactly three paths — this CR file,
+  `docs/current_backlog.md`, and `docs/change/change_log.md` — to record CR-131's
+  completed lifecycle now that implementation, merge, and the release-applicability
+  decision are all resolved. It creates no new implementation, runtime, or scope
+  authority; CR-131's original one-path Scope (below) is preserved as the historical
+  record of what was authorized at the proposal stage, not silently rewritten. See
+  the Closeout section below for the full record. This grant is spent upon opening
+  the closeout PR; it does not include merge authority for that PR.
 - **Human approval requirement:** Proposal acceptance, design acceptance,
-  implementation authority, implementation acceptance, merge authority, and the
-  release-applicability decision have all been granted or decided as recorded above;
-  together they record acceptance of the problem statement, scope boundaries, exact
-  replacement text, authorization to produce one implementation candidate,
-  acceptance of that exact candidate, its merge onto `main`, and that no release
-  action applies. They do not by themselves grant closeout, which remains a
-  separate, undecided decision.
+  implementation authority, implementation acceptance, merge authority, the
+  release-applicability decision, and closeout have all been granted or decided as
+  recorded above; together they record the complete CR-131 lifecycle through
+  closeout. This closeout grant does not itself grant merge authority for the
+  closeout PR; that authority remains a separate human decision.
 
 ## CR Namespace Census (evidence, not assumption)
 
@@ -118,6 +125,15 @@ docs/change/requests/CR-131-agents-md-repository-governance-replacement.md
 No other path is authorized by this CR. This CR does **not** scope, pre-authorize, or
 schedule an eventual `AGENTS.md` implementation slice; that requires its own later,
 separately granted implementation authority once design is accepted.
+
+> **Closeout note (2026-08-12):** The scope above reflects this CR's original
+> proposal-stage authorization and is preserved as written for historical accuracy —
+> it is not silently rewritten. A later, separately granted closeout-recording
+> decision additionally and explicitly authorized exactly two more paths —
+> `docs/current_backlog.md` and `docs/change/change_log.md` — bounded to recording
+> CR-131's completed lifecycle only. It does not retroactively expand the
+> proposal-stage scope above or authorize any other path. See the Closeout section
+> at the end of this document.
 
 ### Proposed eventual AGENTS.md scope (design boundary for future review — not authorized here)
 
@@ -311,3 +327,45 @@ stage, draft final `AGENTS.md` text, request implementation authority, or touch
 `codex/agents-governance-separation` without a separate, explicit human decision.
 Proposal acceptance here authorizes nothing beyond recording that the problem
 statement and boundaries are accepted for further review.
+
+This Stop Point governed the proposal-only gate above. It was superseded stage by
+stage through separate, explicit human decisions — design acceptance, implementation
+authority, implementation acceptance, merge authority, the release-applicability
+decision, and closeout — each recorded in the Status section and in this Closeout
+section, none inferred from any prior grant.
+
+## Closeout
+
+Recorded 2026-08-12 under separately granted closeout authority (see Status).
+CR-131's lifecycle is complete.
+
+**What was delivered:** the root `AGENTS.md` was replaced with the design-accepted
+61-line repository-governance text (SHA-256
+`58d83280245b053718b04cab0fe84c8d9640c09780018761bcf880add088a77e`), reconstructed
+fresh from then-current `main` per the Reconstruction Requirement above, via
+implementation PR #168 (merge commit
+`2ac5814b37401d3c5ec13b44d9ac961a04bdfbf4`). The lifecycle-record corrections that
+kept this CR's durable Status in sync with each stage were carried through PR #167,
+PR #169, PR #170, and PR #171.
+
+**Release:** determined not applicable (see Status) — no package, deployment,
+runtime rollout, or artifact-publication action is associated with this change.
+
+**Authority status:** proposal acceptance, design acceptance, implementation
+authority, implementation acceptance, merge authority, the release-applicability
+decision, and this closeout are all granted or decided and, where applicable,
+exercised. All are now spent. Neither this CR nor its closeout creates standing
+authority for any future `AGENTS.md` edit, any other repository path, or any of the
+CR-DD/CR-YK/CR-OC/CR-AR/CR-BW lettered lineages considered and rejected during the
+namespace census.
+
+**Non-claims:** this closeout does not claim CR-131 resolved every reference to the
+prior `AGENTS.md` content elsewhere in the repository. Three related findings were
+identified during closeout triage and are explicitly out of scope, tracked
+separately, not by this CR: `triage_core/project_steward.py`'s embedded "Cybernetic
+Ecology" escalation-packet language (a separate architectural/runtime follow-up),
+`docs/operations/control-plane-invariant-checklist.md`'s stale `AGENTS.md §7`
+citation (a separate documentation defect), and `docs/submission/claim_boundaries.md`'s
+definition of `ARTIFACT_REVIEW_PASSED`, a term with no remaining canonical source (a
+separate documentation/claim-boundary defect). `docs/backlog.md`'s historical Story
+11.3 record is left untouched as historical text.
