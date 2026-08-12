@@ -3,7 +3,8 @@
 ## Status
 
 - **Status:** Approved — proposal accepted, design accepted, implementation
-  accepted, and PR #168 merged; release applicability and closeout undecided.
+  accepted, PR #168 merged, and release determined not applicable; closeout
+  undecided.
 - **Proposal acceptance:** Granted by the human operator on 2026-08-12 for the
   problem statement and design-review boundaries recorded in this CR — the
   repository-governance-mismatch finding, use of CR-131 in the plain-numeric lineage,
@@ -59,15 +60,20 @@
   design-accepted fingerprint recorded above exactly. This grant is spent: it
   authorized merging that exact head only and does not authorize any further
   `AGENTS.md` edit, release action, or closeout.
+- **Release applicability:** Decided by the human operator on 2026-08-12: **not
+  applicable**. CR-131 changes repository-governance documentation only — there is
+  no package, deployment, runtime rollout, artifact publication, or other release
+  action associated with this change. This decision resolves the release gate by
+  determining that no release-stage action applies to CR-131; it creates no release
+  authority for any other change or action, and does not itself grant closeout.
 - **Human approval requirement:** Proposal acceptance, design acceptance,
-  implementation authority, implementation acceptance, and merge authority have all
-  been granted as recorded above; together they record acceptance of the problem
-  statement, scope boundaries, exact replacement text, authorization to produce one
-  implementation candidate, acceptance of that exact candidate, and its merge onto
-  `main`. They do not by themselves resolve release applicability or grant closeout.
-  Release authority (including whether release applies at all to this
-  repository-governance-only change) and closeout remain separate, undecided
-  decisions.
+  implementation authority, implementation acceptance, merge authority, and the
+  release-applicability decision have all been granted or decided as recorded above;
+  together they record acceptance of the problem statement, scope boundaries, exact
+  replacement text, authorization to produce one implementation candidate,
+  acceptance of that exact candidate, its merge onto `main`, and that no release
+  action applies. They do not by themselves grant closeout, which remains a
+  separate, undecided decision.
 
 ## CR Namespace Census (evidence, not assumption)
 
