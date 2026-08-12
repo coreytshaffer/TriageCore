@@ -20,7 +20,11 @@
   by itself grant implementation authority. A separate, explicit human
   implementation-authority grant — scoped to a settled payload/event schema and
   bounded files — is required before any code change begins, per
-  `docs/change/change_management.md` and CR-130's stage-separation rule.
+  `docs/change/change_management.md` and CR-130's stage-separation rule. Merge of this
+  proposal PR records the design problem, preferred direction, and design-review
+  requirements only. It does not move this CR out of `Proposed`, satisfy the unchecked
+  design-review acceptance criteria, settle the payload/event schema, or grant
+  implementation authority.
 
 ## Scope
 
@@ -204,25 +208,32 @@ settled schema — not code. It must:
       describing both call sites here does not authorize implementing either — any
       future implementation-authority grant must independently name and bound which
       call site(s) it covers.
-- [ ] The proposal defines four acceptance-test scenarios, each specifying real
-      (non-mocked) inputs sufficient to prove the causal families are distinguishable
-      in durable evidence once implemented:
+- [ ] The proposal defines four acceptance-test scenarios that exercise the real
+      `SpecialistRouter.route_task` / `DangerDetector` decision logic rather than
+      mocking the specialist decision result. External connectivity may be
+      deterministically controlled at the `is_internet_available()` boundary; tests
+      MUST NOT depend on ambient network availability.
       1. **High-risk case:** a prompt matching a high-risk category (e.g.
          `destructive_ops`) resolves to specialist-offload evidence identifying the
          bounded risk cause (`offload_reason_code=high_risk`, correct
          `risk_categories`).
       2. **Medium-risk + internet-available case:** a prompt matching a medium-risk
-         category with `is_internet_available()` true distinguishes the
-         connectivity-dependent offload (`offload_reason_code=medium_risk_online`,
-         `internet_available=true`) from the medium-risk *offline fallback* branch
-         (which does not offload today and is out of this CR's scope to change).
+         category, with `is_internet_available()` deterministically controlled true at
+         the external boundary, distinguishes the connectivity-dependent offload
+         (`offload_reason_code=medium_risk_online`, `internet_available=true`) from the
+         medium-risk *offline fallback* branch (which does not offload today and is
+         out of this CR's scope to change).
       3. **Large-context + internet-available case:** data exceeding the context
-         threshold with internet available distinguishes context-pressure offload
+         threshold, with `is_internet_available()` deterministically controlled true at
+         the external boundary, distinguishes context-pressure offload
          (`offload_reason_code=context_limit_online`, `context_limit_exceeded=true`)
          from the risk-driven cases.
-      4. **Privacy case:** proves no prompt substring, no `data` substring, and no
-         raw `DangerInfo.reasons` text appears anywhere in the persisted evidence for
-         any of the above three scenarios.
+      4. **Privacy case:** uses unique sentinel content in the prompt and `data` and
+         proves that no input-derived free-form sentinel content, no raw matched
+         content, and no raw `DangerInfo.reasons` text appears anywhere in persisted
+         evidence for any of the above scenarios. Bounded contract vocabulary is not
+         treated as leakage merely because the same literal token happens to occur in
+         an input.
 - [ ] No implementation authority is granted by this CR. A separate, explicit,
       scoped implementation-authority grant — naming exact files — is required before
       any code change begins, per `docs/change/change_management.md` and CR-130.
