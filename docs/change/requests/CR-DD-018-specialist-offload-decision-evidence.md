@@ -156,9 +156,32 @@ design acceptance, and it grants no implementation authority.
   event-type names, so no ledger schema migration is required.
 - **Because generic append enforces no closed payload, the eventual implementation MUST
   use a dedicated builder/validator** that rejects unknown fields, invalid enum values,
-  and noncanonical category lists before calling the ledger — the same discipline
+  noncanonical category lists, and semantically impossible cross-field combinations
+  before calling the ledger — the same discipline
   `triage_core/route_worker_ledger.py` already demonstrates with its closed
   payload-field sets. Exact module placement is deliberately **not** settled here.
+
+### Evidence source: one decision, never recomputed
+
+The original defect is that structured causal state stays trapped inside
+`SpecialistRouter`. Settling the payload does not fix that unless the payload's *source*
+is also normative, so:
+
+> The durable specialist payload MUST be constructed from bounded structured cause data
+> exposed by the same `SpecialistRouter.route_task()` invocation whose decision is being
+> recorded. Evidence construction MUST NOT parse the free-form `reason` string, rerun
+> `DangerDetector.analyze()`, rerun `is_internet_available()`, or re-derive the decision
+> from raw prompt/data at persistence time.
+
+`route_task()` evaluates danger and connectivity exactly once, before branching. Those
+observations must be carried forward, not recreated. Recomputing at persistence time
+would make the evidence a second, independently-evaluated routing decision that can
+silently diverge from the one that actually controlled execution — particularly for
+`is_internet_available()`, which performs a live socket probe whose result can change
+between the branch and the append.
+
+This settles the *source* obligation only. Whether the structured result is a dataclass,
+a nested dict, or a separate module is deliberately **not** settled here.
 
 ### Closed payload (discriminated by `offload_reason_code`)
 
@@ -173,9 +196,17 @@ Common fields, always present:
 - `risk_categories` — always present; **sorted and deduplicated**, restricted to
   `destructive_ops | system_modifications | secrets_and_auth | package_management |
   deployment_config`. An empty list is valid. Canonical ordering is required because
-  `DangerDetector` accumulates categories in a `set` before converting to a list, so raw
-  ordering is not a stable evidence property — and would become a correctness problem if
-  this event is signed later.
+  `DangerDetector` accumulates categories in a `set` before converting to a list
+  (`categories_list = list(categories)`), so its raw list ordering is not a stable
+  evidence property — and would become a correctness problem if this event is signed
+  later.
+
+**Builder canonicalizes; validator rejects.** These are distinct obligations and must not
+be collapsed: the *builder* validates category membership, deduplicates, and sorts into
+canonical order when constructing the payload; the *validator* rejects a persisted
+payload containing unknown categories, duplicates, noncanonical ordering, or an
+impossible cross-field combination. A validator that silently re-sorts instead of
+rejecting would mask exactly the drift the canonical form exists to detect.
 
 Variant-required fields:
 
@@ -189,6 +220,28 @@ Variant-required fields:
 Fields not permitted by a variant MUST be **absent, never `null`**. A `null` placeholder
 would reintroduce exactly the "absent means what?" ambiguity this discriminated shape
 exists to remove.
+
+### Cross-field semantic constraints
+
+Closing each field's vocabulary and controlling presence/absence is not sufficient: a
+validator satisfying only those rules would still accept semantically impossible evidence
+such as `offload_reason_code=high_risk` with `risk_level=low`, or
+`context_limit_online` with `risk_level=medium`. The builder/validator MUST additionally
+enforce the relationships `DangerDetector` and `SpecialistRouter` actually establish:
+
+| `offload_reason_code` | Required `risk_level` | Required `risk_categories` |
+|---|---|---|
+| `high_risk` | `high` | at least one of `destructive_ops`, `system_modifications`, `secrets_and_auth` |
+| `medium_risk_online` | `medium` | at least one of `package_management`, `deployment_config`, and **no** high-risk category |
+| `context_limit_online` | `low` | empty (`[]`) |
+| `safety_handoff` | any valid level | must be consistent with the recorded `risk_level` under the three rules above |
+
+These mirror `DangerDetector.analyze()`: it returns `high` when a high-risk category is
+present, `medium` when a package/deployment category is present *and* no high-risk
+category is, and `low` otherwise — and both `low` return paths emit an empty
+`risk_categories` list. `safety_handoff` admits any valid risk level because the explicit
+category triggers the branch independently of risk assessment; its categories must still
+be internally consistent with whatever `risk_level` is recorded.
 
 ### Discriminant normalization (`safety_handoff` / `high_risk` overlap)
 
@@ -325,6 +378,16 @@ proposed — it is not an allowlist and authorizes nothing.
       field (`offload_reason_code`, `risk_level`, `risk_categories`). *Satisfied by the
       Settled Design Contract: a discriminated payload keyed by `offload_reason_code`,
       with per-variant required/absent fields and no `null` placeholders.*
+- [x] The contract closes the schema semantically, not only structurally: cross-field
+      constraints bind each `offload_reason_code` to its required `risk_level` and
+      `risk_categories`, so semantically impossible evidence (e.g. `high_risk` with
+      `risk_level=low`) is rejected rather than merely well-formed. Builder
+      canonicalization and validator rejection are defined as distinct obligations.
+- [x] The contract makes the evidence *source* normative: the payload must be built from
+      the same `SpecialistRouter.route_task()` invocation that controlled the branch,
+      with parsing the free-form `reason`, rerunning `DangerDetector.analyze()`,
+      rerunning `is_internet_available()`, and re-deriving from raw prompt/data at
+      persistence time all prohibited.
 - [x] The proposal explicitly and unconditionally excludes prompt text, raw matched
       substrings, secrets, file paths, and free-form `DangerInfo.reasons` from every
       durable field it defines, and states this exclusion does not rest on any
@@ -349,11 +412,11 @@ proposed — it is not an allowlist and authorizes nothing.
       failure — propagates before worker execution, fallthrough,
       `LocalRouteUnavailableError`, or a successfully recorded `handoff_required`
       outcome.
-- [x] The proposal defines four acceptance-test scenarios that exercise the real
-      `SpecialistRouter.route_task` / `DangerDetector` decision logic rather than
-      mocking the specialist decision result. External connectivity may be
-      deterministically controlled at the `is_internet_available()` boundary; tests
-      MUST NOT depend on ambient network availability.
+- [x] The proposal defines five acceptance-test scenarios — one per causal variant, plus
+      privacy — that exercise the real `SpecialistRouter.route_task` / `DangerDetector`
+      decision logic rather than mocking the specialist decision result. External
+      connectivity may be deterministically controlled at the `is_internet_available()`
+      boundary; tests MUST NOT depend on ambient network availability.
       1. **High-risk case:** a prompt matching a high-risk category (e.g.
          `destructive_ops`) resolves to specialist-offload evidence identifying the
          bounded risk cause (`offload_reason_code=high_risk`, correct
@@ -369,18 +432,27 @@ proposed — it is not an allowlist and authorizes nothing.
          the external boundary, distinguishes context-pressure offload
          (`offload_reason_code=context_limit_online`, `context_limit_exceeded=true`)
          from the risk-driven cases.
-      4. **Privacy case:** uses unique sentinel content in the prompt and `data` and
+      4. **Safety-handoff case (direct router):** calls the real
+         `SpecialistRouter.route_task()` with `category="safety_handoff"`, a low-risk
+         prompt, and bounded `data`, with connectivity deterministically controlled
+         (the router probes it even though the safety branch does not depend on it).
+         Asserts the structured cause normalizes to
+         `offload_reason_code=safety_handoff`, `risk_level=low`, and empty
+         `risk_categories`. This variant is exercised directly at the router rather than
+         end-to-end through `TriageClient` precisely because `SpecialistRouter` supports
+         `safety_handoff` while `TaskClassifier` currently cannot emit it — **no
+         `TaskClassifier` change is required or authorized to obtain this coverage.**
+         **Overlap-precedence coverage** is required as either a subcase of this
+         scenario or an explicit assertion within it: a high-risk prompt *plus*
+         `category="safety_handoff"` proves the normalization rule —
+         `offload_reason_code=safety_handoff` while `risk_level=high` and the high-risk
+         `risk_categories` remain preserved, in canonical order.
+      5. **Privacy case:** uses unique sentinel content in the prompt and `data` and
          proves that no input-derived free-form sentinel content, no raw matched
          content, and no raw `DangerInfo.reasons` text appears anywhere in persisted
          evidence for any of the above scenarios. Bounded contract vocabulary is not
          treated as leakage merely because the same literal token happens to occur in
          an input.
-
-      **Coverage note for `safety_handoff`:** that variant is not reachable end-to-end
-      through `TriageClient`, because `TaskClassifier` cannot emit the category. How to
-      cover it — a direct `SpecialistRouter.route_task()` unit test, or accepting it as
-      designed-but-uncovered until the trigger becomes reachable — is left to the
-      implementation CR and is not settled here.
 - [x] No implementation authority is granted by this CR. A separate, explicit,
       scoped implementation-authority grant — naming exact files and which call
       site(s) it covers — is required before any code change begins, per
