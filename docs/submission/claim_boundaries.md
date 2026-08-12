@@ -101,9 +101,9 @@ subject to the
   or authorize its use.
 - Review metadata supports evidence and queue projections; it is not a universal
   execution block or a human authorization token.
-- `ARTIFACT_REVIEW_PASSED` is an artifact-quality verdict only; it does not
-  authorize mutation, commit, push, merge, consequential effects, or recorded
-  human acceptance.
+- An artifact-review or quality verdict, however labeled, is evidence about
+  output quality only; it does not authorize mutation, commit, push, merge,
+  consequential effects, or recorded human acceptance.
 - Evaluator output is assessment evidence, not authorization, mutation
   permission, or recorded human acceptance.
 - An observation records what was measured under stated conditions; it does not
