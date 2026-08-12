@@ -2,7 +2,8 @@
 
 ## Status
 
-- **Status:** Approved — proposal accepted; design review pending.
+- **Status:** Approved — proposal and design accepted; implementation authority
+  pending.
 - **Proposal acceptance:** Granted by the human operator on 2026-08-12 for the
   problem statement and design-review boundaries recorded in this CR — the
   repository-governance-mismatch finding, use of CR-131 in the plain-numeric lineage,
@@ -10,22 +11,31 @@
   stale uncommitted draft as source material only, the reconstruction requirement,
   and the writable-mutation/read-only-verification separation — at exact accepted
   head `ebf462903d5e67259d07abb6cd13f3aacd4dcb09`.
+- **Design acceptance:** Granted by the human operator on 2026-08-12 for the exact
+  61-line `AGENTS.md` replacement text drafted, reviewed, and corrected in the
+  CR-131 design-review conversation following read-only investigation against `main`
+  at `f807a6e6319ab49761985140a73d1d4469efeaec` (SHA-256
+  `58d83280245b053718b04cab0fe84c8d9640c09780018761bcf880add088a77e` over the exact
+  accepted text). That text is frozen as the accepted design. This grant authorizes
+  only recording design acceptance and directly corresponding status metadata in
+  this CR; it does not modify the accepted text and grants no implementation,
+  runtime, schema, test, or broader documentation change.
 - **Type:** Documentation / Governance (repository-level agent guidance — no runtime,
   routing, capability, or schema component).
 - **Priority:** Design review. Raised from a read-only investigation of an existing
   uncommitted working-tree draft; see Source Material below.
 - **Implementation authority:** Not authorized. Explicitly withheld, and unchanged by
-  proposal acceptance. No `AGENTS.md` edit, implementation commit, implementation
-  branch, or implementation PR is authorized by this CR.
-- **Design acceptance:** Not granted. Remains a separate, later human decision.
-- **Human approval requirement:** Proposal acceptance has been granted as recorded
-  above; it records acceptance of the *problem statement and scope boundaries* only
-  and does not by itself grant implementation authority. A separate, explicit human
-  implementation-authority grant — scoped to the exact final text and bounded to the
-  single file `AGENTS.md` — is required before any edit begins, per
-  `docs/change/change_management.md` and CR-130's stage-separation rule. Design
-  acceptance, implementation authority, implementation acceptance, and merge
-  authority remain separate, ungranted decisions.
+  proposal acceptance or design acceptance. No `AGENTS.md` edit, implementation
+  commit, implementation branch, or implementation PR is authorized by this CR.
+- **Human approval requirement:** Proposal acceptance and design acceptance have
+  both been granted as recorded above; together they record acceptance of the
+  problem statement, scope boundaries, and exact replacement text only, and do not
+  by themselves grant implementation authority. A separate, explicit human
+  implementation-authority grant — scoped to the exact accepted text and bounded to
+  the single file `AGENTS.md` — is required before any edit begins, per
+  `docs/change/change_management.md` and CR-130's stage-separation rule.
+  Implementation authority, implementation acceptance, merge authority, release
+  authority, and closeout remain separate, ungranted decisions.
 
 ## CR Namespace Census (evidence, not assumption)
 
