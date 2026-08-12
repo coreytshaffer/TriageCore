@@ -262,9 +262,16 @@ Scope test: `Does this strengthen the evidence-bound governance kernel, or is it
     submission and portfolio entry point (PR #143), and this backlog taxonomy.
     These were separately reviewed documentation slices and grant no runtime or
     implementation authority.
-  - `AGENTS.md` terminology checkpoint: completed in PR #140. An
-    `ARTIFACT_REVIEW_PASSED` quality verdict remains evidence only and must not
-    be confused with human authorization for mutation or consequential effects.
+  - `AGENTS.md` history: PR #140's supervisor-verdict terminology checkpoint
+    (`ARTIFACT_REVIEW_PASSED` as an evidence-only quality verdict) applied to the
+    `AGENTS.md` content of that era. CR-131 subsequently replaced `AGENTS.md` in
+    full with a TriageCore-specific repository-governance document, merged through
+    PR #168 (`main` `AGENTS.md` SHA-256
+    `58d83280245b053718b04cab0fe84c8d9640c09780018761bcf880add088a77e`); the
+    current `AGENTS.md` no longer contains PR #140's supervisor-verdict
+    terminology or `ARTIFACT_REVIEW_PASSED`. This entry records that the
+    replacement is complete; it does not claim any related documentation
+    cross-references elsewhere in the repository were updated to match.
   - Sequenced track 2 — **Agentic boundary governance**: candidate research-only
     work covering evaluation-environment assurance, evaluator-harness threat
     modeling, incident-derived adversarial fixtures, delegation-chain
