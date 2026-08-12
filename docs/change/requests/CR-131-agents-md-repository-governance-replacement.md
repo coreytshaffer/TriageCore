@@ -2,8 +2,8 @@
 
 ## Status
 
-- **Status:** Approved — proposal accepted, design accepted, implementation produced
-  as a candidate; implementation acceptance pending.
+- **Status:** Approved — proposal accepted, design accepted, implementation accepted
+  for PR #168; merge authority for PR #168 pending.
 - **Proposal acceptance:** Granted by the human operator on 2026-08-12 for the
   problem statement and design-review boundaries recorded in this CR — the
   repository-governance-mismatch finding, use of CR-131 in the plain-numeric lineage,
@@ -42,13 +42,21 @@
   `AGENTS.md` edit, implementation acceptance, or merge authority for PR #168. This
   lifecycle-record correction itself grants nothing further — it records what was
   already authorized and produced; it is not a new grant.
-- **Human approval requirement:** Proposal acceptance, design acceptance, and
-  implementation authority have all been granted as recorded above; together they
-  record acceptance of the problem statement, scope boundaries, exact replacement
-  text, and authorization to produce one implementation candidate. They do not by
-  themselves grant implementation acceptance or merge authority. Implementation
-  acceptance of PR #168, merge authority for PR #167, merge authority for PR #168,
-  release authority, and closeout all remain separate, ungranted decisions.
+- **Implementation acceptance:** Granted by the human operator on 2026-08-12 for
+  implementation PR #168 at exact head `1da8bc03a2347992d910d9907e193d3050b0e47a`,
+  whose committed `AGENTS.md` SHA-256
+  (`58d83280245b053718b04cab0fe84c8d9640c09780018761bcf880add088a77e`) matches the
+  design-accepted fingerprint recorded above. This decision covers that exact head
+  only; any subsequent modification to PR #168 would require a new implementation-
+  acceptance decision. It does not grant merge authority for PR #168, release
+  authority, or closeout.
+- **Human approval requirement:** Proposal acceptance, design acceptance,
+  implementation authority, and implementation acceptance have all been granted as
+  recorded above; together they record acceptance of the problem statement, scope
+  boundaries, exact replacement text, authorization to produce one implementation
+  candidate, and acceptance of that exact candidate at its accepted head. They do
+  not by themselves grant merge authority. Merge authority for PR #168, release
+  authority, and closeout all remain separate, ungranted decisions.
 
 ## CR Namespace Census (evidence, not assumption)
 
