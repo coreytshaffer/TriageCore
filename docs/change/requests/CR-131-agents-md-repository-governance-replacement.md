@@ -14,12 +14,16 @@
 - **Design acceptance:** Granted by the human operator on 2026-08-12 for the exact
   61-line `AGENTS.md` replacement text drafted, reviewed, and corrected in the
   CR-131 design-review conversation following read-only investigation against `main`
-  at `f807a6e6319ab49761985140a73d1d4469efeaec` (SHA-256
-  `58d83280245b053718b04cab0fe84c8d9640c09780018761bcf880add088a77e` over the exact
-  accepted text). That text is frozen as the accepted design. This grant authorizes
-  only recording design acceptance and directly corresponding status metadata in
-  this CR; it does not modify the accepted text and grants no implementation,
-  runtime, schema, test, or broader documentation change.
+  at `f807a6e6319ab49761985140a73d1d4469efeaec`. That text is frozen as the accepted
+  design. Its SHA-256 is
+  `58d83280245b053718b04cab0fe84c8d9640c09780018761bcf880add088a77e`, recorded here
+  as an integrity fingerprint of that conversation-only artifact — it lets an equal
+  copy be verified byte-for-byte if reproduced, but the hash alone does not make the
+  accepted text independently reconstructible from this CR, this PR, or any other
+  repository artifact. The exact bytes exist only in the design-review conversation
+  record. This grant authorizes only recording design acceptance and directly
+  corresponding status metadata in this CR; it does not modify the accepted text and
+  grants no implementation, runtime, schema, test, or broader documentation change.
 - **Type:** Documentation / Governance (repository-level agent guidance — no runtime,
   routing, capability, or schema component).
 - **Priority:** Design review. Raised from a read-only investigation of an existing
