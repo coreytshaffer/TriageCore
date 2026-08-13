@@ -211,6 +211,7 @@ Invoke-Item ~/.triagecore/dashboard.html
 - Dashboard has no external dependencies.
 - Handoffs omit private notes by default.
 - Evaluator must not become approval authority.
+- Sensitive-context escalation follows the Cybernetic Ecology boundary policy — see [Cybernetic Ecology Boundary Policy](docs/operations/cybernetic-ecology-boundary.md).
 
 ### Daily Workflow
 
