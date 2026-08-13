@@ -3,12 +3,16 @@
 ## Status and Verification Basis
 
 **Level 1 — current system architecture.** Verified against local `main` at
-`1c2d6242ab18cf0d961b06994cf37c7c59ea38a5` on 2026-08-01. This pin follows
-the identity-consolidation documentation sequence through the submission
-claim-boundary slice. No production, test, workflow, or schema files changed
-since the prior `6d585268` behavior pin; the only non-document path change
-was the `pyproject.toml` description, which changed no runtime-integration
-behavior.
+`d3462a578b8bdf15d012a8aa1d4e1962520e7c3f` on 2026-08-12, replacing the prior
+`1c2d6242` pin of 2026-08-01. `main` advanced 86 commits in that interval; most
+of that work was governance, change-record, and documentation activity that does
+not bear on integration topology. A read-only census identified the
+architecture-relevant runtime and configuration changes as explicit local
+route-to-model binding (CR-DD-014, including the `[capability]` block now present
+in `triagecore.toml`), blocked-route evidence parity (CR-DD-017), and the
+specialist-offload evidence contract (CR-DD-018). CR-DD-016 changed
+capability-probe operator documentation and CLI help only; it did not alter
+runtime semantics.
 This page distinguishes current integrated paths,
 implemented-but-disconnected foundations, and conceptual or external actors.
 
@@ -39,7 +43,7 @@ reservation, capability-claim, and constrained replacement components are implem
 
 | Area | Status | Current boundary |
 | --- | --- | --- |
-| `tc run` | Current and integrated | Packet preflight, capability resolution, classification, resilience routing, terminal-route handling, backend execution, validation, and ledger evidence |
+| `tc run` | Current and integrated | Packet preflight, capability resolution and explicit local model binding, classification/specialist routing, resilience routing, ProjectSteward sensitive-context boundary, terminal-route handling, backend execution, validation, and route/worker evidence persistence |
 | Local backend | Current when configured | Invoked through `TriageEngine.execute_task` |
 | Qwen Cloud backend | Current but optional | Only receives an `ExternalSafeTaskPacket`; disabled or unconfigured routes terminate as handoff |
 | Deterministic route | Selected by policy, executor disconnected | `tc run` returns `handoff_required`; no deterministic executor is wired into the governed loop |
@@ -69,7 +73,10 @@ reservation, capability-claim, and constrained replacement components are implem
 ## Key Separation Rules
 
 1. Route selection and backend execution are separate stages.
-2. Capability evidence resolution distinguishes observation from configured declaration.
+2. Capability evidence resolution distinguishes observation from configured
+   declaration, and separately resolves an explicit route-to-model binding. On the
+   governed `tc run` path, a declared local route class without a resolved model
+   binding does not become an executable local route.
 3. `human_review_required` can populate the review queue without blocking an otherwise
    selected automated route. A `human_handoff` terminal route does block worker invocation.
 4. SQLite owns atomic capability state; the JSONL ledger records durable evidence after the
@@ -94,8 +101,15 @@ reservation, capability-claim, and constrained replacement components are implem
 - `triage_core/tc_cli.py`: `tc_run`
 - `triage_core/client.py`: `TriageClient.run_task`,
   `TriageClient._build_resilience_route_input`, `TriageClient._execute_cloud_task`
-- `triage_core/capability_evidence.py`: `resolve_capability`, `resolve_from_config`
+- `triage_core/capability_evidence.py`: `resolve_capability`, `resolve_from_config`,
+  `CapabilityResolution.model_for_route`
+- `triage_core/routers.py`: `SpecialistRouter.route_task`
 - `triage_core/routing/resilience_router.py`: `choose_resilience_route`
+- `triage_core/routing/route_events.py`: `build_route_decision_payload`,
+  `build_specialist_offload_payload`, `validate_specialist_offload_payload`, and
+  `build_worker_result_payload`
+- `triage_core/project_steward.py` and `policies/cybernetic_ecology_boundary.yaml`
+- `triage_core/run_plan.py`: `build_run_plan`
 - `triage_core/engine.py`: `TriageEngine.execute_task`
 - `triage_core/task_ledger.py` and `triage_core/review_queue.py`
 - `triage_core/triagedesk_adapter.py`
@@ -105,10 +119,13 @@ reservation, capability-claim, and constrained replacement components are implem
 - `triage_core/mediated_effect.py`, `triage_core/request_reservation.py`,
   `triage_core/mediated_executor.py`, and `triage_core/mediated_executor_win32.py`
 - Focused tests in `tests/test_capability_binding.py`, `tests/test_client.py`,
-  `tests/test_authz.py`, `tests/test_capability_claims.py`,
-  `tests/test_request_reservation.py`, `tests/test_mediated_effect.py`,
-  `tests/test_mediated_executor.py`, `tests/test_triagedesk_adapter.py`, and
-  `tests/test_workspace_*.py`
+  `tests/test_routers.py`, `tests/test_route_events.py`,
+  `tests/test_route_decision_audit.py`, `tests/test_local_only_routing.py`,
+  `tests/test_tc_run_cli.py`, `tests/test_tc_run_plan_cli.py`,
+  `tests/test_project_steward_firewall.py`, `tests/test_authz.py`,
+  `tests/test_capability_claims.py`, `tests/test_request_reservation.py`,
+  `tests/test_mediated_effect.py`, `tests/test_mediated_executor.py`,
+  `tests/test_triagedesk_adapter.py`, and `tests/test_workspace_*.py`
 
 ## Non-Claims
 
@@ -124,6 +141,13 @@ reservation, capability-claim, and constrained replacement components are implem
 
 - This diagram describes repository integration, not host deployment, network topology, or
   operator practice.
-- `main@1c2d624` is the evidence pin. Re-verify call sites, import relationships,
+- `main@d3462a5` is the evidence pin. Re-verify call sites, import relationships,
   and integration claims when the pin changes.
+- `current_system_architecture.svg` has not been regenerated for this pin. Its embedded
+  caption still reads `main@6d585268`, and it does not depict explicit local model
+  binding, the `ProjectSteward` sensitive-context boundary, or specialist-offload
+  evidence. This Markdown is authoritative where the two differ; regenerating the SVG is
+  separate work.
+- `docs/architecture/governed_run_flow.md` (Level 3) remains pinned to `6d585268` and has
+  not been re-verified against this pin.
 - Detailed pages and tests remain authoritative for ordering and reason-code behavior.
