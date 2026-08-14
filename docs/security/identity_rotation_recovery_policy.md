@@ -23,6 +23,30 @@ Current policy:
 
 This matches the currently implemented conservative behavior.
 
+#### Lifecycle health is distinct from trust
+
+Trust and lifecycle health are separate properties, and health reporting must not
+be read as a trust statement. Revocation is a valid terminal lifecycle state: an
+identity that has been deliberately revoked is *correctly* revoked, so lifecycle
+health tooling reports it as healthy-as-revoked rather than as a fault.
+
+This does not soften any statement above. A revoked identity remains unusable for
+signing, verification, authorization, and capability readiness. The three
+properties are independent:
+
+    LifecycleHealthy != OperationallyUsable != CapabilityReady
+
+Operator-facing health output must therefore state the revoked lifecycle state and
+its operational consequence explicitly, rather than reporting a bare pass that
+could be misread as readiness. A capability-readiness check against a revoked
+identity must fail explicitly, and must not report that the requested capability is
+absent when revocation is the operative reason — those are different facts and only
+one of them is true.
+
+This applies only to accepted terminal revocation. An absent active identity
+arising from any other cause — including a compromised record — remains a health
+error.
+
 ### Rotated
 
 Rotated means a successor key has replaced the old key for future signing, but

@@ -775,10 +775,40 @@ def tc_identity_doctor(agent_id: Optional[str], for_capability: Optional[str] = 
         except Exception:
             pass
 
-    if for_capability and loaded_identities is not None:
-        from triage_core.agent_identity import ACTIVE_STATUS, IdentityDoctorIssue
+    revoked_agents = []
+    if loaded_identities is not None:
+        from triage_core.agent_identity import REVOKED_STATUS, is_terminal_revoked
         for a_id, agent_list in loaded_identities.items():
             if agent_id and a_id != agent_id:
+                continue
+            if is_terminal_revoked(agent_list):
+                revoked_record = next(
+                    item for item in agent_list if item.status == REVOKED_STATUS
+                )
+                revoked_agents.append((a_id, revoked_record.public_key_fingerprint))
+
+    revoked_agent_ids = {a_id for a_id, _ in revoked_agents}
+
+    if for_capability and loaded_identities is not None:
+        from triage_core.agent_identity import ACTIVE_STATUS, IdentityDoctorIssue
+        for a_id, fingerprint in revoked_agents:
+            # A revoked identity is never capability-ready. Reported with a distinct
+            # code, and worded so it asserts nothing about whether the requested
+            # capability was ever granted — revocation is the operative reason.
+            report.errors.append(IdentityDoctorIssue(
+                severity="error",
+                code="revoked_identity_not_capability_ready",
+                agent_id=a_id,
+                fingerprint=fingerprint,
+                message=(
+                    f"Requested capability '{for_capability}' cannot be ready "
+                    f"because the identity is revoked"
+                ),
+            ))
+        for a_id, agent_list in loaded_identities.items():
+            if agent_id and a_id != agent_id:
+                continue
+            if a_id in revoked_agent_ids:
                 continue
             active_identities = [item for item in agent_list if item.status == ACTIVE_STATUS]
             if len(active_identities) != 1:
@@ -816,6 +846,12 @@ def tc_identity_doctor(agent_id: Optional[str], for_capability: Optional[str] = 
     for warn in report.warnings:
         fp_str = f" fingerprint={warn.fingerprint}" if warn.fingerprint else ""
         print(f"WARNING {warn.code} agent_id={warn.agent_id}{fp_str} ({warn.message})")
+
+    for revoked_agent_id, fingerprint in revoked_agents:
+        print(
+            f"OK lifecycle_state=revoked agent_id={revoked_agent_id} "
+            f"fingerprint={fingerprint} operationally_usable=false capability_ready=false"
+        )
 
     for ready_agent_id, capability, fingerprint in capability_ready_agents:
         print(

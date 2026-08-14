@@ -5,7 +5,14 @@ import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ed25519
 
-from triage_core.tc_cli import tc_identity_init, tc_identity_doctor, tc_identity_rotate, main
+from triage_core.tc_cli import (
+    tc_identity_check,
+    tc_identity_init,
+    tc_identity_doctor,
+    tc_identity_revoke,
+    tc_identity_rotate,
+    main,
+)
 from triage_core.agent_identity import AgentIdentityRegistry, IdentityDoctorIssue
 
 def run_cli_command(monkeypatch, capsys, tmp_path, args):
@@ -176,3 +183,232 @@ def test_doctor_fails_for_unknown_scoped_agent(tmp_path, monkeypatch, capsys):
     out = run_cli_command(monkeypatch, capsys, tmp_path, ["identity", "doctor", "missing-agent", "--for-capability", "route_decision:sign"])
     assert "Identity doctor failed" in out
     assert "ERROR unknown_agent agent_id=missing-agent" in out
+
+
+# --- CR-133: revoked-identity health semantics -------------------------------
+#
+# Accepted semantics (option (a)): LifecycleHealthy != OperationallyUsable !=
+# CapabilityReady. Terminal revocation is a valid lifecycle end-state, so it is
+# healthy *as revoked* while remaining unusable for capability readiness.
+#
+# Recorded pre-change behavior at main@770d9f2 for a revoked identity, which the
+# first three cases below invert:
+#     ERROR   no_active_key
+#     WARNING missing_rotated_at
+#     WARNING missing_archived_key
+#     exit 1
+
+
+def _registry_path(tmp_path):
+    return tmp_path / ".triagecore" / "identity" / "agents.json"
+
+
+def _mutate_registry(tmp_path, mutate):
+    """Rewrite registry records directly.
+
+    Required for compromised and multiply-revoked states: no production code path
+    sets COMPROMISED_STATUS, and `identity init` refuses to re-register a revoked
+    agent_id, so neither state is reachable through supported commands.
+    """
+    path = _registry_path(tmp_path)
+    data = json.loads(path.read_text())
+    mutate(data["agents"])
+    path.write_text(json.dumps(data, indent=2))
+
+
+def _fingerprints_by_status(tmp_path, agent_id):
+    registry = AgentIdentityRegistry(ledger_dir=tmp_path / ".triagecore")
+    return {
+        identity.status: identity.public_key_fingerprint
+        for identity in registry.load()[agent_id]
+    }
+
+
+def _lines_starting(out, prefix):
+    return [line for line in out.splitlines() if line.startswith(prefix)]
+
+
+def _setup_revoked(tmp_path, monkeypatch, capabilities=("cap:read",)):
+    with monkeypatch.context() as m:
+        m.setattr("triage_core.tc_cli._repo_root_or_cwd", lambda: tmp_path)
+        tc_identity_init("agent-001", "Role", list(capabilities))
+        tc_identity_revoke("agent-001")
+
+
+def test_doctor_passes_for_terminal_revoked_identity(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    _setup_revoked(tmp_path, monkeypatch)
+
+    out = run_cli_command(monkeypatch, capsys, tmp_path, ["identity", "doctor", "agent-001"])
+
+    assert "Identity doctor passed" in out
+    assert "errors=0 warnings=0" in out
+    # The three findings that previously arose from revocation are gone...
+    assert "no_active_key" not in out
+    assert "missing_rotated_at" not in out
+    assert "missing_archived_key" not in out
+    # ...but the lifecycle state is stated positively rather than merely silent,
+    # so "passed" cannot be misread as "this signer is ready".
+    assert "lifecycle_state=revoked" in out
+    assert "operationally_usable=false" in out
+    assert "capability_ready=false" in out
+
+
+def test_doctor_for_capability_fails_explicitly_for_revoked_identity(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    _setup_revoked(tmp_path, monkeypatch, capabilities=["route_decision:sign"])
+
+    out = run_cli_command(
+        monkeypatch, capsys, tmp_path,
+        ["identity", "doctor", "agent-001", "--for-capability", "route_decision:sign"],
+    )
+
+    assert "Identity doctor failed" in out
+    assert "ERROR revoked_identity_not_capability_ready agent_id=agent-001" in out
+    # The capability *is* present in the revoked record's metadata, so reusing
+    # missing_requested_capability here would assert something false.
+    assert "missing_requested_capability" not in out
+    assert "OK capability_ready" not in out
+
+
+def test_doctor_for_capability_revoked_identity_when_capability_never_granted(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    _setup_revoked(tmp_path, monkeypatch, capabilities=["route_audit:sign"])
+
+    out = run_cli_command(
+        monkeypatch, capsys, tmp_path,
+        ["identity", "doctor", "agent-001", "--for-capability", "route_decision:sign"],
+    )
+
+    # Revocation is the operative reason whether or not the capability was ever
+    # granted, so the diagnostic is the same and claims nothing about the grant.
+    assert "Identity doctor failed" in out
+    assert "ERROR revoked_identity_not_capability_ready agent_id=agent-001" in out
+    assert "missing_requested_capability" not in out
+    assert "OK capability_ready" not in out
+
+
+def test_doctor_preserves_rotated_history_checks_when_current_identity_revoked(tmp_path, monkeypatch, capsys):
+    """CR-133 acceptance constraint 2: historical integrity is not globally disabled."""
+    monkeypatch.chdir(tmp_path)
+    with monkeypatch.context() as m:
+        m.setattr("triage_core.tc_cli._repo_root_or_cwd", lambda: tmp_path)
+        tc_identity_init("agent-001", "Role", ["cap:read"])
+        tc_identity_rotate("agent-001", False)
+        tc_identity_revoke("agent-001")
+
+    fingerprints = _fingerprints_by_status(tmp_path, "agent-001")
+    archived_keys = list((tmp_path / ".triagecore" / "identity" / "keys").glob("*.rotated"))
+    assert len(archived_keys) == 1
+    archived_keys[0].unlink()
+
+    out = run_cli_command(monkeypatch, capsys, tmp_path, ["identity", "doctor", "agent-001"])
+
+    # Genuine rotated history still receives archival checks...
+    warnings = _lines_starting(out, "WARNING")
+    assert any("missing_archived_key" in line for line in warnings)
+    assert any(fingerprints["rotated"] in line for line in warnings)
+    # ...while the revoked record contributes no findings of its own.
+    assert not any(fingerprints["revoked"] in line for line in warnings)
+    assert "no_active_key" not in out
+
+
+def test_doctor_compromised_state_behavior_unchanged(tmp_path, monkeypatch, capsys):
+    """CR-133 acceptance constraint 1: compromised health semantics are untouched.
+
+    Behavioral non-change proof. These are exactly the findings a single non-active
+    record produced at main@770d9f2, recorded here because no pre-existing test pins
+    compromised doctor behavior.
+    """
+    monkeypatch.chdir(tmp_path)
+    _setup_revoked(tmp_path, monkeypatch)
+
+    def to_compromised(agents):
+        for agent in agents:
+            if agent["status"] == "revoked":
+                agent["status"] = "compromised"
+
+    _mutate_registry(tmp_path, to_compromised)
+
+    out = run_cli_command(monkeypatch, capsys, tmp_path, ["identity", "doctor", "agent-001"])
+
+    assert "Identity doctor failed" in out
+    assert "ERROR no_active_key agent_id=agent-001" in out
+    assert "missing_rotated_at" in out
+    assert "missing_archived_key" in out
+    assert "lifecycle_state=revoked" not in out
+
+
+@pytest.mark.parametrize("shape", ["rotated_only", "multiply_revoked"])
+def test_doctor_no_active_key_preserved_for_other_zero_active_causes(tmp_path, monkeypatch, capsys, shape):
+    """CR-133 acceptance constraint 3: only accepted terminal revocation is exempt.
+
+    Guards the predicate against being widened to "no active identity".
+    """
+    monkeypatch.chdir(tmp_path)
+    with monkeypatch.context() as m:
+        m.setattr("triage_core.tc_cli._repo_root_or_cwd", lambda: tmp_path)
+        tc_identity_init("agent-001", "Role", ["cap:read"])
+        tc_identity_rotate("agent-001", False)
+        if shape == "multiply_revoked":
+            tc_identity_revoke("agent-001")
+
+    if shape == "rotated_only":
+        def mutate(agents):
+            for agent in agents:
+                if agent["status"] == "active":
+                    agent["status"] = "rotated"
+                    agent["rotated_at"] = "2026-08-14T00:00:00+00:00"
+    else:
+        def mutate(agents):
+            for agent in agents:
+                agent["status"] = "revoked"
+
+    _mutate_registry(tmp_path, mutate)
+
+    out = run_cli_command(monkeypatch, capsys, tmp_path, ["identity", "doctor", "agent-001"])
+
+    assert "Identity doctor failed" in out
+    assert "ERROR no_active_key agent_id=agent-001" in out
+    assert "lifecycle_state=revoked" not in out
+
+
+def test_doctor_read_only_guarantee_for_revoked_identity(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    _setup_revoked(tmp_path, monkeypatch)
+
+    key_path = tmp_path / ".triagecore" / "identity" / "keys" / "agent-001.key"
+    registry_before = _registry_path(tmp_path).read_bytes()
+    key_before = key_path.read_bytes()
+
+    run_cli_command(monkeypatch, capsys, tmp_path, ["identity", "doctor", "agent-001"])
+    run_cli_command(
+        monkeypatch, capsys, tmp_path,
+        ["identity", "doctor", "agent-001", "--for-capability", "cap:read"],
+    )
+
+    # No private-key disposition is introduced or inferred by this slice.
+    assert _registry_path(tmp_path).read_bytes() == registry_before
+    assert key_path.read_bytes() == key_before
+
+
+def test_check_and_doctor_do_not_contradict_for_revoked_state(tmp_path, monkeypatch, capsys):
+    """Narrow non-contradiction for the revoked state only.
+
+    CR-133 establishes no general rule that `check` and `doctor` must agree; it
+    requires that a *contradiction* follow from a stated lifecycle rule rather than
+    from incidental filter mechanics. `check` already passed for a revoked identity
+    (tests/test_identity_cli.py), while `doctor` failed.
+    """
+    monkeypatch.chdir(tmp_path)
+    _setup_revoked(tmp_path, monkeypatch)
+
+    doctor_out = run_cli_command(monkeypatch, capsys, tmp_path, ["identity", "doctor", "agent-001"])
+
+    with monkeypatch.context() as m:
+        m.setattr("triage_core.tc_cli._repo_root_or_cwd", lambda: tmp_path)
+        tc_identity_check()
+    check_out = capsys.readouterr().out
+
+    assert "Identity doctor passed" in doctor_out
+    assert "Identity check passed" in check_out
