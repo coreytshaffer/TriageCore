@@ -2,45 +2,62 @@
 
 ## Status
 
-- **Status:** Proposal only. This CR records an unsettled lifecycle-semantics question
-  discovered during a read-only review. It proposes no change, prescribes no fix, and
-  asserts no defect. It exists to get the semantic question answered before any code,
-  test, or documentation is altered.
+- **Status:** Semantic question **settled**; see Accepted Semantic Decision below. This CR
+  originally recorded an unsettled lifecycle-semantics question discovered during a
+  read-only review. The design decision has now been made. The CR still proposes no code
+  change, prescribes no fix, and asserts no defect, and it remains the stop point: no
+  implementation has been scoped or authorized.
 - **Type:** Design question / lifecycle semantics (agent identity). No runtime, routing,
   schema, or evidence-ledger component.
 - **Priority:** Design review. Raised from a read-only comparison of the archived
   `wip/identity-doctor` branch against `main`; see Source Material below.
-- **Implementation authority:** **None granted and none requested.** This CR does not
-  authorize modifying `triage_core/agent_identity.py`, `triage_core/tc_cli.py`, any
-  identity test, or any lifecycle behavior. It does not authorize adding regression
-  tests for the behavior described below — see Deferred Work.
-- **Proposal acceptance:** Not yet granted. Observations recorded against `main` at
+- **Proposal acceptance:** Granted by the human operator on 2026-08-14 for the problem
+  statement, evidence, and framing recorded in this CR, observed against `main` at
   `770d9f25a6da6099f72913ef886a6781cd014ac2`.
+- **Design decision:** Granted by the human operator on 2026-08-14, selecting **option
+  (a)** from the Open Design Question below. The accepted semantics are recorded verbatim
+  in Accepted Semantic Decision. This grant settles the *meaning* of a revoked identity's
+  health. It grants no authority to change any code, test, or behavior to match that
+  meaning.
+- **Implementation authority:** **Still withheld.** Not granted and not requested. This CR
+  does not authorize modifying `triage_core/agent_identity.py`, `triage_core/tc_cli.py`,
+  any identity test, or any lifecycle behavior. It does not authorize adding regression
+  tests — see Deferred Work. Implementation scoping is a separate, later decision.
+- **Merge / release / closeout authority:** Not granted.
 
 ## Scope
 
 Exactly one file: this document.
 
-This CR is a problem statement and a question. It deliberately stops short of a
-controlling rule, because the evidence establishes that two surfaces differ — not that
-either one is wrong.
+This CR is a problem statement, a question, and — as of 2026-08-14 — the accepted answer
+to that question. It deliberately stops short of implementation: it settles what a revoked
+identity's health *means*, and does not scope, design, or authorize any change that would
+make the code express that meaning.
 
 ## Human Approval Requirement
 
-No subsequent slice may proceed on the strength of this document alone. Answering the
-Open Design Question below is a human decision. Until it is answered and recorded, no
-implementation, test, or documentation change in the identity lifecycle area is
-authorized by this CR.
+No subsequent slice may proceed on the strength of this document alone.
+
+The Open Design Question below was a human decision, and it has been answered and recorded
+(option (a), 2026-08-14). **Answering it did not confer implementation authority.** No
+implementation, test, or documentation change in the identity lifecycle area is authorized
+by this CR. Scoping such a change is itself a separate decision that has not been made.
 
 ## Problem Statement
+
+*Stated as observed at proposal time; the question it raised has since been answered — see
+Accepted Semantic Decision.*
 
 A cleanly revoked agent identity is accepted by `tc identity check` and simultaneously
 classified as erroneous by `tc identity doctor`. No test establishes whether that
 difference is intentional.
 
-The word *bug* is deliberately not used. What is established is a divergence between two
-surfaces and an absence of any recorded decision about it. Which behavior is correct — or
-whether both are, under distinct definitions — is exactly what remains unsettled.
+The word *bug* is deliberately not used. What was established by the evidence is a
+divergence between two surfaces and an absence of any recorded decision about it — not
+that either behavior was wrong. Which behavior is correct, or whether both are under
+distinct definitions, was exactly the open question; it is now settled by the accepted
+decision recorded below, which the evidence in this section supports but did not by itself
+determine.
 
 ### Evidence anchor
 
@@ -109,7 +126,10 @@ SAME registry, cleanly revoked agent:
 `tests/test_doctor_cli.py` contains no revoked-identity case, so nothing in the suite
 observes this divergence.
 
-## Open Design Question
+## Open Design Question — Answered (a)
+
+Retained as written for the record, so that the accepted answer is legible as a choice
+*among* stated alternatives rather than as the only option considered.
 
 Is revocation:
 
@@ -122,7 +142,45 @@ Is revocation:
   state in which `check` passing and `doctor` failing is the designed, documented outcome?
 
 Each answer implies a different subsequent change, and they are mutually exclusive.
-Selecting one is out of scope here.
+
+**Answered on 2026-08-14: option (a).** See Accepted Semantic Decision.
+
+## Accepted Semantic Decision
+
+Granted by the human operator on 2026-08-14.
+
+A correctly revoked identity is a **valid terminal lifecycle state**: healthy *as revoked*,
+but intentionally **not operationally usable or capability-ready**.
+
+Two consequences follow directly from that decision:
+
+1. **Rotation-specific invariants do not automatically apply to revocation.** The
+   `rotated_at` timestamp and the archived-key artifact are rotation concepts. Their
+   absence on a revoked record is not, by itself, evidence of an unhealthy identity.
+2. **Private-key disposition on revocation remains a separate, unresolved question.**
+   Whether a revoked identity should retain, archive, or destroy its private key material
+   is expressly *not* settled by this decision and must not be inferred from it.
+
+### Controlling invariant
+
+    LifecycleHealthy ≠ OperationallyUsable
+
+These are distinct properties and must be represented distinctly. An identity may be
+lifecycle-healthy (correctly revoked, terminal, well-formed) while being operationally
+unusable (no active key, not capability-ready). Reporting the second as a failure of the
+first conflates them.
+
+### Implementation-facing consequence (not authorized here)
+
+Any future change must make this distinction **explicit**. At `main@770d9f2` the current
+behavior emerges incidentally: `no_active_key` falls out of an empty `ACTIVE_STATUS`
+filter, and the two warnings fall out of a generic non-active-history loop that processes
+`REVOKED_STATUS` records identically to `ROTATED_STATUS` ones. Under the accepted
+semantics that outcome is an accident of those filters rather than an expression of a
+stated rule — which is precisely what the Requirement section forbids.
+
+This paragraph describes what a correct future change must satisfy. It does not authorize
+making one.
 
 ## Non-Requirement
 
@@ -165,9 +223,15 @@ but has no corresponding case in `tests/test_doctor_cli.py`: the `missing_rotate
 code emitted by `tc_identity_doctor()` in `triage_core/tc_cli.py`. Adding those tests is
 deliberately **not** proposed here.
 
-A regression test written now would pin whichever behavior currently exists, which for
-the revoked case is precisely the behavior in dispute. No regression behavior should be
-pinned until the Open Design Question is settled.
+The original reason was that a regression test written before the decision would pin
+whichever behavior currently exists, which for the revoked case was precisely the behavior
+in dispute.
+
+That reason has now sharpened rather than lapsed. With option (a) accepted, the current
+revoked-case behavior at `main@770d9f2` is known to *contradict* the accepted semantics —
+so pinning it would encode the wrong rule, not merely a premature one. The other three
+scenarios remain unpinned because this CR grants no test-authoring authority at all. Test
+scoping belongs to a later, separately authorized slice.
 
 ## Source Material
 
@@ -184,6 +248,11 @@ a doctor-level test. The revoked-identity case is the single genuine divergence.
 
 ## Stop Point
 
-This CR stops at the question. The next governed step is a human decision selecting (a),
-(b), or (c) — or rejecting the framing. Only after that decision is recorded should any
-follow-on slice be scoped.
+This CR previously stopped at the question. That decision has been made and recorded
+(option (a), 2026-08-14), and **the CR stops again here — before implementation scoping.**
+
+Nothing further is authorized by this document. The next governed step is a separate human
+decision on whether, and how narrowly, to scope an implementation slice that makes
+`LifecycleHealthy ≠ OperationallyUsable` explicit. Two questions remain deliberately open
+and must not be resolved by inference from the accepted semantics: private-key disposition
+on revocation, and which surface (`check`, `doctor`, or both) should carry the distinction.
