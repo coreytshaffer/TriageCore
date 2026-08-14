@@ -24,31 +24,33 @@
   census enumerates a four-file allowlist, a defect that a naive fix would introduce, and
   binding acceptance constraints. **Recording it granted no authority to act on it**, and
   it is not an implementation design.
-- **Implementation authority:** **Still withheld.** Not granted and not requested. This CR
-  does not authorize modifying `triage_core/agent_identity.py`, `triage_core/tc_cli.py`,
-  any identity test, or any lifecycle behavior — including the four files named in the
-  census allowlist, which bounds a future slice rather than enabling one. It does not
-  authorize writing the Required Regression Set — see Deferred Work. Implementation scoping
-  is a separate, later decision.
+- **Implementation authority:** **Granted by the human operator on 2026-08-14**, for one
+  bounded single-slice implementation against the four-file census allowlist. Recorded
+  verbatim in Implementation Authority — Single Slice Granted below. The grant is
+  single-use and stage-bound: it authorizes preparation of a reviewable implementation
+  candidate, and is **exhausted** once that candidate exists. It does not carry
+  implementation acceptance.
 - **Merge / release / closeout authority:** Not granted.
 
 ## Scope
 
 Exactly one file: this document.
 
-This CR is a problem statement, a question, and — as of 2026-08-14 — the accepted answer
-to that question. It deliberately stops short of implementation: it settles what a revoked
-identity's health *means*, and does not scope, design, or authorize any change that would
-make the code express that meaning.
+This CR is a problem statement, a question, the accepted answer to that question, and — as
+of 2026-08-14 — the durable record of the bounded implementation authority granted against
+it. It settles what a revoked identity's health *means*. It does not itself implement that
+meaning; the code change lives in PR #178 under the separately recorded grant.
 
 ## Human Approval Requirement
 
 No subsequent slice may proceed on the strength of this document alone.
 
 The Open Design Question below was a human decision, and it has been answered and recorded
-(option (a), 2026-08-14). **Answering it did not confer implementation authority.** No
-implementation, test, or documentation change in the identity lifecycle area is authorized
-by this CR. Scoping such a change is itself a separate decision that has not been made.
+(option (a), 2026-08-14). **Answering it did not confer implementation authority.**
+Implementation authority was a separate, later human decision, granted on 2026-08-14 and
+recorded verbatim in Implementation Authority — Single Slice Granted. It is bounded to four
+paths, single-use, now exhausted, and does not extend to acceptance, merge, release, or
+closeout. Any change beyond those four paths remains unauthorized by this CR.
 
 ## Problem Statement
 
@@ -331,8 +333,8 @@ Binding on any future implementation slice, whenever one is authorized:
 
 ### Required Regression Set
 
-Four behavioral cases, plus one constraint. **Not authorized to be written by this CR** —
-see Deferred Work.
+Four behavioral cases, plus one constraint. Not authorized when first recorded; **authorized
+and written under the single-slice grant** below, in `tests/test_doctor_cli.py`.
 
 1. Generated → revoked: general doctor succeeds; no `no_active_key`; no revocation-caused
    `missing_rotated_at` or `missing_archived_key`; revoked/non-operational state visible.
@@ -348,7 +350,88 @@ Plus: an explicit compromised-state case, **or** a recorded behavioral non-chang
 `COMPROMISED_STATUS`. A compromised state must be constructed by direct registry mutation,
 since no production path sets it.
 
+## Implementation Authority — Single Slice Granted
+
+Granted by the human operator on 2026-08-14. Recorded verbatim.
+
+> Implementation authority is granted for one bounded CR-133 implementation slice
+> implementing the accepted option (a) semantics:
+>
+>     LifecycleHealthy ≠ OperationallyUsable ≠ CapabilityReady
+>
+> The grant is limited to exactly these four paths:
+>
+> - `triage_core/agent_identity.py`
+> - `triage_core/tc_cli.py`
+> - `tests/test_doctor_cli.py`
+> - `docs/security/identity_rotation_recovery_policy.md`
+>
+> Within `triage_core/agent_identity.py`, this grant includes authority to add one
+> module-level helper that classifies the already-settled terminal revoked state for
+> shared use by `AgentIdentityRegistry.check_health()` and `tc_identity_doctor()`. The
+> helper must not introduce a new lifecycle state or modify `IdentityDoctorReport` or
+> `IdentityDoctorIssue`.
+>
+> The terminal-revoked predicate must remain narrowly bounded:
+>
+> - zero `ACTIVE_STATUS` records;
+> - exactly one `REVOKED_STATUS` record; and
+> - every remaining historical record, if any, is `ROTATED_STATUS`.
+>
+> The implementation may:
+>
+> - prevent a correctly terminal-revoked identity from emitting revocation-caused
+>   `no_active_key`, `missing_rotated_at`, or `missing_archived_key` health findings;
+> - make the revoked/non-operational lifecycle state explicitly visible in
+>   `tc identity doctor` output;
+> - make `--for-capability` fail explicitly for a revoked identity using a distinct
+>   diagnostic meaning that does not falsely claim the requested capability is absent; and
+> - add the CR-133 regression coverage and the bounded normative-policy clarification
+>   already specified in this CR.
+>
+> The implementation must preserve all recorded CR-133 constraints, including:
+>
+> - `ROTATED_STATUS` historical-integrity diagnostics remain intact;
+> - `COMPROMISED_STATUS` health behavior remains unchanged, through both the zero-active
+>   and historical-record paths;
+> - `no_active_key` remains an error for zero-active states other than the accepted
+>   terminal-revoked state;
+> - revoked identities remain unusable for signing, verification, authorization, and
+>   capability readiness;
+> - `missing_requested_capability` is not reused to describe revocation when revocation is
+>   the operative reason;
+> - no private-key retention, archival, deletion, or other disposition policy is introduced
+>   or inferred;
+> - `revoke_identity()`, `check_consistency()`, `IdentityDoctorReport`, and
+>   `IdentityDoctorIssue` remain unchanged; and
+> - the separately deferred archived-design coverage gaps remain outside this slice.
+>
+> The implementation-authority grant is single-slice, single-use, and stage-bound. It
+> authorizes preparation of a reviewable implementation candidate within the four-file
+> allowlist, including the bounded edits, tests, verification, commit, push, and opening of
+> an implementation PR. It does not grant implementation acceptance, merge authority,
+> release authority, or closeout authority.
+>
+> This grant is exhausted when that reviewable implementation candidate is produced.
+
+### Grant exercised and exhausted
+
+The candidate was produced on 2026-08-14 as
+[PR #178](https://github.com/coreytshaffer/TriageCore/pull/178), branch
+`claude/cr-133-revoked-identity-health-implementation`, based `origin/main@770d9f2`,
+touching exactly the four allowlisted paths. **The grant is therefore exhausted.**
+
+Implementation acceptance was reviewed on 2026-08-14 and **withheld** pending two evidence
+repairs: this authority record, and regression-pinning of the `tc identity doctor` exit-code
+contract (the stdout assertions alone did not pin exit 0 versus exit 1, which is precisely
+what the Post-Change-State Trap turns on). Implementation design and code review both
+passed. Merge, release, and closeout remain ungranted.
+
 ## Explicit Exclusions
+
+These exclusions describe this CR document's own scope. They are superseded, for the four
+allowlisted paths only, by the single-slice grant recorded above; everything not named in
+that grant remains excluded.
 
 This CR does not change, and does not authorize changing:
 
@@ -369,6 +452,9 @@ but has no corresponding case in `tests/test_doctor_cli.py`: the `missing_rotate
 code emitted by `tc_identity_doctor()` in `triage_core/tc_cli.py`. Adding those tests is
 deliberately **not** proposed here.
 
+The single-slice grant of 2026-08-14 does **not** disturb this deferral: it authorizes the
+Required Regression Set only, and the four archived-design coverage gaps remain outside it.
+
 The original reason was that a regression test written before the decision would pin
 whichever behavior currently exists, which for the revoked case was precisely the behavior
 in dispute.
@@ -376,8 +462,8 @@ in dispute.
 That reason has now sharpened rather than lapsed. With option (a) accepted, the current
 revoked-case behavior at `main@770d9f2` is known to *contradict* the accepted semantics —
 so pinning it would encode the wrong rule, not merely a premature one. The other three
-scenarios remain unpinned because this CR grants no test-authoring authority at all. Test
-scoping belongs to a later, separately authorized slice.
+scenarios remain unpinned because the test-authoring authority later granted covers only the
+Required Regression Set. Their scoping belongs to a further, separately authorized slice.
 
 **These are two distinct sets; do not conflate them.** The four scenarios above are
 *archived-design coverage gaps* (`missing_rotated_at`, `malformed_registry`, positive
@@ -402,13 +488,17 @@ a doctor-level test. The revoked-identity case is the single genuine divergence.
 
 ## Stop Point
 
-This CR has stopped twice, and stops a third time here.
+This CR has stopped three times, and stops a fourth time here.
 
 1. It stopped at the open question. Answered: option (a), 2026-08-14.
 2. It stopped before implementation scoping. A read-only census was then authorized and
    recorded — see Implementation Surface.
-3. **It now stops before implementation.** Nothing in this document authorizes writing
-   code, tests, or documentation.
+3. It stopped before implementation. A bounded single-slice implementation authority was
+   then granted on 2026-08-14 and exercised as PR #178 — see Implementation Authority. That
+   grant is now exhausted.
+4. **It now stops before implementation acceptance.** Acceptance was reviewed on
+   2026-08-14 and withheld pending two evidence repairs. Nothing in this document
+   authorizes merging PR #178, nor any change outside the four allowlisted paths.
 
 The surface question posed at the second stop — which surface should carry the distinction —
 is answered by the recorded census: both `AgentIdentityRegistry.check_health()` and
@@ -418,6 +508,6 @@ the second. `check_consistency()` is not involved; its current behavior is alrea
 **Private-key disposition on revocation remains open** and must not be resolved by inference
 from the accepted semantics or from the census.
 
-The next governed step is a separate human decision on whether to authorize an
-implementation slice bounded by the four-file allowlist and subject to the Acceptance
-Constraints. That decision has not been made.
+The next governed step is a separate human decision on implementation acceptance for
+PR #178, re-reviewing the two repair deltas rather than reopening the whole implementation.
+That decision has not been made.
