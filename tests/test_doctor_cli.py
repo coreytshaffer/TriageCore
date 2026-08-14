@@ -15,17 +15,32 @@ from triage_core.tc_cli import (
 )
 from triage_core.agent_identity import AgentIdentityRegistry, IdentityDoctorIssue
 
-def run_cli_command(monkeypatch, capsys, tmp_path, args):
+def run_cli_command_with_exit_code(monkeypatch, capsys, tmp_path, args):
+    """Run a CLI command, returning ``(stdout, exit_code)``.
+
+    The printed status line and the process exit code are separate contracts, and
+    CR-133 turns specifically on the second one: the post-change-state trap was a
+    revoked identity exiting 0 while printing no capability finding. Tests that
+    assert only on stdout cannot detect that.
+
+    ``main()`` returning without raising is a success exit, reported as 0.
+    """
     monkeypatch.chdir(tmp_path)
     import sys
+    exit_code = 0
     with monkeypatch.context() as m:
         m.setattr(sys, 'argv', ["tc"] + args)
         m.setattr("triage_core.tc_cli._repo_root_or_cwd", lambda: tmp_path)
         try:
             main()
-        except SystemExit:
-            pass
-    return capsys.readouterr().out
+        except SystemExit as exc:
+            exit_code = exc.code or 0
+    return capsys.readouterr().out, exit_code
+
+
+def run_cli_command(monkeypatch, capsys, tmp_path, args):
+    out, _ = run_cli_command_with_exit_code(monkeypatch, capsys, tmp_path, args)
+    return out
 
 def test_doctor_healthy_identity(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
@@ -161,7 +176,9 @@ def test_doctor_capability_check_passes_for_route_decision_signer(tmp_path, monk
         m.setattr("triage_core.tc_cli._repo_root_or_cwd", lambda: tmp_path)
         tc_identity_init("router-tools", "Role", ["route_decision:sign"])
 
-    out = run_cli_command(monkeypatch, capsys, tmp_path, ["identity", "doctor", "router-tools", "--for-capability", "route_decision:sign"])
+    out, exit_code = run_cli_command_with_exit_code(monkeypatch, capsys, tmp_path, ["identity", "doctor", "router-tools", "--for-capability", "route_decision:sign"])
+    # Positive control for the revoked exit-code pins below.
+    assert exit_code == 0
     assert "Identity doctor passed" in out
     assert "OK capability_ready agent_id=router-tools capability=route_decision:sign" in out
 
@@ -172,7 +189,10 @@ def test_doctor_capability_check_fails_when_capability_missing(tmp_path, monkeyp
         m.setattr("triage_core.tc_cli._repo_root_or_cwd", lambda: tmp_path)
         tc_identity_init("router-tools", "Role", ["route_audit:sign"])
 
-    out = run_cli_command(monkeypatch, capsys, tmp_path, ["identity", "doctor", "router-tools", "--for-capability", "route_decision:sign"])
+    out, exit_code = run_cli_command_with_exit_code(monkeypatch, capsys, tmp_path, ["identity", "doctor", "router-tools", "--for-capability", "route_decision:sign"])
+    # Negative control: a genuinely absent capability on an *active* identity still
+    # exits 1 via missing_requested_capability, distinct from the revoked path.
+    assert exit_code == 1
     assert "Identity doctor failed" in out
     assert "ERROR missing_requested_capability agent_id=router-tools" in out
     assert "route_decision:sign" in out
@@ -239,8 +259,11 @@ def test_doctor_passes_for_terminal_revoked_identity(tmp_path, monkeypatch, caps
     monkeypatch.chdir(tmp_path)
     _setup_revoked(tmp_path, monkeypatch)
 
-    out = run_cli_command(monkeypatch, capsys, tmp_path, ["identity", "doctor", "agent-001"])
+    out, exit_code = run_cli_command_with_exit_code(
+        monkeypatch, capsys, tmp_path, ["identity", "doctor", "agent-001"]
+    )
 
+    assert exit_code == 0
     assert "Identity doctor passed" in out
     assert "errors=0 warnings=0" in out
     # The three findings that previously arose from revocation are gone...
@@ -258,11 +281,14 @@ def test_doctor_for_capability_fails_explicitly_for_revoked_identity(tmp_path, m
     monkeypatch.chdir(tmp_path)
     _setup_revoked(tmp_path, monkeypatch, capabilities=["route_decision:sign"])
 
-    out = run_cli_command(
+    out, exit_code = run_cli_command_with_exit_code(
         monkeypatch, capsys, tmp_path,
         ["identity", "doctor", "agent-001", "--for-capability", "route_decision:sign"],
     )
 
+    # The post-change-state trap: without this pin, a revoked identity exiting 0
+    # while printing no capability finding would pass the stdout assertions.
+    assert exit_code == 1
     assert "Identity doctor failed" in out
     assert "ERROR revoked_identity_not_capability_ready agent_id=agent-001" in out
     # The capability *is* present in the revoked record's metadata, so reusing
@@ -275,13 +301,14 @@ def test_doctor_for_capability_revoked_identity_when_capability_never_granted(tm
     monkeypatch.chdir(tmp_path)
     _setup_revoked(tmp_path, monkeypatch, capabilities=["route_audit:sign"])
 
-    out = run_cli_command(
+    out, exit_code = run_cli_command_with_exit_code(
         monkeypatch, capsys, tmp_path,
         ["identity", "doctor", "agent-001", "--for-capability", "route_decision:sign"],
     )
 
     # Revocation is the operative reason whether or not the capability was ever
     # granted, so the diagnostic is the same and claims nothing about the grant.
+    assert exit_code == 1
     assert "Identity doctor failed" in out
     assert "ERROR revoked_identity_not_capability_ready agent_id=agent-001" in out
     assert "missing_requested_capability" not in out
