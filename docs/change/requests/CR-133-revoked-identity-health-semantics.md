@@ -19,10 +19,17 @@
   in Accepted Semantic Decision. This grant settles the *meaning* of a revoked identity's
   health. It grants no authority to change any code, test, or behavior to match that
   meaning.
+- **Implementation-surface census:** Conducted read-only against `main@770d9f2` and
+  recorded on 2026-08-14 at the operator's direction; see Implementation Surface below. The
+  census enumerates a four-file allowlist, a defect that a naive fix would introduce, and
+  binding acceptance constraints. **Recording it granted no authority to act on it**, and
+  it is not an implementation design.
 - **Implementation authority:** **Still withheld.** Not granted and not requested. This CR
   does not authorize modifying `triage_core/agent_identity.py`, `triage_core/tc_cli.py`,
-  any identity test, or any lifecycle behavior. It does not authorize adding regression
-  tests — see Deferred Work. Implementation scoping is a separate, later decision.
+  any identity test, or any lifecycle behavior — including the four files named in the
+  census allowlist, which bounds a future slice rather than enabling one. It does not
+  authorize writing the Required Regression Set — see Deferred Work. Implementation scoping
+  is a separate, later decision.
 - **Merge / release / closeout authority:** Not granted.
 
 ## Scope
@@ -170,6 +177,9 @@ lifecycle-healthy (correctly revoked, terminal, well-formed) while being operati
 unusable (no active key, not capability-ready). Reporting the second as a failure of the
 first conflates them.
 
+*Refined for implementation purposes to a three-part form after the surface census — see
+Refinement of the controlling invariant. The refinement does not alter this decision.*
+
 ### Implementation-facing consequence (not authorized here)
 
 Any future change must make this distinction **explicit**. At `main@770d9f2` the current
@@ -202,6 +212,142 @@ processes `REVOKED_STATUS` records identically to `ROTATED_STATUS` ones. Whateve
 is chosen, the outcome must be traceable to a stated rule about revocation rather than to
 the incidental behavior of those filters.
 
+## Implementation Surface — Read-Only Census
+
+Conducted read-only against `main@770d9f2` on 2026-08-14. Recorded here so that a later,
+separately authorized implementation slice inherits a bounded allowlist rather than
+re-deriving one. **Recording this census grants no authority to act on it.**
+
+### Already correct — outside the allowlist
+
+The "not operationally usable" half of the accepted semantics is **already enforced** and
+requires no change. `AgentIdentityRegistry.get_identity()` and
+`.require_authorized_capability()` raise `RevokedAgentError` for a revoked identity;
+`.verify_signed_payload()` returns `False`; `triage_core/task_ledger.py` already handles
+`RevokedAgentError` at its two call sites.
+
+Option (a) is therefore not a two-sided change. Only *health reporting* conflates the
+properties. Also outside the allowlist, and not to be modified:
+
+- `AgentIdentityRegistry.check_consistency()` — passing for a revoked identity is already
+  correct under the accepted semantics
+- `AgentIdentityRegistry.revoke_identity()` — unchanged; altering it would require settling
+  private-key disposition, which remains open
+- The `IdentityDoctorReport` and `IdentityDoctorIssue` dataclasses — the existing issue type
+  is sufficient to express the distinction
+
+### Minimum allowlist — exactly four files
+
+| Path | Why it is necessary |
+|---|---|
+| `triage_core/agent_identity.py` | `check_health()` is the only place lifecycle health is computed |
+| `triage_core/tc_cli.py` | without it, `--for-capability` reports success for a revoked identity — see Post-Change-State Trap |
+| `tests/test_doctor_cli.py` | the doctor-behavior test surface; no existing test sits at the revoke/health intersection |
+| `docs/security/identity_rotation_recovery_policy.md` | the normative policy authority for status semantics |
+
+Test-surface note: revocation and doctor-health are currently tested in disjoint files —
+`tests/test_doctor_cli.py` carries the health/doctor cases and no revocation cases, while
+`tests/test_identity_cli.py` and `tests/test_agent_identity.py` carry revocation cases and
+no health/doctor cases. No existing test pins the disputed behavior, so none breaks.
+
+Documentation note: no normative CLI reference documents `tc identity doctor` output. Every
+other file mentioning it is historical — past `CR-*.md` records, dated operations
+checkpoints, and the append-only `docs/change/change_log.md`. None of those may be edited.
+
+### Post-Change-State Trap
+
+`tc_cli.py` is in the minimum surface because of a defect that would be **introduced** by a
+correct-looking change confined to `check_health()` alone.
+
+Verified by read-only probe against `main@770d9f2`, for a revoked agent invoked as
+`tc identity doctor --agent-id <revoked> --for-capability <X>`:
+
+```
+ERROR no_active_key ...        <- the only error emitted
+exit_code = 1
+capability_ready line present: False
+capability ERROR present:      False
+```
+
+Today's non-zero exit is produced **entirely** by the health error. In
+`tc_identity_doctor()`, the `--for-capability` loop skips any agent without exactly one
+`ACTIVE_STATUS` identity, and the process exits non-zero only when `report.has_errors` is
+true. Remove `no_active_key` for revoked identities under the accepted semantics and that
+invocation exits **0**, emitting neither a capability error nor a `capability_ready` line —
+reporting success for an identity the accepted semantics state is not capability-ready.
+
+Two consequences for any implementation:
+
+1. The existing `missing_requested_capability` code **must not** be reused for this case.
+   In the probe the requested capability was present in the identity's metadata; the
+   identity is unusable because it is revoked, not because the capability is absent. That
+   code would assert something false. A distinct code — for example
+   `revoked_identity_not_capability_ready` — is required.
+2. The revoked state should be **visible**, not merely non-erroring. Suppressing the three
+   issues leaves `Identity doctor passed`, which reads as "this signer is ready". A
+   positive statement of the lifecycle state and its operational consequence is preferred;
+   exact vocabulary is an implementation-design question.
+
+### Refinement of the controlling invariant
+
+The accepted decision states `LifecycleHealthy ≠ OperationallyUsable`. Because the CLI
+exposes capability readiness as a separately requestable check, the operative form is:
+
+    LifecycleHealthy ≠ OperationallyUsable ≠ CapabilityReady
+
+This refines the accepted two-part form for implementation purposes. It does not alter the
+semantic decision granted on 2026-08-14.
+
+### Acceptance Constraints
+
+Binding on any future implementation slice, whenever one is authorized:
+
+1. **CR-133 must not change `COMPROMISED_STATUS` health semantics.** CR-133 settled
+   revocation, not compromise. Verified: nothing currently pins compromised doctor
+   behavior — `COMPROMISED_STATUS` has one production consumer
+   (`verify_signed_payload()`), no production code path sets it, and the single test
+   touching it pins signature verification rather than health. There is no existing test
+   to inherit protection from, so this constraint must be enforced deliberately.
+
+   Two distinct vectors violate it, and an acceptance check must cover both:
+
+   - rewriting the historical-key loop guard `status != ACTIVE_STATUS` to
+     `status == ROTATED_STATUS`, which also exempts compromised records; and
+   - suppressing `no_active_key` on the condition *"no active identity"* rather than
+     specifically *"terminal revoked"* — a compromised identity also has no active key, so
+     this changes compromised behavior without touching the historical loop at all.
+
+   The criterion must therefore be written against the **condition used**, not merely the
+   code region edited.
+
+2. **Historical integrity checking must not be globally disabled.** Genuine
+   `ROTATED_STATUS` history must remain subject to rotation archival expectations.
+
+3. **`no_active_key` must remain intact** for an absent active identity arising from any
+   cause other than accepted terminal revocation.
+
+4. **Private-key disposition remains out of scope** and must not be resolved by inference
+   from any of the above.
+
+### Required Regression Set
+
+Four behavioral cases, plus one constraint. **Not authorized to be written by this CR** —
+see Deferred Work.
+
+1. Generated → revoked: general doctor succeeds; no `no_active_key`; no revocation-caused
+   `missing_rotated_at` or `missing_archived_key`; revoked/non-operational state visible.
+2. Generated → revoked, with `--for-capability`: the readiness check fails explicitly with
+   a not-capability-ready result; no `capability_ready` output.
+3. Rotated history with the current identity revoked: the revoked record is healthy as
+   revoked, while genuine `ROTATED_STATUS` history still receives archival checks — this is
+   the case that proves constraint 2 held.
+4. Absence of an active identity for a cause other than accepted terminal revocation:
+   `no_active_key` behavior intact.
+
+Plus: an explicit compromised-state case, **or** a recorded behavioral non-change proof for
+`COMPROMISED_STATUS`. A compromised state must be constructed by direct registry mutation,
+since no production path sets it.
+
 ## Explicit Exclusions
 
 This CR does not change, and does not authorize changing:
@@ -233,6 +379,14 @@ so pinning it would encode the wrong rule, not merely a premature one. The other
 scenarios remain unpinned because this CR grants no test-authoring authority at all. Test
 scoping belongs to a later, separately authorized slice.
 
+**These are two distinct sets; do not conflate them.** The four scenarios above are
+*archived-design coverage gaps* (`missing_rotated_at`, `malformed_registry`, positive
+agent-scoping, `missing_audit_event`) inherited from the `wip/identity-doctor` comparison.
+The four cases in the Required Regression Set are *revocation-semantics cases* derived from
+the accepted decision. They overlap only incidentally — `missing_rotated_at` appears in both
+lists for different reasons, as an untested code in the first and as an assertion about
+revoked identities in the second. Neither set is authorized by this CR.
+
 ## Source Material
 
 Findings extracted from a read-only comparison of `wip/identity-doctor` against `main`.
@@ -248,11 +402,22 @@ a doctor-level test. The revoked-identity case is the single genuine divergence.
 
 ## Stop Point
 
-This CR previously stopped at the question. That decision has been made and recorded
-(option (a), 2026-08-14), and **the CR stops again here — before implementation scoping.**
+This CR has stopped twice, and stops a third time here.
 
-Nothing further is authorized by this document. The next governed step is a separate human
-decision on whether, and how narrowly, to scope an implementation slice that makes
-`LifecycleHealthy ≠ OperationallyUsable` explicit. Two questions remain deliberately open
-and must not be resolved by inference from the accepted semantics: private-key disposition
-on revocation, and which surface (`check`, `doctor`, or both) should carry the distinction.
+1. It stopped at the open question. Answered: option (a), 2026-08-14.
+2. It stopped before implementation scoping. A read-only census was then authorized and
+   recorded — see Implementation Surface.
+3. **It now stops before implementation.** Nothing in this document authorizes writing
+   code, tests, or documentation.
+
+The surface question posed at the second stop — which surface should carry the distinction —
+is answered by the recorded census: both `AgentIdentityRegistry.check_health()` and
+`tc_identity_doctor()`, because a change confined to the first introduces a false success in
+the second. `check_consistency()` is not involved; its current behavior is already correct.
+
+**Private-key disposition on revocation remains open** and must not be resolved by inference
+from the accepted semantics or from the census.
+
+The next governed step is a separate human decision on whether to authorize an
+implementation slice bounded by the four-file allowlist and subject to the Acceptance
+Constraints. That decision has not been made.
