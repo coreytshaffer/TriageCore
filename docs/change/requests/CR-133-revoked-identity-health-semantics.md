@@ -30,6 +30,11 @@
   single-use and stage-bound: it authorizes preparation of a reviewable implementation
   candidate, and is **exhausted** once that candidate exists. It does not carry
   implementation acceptance.
+- **Implementation acceptance:** **Granted by the human operator on 2026-08-14** for
+  [PR #178](https://github.com/coreytshaffer/TriageCore/pull/178) at `bbb36d4`, following
+  implementation-design review, code review, and two evidence repairs. Acceptance attaches
+  to that specific revision. It settles that the implementation is correct and complete as
+  reviewed; it does not authorize landing it.
 - **Merge / release / closeout authority:** Not granted.
 
 ## Scope
@@ -421,11 +426,22 @@ The candidate was produced on 2026-08-14 as
 `claude/cr-133-revoked-identity-health-implementation`, based `origin/main@770d9f2`,
 touching exactly the four allowlisted paths. **The grant is therefore exhausted.**
 
-Implementation acceptance was reviewed on 2026-08-14 and **withheld** pending two evidence
-repairs: this authority record, and regression-pinning of the `tc identity doctor` exit-code
-contract (the stdout assertions alone did not pin exit 0 versus exit 1, which is precisely
-what the Post-Change-State Trap turns on). Implementation design and code review both
-passed. Merge, release, and closeout remain ungranted.
+Implementation acceptance was first reviewed on 2026-08-14 and **withheld** pending two
+evidence repairs: this authority record, and regression-pinning of the `tc identity doctor`
+exit-code contract (the stdout assertions alone did not pin exit 0 versus exit 1, which is
+precisely what the Post-Change-State Trap turns on). Implementation design and code review
+both passed at that review.
+
+Both repairs were delivered — the authority record at `f952e26` on this branch, and the
+exit-code pins at `bbb36d4` on the implementation branch — and re-reviewed as deltas only
+rather than by reopening the implementation. The exit-code pins were shown to be
+load-bearing by mutation: changing only the doctor's terminal `sys.exit(1)` to
+`sys.exit(0)`, leaving printed output byte-identical, fails exactly the three exit-code
+cases and nothing else, which a stdout-only suite would have passed silently. CI is green on
+Python 3.10, 3.11, and 3.12 plus `windows_executor`.
+
+**Implementation acceptance was granted by the human operator on 2026-08-14 for PR #178 at
+`bbb36d4`.** Merge, release, and closeout remain ungranted.
 
 ## Explicit Exclusions
 
@@ -496,9 +512,18 @@ This CR has stopped three times, and stops a fourth time here.
 3. It stopped before implementation. A bounded single-slice implementation authority was
    then granted on 2026-08-14 and exercised as PR #178 — see Implementation Authority. That
    grant is now exhausted.
-4. **It now stops before implementation acceptance.** Acceptance was reviewed on
-   2026-08-14 and withheld pending two evidence repairs. Nothing in this document
-   authorizes merging PR #178, nor any change outside the four allowlisted paths.
+4. It stopped before implementation acceptance. Acceptance was withheld on 2026-08-14
+   pending two evidence repairs, which were delivered and re-reviewed; acceptance was then
+   granted the same day for PR #178 at `bbb36d4`.
+5. **It now stops before merge authority.** Nothing in this document authorizes merging
+   PR #177 or PR #178, nor any change outside the four allowlisted paths.
+
+**Recommended merge ordering when merge authority is granted: #177 first, then #178.**
+The two PRs have no file overlap, so nothing *forces* this order — which is precisely why
+it is recorded here rather than left to convenience. Landing the authority and acceptance
+record before the runtime change it authorized gives the repository history the same causal
+order as the governance process, so a later reader reconstructing the decision from `main`
+finds the authority in place before the code it governs.
 
 The surface question posed at the second stop — which surface should carry the distinction —
 is answered by the recorded census: both `AgentIdentityRegistry.check_health()` and
@@ -508,6 +533,5 @@ the second. `check_consistency()` is not involved; its current behavior is alrea
 **Private-key disposition on revocation remains open** and must not be resolved by inference
 from the accepted semantics or from the census.
 
-The next governed step is a separate human decision on implementation acceptance for
-PR #178, re-reviewing the two repair deltas rather than reopening the whole implementation.
-That decision has not been made.
+The next governed step is a separate human decision on merge authority for PR #177 and
+PR #178. That decision has not been made.
