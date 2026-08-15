@@ -563,15 +563,20 @@ class AgentIdentityRegistry:
 
             report.checked_agent_ids.append(a_id)
 
+            terminal_revoked = is_terminal_revoked(agent_list)
             active_keys = [rot_id for rot_id in agent_list if rot_id.status == ACTIVE_STATUS]
 
             if len(active_keys) == 0:
-                report.errors.append(IdentityDoctorIssue(
-                    severity="error",
-                    code="no_active_key",
-                    agent_id=a_id,
-                    message="No active key found for agent identity"
-                ))
+                # Suppressed only for the accepted terminal-revoked state. Any other
+                # cause of an absent active identity — compromised, unknown status,
+                # multiply revoked — still reports no_active_key.
+                if not terminal_revoked:
+                    report.errors.append(IdentityDoctorIssue(
+                        severity="error",
+                        code="no_active_key",
+                        agent_id=a_id,
+                        message="No active key found for agent identity"
+                    ))
             elif len(active_keys) > 1:
                 report.errors.append(IdentityDoctorIssue(
                     severity="error",
@@ -618,6 +623,14 @@ class AgentIdentityRegistry:
 
             for hist_id in agent_list:
                 if hist_id.status != ACTIVE_STATUS:
+                    # Exempt only the revoked record of an accepted terminal-revoked
+                    # identity. Revocation neither stamps rotated_at nor archives key
+                    # material, so rotation-shaped checks cannot hold for it. The guard
+                    # stays a negative exemption: ROTATED_STATUS and COMPROMISED_STATUS
+                    # records continue through this loop unchanged.
+                    if terminal_revoked and hist_id.status == REVOKED_STATUS:
+                        continue
+
                     if not hist_id.rotated_at:
                         report.warnings.append(IdentityDoctorIssue(
                             severity="warning",
@@ -840,6 +853,37 @@ class AgentIdentityRegistry:
             password=None,
         )
         return private_key
+
+
+def is_terminal_revoked(identities: List[AgentIdentity]) -> bool:
+    """Return True when an agent's records form the accepted terminal-revoked state.
+
+    Terminal revocation is a valid lifecycle end-state (CR-133): the identity is
+    LifecycleHealthy while remaining neither OperationallyUsable nor CapabilityReady.
+    The predicate is deliberately narrow so that no other zero-active shape is blessed:
+
+    - no ``ACTIVE_STATUS`` record;
+    - exactly one ``REVOKED_STATUS`` record; and
+    - every remaining record, if any, is ``ROTATED_STATUS``.
+
+    A compromised, unknown-status, or multiply-revoked registry therefore returns False
+    and keeps its current health findings. Shared by
+    ``AgentIdentityRegistry.check_health()`` and ``tc_identity_doctor()`` so the two
+    surfaces cannot drift apart on the classification.
+    """
+    if any(identity.status == ACTIVE_STATUS for identity in identities):
+        return False
+
+    revoked_count = sum(
+        1 for identity in identities if identity.status == REVOKED_STATUS
+    )
+    if revoked_count != 1:
+        return False
+
+    return all(
+        identity.status in (REVOKED_STATUS, ROTATED_STATUS)
+        for identity in identities
+    )
 
 
 def _fingerprint_public_key(public_key: str) -> str:
