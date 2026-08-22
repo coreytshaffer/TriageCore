@@ -16,12 +16,14 @@ CR-YK-002's atomic-claiming foundation, complete and merged through PR #117 as
 consumption questions this document deferred, and the slice has since been
 **implemented** on `claude/cr-dd-012b-shared-preview-execution-consumption` under
 a direct implementation instruction, bounded by that document's own provisional
-file allowlist. Implementation authority is spent. **Implementation acceptance,
-merge, and closeout are separate gates and are not granted**; the two paths taken
-beyond the provisional allowlist, the behavioral changes an accepting reviewer
-would be approving, and the places the built code is narrower than the
-recommendation are all recorded in that document's Implementation Record rather
-than absorbed. CR-DD-012A through CR-DD-011 behavior on `main` is unchanged until
+file allowlist. Implementation authority is spent, and an acceptance review at
+`909838f` withheld acceptance pending three repairs, all since implemented.
+**Implementation acceptance, merge, and closeout are separate gates and are not
+granted**, and one authority defect precedes acceptance: the implementation
+instruction named no bounded file allowlist. That defect, the two paths taken
+beyond the inferred allowlist, the behavioral changes an accepting reviewer would
+be approving, and the one remaining place the built code is narrower than the
+recommendation are all recorded in that document rather than absorbed. CR-DD-012A through CR-DD-011 behavior on `main` is unchanged until
 that slice is accepted and merged. The proposal's three previously open questions
 were settled by recorded decision, most importantly that CR-DD-013 capability evidence
 constrains **execution binding only** and never governed-decision formation: a

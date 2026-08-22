@@ -3,21 +3,57 @@
 ## Status
 
 **Implemented on `claude/cr-dd-012b-shared-preview-execution-consumption`;
-implementation acceptance, merge, and closeout are NOT granted.**
+implementation acceptance, merge, and closeout are NOT granted. One open defect
+in the authority record, described immediately below, precedes acceptance.**
 
-The operator opened the implementation phase in a direct instruction — "Begin
-Implementation phase for CR-DD-012B — Shared Preview/Execution Consumption." No
-replacement file allowlist accompanied that instruction, so the implementation
-was bounded by the provisional allowlist this document already carried in
-**Settled Question 8**, with gates 3 through 5 treated as bound obligations. The
-two paths beyond that provisional list, and why each was unavoidable, are
-recorded in **Implementation Record** below; both are regression-test updates,
-neither touches a deliberately excluded module, and both are named rather than
-absorbed. If a different allowlist was intended, this slice is scoped wrongly and
-should be re-scoped rather than accepted.
+### Authority record — incomplete, and not to be papered over
+
+The operator opened the implementation phase with this instruction, quoted in
+full:
+
+> Begin Implementation phase for CR-DD-012B — Shared Preview/Execution
+> Consumption.
+
+That instruction granted the implementation phase. **It named no bounded file
+allowlist.** This document requires one — "that approval must name its own
+bounded file allowlist" — so the grant as issued was incomplete against the
+governance model this CR sets for itself.
+
+What I did next, stated as what it was: I **inferred** that the provisional list
+in **Settled Question 8** was the intended bound and proceeded under it. That
+inference is not a grant, and recording it here does not make it one. Two paths
+were then taken beyond even that inferred list.
+
+The correct sequencing is that the authority record is corrected *before*
+acceptance, not reconstructed at acceptance to fit what was built. Three
+dispositions are available, and only the operator can choose among them:
+
+1. If consequential regression-test repairs were already intended to fall inside
+   the implementation grant, record that reading here, and the two paths need no
+   amendment.
+2. If the provisional paths were meant exactly, a bounded scope amendment naming
+   `tests/test_tc_run_cli.py` and `tests/test_tc_run_plan_cli.py` is required
+   before acceptance.
+3. If no implementation allowlist was ever intended to bind, the lifecycle record
+   should say so plainly rather than have an inferred one stand in for it.
+
+Disposition 3 describes what actually happened. Wording that would close the gap
+under disposition 2, if that is the operator's reading:
+
+> Scope amendment granted for CR-DD-012B: the implementation allowlist is the
+> provisional list in Settled Question 8 plus `tests/test_tc_run_cli.py` and
+> `tests/test_tc_run_plan_cli.py`.
+
+Nothing in this document issues that amendment.
+
+### Everything else
 
 Implementation authority is now spent. Acceptance, merge, and closeout are
 separate gates and remain ungranted; nothing below claims otherwise.
+
+The candidate has since been revised in response to a recorded acceptance review
+that withheld acceptance at `909838f` and required three repairs. All three are
+implemented; see **Repairs after the `909838f` acceptance review**.
 
 The sections that follow the implementation record are the proposal as written
 before implementation, preserved unchanged so the recommendation and the outcome
@@ -68,15 +104,15 @@ exists on the branch; nothing here grants acceptance or merge.
 | `tests/test_governed_consumption_failclosed.py` (new) | fail-closed matrix | yes |
 | `tests/test_governed_decision_integration_absence.py` (deleted) | retired per gate 3; coverage replaced, not removed | yes (named as a retirement decision) |
 | this document, `CR-DD-012-shared-governed-run-decision.md`, `docs/current_backlog.md`, `docs/architecture/daily_driver_orchestrator_spec.md` | status | yes |
-| `tests/test_tc_run_cli.py` | **beyond the provisional list** — two regression updates, below | no |
-| `tests/test_tc_run_plan_cli.py` | **beyond the provisional list** — one regression update, below | no |
+| `tests/test_tc_run_cli.py` | **beyond the inferred list** — two regression updates, below | no |
+| `tests/test_tc_run_plan_cli.py` | **beyond the inferred list** — one regression update, below | no |
 
 Every deliberately excluded module is untouched: `route_worker_ledger.py`,
 `run_plan_artifact.py`, `capability_evidence.py`, `governed_run_snapshot.py`,
 `governed_decision.py`, `task_ledger.py`, `engine.py`, `resilience_router.py`,
 every CR-YK and CR-OC module, and `docs/change/change_log.md`.
 
-### The two paths beyond the provisional allowlist
+### The two paths beyond the inferred allowlist
 
 Both are existing regression tests that the slice's intended behavior
 necessarily invalidates. Neither weakens an assertion; both were rewritten to
@@ -131,30 +167,82 @@ assert the new guarantee.
   treats a non-local route on a local-only packet as fail-closed. Both are
   non-executing terminal outcomes; exit 2 is the more conservative of the two.
 
+### Repairs after the `909838f` acceptance review
+
+Acceptance was withheld at `909838f` with three required repairs. All three are
+implemented.
+
+**Repair 1 — scope record.** No implementation allowlist was ever granted, so the
+lifecycle record is corrected rather than reconstructed. See **Authority record**
+in **Status**. This repair records the defect and names the wording that would
+close it; it does not close it.
+
+**Repair 2 — remaining decision-bearing recomputation removed.** Both offenders
+are gone from the governed path.
+
+*`ProjectSteward`.* The governed path now consumes `ethical_firewall` from the
+decision and never calls `evaluate()`. **A claim in the previous revision of this
+record was wrong and is corrected here:** it said removing the steward "would
+silently drop the credit-allowance and energy gates." It would not.
+`ProjectSteward.__init__` does `self.budgets = budgets or {}`, so `ProjectSteward()`
+and `ProjectSteward(budgets={})` are the same object state; `token_credit_allowance`
+is therefore always `0` on this path and the credit gate is unreachable, and the
+energy and validation gates require a non-empty `completed_orders`, which
+`run_task` never supplies. The only live output was the ethical firewall on the
+prompt text — which the decision already carries as a first-class field. So there
+was no gate to lose, and the recomputation was pure duplication. The reviewer's
+reading was correct and mine was not.
+
+*`SpecialistRouter.route_task`.* Not invoked at all on the governed path. Its
+offload verdict is a second policy decision: two of its three offload branches
+turn on a live `is_internet_available()` probe, which Resolved Question 1
+forbids from answering what route a task receives, and its third branch — high
+risk — the decision already expresses as a preferred `human_handoff`. Only its
+two execution *parameters* were still needed, and both are pure functions of the
+classification the decision carries. `client._governed_execution_parameters`
+returns them, and a parametrized drift guard asserts they equal `route_task`'s
+own tables for every category the deterministic classifier can emit. The
+executed timeout is now exactly the `specialist_timeout_forecast_seconds` the
+preview published, so the budget a reviewer reads is the budget the worker gets.
+
+Consequences worth naming: `tc run` no longer emits a `specialist_offload_decision`
+event, because no specialist offload decision is made; the CR-DD-018 evidence
+contract is untouched and still governs the direct-library path. And a
+medium-risk or large-context task no longer offloads on the basis of live
+connectivity — which is the corrected architecture, not a lost feature.
+
+*`verify_packet` remains,* and is the one survivor. It produces the
+`VerifiedTaskPacket` type token the routing boundary requires, so it is
+validation rather than recomputation, it cannot alter policy, and it is itself
+one of the decision's `required_checks`.
+
+**Repair 3 — ethical-firewall exit 3 restored.** A firewall handoff is a governed
+terminal outcome, not an unavailable route, and it now returns `handoff_required`
+with a `worker_result` record at exit 3 rather than being caught by the
+local-only guard at exit 2. The distinguishing fact is the binding outcome, not
+the route name: `human_handoff` bound as **primary** with a triggered ethical
+firewall is a governed handoff; `human_handoff` reached as an envelope
+**fallback** means the authorized route could not bind and stays fail-closed at
+exit 2. Both cases are pinned by regression tests.
+
+One residual asymmetry, flagged rather than changed: a **high-risk** local-only
+run also routes to a primary `human_handoff` and still exits 2, because
+`test_high_risk_local_only_fails_closed_exit_2` pins that as a CR-DD-009
+exit-code contract and it was not a regression this slice introduced. By the
+evidence argument in the acceptance review it arguably belongs at exit 3 too.
+Changing it was outside the requested repairs, so it is left for an explicit
+decision.
+
 ### Where the implementation is narrower than the recommendation
 
-Stated plainly rather than absorbed, because each is a place the built code does
-less than **Settled Question 2**'s "consumes its policy outputs instead of
-re-deriving them" might be read to promise:
+One item remains, stated plainly rather than absorbed: **`verify_packet` still
+runs inside `run_task`**, for the reason given under repair 2. Everything else
+in this section in the previous revision has been removed by that repair.
 
-- **`verify_packet` still runs inside `run_task`.** It is the type-safety
-  mechanism that produces the `VerifiedTaskPacket` the routing boundary requires,
-  not only a policy evaluation, so it cannot be replaced by a decision field. It
-  is also one of the decision's own `required_checks`.
-- **`ProjectSteward` still runs inside `run_task`.** Removing it would silently
-  drop the credit-allowance and energy gates, which the decision does not model
-  — a governance *loosening* outside this slice's scope. It can only terminate an
-  attempt, never widen one, and the decision remains authoritative for
-  classification, route policy, privacy posture, and context budget. The seam
-  evaluates the steward with `budgets={}`, matching what preview already did.
-- **The specialist-policy selector (`route_task`) still runs inside `run_task`.**
-  It calls `is_internet_available()`, a live network observation, so under
-  Resolved Question 1 it belongs to binding rather than to decision formation.
-  It is invoked once, at binding; neither consumer invokes a second one.
-
-The no-rebuild traps therefore assert what the code actually guarantees: neither
-consumer invokes a second deterministic classifier, context planner, or
-resilience router, and neither constructs a second snapshot or decision.
+The no-rebuild traps now assert: neither consumer invokes a second deterministic
+classifier, context planner, resilience router, ethical-firewall evaluator, or
+specialist-policy selector; no live connectivity probe runs on the governed
+path; and neither consumer constructs a second snapshot or decision.
 
 ### Two mechanical accommodations
 
@@ -182,11 +270,19 @@ resilience router, and neither constructs a second snapshot or decision.
 
 ### Verification
 
-`python -m pytest tests/ -q` — **1787 passed, 6 skipped**, no failures.
+`python -m pytest tests/ -q` — **1802 passed, 6 skipped**, no failures. The count
+rose from 1787 at `909838f` because the three repairs added 15 tests.
 
 An earlier full run reported 13 `OSError` failures in
-`tests/test_build_review_cli.py`; those were Windows Smart App Control blocking
-subprocess launch, unrelated to this slice, and they pass once it is disabled.
+`tests/test_build_review_cli.py`. Those were Windows Smart App Control blocking
+subprocess launch — environmental, not product failures — and the file passes
+14/14 once it is disabled. Recorded here so a future reader does not
+misattribute them.
+
+The plan-artifact `assembled_input_binding` digest changes value across this
+slice, for the reason given under **Behavioral changes**. Recorded explicitly so
+a pre-CR-DD-012B digest that does not match a post-CR-DD-012B one is read as the
+intended single-assembly change and never as evidence of corruption.
 
 ## Objective
 

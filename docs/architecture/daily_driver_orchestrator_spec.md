@@ -37,10 +37,12 @@ bytes, but grants no integration authority; no public command consumes it. CR-DD
 CR-YK-002 atomic-claiming prerequisite is satisfied through PR #117 as `5155bbb`, and the
 slice specified at
 `docs/change/requests/CR-DD-012B-shared-preview-execution-consumption.md` is now
-**implemented on an unmerged branch** under a direct implementation instruction bounded by
-that document's own provisional file allowlist. Implementation acceptance, merge, and
-closeout are separate gates and are not granted, so nothing in this spec's description of
-current `main` behavior changes until that slice is accepted. **CR-DD-013 is implemented and merged through PR #116 as
+**implemented on an unmerged branch** under a direct implementation instruction that named
+no bounded file allowlist; that authority defect is recorded in the CR and precedes
+acceptance. An acceptance review at `909838f` withheld acceptance pending three repairs,
+all since implemented. Implementation acceptance, merge, and closeout are separate gates
+and are not granted, so nothing in this spec's description of current `main` behavior
+changes until that slice is accepted. **CR-DD-013 is implemented and merged through PR #116 as
 `98df9c1`.** `tc run` now resolves recorded capability evidence and binds that resolution
 into route selection; configured route declarations and observed reachability remain
 separate inputs. Its documentation-only closeout merged through PR #132 at `6d585268` and
