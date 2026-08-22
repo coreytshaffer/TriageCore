@@ -2,11 +2,28 @@
 
 ## Status
 
-**Implemented on `claude/cr-dd-012b-shared-preview-execution-consumption`;
-implementation acceptance, merge, and closeout are NOT granted. One open defect
-in the authority record, described immediately below, precedes acceptance.**
+**Implementation acceptance GRANTED for exact head `bbe5336`. Merge, release,
+and closeout authority are WITHHELD.**
 
-### Authority record — incomplete, and not to be papered over
+### Lifecycle state
+
+| Stage | State |
+|---|---|
+| design direction | accepted |
+| implementation authority | incomplete originally; defect preserved below |
+| corrective ratification | granted for exact `bbe5336` |
+| implementation acceptance | **granted** for exact `bbe5336` |
+| merge authority | withheld |
+| release authority | withheld |
+| closeout | withheld |
+
+The accepted candidate is the code and test state at `bbe5336`. This document's
+own status entries are inside the ratified path inventory, so recording the
+grants here changes no code and no test; `git diff bbe5336..HEAD -- triage_core/
+tests/` is empty by construction, and the acceptance attaches to that state
+rather than to whatever the branch's tip commit happens to be.
+
+### Authority record — the original defect, preserved
 
 The operator opened the implementation phase with this instruction, quoted in
 full:
@@ -14,46 +31,62 @@ full:
 > Begin Implementation phase for CR-DD-012B — Shared Preview/Execution
 > Consumption.
 
-That instruction granted the implementation phase. **It named no bounded file
+That instruction granted implementation intent. **It named no bounded file
 allowlist.** This document requires one — "that approval must name its own
 bounded file allowlist" — so the grant as issued was incomplete against the
 governance model this CR sets for itself.
 
-What I did next, stated as what it was: I **inferred** that the provisional list
-in **Settled Question 8** was the intended bound and proceeded under it. That
-inference is not a grant, and recording it here does not make it one. Two paths
-were then taken beyond even that inferred list.
+What happened next, stated as what it was: the provisional list in **Settled
+Question 8** was **inferred** to be the intended bound, and work proceeded under
+it. That inference was not a grant. Two paths were then taken beyond even that
+inferred list.
 
-The correct sequencing is that the authority record is corrected *before*
-acceptance, not reconstructed at acceptance to fit what was built. Three
-dispositions are available, and only the operator can choose among them:
+**This defect is not erased, relabelled, or reconstructed.** The operator's
+recorded reasoning for preserving it rather than rebuilding: replaying the same
+work later "would improve the appearance of the process without changing the
+evidence," because the implementation did in fact begin under an incomplete
+authorization, and that historical fact does not disappear by re-enacting the
+work. Preserving the defect as evidence is more faithful to this project's
+evidence doctrine than rewriting history.
 
-1. If consequential regression-test repairs were already intended to fall inside
-   the implementation grant, record that reading here, and the two paths need no
-   amendment.
-2. If the provisional paths were meant exactly, a bounded scope amendment naming
-   `tests/test_tc_run_cli.py` and `tests/test_tc_run_plan_cli.py` is required
-   before acceptance.
-3. If no implementation allowlist was ever intended to bind, the lifecycle record
-   should say so plainly rather than have an inferred one stand in for it.
+### Corrective ratification — granted, recorded verbatim
 
-Disposition 3 describes what actually happened. Wording that would close the gap
-under disposition 2, if that is the operator's reading:
+The operator's disposition, recorded as issued:
 
-> Scope amendment granted for CR-DD-012B: the implementation allowlist is the
-> provisional list in Settled Question 8 plus `tests/test_tc_run_cli.py` and
-> `tests/test_tc_run_plan_cli.py`.
+> For CR-DD-012B, I grant a one-time corrective bounded implementation
+> ratification for the exact candidate at `bbe5336`. The authorized scope is the
+> complete cumulative changed-path inventory already recorded in CR-DD-012B at
+> `bbe5336`, including the two necessary regression-test paths
+> `tests/test_tc_run_cli.py` and `tests/test_tc_run_plan_cli.py`. This grant
+> applies only to the exact candidate state at `bbe5336`; recognizes that the
+> earlier instruction, "Begin Implementation phase for CR-DD-012B — Shared
+> Preview/Execution Consumption," granted implementation intent but failed the
+> CR's requirement for an explicit bounded allowlist; does not erase or relabel
+> that earlier governance defect; authorizes the already-produced candidate to be
+> evaluated for implementation acceptance without reconstruction; grants no
+> authority for further implementation changes; is exhausted by this disposition;
+> and grants no merge, release, or closeout authority. If the candidate changes
+> by even one substantive commit, this ratification does not automatically follow
+> the new head.
 
-Nothing in this document issues that amendment.
+The ratification is exhausted. It authorized evaluation of the existing
+candidate, not further implementation.
 
-### Everything else
+### Implementation acceptance — granted at `bbe5336`
 
-Implementation authority is now spent. Acceptance, merge, and closeout are
-separate gates and remain ungranted; nothing below claims otherwise.
+Granted on the substantive grounds recorded in the acceptance review: the
+canonical-decision boundary now holds, because execution no longer runs
+`ProjectSteward` or `SpecialistRouter.route_task` as downstream decision-makers;
+the runtime/policy separation is real, because medium-risk and oversized-context
+behavior no longer changes route policy on live connectivity; the
+ethical-firewall regression is repaired semantically rather than numerically; the
+no-rebuild traps were strengthened by being installed after the seam, so they
+test the property actually in dispute; and verification is 1802 passed / 6
+skipped overall with 106 focused tests across the no-rebuild traps, gates 3
+through 5, and terminal routing.
 
-The candidate has since been revised in response to a recorded acceptance review
-that withheld acceptance at `909838f` and required three repairs. All three are
-implemented; see **Repairs after the `909838f` acceptance review**.
+**No further modification is authorized under the implementation grant.** The
+next gate is merge authority.
 
 The sections that follow the implementation record are the proposal as written
 before implementation, preserved unchanged so the recommendation and the outcome
@@ -88,7 +121,8 @@ deferred to the implementation slice.
 ## Implementation Record
 
 Recorded after the implementation phase. Everything here describes code that
-exists on the branch; nothing here grants acceptance or merge.
+exists on the branch. Nothing in *this section* grants anything; the recorded
+grants live in **Status**, and merge, release, and closeout remain withheld.
 
 ### Files changed
 
@@ -173,9 +207,10 @@ Acceptance was withheld at `909838f` with three required repairs. All three are
 implemented.
 
 **Repair 1 — scope record.** No implementation allowlist was ever granted, so the
-lifecycle record is corrected rather than reconstructed. See **Authority record**
-in **Status**. This repair records the defect and names the wording that would
-close it; it does not close it.
+lifecycle record was corrected rather than reconstructed. See **Authority
+record** in **Status**. The repair recorded the defect and named the dispositions;
+the operator subsequently chose corrective ratification, which is recorded
+verbatim there. The defect itself is preserved, not closed retroactively.
 
 **Repair 2 — remaining decision-bearing recomputation removed.** Both offenders
 are gone from the governed path.
@@ -225,13 +260,14 @@ firewall is a governed handoff; `human_handoff` reached as an envelope
 **fallback** means the authorized route could not bind and stays fail-closed at
 exit 2. Both cases are pinned by regression tests.
 
-One residual asymmetry, flagged rather than changed: a **high-risk** local-only
-run also routes to a primary `human_handoff` and still exits 2, because
-`test_high_risk_local_only_fails_closed_exit_2` pins that as a CR-DD-009
-exit-code contract and it was not a regression this slice introduced. By the
-evidence argument in the acceptance review it arguably belongs at exit 3 too.
-Changing it was outside the requested repairs, so it is left for an explicit
-decision.
+One residual asymmetry, flagged rather than changed, and since **settled as
+out of scope for this slice** by the accepting reviewer: a **high-risk**
+local-only run also routes to a primary `human_handoff` and still exits 2,
+because `test_high_risk_local_only_fails_closed_exit_2` pins that as a CR-DD-009
+exit-code contract and it was not a regression this slice introduced. It is
+recorded as a separate discovery in **Open Discovery: High-Risk Terminal Exit
+Class** below. Folding it in here would have turned a convergence slice into a
+semantic rewrite.
 
 ### Where the implementation is narrower than the recommendation
 
@@ -283,6 +319,47 @@ The plan-artifact `assembled_input_binding` digest changes value across this
 slice, for the reason given under **Behavioral changes**. Recorded explicitly so
 a pre-CR-DD-012B digest that does not match a post-CR-DD-012B one is read as the
 intended single-assembly change and never as evidence of corruption.
+
+### Open Discovery: High-Risk Terminal Exit Class
+
+Raised during CR-DD-012B implementation, **deliberately not resolved here**, and
+carrying no authority of its own.
+
+**Question.** Should the CLI outcome be determined by *why* `human_handoff` was
+selected, or simply by the fact that the authoritative governed decision selected
+terminal `human_handoff`?
+
+Today the answer is "why". A firewall-triggered primary `human_handoff` exits 3
+as a governed handoff; a high-risk primary `human_handoff` on a local-only packet
+exits 2 as a fail-closed error. Both are primary bindings of the same terminal
+route, and neither executes anything.
+
+**The accepting reviewer's architectural lean**, recorded as a lean and not as a
+decision:
+
+```text
+authoritative decision = human_handoff
+              ↓
+     no execution attempted
+              ↓
+       handoff_required
+              ↓
+            exit 3
+```
+
+with the safety reason carried in structured evidence rather than encoded
+indirectly in the process exit class.
+
+**Why it was not done here.** CR-DD-009 explicitly distinguishes exit 2 as a
+privacy-or-safety fail-closed condition from exit 3 as a governed
+`handoff_required` outcome, and a high-risk task routed to `human_handoff` sits
+genuinely between those two meanings. The exit-2 behavior predates CR-DD-012B and
+is already pinned by test. Changing it inside a convergence slice would have made
+it a semantic rewrite.
+
+**What it needs.** Its own read-only investigation against CR-DD-009, CR-125, the
+high-risk tests, and downstream consumers of the exit class, before anything
+changes.
 
 ## Objective
 
