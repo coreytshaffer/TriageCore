@@ -14,9 +14,11 @@ CR-DD-011 behavior remains unchanged.
 CR-YK-002's atomic-claiming foundation, complete and merged through PR #117 as
 `5155bbb`. `CR-DD-012B-shared-preview-execution-consumption.md` settled the
 consumption questions this document deferred, and the slice has since been
-**implemented** on `claude/cr-dd-012b-shared-preview-execution-consumption` under
-a direct implementation instruction, bounded by that document's own provisional
-file allowlist. Implementation authority is spent, an acceptance review at
+**implemented** on `claude/cr-dd-012b-shared-preview-execution-35b467` under a
+direct implementation instruction that granted intent but named no bounded file
+allowlist; work proceeded under that document's provisional list as an *inferred*
+scope, which was not a grant, and the gap was closed afterwards by a one-time
+corrective ratification. Implementation authority is spent, an acceptance review at
 `909838f` withheld acceptance pending three repairs, all were implemented, and
 **implementation acceptance is now granted for exact head `bbe5336`. Merge,
 release, and closeout authority are withheld.** The original authority defect —

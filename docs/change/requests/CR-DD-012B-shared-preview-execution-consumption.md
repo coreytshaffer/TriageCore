@@ -3,7 +3,9 @@
 ## Status
 
 **Implementation acceptance GRANTED for exact head `bbe5336`. Merge, release,
-and closeout authority are WITHHELD.**
+and closeout authority are WITHHELD.** Published as
+[PR #179](https://github.com/coreytshaffer/TriageCore/pull/179) from branch
+`claude/cr-dd-012b-shared-preview-execution-35b467`.
 
 ### Lifecycle state
 
@@ -137,20 +139,54 @@ restores CI's ability to evaluate that state after an authorized test retirement
 ```text
 bbe5336    = accepted implementation/test state
 8180bca    = governance record
-<new tip>  = governance record + exact CI reference repair
+e5f3218    = governance record + authorized CI repair
 ```
 
-and the repaired tip becomes eligible for merge review only if both hold:
+Both required checks hold at `e5f3218`:
 
 ```bash
-git diff bbe5336 <new-tip> -- triage_core/ tests/
+git diff bbe5336 e5f3218 -- triage_core/ tests/
 # empty
 
-git diff 8180bca <new-tip> -- .github/workflows/tests.yml
-# exactly one path substitution
+git diff 8180bca e5f3218 -- .github/workflows/tests.yml
+# exactly one path substitution, at line 88
 ```
 
-Merge authority remains withheld pending that independent review.
+GitHub Actions run **#482** succeeded at that head across all four jobs —
+`pytest` on 3.10, 3.11 and 3.12, plus the mandatory `windows_executor`.
+
+Merge authority remains withheld pending independent review.
+
+### Corrective publication clarification — branch selector
+
+The publication grant named the branch
+`claude/cr-dd-012b-shared-preview-execution-consumption`. **No such branch
+exists.** The real branch is `claude/cr-dd-012b-shared-preview-execution-35b467`. The erroneous name originated in the
+implementing agent's own prose, propagated into this document and its companions,
+and was then carried into the grant.
+
+The operator's clarification, recorded as issued:
+
+> The publication authority previously granted for exact commit `8180bca` is
+> corrected and ratified as applying to the actual branch
+> `claude/cr-dd-012b-shared-preview-execution-35b467`, which published that exact
+> authorized commit as PR #179. The erroneous branch name is preserved as a
+> documentary selector error, not treated as authority for a different code
+> state. This clarification grants no implementation, merge, release, or closeout
+> authority.
+
+The exact commit was right; only the selector was wrong, which makes this a
+bounded record correction rather than an implementation-scope problem. The error
+is recorded rather than erased, consistent with how the original allowlist defect
+was handled.
+
+A subsequent independent merge review found four record-integrity defects — the
+wrong branch name here and in the parent CR, an overstated claim in the parent CR
+that implementation was "bounded by" the provisional allowlist when it was
+*inferred*, a stale "acceptance remains ungranted" line in the backlog, and a
+stale PR body. None reopened implementation acceptance. All were repaired under a
+bounded governance-record grant limited to this document, the parent CR,
+`docs/current_backlog.md`, and PR #179's body metadata.
 
 The sections that follow the implementation record are the proposal as written
 before implementation, preserved unchanged so the recommendation and the outcome
