@@ -34,11 +34,13 @@ implementation is withheld. **CR-DD-012A is complete and merged through PR #107 
 `bccaaad`.** It distinguishes optional provenance source bytes, normalized component
 bytes under current UTF-8/text semantics, and authoritative assembled worker-execution
 bytes, but grants no integration authority; no public command consumes it. CR-DD-012B's
-CR-YK-002 atomic-claiming prerequisite is satisfied through PR #117 as `5155bbb`, and a
-documentation-only proposal now exists at
-`docs/change/requests/CR-DD-012B-shared-preview-execution-consumption.md`; implementation
-remains blocked on its own explicit approval and bounded file allowlist, and the proposal
-is not that approval. **CR-DD-013 is implemented and merged through PR #116 as
+CR-YK-002 atomic-claiming prerequisite is satisfied through PR #117 as `5155bbb`, and the
+slice specified at
+`docs/change/requests/CR-DD-012B-shared-preview-execution-consumption.md` is now
+**implemented on an unmerged branch** under a direct implementation instruction bounded by
+that document's own provisional file allowlist. Implementation acceptance, merge, and
+closeout are separate gates and are not granted, so nothing in this spec's description of
+current `main` behavior changes until that slice is accepted. **CR-DD-013 is implemented and merged through PR #116 as
 `98df9c1`.** `tc run` now resolves recorded capability evidence and binds that resolution
 into route selection; configured route declarations and observed reachability remain
 separate inputs. Its documentation-only closeout merged through PR #132 at `6d585268` and
@@ -91,9 +93,10 @@ after M0 (below) produces daily-use evidence. See **Evidence Requirements**.
   artifact review linkage. Execution still does not consume that artifact or the same
   immutable decision. CR-DD-012A's bounded internal, non-integrated foundation and focused
   tests are complete and merged through PR #107 as `bccaaad`; no public command consumes
-  them. CR-DD-012B has a documentation-only proposal and still has no implementation
-  authority. The future shared path must use one immutable input snapshot
-  so execution does not reopen or reconstruct governed inputs. Confirmed-artifact
+  them. CR-DD-012B is implemented on an unmerged branch; its implementation acceptance is
+  not granted, so on `main` the two paths still diverge. The shared path that branch builds
+  uses one immutable input snapshot, read once at a seam before the preview branch, so
+  execution does not reopen or reconstruct governed inputs. Confirmed-artifact
   execution remains a later, separately gated CR; `triagecore run-pipeline` also remains
   local-only and bypasses the router.
 - **G2 — Cloud is Qwen, not frontier.** No live Claude/GPT/Gemini backends, no provider
@@ -137,9 +140,8 @@ backwards.
    `NormalizedComponentBytes`, and authoritative `AssembledExecutionBytes`, plus the
    canonical decision, pure normalizer/builder, identity, and focused tests with no CLI,
    ledger, worker, route, or plan-v2 change; then **M0.3b / CR-DD-012B**, whose
-   CR-YK-002 prerequisite is now satisfied and whose documentation-only proposal is
-   recorded, but which remains blocked until it receives its own separate approval and
-   bounded file allowlist. It owns shared preview/execution consumption, envelope
+   CR-YK-002 prerequisite is satisfied and which is now implemented on an unmerged branch,
+   blocked until it receives implementation acceptance. It owns shared preview/execution consumption, envelope
    enforcement, bounded decision-ID linkage, and parity/fail-closed tests. A recorded
    decision settles that CR-DD-013 capability evidence constrains **execution binding
    only** and never governed-decision formation, so stable inputs produce the decision,

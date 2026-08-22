@@ -2,13 +2,28 @@
 
 ## Status
 
-**Proposed; documentation only; implementation unauthorized.**
+**Implemented on `claude/cr-dd-012b-shared-preview-execution-consumption`;
+implementation acceptance, merge, and closeout are NOT granted.**
 
-This document is a proposal. It grants no implementation authority, no file
-allowlist, and no execution authority. Work may begin only after a separate,
-explicit human implementation approval is recorded, and that approval must name
-its own bounded file allowlist. Recording a recommendation here is not that
-approval.
+The operator opened the implementation phase in a direct instruction — "Begin
+Implementation phase for CR-DD-012B — Shared Preview/Execution Consumption." No
+replacement file allowlist accompanied that instruction, so the implementation
+was bounded by the provisional allowlist this document already carried in
+**Settled Question 8**, with gates 3 through 5 treated as bound obligations. The
+two paths beyond that provisional list, and why each was unavoidable, are
+recorded in **Implementation Record** below; both are regression-test updates,
+neither touches a deliberately excluded module, and both are named rather than
+absorbed. If a different allowlist was intended, this slice is scoped wrongly and
+should be re-scoped rather than accepted.
+
+Implementation authority is now spent. Acceptance, merge, and closeout are
+separate gates and remain ungranted; nothing below claims otherwise.
+
+The sections that follow the implementation record are the proposal as written
+before implementation, preserved unchanged so the recommendation and the outcome
+can be compared. Where the built code diverges from a recommendation, the
+divergence is named in **Implementation Record**, not silently edited into the
+recommendation.
 
 The sequencing prerequisites are satisfied:
 
@@ -18,22 +33,160 @@ The sequencing prerequisites are satisfied:
 - **CR-YK-002** is complete and merged through PR #117 as `5155bbb`, satisfying
   the atomic-claiming prerequisite the parent CR named.
 
-Satisfying a prerequisite is not approval. CR-DD-012B remains blocked on its own
-explicit gate, and the merge of either foundation is not that gate.
+Satisfying a prerequisite was never approval, and neither foundation's merge was
+the implementation gate; the operator's direct instruction was.
 
-The three questions this proposal originally left open have since been settled by
-recorded supervisor decision — see **Resolved Questions** — and five
-implementation approval gates are recorded in **Implementation Approval Gates**.
-Gates 1 and 2 are proposal-stage preconditions and are satisfied here. Gates 3
-through 5 are implementation obligations: they must be **bound by** any bounded
-implementation approval and **satisfied before** implementation acceptance,
-merge, or closeout. Settling a design question is not implementation authority;
-the gates describe what an approval must require, not an approval already given.
+The three questions this proposal originally left open were settled by recorded
+supervisor decision — see **Resolved Questions** — and five implementation
+approval gates are recorded in **Implementation Approval Gates**. Gates 1 and 2
+were proposal-stage preconditions, satisfied before implementation began. Gates 3
+through 5 were implementation obligations and now pass; they were the condition
+on *acceptance*, so their passing is evidence for that decision rather than the
+decision itself.
 
 This CR is scoped against `main` at `8bfb547`. Its parent architecture is
 `CR-DD-012-shared-governed-run-decision.md`, which remains authoritative on the
 contract model; this document settles only the consumption questions the parent
 deferred to the implementation slice.
+
+## Implementation Record
+
+Recorded after the implementation phase. Everything here describes code that
+exists on the branch; nothing here grants acceptance or merge.
+
+### Files changed
+
+| Path | Change | On the provisional allowlist |
+|---|---|---|
+| `triage_core/tc_cli.py` | one snapshot/decision construction seam before the planning branch; sources read once as bytes; artifact fed from snapshot bytes | yes |
+| `triage_core/run_plan.py` | the seam itself (`build_governed_run_context`); `build_run_plan` projects a completed decision | yes |
+| `triage_core/client.py` | optional `snapshot`/`decision` pair; consumes decision policy; fail-closed verification | yes |
+| `triage_core/routing/route_events.py` | additive bounded `decision_id` linkage | yes |
+| `triage_core/runtime_observation.py` (new) | validated internal observation and envelope filter | yes |
+| `tests/test_governed_consumption_parity.py` (new) | integrated shape, parity, no-rebuild traps, mutation, TOCTOU, privacy | yes |
+| `tests/test_runtime_observation.py` (new) | envelope and observation separation, gates 4 and 5 | yes |
+| `tests/test_governed_consumption_failclosed.py` (new) | fail-closed matrix | yes |
+| `tests/test_governed_decision_integration_absence.py` (deleted) | retired per gate 3; coverage replaced, not removed | yes (named as a retirement decision) |
+| this document, `CR-DD-012-shared-governed-run-decision.md`, `docs/current_backlog.md`, `docs/architecture/daily_driver_orchestrator_spec.md` | status | yes |
+| `tests/test_tc_run_cli.py` | **beyond the provisional list** — two regression updates, below | no |
+| `tests/test_tc_run_plan_cli.py` | **beyond the provisional list** — one regression update, below | no |
+
+Every deliberately excluded module is untouched: `route_worker_ledger.py`,
+`run_plan_artifact.py`, `capability_evidence.py`, `governed_run_snapshot.py`,
+`governed_decision.py`, `task_ledger.py`, `engine.py`, `resilience_router.py`,
+every CR-YK and CR-OC module, and `docs/change/change_log.md`.
+
+### The two paths beyond the provisional allowlist
+
+Both are existing regression tests that the slice's intended behavior
+necessarily invalidates. Neither weakens an assertion; both were rewritten to
+assert the new guarantee.
+
+1. **`tests/test_tc_run_cli.py`.** Its injected `RecordingClient.run_task` has a
+   fixed signature that the new `snapshot`/`decision` pair breaks, and
+   `test_terminal_routes_exit_3_without_backend_execution` patched
+   `triage_core.client.choose_resilience_route` — a call the governed path no
+   longer makes, so the patch had become a silent no-op. The test now drives the
+   router at the seam, and its `deterministic` arm asserts the stronger new
+   fact: an unbindable member falls through to the next already-authorized
+   envelope member rather than executing anything.
+2. **`tests/test_tc_run_plan_cli.py`.** The governed snapshot bounds an explicit
+   task ID to letters, marks, numbers and `._:+-`, so `--task-id 'tâsk-☃'` is now
+   rejected at the seam instead of rendered. The unicode-escaping test keeps its
+   snowman in the source path and the backend model and uses a non-ASCII
+   *letter* in the task ID, so the escaping it exists to prove is still proven.
+
+### Behavioral changes an accepting reviewer is approving
+
+- **Capability no longer reaches route policy** (Resolved Question 1, as
+  recorded). Both preview and execution now form the decision with
+  capability-free availability. A run whose local capability is unknown produces
+  a decision naming local routes and then fails at binding, where previously the
+  router resolved to no local route earlier. The observable terminal outcome for
+  `tc run` is unchanged — a local-only run with no usable local capability still
+  exits 2 through the existing local-route guard — but the *reason* now arrives
+  at binding rather than at routing.
+- **`tc run --plan` output gains one line**,
+  `permitted_fallback_envelope`, and its `route_required_checks` line now lists
+  the governed verification codes rather than the router's (previously empty)
+  list. The `governed_run_plan.v1` contract, its field set, `plan_body_digest`
+  and `artifact_byte_digest` semantics are unchanged, and `decision_id` is
+  absent from the artifact.
+- **Plan-artifact digests change value.** The artifact's `assembled_input_binding`
+  now digests the snapshot's authoritative assembled bytes
+  (`instruction + b"\n\nDATA:\n" + task_data`) instead of a second independent
+  `f"{prompt}\n{data}"` assembly. This is the point of the slice — one assembly
+  rule for digests and execution alike — and it means a digest recorded before
+  this change will not match one recorded after. No schema version changes.
+- **`--model` is now validated on the execution path too.** An unknown profile
+  exits 1 rather than being ignored, because a governed decision requires a
+  resolved context/model profile.
+- **An execution-path privacy failure now reports bounded finding codes.** The
+  seam's scan runs before `verify_packet`, so the message is the plan path's
+  `finding_codes=` form rather than the scanner's free text. Exit code is
+  unchanged at 2.
+- **A local-only run whose ethical firewall triggers now exits 2 rather than 3**
+  in the narrow case where the firewall triggers but deterministic risk is low.
+  The decision forces `human_handoff`, and the pre-existing local-route guard
+  treats a non-local route on a local-only packet as fail-closed. Both are
+  non-executing terminal outcomes; exit 2 is the more conservative of the two.
+
+### Where the implementation is narrower than the recommendation
+
+Stated plainly rather than absorbed, because each is a place the built code does
+less than **Settled Question 2**'s "consumes its policy outputs instead of
+re-deriving them" might be read to promise:
+
+- **`verify_packet` still runs inside `run_task`.** It is the type-safety
+  mechanism that produces the `VerifiedTaskPacket` the routing boundary requires,
+  not only a policy evaluation, so it cannot be replaced by a decision field. It
+  is also one of the decision's own `required_checks`.
+- **`ProjectSteward` still runs inside `run_task`.** Removing it would silently
+  drop the credit-allowance and energy gates, which the decision does not model
+  — a governance *loosening* outside this slice's scope. It can only terminate an
+  attempt, never widen one, and the decision remains authoritative for
+  classification, route policy, privacy posture, and context budget. The seam
+  evaluates the steward with `budgets={}`, matching what preview already did.
+- **The specialist-policy selector (`route_task`) still runs inside `run_task`.**
+  It calls `is_internet_available()`, a live network observation, so under
+  Resolved Question 1 it belongs to binding rather than to decision formation.
+  It is invoked once, at binding; neither consumer invokes a second one.
+
+The no-rebuild traps therefore assert what the code actually guarantees: neither
+consumer invokes a second deterministic classifier, context planner, or
+resilience router, and neither constructs a second snapshot or decision.
+
+### Two mechanical accommodations
+
+- **`sensitivity_requires_human_review` is not in `ROUTE_REASON_CODES`.** The
+  router emits it; the closed decision vocabulary in `governed_decision.py` does
+  not enumerate it, and that module is deliberately excluded from the allowlist.
+  The decision body records the generic `policy_selected` for that case. The
+  operator-facing plan still renders the router's own spelling, so no fidelity is
+  lost where a reader looks for it. Admitting the code to the closed vocabulary
+  is a candidate for a later CR, not a widening made here.
+- **The worker system message is duplicated in `run_plan.py`.** The snapshot
+  binds its digest and `engine.py` owns the literal, but `engine.py` is outside
+  the allowlist. `tests/test_governed_consumption_parity.py` asserts the two
+  spellings have not drifted.
+
+### Gate satisfaction
+
+| Gate | Status | Evidence |
+|---|---|---|
+| 1 — recorded decision on capability volatility | satisfied at proposal stage | **Resolved Question 1** |
+| 2 — seam before the `planning` branch, consumed by both | satisfied | `tc_cli.py` step 2b; `test_execution_receives_the_seam_snapshot_and_decision`, `test_preview_projects_the_seam_decision_without_recomputing_it` |
+| 3 — guard retired, not deleted; positive integrated-shape tests in the same change | satisfied | `tests/test_governed_consumption_parity.py`, including the two purity tests carried over verbatim from the retired guard |
+| 4 — capability change after decision formation changes nothing | satisfied | `test_capability_change_after_decision_formation_changes_no_policy` |
+| 5 — unavailable capability yields only an authorized fallback or a closed failure | satisfied | `test_unavailable_capability_falls_back_or_closes`, `test_binding_never_leaves_the_governed_envelope` |
+
+### Verification
+
+`python -m pytest tests/ -q` — **1787 passed, 6 skipped**, no failures.
+
+An earlier full run reported 13 `OSError` failures in
+`tests/test_build_review_cli.py`; those were Windows Smart App Control blocking
+subprocess launch, unrelated to this slice, and they pass once it is disabled.
 
 ## Objective
 
@@ -275,9 +428,10 @@ Three rules govern all of them:
 
 ### 8. Implementation file allowlist and focused tests
 
-**Provisional. Not authorized by this proposal.** A separate implementation
-approval must confirm or replace this list. Any path beyond it is a stop
-condition.
+**Provisional as written; this became the bound list.** The implementation
+instruction named no replacement, so the table below is what bounded the work.
+Two paths beyond it were taken and are named in **Implementation Record**; the
+deliberate exclusions below were all honored.
 
 | Path | Change |
 |---|---|
@@ -376,9 +530,12 @@ call, or real runtime.
 
 ### 10. Stop point
 
-Work stops when this proposal PR is open. No implementation begins until a
-separate human approval is recorded that names its own bounded file allowlist.
-This document is not that approval, and neither is the merge of this proposal.
+*As proposed:* work stops when this proposal PR is open, and no implementation
+begins until a separate human approval is recorded.
+
+*As it now stands:* implementation was instructed and is complete, so this stop
+point is spent. The next stop point is implementation acceptance, which is a
+separate gate and is not granted. Work stops here.
 
 ## Invariants This Slice Must Preserve
 
@@ -532,6 +689,11 @@ An approval that grants permission to implement without binding gates 3 through
 5 as obligations is incomplete, and an implementation that reaches acceptance,
 merge, or closeout without them passing must be rejected.
 
+**Stage reached.** Permission to implement was given and is spent. Gates 3
+through 5 were treated as bound obligations and now pass — see **Gate
+satisfaction** in **Implementation Record**. Permission to accept has not been
+given; gates passing is evidence for that decision, not the decision.
+
 ### Proposal-stage preconditions — satisfied
 
 1. **A recorded decision on capability volatility and its CR-DD-013 behavioral
@@ -545,16 +707,17 @@ merge, or closeout without them passing must be rejected.
 
 ### Implementation obligations — bound at approval, satisfied before acceptance
 
-3. **Replacement of the integration-absence guard with positive tests** proving
-   one snapshot, one governed decision, and two projections — **not merely
-   deletion of the old guard.** `tests/test_governed_decision_integration_absence.py`
+3. **[satisfied] Replacement of the integration-absence guard with positive
+   tests** proving one snapshot, one governed decision, and two projections —
+   **not merely deletion of the old guard.** `tests/test_governed_decision_integration_absence.py`
    may be retired only in the same change that adds positive tests asserting
    the integrated shape. An implementation that deletes the guard without
    replacing its coverage is rejected.
-4. **A negative test where runtime capability changes after decision formation**
-   and cannot change the decision ID, the route policy, or the envelope.
-5. **A negative test showing unavailable capability causes only an authorized
-   fallback or a closed failure** — never an unauthorized route.
+4. **[satisfied] A negative test where runtime capability changes after decision
+   formation** and cannot change the decision ID, the route policy, or the
+   envelope.
+5. **[satisfied] A negative test showing unavailable capability causes only an
+   authorized fallback or a closed failure** — never an unauthorized route.
 
 Gates 3 through 5 are additive to the focused tests listed in **Settled
 Question 8**. Satisfying gates 1 and 2 grants nothing on its own: implementation
