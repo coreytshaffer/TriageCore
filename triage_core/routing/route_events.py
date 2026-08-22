@@ -1,6 +1,12 @@
+import re
 from typing import Any, Dict
 
 from .resilience_router import ResilienceRouteDecision, ResilienceRouteInput
+
+# CR-DD-012B: bounded governed-decision linkage. Additive, through the existing
+# open extension point; the closed ``route-worker-ledger.v1`` contract in
+# ``route_worker_ledger.py`` is neither modified nor used by this path.
+_DECISION_ID_RE = re.compile(r"sha256:[0-9a-f]{64}\Z")
 
 # CR-DD-018: the accepted specialist-offload evidence contract. These constants are
 # declared independently of the producer's own vocabulary on purpose: the producer
@@ -203,6 +209,23 @@ def validate_specialist_offload_payload(payload: Any) -> None:
     _require_risk_consistency(reason_code, risk_level, categories)
 
 
+class DecisionLinkageError(ValueError):
+    """Raised when governed-decision linkage evidence is not bounded."""
+
+
+def _bounded_decision_id(value: Any) -> str:
+    """Reject anything that is not a bounded content-linkage digest.
+
+    Linkage is evidence only. A present ``decision_id`` records which governed
+    decision an attempt descended from. It asserts nothing about approval,
+    admission, quality, acceptance, or successful human review, and no consumer
+    may read it as such.
+    """
+    if not isinstance(value, str) or not _DECISION_ID_RE.fullmatch(value):
+        raise DecisionLinkageError("decision_id must be a bounded sha256 digest")
+    return value
+
+
 def build_route_decision_payload(
     route_input: ResilienceRouteInput,
     route_decision: ResilienceRouteDecision,
@@ -210,6 +233,7 @@ def build_route_decision_payload(
     selected_backend: str = "",
     selected_model: str = "",
     route_source: str = "resilience_router_v1",
+    decision_id: Any = None,
 ) -> Dict[str, Any]:
     payload: Dict[str, Any] = {
         "task_class": route_input.task_class,
@@ -245,6 +269,11 @@ def build_route_decision_payload(
     if capability is not None and hasattr(capability, "to_evidence_payload"):
         payload.update(capability.to_evidence_payload())
 
+    # CR-DD-012B: bounded governed-decision linkage through the same open
+    # extension point. Additive, so no schema-version bump is needed.
+    if decision_id is not None:
+        payload["decision_id"] = _bounded_decision_id(decision_id)
+
     return payload
 
 
@@ -256,7 +285,7 @@ def build_worker_result_payload(
     failure_stage = result.get("failure_stage")
     backend_failure = bool(failure_type == "backend_error" and failure_stage == "local_backend_generate")
 
-    return {
+    payload = {
         "selected_route": route_payload.get("selected_route"),
         "selected_backend": route_payload.get("selected_backend", ""),
         "selected_model": route_payload.get("selected_model", ""),
@@ -279,3 +308,10 @@ def build_worker_result_payload(
         "validator_version": result.get("validator_version"),
         "validator_scope": result.get("validator_scope"),
     }
+
+    # Linkage is carried forward from the route decision this attempt descended
+    # from -- never re-derived here, and never synthesized when absent.
+    if "decision_id" in route_payload:
+        payload["decision_id"] = _bounded_decision_id(route_payload["decision_id"])
+
+    return payload
