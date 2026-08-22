@@ -17,11 +17,13 @@ and closeout authority are WITHHELD.**
 | release authority | withheld |
 | closeout | withheld |
 
-The accepted candidate is the code and test state at `bbe5336`. This document's
-own status entries are inside the ratified path inventory, so recording the
-grants here changes no code and no test; `git diff bbe5336..HEAD -- triage_core/
-tests/` is empty by construction, and the acceptance attaches to that state
-rather than to whatever the branch's tip commit happens to be.
+The accepted candidate is the code and test state at `bbe5336`, and acceptance
+attaches to that state rather than to whatever the branch's tip commit happens to
+be. `git diff bbe5336 HEAD -- triage_core/ tests/` is empty and stays empty: this
+document's status entries are inside the ratified path inventory, and the one
+subsequent non-documentation change — the bounded CI-reference repair recorded
+under **Publication, and one supplemental CI repair** — touches only
+`.github/workflows/tests.yml`.
 
 ### Authority record — the original defect, preserved
 
@@ -87,6 +89,68 @@ through 5, and terminal routing.
 
 **No further modification is authorized under the implementation grant.** The
 next gate is merge authority.
+
+### Publication, and one supplemental CI repair
+
+Publication of the branch at `8180bca` was authorized for the limited purpose of
+pushing it, opening a PR against `main`, and exposing the candidate for
+independent review and CI. That produced
+[PR #179](https://github.com/coreytshaffer/TriageCore/pull/179).
+
+**The publication gate immediately did its job.** All three Ubuntu `pytest` jobs
+passed, and the mandatory `windows_executor` job failed with:
+
+```text
+ERROR: file or directory not found: tests/test_governed_decision_integration_absence.py
+```
+
+`.github/workflows/tests.yml` names the retired integration-absence guard by path
+in its mandatory Windows group. Retiring that file was authorized under approval
+gate 3 and its coverage was replaced, but the retirement was never swept for
+references *outside* the test tree, and the workflow is not in this slice's path
+inventory. So the accepted implementation was sound while CI could no longer
+evaluate it — integration residue that local runs structurally cannot catch,
+which is precisely what a publication gate exists to expose.
+
+The operator granted a bounded supplemental repair authority for exactly two
+paths:
+
+> For PR #179, I authorize exactly these changes: `.github/workflows/tests.yml`:
+> replace only `tests/test_governed_decision_integration_absence.py` with
+> `tests/test_governed_consumption_parity.py`;
+> `docs/change/requests/CR-DD-012B-shared-preview-execution-consumption.md`:
+> record this supplemental authority and the CI finding, if needed. No other
+> workflow, runtime, test, configuration, or documentation change is authorized
+> by this grant.
+
+The substitution points the mandatory group at the file that carries the retired
+guard's replacement coverage, including its two `governed_decision` purity tests
+carried over verbatim.
+
+This grant amends the ratification's "one substantive commit voids it" condition
+**only** for this exact CI-reference repair, on the recorded ground that the
+repair does not alter the accepted implementation state or its tests — it
+restores CI's ability to evaluate that state after an authorized test retirement.
+
+**Acceptance does not migrate to the repaired tip.** The pinning is:
+
+```text
+bbe5336    = accepted implementation/test state
+8180bca    = governance record
+<new tip>  = governance record + exact CI reference repair
+```
+
+and the repaired tip becomes eligible for merge review only if both hold:
+
+```bash
+git diff bbe5336 <new-tip> -- triage_core/ tests/
+# empty
+
+git diff 8180bca <new-tip> -- .github/workflows/tests.yml
+# exactly one path substitution
+```
+
+Merge authority remains withheld pending that independent review.
 
 The sections that follow the implementation record are the proposal as written
 before implementation, preserved unchanged so the recommendation and the outcome

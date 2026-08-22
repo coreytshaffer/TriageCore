@@ -85,7 +85,7 @@ jobs:
           python -m pytest `
             tests/test_mediated_executor.py `
             tests/test_privacy_invariants.py `
-            tests/test_governed_decision_integration_absence.py `
+            tests/test_governed_consumption_parity.py `
             -m "not windows_optional" -q `
             -o junit_family=legacy --junit-xml=$xml
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
