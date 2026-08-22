@@ -3,6 +3,7 @@ from .engine import TriageEngine
 from .routers import TriageRouter
 from .backends import LocalBackend, create_backend
 from .routing import (
+    ResilienceRouteDecision,
     ResilienceRouteInput,
     SPECIALIST_OFFLOAD_EVENT_TYPE,
     build_route_decision_payload,
@@ -51,13 +52,34 @@ class TriageClient:
         route_decision_signing_registry: Optional[AgentIdentityRegistry] = None,
         route_decision_signing_agent_id: Optional[str] = None,
         capability: Optional[Any] = None,
+        snapshot: Optional[Any] = None,
+        decision: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """
         Runs a given prompt and data through the execution engine.
         First, it classifies and routes the request.
         If it's safe to run locally, it attempts execution.
         If execution fails, times out, or the router blocks it, it creates a structured handoff.
+
+        CR-DD-012B. ``snapshot`` and ``decision`` are a new optional pair. When
+        absent -- every existing library caller -- behavior is preserved
+        unchanged and no decision is constructed on the caller's behalf. When
+        supplied together, as ``tc run`` and ``tc run --plan`` always do, policy
+        comes from the completed governed decision instead of from in-method
+        computation: classification and the logical route are *consumed*, never
+        re-derived, and execution reads the exact snapshot bytes rather than the
+        caller's own assembly.
+
+        A caller who supplies a decision therefore gets different behavior from
+        one who does not. That is the point of the slice, not an accident, and
+        the compatibility claim is narrow: existing callers are unaffected
+        because they pass nothing, not because the two paths are equivalent.
         """
+        from .runtime_observation import (
+            GovernedBindingError,
+            observe_route_binding,
+            validate_envelope_compliance,
+        )
         from .classifier import TaskClassifier
         from .project_steward import ProjectSteward
         from .task_packet import TaskPacket
@@ -114,32 +136,76 @@ class TriageClient:
             
         prompt = verified_packet.prompt
         data = verified_packet.data
-        
+
+        governed = decision is not None or snapshot is not None
+        decision_id = None
+        if governed:
+            # Fail closed before any backend construction or invocation. A stale
+            # or inconsistent decision terminates the attempt; it is never
+            # transparently rebuilt. Termination is not repair.
+            self._verify_governed_inputs(
+                snapshot=snapshot,
+                decision=decision,
+                verified_packet=verified_packet,
+                is_local_only=is_local_only,
+            )
+            decision_id = decision.decision_id
+
         # Step 1: Routing logic
-        category = TaskClassifier.classify(prompt)
+        if governed:
+            category = decision.policy.classification
+        else:
+            category = TaskClassifier.classify(prompt)
         route_decision = self.router.specialist.route_task(category, prompt, data)
         use_timeout = route_decision.get("timeout", self.engine.timeout)
         resilience_input = self._build_resilience_route_input(
             category=category, validator=validator, capability=capability
         )
-        
+
         if is_local_only:
             resilience_input.privacy_level = "local_only"
-            
-        resilience_decision = choose_resilience_route(resilience_input)
-        selected_route = resilience_decision.selected_route
-        selected_backend_name = self._selected_backend_name(selected_route)
-        if selected_route in {"cloud_primary", "cloud_secondary"}:
-            selected_model = default_config.get_qwen_model()
-        elif selected_route in {"local_fast", "local_heavy"}:
-            selected_model = (
-                route_decision.get("model")
-                if capability is None
-                else capability.model_for_route(selected_route)
-            ) or ""
+
+        if governed:
+            # Runtime binding is a filter over the decision's closed, ordered
+            # envelope -- never a selection over the space of backends. The
+            # router is not consulted again; capability constrains binding only.
+            observation = observe_route_binding(
+                decision=decision,
+                capability=capability,
+                cloud_enabled=default_config.get_qwen_enabled(),
+                local_backend_type=self._selected_backend_name("local_fast"),
+                cloud_model=default_config.get_qwen_model(),
+            )
+            validate_envelope_compliance(observation, decision)
+            if observation.binding_outcome == "closed":
+                raise GovernedBindingError(
+                    "No authorized binding exists for the governed envelope. "
+                    "Failing closed."
+                )
+            resilience_decision = ResilienceRouteDecision(
+                selected_route=observation.selected_route,
+                reason=decision.policy.route_reason_codes[0],
+                fallback_depth=observation.envelope_position,
+                human_review_required=decision.policy.human_review == "required",
+                required_checks=list(decision.policy.required_checks),
+            )
+            selected_route = observation.selected_route
+            selected_model = observation.model_binding
         else:
-            selected_model = ""
-        
+            resilience_decision = choose_resilience_route(resilience_input)
+            selected_route = resilience_decision.selected_route
+            if selected_route in {"cloud_primary", "cloud_secondary"}:
+                selected_model = default_config.get_qwen_model()
+            elif selected_route in {"local_fast", "local_heavy"}:
+                selected_model = (
+                    route_decision.get("model")
+                    if capability is None
+                    else capability.model_for_route(selected_route)
+                ) or ""
+            else:
+                selected_model = ""
+        selected_backend_name = self._selected_backend_name(selected_route)
+
         # Ensure local-only packets only use explicitly local routes
         if is_local_only:
             if selected_route not in ["local_heavy", "local_fast", "deterministic"]:
@@ -150,6 +216,7 @@ class TriageClient:
                     resilience_decision,
                     selected_backend=selected_backend_name,
                     selected_model=selected_model,
+                    decision_id=decision_id,
                 )
                 self._append_route_decision_event(
                     ledger=ledger,
@@ -191,6 +258,7 @@ class TriageClient:
             resilience_decision,
             selected_backend=selected_backend_name,
             selected_model=selected_model,
+            decision_id=decision_id,
         )
         self._append_route_decision_event(
             ledger=ledger,
@@ -343,6 +411,153 @@ class TriageClient:
             return self._merge_route_fields(result, route_payload)
         finally:
             self.engine.backend.model = original_model
+
+    @staticmethod
+    def _binding_primitive(value: Any) -> Any:
+        """Field-name-keyed view of a binding, comparable across its two spellings.
+
+        ``governed_run_snapshot`` and ``governed_decision`` each declare their own
+        ``SnapshotDecisionBinding`` -- deliberately, so the decision owns a copy
+        rather than an alias. They therefore never compare equal by identity or
+        by dataclass equality, and their field *order* differs. Comparing by
+        field name is what lets execution check it received the exact snapshot
+        the decision governs.
+        """
+        from dataclasses import fields, is_dataclass
+
+        if is_dataclass(value):
+            return {
+                item.name: TriageClient._binding_primitive(getattr(value, item.name))
+                for item in fields(value)
+            }
+        if isinstance(value, tuple):
+            return tuple(TriageClient._binding_primitive(item) for item in value)
+        return value
+
+    @staticmethod
+    def _verify_governed_inputs(
+        *,
+        snapshot: Any,
+        decision: Any,
+        verified_packet: Any,
+        is_local_only: bool,
+    ) -> None:
+        """Fail closed on any governed-consumption inconsistency.
+
+        Every condition here terminates the attempt before backend construction
+        or invocation, with no backend call and no privacy-unsafe ledger write.
+        Termination is not repair: the attempt ends, and a new invocation may
+        produce a new snapshot and decision. Nothing below revalidates-and-repairs.
+
+        Staleness is binding-defined, not clock-defined -- it is determined by
+        the immutable snapshot binding and decision-relevant facts, never by
+        elapsed wall time, current file contents, or backend health.
+        """
+        from .governed_decision import (
+            GovernedDecision,
+            GovernedDecisionError,
+            parse_governed_decision,
+            serialize_governed_decision,
+            verify_governed_decision_id,
+        )
+        from .governed_run_snapshot import GovernedRunInputSnapshot, sha256_digest
+        from .run_plan import configuration_digest
+        from .runtime_observation import GovernedBindingError
+
+        if type(snapshot) is not GovernedRunInputSnapshot:
+            raise GovernedBindingError(
+                "a governed run requires the immutable snapshot its decision binds"
+            )
+        if type(decision) is not GovernedDecision:
+            raise GovernedBindingError("a governed run requires a governed decision")
+
+        # One canonical round trip rejects a malformed, noncanonical,
+        # unsupported-version, missing-field, or unknown-field decision, and
+        # independently re-derives the content-linkage ID.
+        try:
+            canonical = serialize_governed_decision(decision)
+            reparsed = parse_governed_decision(canonical)
+        except GovernedDecisionError as exc:
+            raise GovernedBindingError(
+                f"governed decision failed canonical validation: {exc}"
+            ) from exc
+        if reparsed.decision_id != decision.decision_id or not verify_governed_decision_id(
+            decision
+        ):
+            raise GovernedBindingError("decision_id does not match the decision body")
+
+        binding = decision.snapshot_binding
+        if TriageClient._binding_primitive(
+            snapshot.to_decision_binding()
+        ) != TriageClient._binding_primitive(binding):
+            raise GovernedBindingError(
+                "execution received a snapshot other than the one governed"
+            )
+
+        for value, expected, label in (
+            (snapshot.instruction_bytes, binding.instruction, "instruction"),
+            (snapshot.inline_input_bytes, binding.inline_input, "inline input"),
+            (snapshot.task_data_bytes, binding.task_data, "task data"),
+            (
+                snapshot.assembled_execution_bytes,
+                binding.assembled_execution,
+                "assembled execution",
+            ),
+        ):
+            if len(value) != expected.byte_length or sha256_digest(value) != expected.sha256:
+                raise GovernedBindingError(f"{label} digest or length mismatch")
+
+        # Execution consumes exact snapshot bytes. A packet assembled from
+        # anything else is a second assembly site, which is the drift this
+        # slice exists to remove.
+        if verified_packet.prompt != snapshot.instruction_bytes.decode("utf-8"):
+            raise GovernedBindingError("packet instruction is not the snapshot's")
+        if verified_packet.data != snapshot.task_data_bytes.decode("utf-8"):
+            raise GovernedBindingError("packet task data is not the snapshot's")
+
+        policy = decision.policy
+        if configuration_digest(
+            cloud_backend_enabled=default_config.get_qwen_enabled(),
+            cloud_model_binding=(
+                default_config.get_qwen_model()
+                if default_config.get_qwen_enabled()
+                else "not_enabled"
+            ),
+            local_backend_type=default_config.get_backend_type(),
+        ) != policy.configuration_sha256:
+            raise GovernedBindingError(
+                "decision-relevant configuration changed after decision formation"
+            )
+
+        egress_eligible = (
+            policy.privacy_preflight == "passed"
+            and binding.declared_privacy != "local_only"
+        )
+        decision_allows_cloud = egress_eligible and binding.cloud_intent == "requested"
+        if is_local_only != (not decision_allows_cloud):
+            raise GovernedBindingError(
+                "runtime privacy posture disagrees with the governed decision"
+            )
+
+        routes = (policy.preferred_logical_route, *policy.permitted_fallback_envelope)
+        if not policy.preferred_logical_route:
+            raise GovernedBindingError("governed decision names no logical route")
+        if len(set(routes)) != len(routes):
+            raise GovernedBindingError("governed envelope repeats a logical route")
+        if not egress_eligible and any(
+            route in {"cloud_primary", "cloud_secondary"} for route in routes
+        ):
+            raise GovernedBindingError("cloud route present outside the egress envelope")
+
+        review_required = (
+            policy.risk_posture == "high"
+            or policy.privacy_preflight != "passed"
+            or policy.ethical_firewall == "triggered"
+            or policy.preferred_logical_route == "human_handoff"
+            or policy.terminal_escalation != "none"
+        )
+        if review_required and policy.human_review != "required":
+            raise GovernedBindingError("human-review posture is inconsistent")
 
     @staticmethod
     def _append_optional_event(
