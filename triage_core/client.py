@@ -16,6 +16,48 @@ from .task_ledger import TaskLedger
 from .privacy_scanner import scan_task_packet, PrivacyViolationError
 from .config import default_config
 
+# CR-DD-012B: the two execution *parameters* the governed path still needs from
+# specialist routing, expressed as pure functions of the classification the
+# governed decision already carries. Both are read straight out of
+# ``SpecialistRouter.route_task``'s own category tables; neither depends on the
+# live ``is_internet_available()`` probe or on any offload verdict, so consuming
+# them here invokes no second policy decision.
+#
+# ``routers.py`` is outside this slice's file allowlist, so the category bindings
+# are restated rather than imported -- the post-processor *function* is imported,
+# only the binding is restated.
+# ``tests/test_governed_consumption_parity.py`` asserts these agree with
+# ``route_task`` for every category the deterministic classifier can emit.
+_GOVERNED_TIMEOUT_SECONDS = {
+    "bugfix": 30,
+    "test_addition": 30,
+    "refactor": 30,
+    "docs_update": 120,
+    "architecture_planning": 120,
+}
+_GOVERNED_POST_PROCESSED = frozenset({"docs_update", "architecture_planning"})
+_GOVERNED_DEFAULT_TIMEOUT_SECONDS = 45
+
+
+def _governed_execution_parameters(classification: str):
+    """Return ``(timeout_seconds, post_processor)`` for a governed run.
+
+    These are execution parameters, not policy: they cannot change the route,
+    the envelope, the privacy posture, or whether the attempt proceeds. The
+    timeout returned here is exactly the ``specialist_timeout_forecast_seconds``
+    the preview published, so the budget a reviewer read is the budget the
+    worker gets.
+    """
+    from .routers import extract_first_code_block
+
+    return (
+        _GOVERNED_TIMEOUT_SECONDS.get(
+            classification, _GOVERNED_DEFAULT_TIMEOUT_SECONDS
+        ),
+        extract_first_code_block if classification in _GOVERNED_POST_PROCESSED else None,
+    )
+
+
 class TriageClient:
     def __init__(
         self,
@@ -153,11 +195,27 @@ class TriageClient:
 
         # Step 1: Routing logic
         if governed:
+            # Policy is consumed, never re-derived. The specialist-policy
+            # selector is not invoked at all on this path: its offload verdict
+            # is a second policy decision, and two of its three offload branches
+            # turn on a live ``is_internet_available()`` probe -- a volatile
+            # observation, which under CR-DD-012B Resolved Question 1 may decide
+            # whether an authorized plan can execute now but never what route or
+            # policy the task receives. Its third branch, high risk, the governed
+            # decision already expresses as a preferred ``human_handoff``.
+            #
+            # Only its two execution *parameters* are still needed, and both are
+            # pure functions of the classification the decision already carries.
             category = decision.policy.classification
+            route_decision = {}
+            use_timeout, post_processor_override = _governed_execution_parameters(
+                category
+            )
         else:
             category = TaskClassifier.classify(prompt)
-        route_decision = self.router.specialist.route_task(category, prompt, data)
-        use_timeout = route_decision.get("timeout", self.engine.timeout)
+            route_decision = self.router.specialist.route_task(category, prompt, data)
+            use_timeout = route_decision.get("timeout", self.engine.timeout)
+            post_processor_override = None
         resilience_input = self._build_resilience_route_input(
             category=category, validator=validator, capability=capability
         )
@@ -206,8 +264,23 @@ class TriageClient:
                 selected_model = ""
         selected_backend_name = self._selected_backend_name(selected_route)
 
+        # A governed decision whose *preferred* route is ``human_handoff``
+        # because the ethical firewall triggered is a terminal governed outcome,
+        # not an unavailable route. It must reach the handoff branch below and
+        # return ``handoff_required`` with a ``worker_result`` record, rather
+        # than being caught by the local-only guard as a fail-closed error
+        # (CR-125). A ``human_handoff`` reached as an envelope *fallback* is the
+        # opposite case -- the authorized route could not bind -- and stays
+        # fail-closed.
+        governed_terminal_handoff = (
+            governed
+            and observation.binding_outcome == "primary"
+            and selected_route == "human_handoff"
+            and decision.policy.ethical_firewall == "triggered"
+        )
+
         # Ensure local-only packets only use explicitly local routes
-        if is_local_only:
+        if is_local_only and not governed_terminal_handoff:
             if selected_route not in ["local_heavy", "local_fast", "deterministic"]:
                 audit = RouteDecisionAudit(task_id, privacy_level, True, True, selected_route, selected_backend_name, "blocked", "ambiguous_or_remote_route")
                 self._append_optional_event(ledger, task_id, "route_audit", audit.to_dict())
@@ -268,9 +341,25 @@ class TriageClient:
             signing_agent_id=route_decision_signing_agent_id,
         )
 
-        steward = ProjectSteward()
-        steward_eval = steward.evaluate(task_prompt=prompt, target_files=[], completed_orders=[])
-        if steward_eval["local_result_status"] == "insufficient":
+        # The ethical firewall, terminal escalation, and human-review posture are
+        # first-class fields of the governed decision. On the governed path they
+        # are *consumed* from it. ``ProjectSteward`` is not asked to decide
+        # again: a second verdict that could stop a run the canonical decision
+        # permitted, or permit one it stopped, would mean the decision was never
+        # authoritative. The seam performs the single evaluation.
+        if governed:
+            steward_insufficient = decision.policy.ethical_firewall == "triggered"
+            steward_eval = {
+                "reason": "ethical_firewall_requires_human_review",
+                "firewall_triggered": steward_insufficient,
+            }
+        else:
+            steward = ProjectSteward()
+            steward_eval = steward.evaluate(
+                task_prompt=prompt, target_files=[], completed_orders=[]
+            )
+            steward_insufficient = steward_eval["local_result_status"] == "insufficient"
+        if steward_insufficient:
             result = {
                 "status": "handoff_required",
                 "source": "steward",
@@ -357,7 +446,11 @@ class TriageClient:
                 raw_data=data,
                 validator=validator,
                 timeout=use_timeout,
-                post_processor=route_decision.get("post_processor"),
+                post_processor=(
+                    post_processor_override
+                    if governed
+                    else route_decision.get("post_processor")
+                ),
             )
             self._append_optional_event(
                 ledger=ledger,
@@ -368,7 +461,9 @@ class TriageClient:
             return self._merge_route_fields(result, route_payload)
             
         # Step 2: Local execution
-        post_processor = route_decision.get("post_processor")
+        post_processor = (
+            post_processor_override if governed else route_decision.get("post_processor")
+        )
         original_model = self.engine.backend.model
         requested_model = selected_model
 

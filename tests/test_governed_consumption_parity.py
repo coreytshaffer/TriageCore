@@ -66,9 +66,11 @@ class RecordingBackend:
 
     def __init__(self) -> None:
         self.messages = None
+        self.timeout = None
 
     def generate(self, messages, temperature=0.1, timeout=45, **kwargs):
         self.messages = messages
+        self.timeout = timeout
         return BackendResponse(
             text="LOCAL_RAN",
             raw={},
@@ -684,3 +686,209 @@ def test_governed_decision_does_not_call_ambient_discovery_primitives() -> None:
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
     )
     assert calls.isdisjoint(forbidden_names)
+
+
+# --------------------------------------------------------------------------
+# No remaining decision-bearing recomputation on the governed path.
+#
+# The CR's test contract calls for proof that neither consumer invokes a second
+# classifier, privacy evaluator, context planner, specialist-policy selector, or
+# router. ``ProjectSteward`` and ``SpecialistRouter.route_task`` are the two that
+# carry policy: the steward decides the ethical firewall, and ``route_task``
+# decides offload. Both are traps, not counts -- calling either at all on the
+# governed path fails.
+# --------------------------------------------------------------------------
+
+
+def _replace_after_seam(monkeypatch, target, attribute, replacement):
+    """Swap an attribute only once the seam has built the decision.
+
+    The seam performs the single legitimate evaluation, so a trap installed
+    before it would catch that one. Installing it afterwards isolates exactly
+    the question at issue: does anything *downstream* of the decision decide
+    again?
+    """
+
+    original_seam = run_plan.build_governed_run_context
+
+    def wrapper(**kwargs):
+        context = original_seam(**kwargs)
+        monkeypatch.setattr(target, attribute, replacement)
+        return context
+
+    monkeypatch.setattr(run_plan, "build_governed_run_context", wrapper)
+
+
+def test_execution_does_not_re_evaluate_the_ethical_firewall(monkeypatch):
+    import triage_core.project_steward as steward_module
+
+    def _forbidden(*args, **kwargs):
+        raise AssertionError(
+            "the governed decision is authoritative for the ethical firewall"
+        )
+
+    _replace_after_seam(monkeypatch, steward_module.ProjectSteward, "evaluate", _forbidden)
+
+    backend = RecordingBackend()
+    tc_cli.tc_run(_args(), client=TriageClient(backend=backend))
+    assert backend.messages is not None
+
+
+def test_execution_does_not_invoke_the_specialist_policy_selector(monkeypatch):
+    import triage_core.routers as routers_module
+
+    def _forbidden(*args, **kwargs):
+        raise AssertionError("the specialist-policy selector must not decide again")
+
+    monkeypatch.setattr(routers_module.SpecialistRouter, "route_task", _forbidden)
+    # The live connectivity probe the selector depends on is trapped separately,
+    # so a partial removal that still probes would fail here too.
+    monkeypatch.setattr(
+        routers_module,
+        "is_internet_available",
+        lambda *a, **k: (_ for _ in ()).throw(
+            AssertionError("no live connectivity probe on the governed path")
+        ),
+    )
+
+    backend = RecordingBackend()
+    tc_cli.tc_run(_args(), client=TriageClient(backend=backend))
+    assert backend.messages is not None
+
+
+def test_firewall_verdict_is_consumed_from_the_decision(monkeypatch):
+    """A steward that would say 'clear' cannot un-stop a decision that stopped."""
+
+    import triage_core.project_steward as steward_module
+
+    _replace_after_seam(
+        monkeypatch,
+        steward_module.ProjectSteward,
+        "evaluate",
+        lambda *a, **k: {
+            "local_result_status": "sufficient",
+            "reason": "Local workers succeeded.",
+            "firewall_triggered": False,
+            "recommended_escalation": "none",
+        },
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        tc_cli.tc_run(
+            _args(prompt="Review the sacred burial site survey"),
+            client=TriageClient(backend=RecordingBackend()),
+        )
+    assert exc.value.code == 3
+
+
+# --------------------------------------------------------------------------
+# Execution parameters are pure projections of the classification, and have not
+# drifted from the specialist router's own category tables.
+# --------------------------------------------------------------------------
+
+
+DETERMINISTIC_CATEGORIES = (
+    "docs_update",
+    "bugfix",
+    "test_addition",
+    "refactor",
+    "packaging",
+    "security_review",
+    "architecture_planning",
+    "blocked_or_high_risk",
+)
+
+
+@pytest.mark.parametrize("category", DETERMINISTIC_CATEGORIES)
+def test_governed_execution_parameters_match_the_specialist_router(
+    category, monkeypatch
+):
+    import triage_core.routers as routers_module
+    from triage_core.client import _governed_execution_parameters
+
+    # A benign low-risk prompt and a pinned offline observation, so ``route_task``
+    # reaches its category tables rather than an offload branch.
+    monkeypatch.setattr(routers_module, "is_internet_available", lambda *a, **k: False)
+    reference = routers_module.SpecialistRouter().route_task(category, "update it", "")
+
+    timeout, post_processor = _governed_execution_parameters(category)
+    assert timeout == reference["timeout"]
+    assert post_processor is reference["post_processor"]
+
+
+def test_executed_timeout_is_the_timeout_the_preview_published(monkeypatch, capsys):
+    built = _capture_contexts(monkeypatch)
+    tc_cli.tc_run(_args(plan=True))
+    plan_output = capsys.readouterr().out
+    forecast = built[0].presentation.specialist_timeout
+    assert f"specialist_timeout_forecast_seconds: {forecast}" in plan_output
+
+    backend = RecordingBackend()
+    tc_cli.tc_run(_args(), client=TriageClient(backend=backend))
+    assert backend.timeout == forecast
+
+
+# --------------------------------------------------------------------------
+# Terminal-route exit semantics (CR-125): a governed handoff is exit 3, an
+# unavailable route is exit 2. The distinguishing fact is the binding outcome,
+# not the route name.
+# --------------------------------------------------------------------------
+
+
+def test_ethical_firewall_is_a_governed_handoff_not_a_fail_closed_error(tmp_path):
+    backend = RecordingBackend()
+
+    with pytest.raises(SystemExit) as exc:
+        tc_cli.tc_run(
+            _args(
+                prompt="Review the sacred burial site survey",
+                ledger_dir=str(tmp_path),
+                no_ledger=False,
+            ),
+            client=TriageClient(backend=backend),
+        )
+
+    assert exc.value.code == 3
+    assert backend.messages is None
+
+    events = _ledger_events(tmp_path / "ledger.jsonl")
+    route_decision = next(e for e in events if e["event_type"] == "route_decision")
+    worker_result = next(e for e in events if e["event_type"] == "worker_result")
+    assert route_decision["payload"]["selected_route"] == "human_handoff"
+    assert worker_result["payload"]["selected_route"] == "human_handoff"
+    assert worker_result["payload"]["worker_result_status"] == "not_attempted"
+    assert worker_result["payload"]["failure_type"] == "safety_handoff"
+
+
+def test_a_firewall_handoff_binds_as_primary_not_as_a_fallback(monkeypatch, capsys):
+    """The two human_handoff cases are distinguishable at the binding step."""
+
+    built = _capture_contexts(monkeypatch)
+    tc_cli.tc_run(_args(plan=True, prompt="Review the sacred burial site survey"))
+    capsys.readouterr()
+
+    policy = built[0].decision.policy
+    assert policy.ethical_firewall == "triggered"
+    assert policy.preferred_logical_route == "human_handoff"
+    assert policy.permitted_fallback_envelope == ()
+    assert policy.human_review == "required"
+
+
+def test_an_unbindable_local_route_is_still_fail_closed(tmp_path, monkeypatch):
+    """The capability-driven handoff keeps its exit-2 fail-closed semantics."""
+
+    monkeypatch.setattr(
+        capability_evidence,
+        "resolve_from_config",
+        lambda *a, **k: capability_evidence.unknown_resolution(),
+    )
+    backend = RecordingBackend()
+
+    with pytest.raises(SystemExit) as exc:
+        tc_cli.tc_run(
+            _args(ledger_dir=str(tmp_path), no_ledger=False),
+            client=TriageClient(backend=backend),
+        )
+
+    assert exc.value.code == 2
+    assert backend.messages is None
