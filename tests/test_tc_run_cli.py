@@ -123,9 +123,19 @@ class RecordingClient:
     def __init__(self):
         self.packet = None
 
-    def run_task(self, task_packet, ledger=None, task_id=None, capability=None):
+    def run_task(
+        self,
+        task_packet,
+        ledger=None,
+        task_id=None,
+        capability=None,
+        snapshot=None,
+        decision=None,
+    ):
         self.packet = task_packet
         self.capability = capability
+        self.snapshot = snapshot
+        self.decision = decision
         return {
             "status": "success",
             "output": "CLIENT_RAN",
@@ -267,14 +277,21 @@ def test_handoff_required_exits_3(tmp_path):
 
 
 @pytest.mark.parametrize(
-    ("selected_route", "reason"),
+    ("preferred_route", "reason", "bound_route"),
     [
-        ("human_handoff", "sensitivity_requires_human_review"),
-        ("deterministic", "deterministic_tool_available_for_task_class"),
+        ("human_handoff", "sensitivity_requires_human_review", "human_handoff"),
+        # CR-DD-012B: ``deterministic`` has no executor wired into the governed
+        # loop, so it can never *bind*. It falls through to the next already
+        # authorized envelope member rather than executing anything.
+        (
+            "deterministic",
+            "deterministic_tool_available_for_task_class",
+            "human_handoff",
+        ),
     ],
 )
 def test_terminal_routes_exit_3_without_backend_execution(
-    tmp_path, selected_route, reason
+    tmp_path, preferred_route, reason, bound_route
 ):
     backend = FailingBackend()
     client = TriageClient(backend=backend)
@@ -284,24 +301,36 @@ def test_terminal_routes_exit_3_without_backend_execution(
         allow_cloud=True,
         ledger_dir=str(tmp_path),
     )
-    decision = ResilienceRouteDecision(
-        selected_route=selected_route,
-        reason=reason,
-        fallback_depth=0,
-        human_review_required=selected_route == "human_handoff",
-    )
+    # CR-DD-012B: the logical route now comes from the governed decision built
+    # at the seam, so the router is driven there -- once -- rather than inside
+    # ``run_task``. The seam asks the router for its own fallback ordering by
+    # re-asking with the selected route made unavailable, hence the sequence.
+    ordering = [
+        ResilienceRouteDecision(
+            selected_route=preferred_route,
+            reason=reason,
+            fallback_depth=0,
+            human_review_required=preferred_route == "human_handoff",
+        ),
+        ResilienceRouteDecision(
+            selected_route="human_handoff",
+            reason="no_reliable_automated_route_available",
+            fallback_depth=1,
+            human_review_required=True,
+        ),
+    ]
 
-    with patch("triage_core.classifier.TaskClassifier.classify", return_value="general"):
-        with patch(
-            "triage_core.client.choose_resilience_route", return_value=decision
+    def _staged_route(route_input):
+        return ordering[0] if len(ordering) == 1 else ordering.pop(0)
+
+    with patch("triage_core.run_plan.choose_resilience_route", _staged_route):
+        with patch.object(
+            client.router.specialist,
+            "route_task",
+            return_value={"offload_recommended": False},
         ):
-            with patch.object(
-                client.router.specialist,
-                "route_task",
-                return_value={"offload_recommended": False},
-            ):
-                with pytest.raises(SystemExit) as exc:
-                    tc_cli.tc_run(args, client=client)
+            with pytest.raises(SystemExit) as exc:
+                tc_cli.tc_run(args, client=client)
 
     assert exc.value.code == 3
     assert backend.called is False
@@ -312,7 +341,7 @@ def test_terminal_routes_exit_3_without_backend_execution(
         if line.strip()
     ]
     worker_result = next(event for event in events if event["event_type"] == "worker_result")
-    assert worker_result["payload"]["selected_route"] == selected_route
+    assert worker_result["payload"]["selected_route"] == bound_route
     assert worker_result["payload"]["worker_result_status"] == "not_attempted"
     assert worker_result["payload"]["failure_type"] == "safety_handoff"
 

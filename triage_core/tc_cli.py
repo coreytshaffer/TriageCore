@@ -1066,13 +1066,18 @@ def tc_run(args, client=None) -> None:
         verify_packet,
     )
 
+    from triage_core.governed_decision import GovernedDecisionError
+    from triage_core.governed_run_snapshot import SnapshotError, SourceBytesInput
     from triage_core.run_plan import (
-        ContextSource,
+        RUN_SNAPSHOT_LIMITS,
         RunPlanPrivacyError,
+        build_governed_run_context,
         build_run_plan,
+        normalized_source_text,
         privacy_metadata_for_run,
         render_run_plan,
     )
+    from triage_core.runtime_observation import GovernedBindingError
 
     planning = bool(getattr(args, "plan", False))
     plan_output = getattr(args, "plan_output", None)
@@ -1100,28 +1105,28 @@ def tc_run(args, client=None) -> None:
             print("Error: --task-id is required with --plan-output.")
             sys.exit(1)
 
-    # 1. Assemble task data from --files (repeatable), then --data.
-    data_parts: List[str] = []
-    context_sources = []
-    source_values = []
+    # 1. Read each context source exactly once, here, as bytes. The governed
+    # snapshot built at the seam below owns those bytes from this point on and
+    # no later step -- preview or execution -- reopens a source. That single
+    # read is what closes the preview/execution TOCTOU gap (CR-DD-012B).
+    source_inputs = []
     for file_path in args.files:
         if not os.path.exists(file_path):
             print(f"Error: input file not found: {file_path}")
             sys.exit(1)
         try:
-            with open(file_path, "r", encoding="utf-8") as handle:
-                content = handle.read()
-                context_sources.append(
-                    ContextSource(path=file_path, characters=len(content))
+            source_inputs.append(
+                SourceBytesInput.read(
+                    file_path,
+                    max_bytes=RUN_SNAPSHOT_LIMITS.max_source_bytes_per_source,
                 )
-                source_values.append((file_path, content))
-                data_parts.append(f"\n--- {file_path} ---\n{content}")
+            )
         except OSError as exc:
             print(f"Error reading {file_path}: {exc}")
             sys.exit(1)
-    if args.data:
-        data_parts.append(args.data)
-    data = "".join(data_parts)
+        except SnapshotError as exc:
+            print(f"Error reading {file_path}: {exc}")
+            sys.exit(1)
 
     # 2. Map --privacy to packet metadata. Privacy class alone does not
     # authorize cloud execution; that requires explicit operator intent.
@@ -1129,25 +1134,41 @@ def tc_run(args, client=None) -> None:
         print("Error: --allow-cloud cannot be used with --privacy local_only.")
         sys.exit(1)
 
+    # 2b. The CR-DD-012B construction seam. One immutable snapshot and one
+    # canonical governed decision per invocation, built after argument assembly
+    # and privacy mapping and before the preview/execution branch. Preview and
+    # execution both descend from this value; neither constructs one of its own,
+    # and neither re-derives the policy it carries.
+    try:
+        governed = build_governed_run_context(
+            prompt=args.prompt,
+            sources=source_inputs,
+            inline_data=args.data,
+            privacy=args.privacy,
+            allow_cloud=args.allow_cloud,
+            model_profile=getattr(args, "model", None),
+            task_id=args.task_id,
+        )
+    except KeyError:
+        print(f"Error: Unknown model profile: {getattr(args, 'model', None)}")
+        sys.exit(1)
+    except RunPlanPrivacyError as exc:
+        print("Blocked (privacy fail-closed).")
+        print(f"finding_codes={','.join(exc.finding_codes)}")
+        sys.exit(2)
+    except PrivacyViolationError as exc:
+        print(f"Blocked (privacy fail-closed): {exc}")
+        sys.exit(2)
+    except (SnapshotError, GovernedDecisionError) as exc:
+        print(f"Error: could not build the governed run decision: {exc}")
+        sys.exit(1)
+
+    snapshot = governed.snapshot
+    decision = governed.decision
+    data = snapshot.task_data_bytes.decode("utf-8")
+
     if planning:
-        try:
-            plan = build_run_plan(
-                prompt=args.prompt,
-                data=data,
-                sources=context_sources,
-                inline_data_characters=len(args.data or ""),
-                privacy=args.privacy,
-                allow_cloud=args.allow_cloud,
-                model_profile=args.model,
-                task_id=args.task_id,
-            )
-        except KeyError:
-            print(f"Error: Unknown model profile: {args.model}")
-            sys.exit(1)
-        except RunPlanPrivacyError as exc:
-            print("Blocked (privacy fail-closed).")
-            print(f"finding_codes={','.join(exc.finding_codes)}")
-            sys.exit(2)
+        plan = build_run_plan(governed)
         if plan_output:
             from triage_core.run_plan_artifact import (
                 RunPlanArtifactError,
@@ -1156,12 +1177,18 @@ def tc_run(args, client=None) -> None:
             )
 
             try:
+                # One assembly rule serves digests and execution alike: these
+                # are the snapshot's authoritative bytes, not a second
+                # independent assembly of the same arguments.
                 _, artifact_bytes, body_digest, artifact_digest = build_artifact(
                     plan=plan,
-                    prompt=args.prompt,
-                    assembled_input=f"{args.prompt}\n{data}",
-                    inline_input=args.data or "",
-                    source_values=source_values,
+                    prompt=snapshot.instruction_bytes.decode("utf-8"),
+                    assembled_input=snapshot.assembled_execution_bytes.decode("utf-8"),
+                    inline_input=snapshot.inline_input_bytes.decode("utf-8"),
+                    source_values=[
+                        (source.path_spelling, normalized_source_text(source))
+                        for source in snapshot.sources
+                    ],
                 )
                 written_path = publish_artifact(
                     plan_output,
@@ -1186,10 +1213,18 @@ def tc_run(args, client=None) -> None:
 
     privacy_metadata = privacy_metadata_for_run(args.privacy, args.allow_cloud)
 
-    # 3. Build and preflight the packet before any evidence is persisted.
+    # 3. Build and preflight the packet before any evidence is persisted. The
+    # packet carries the snapshot's exact bytes -- the execution path never
+    # reassembles the operator's arguments a second time.
+    #
+    # The generated execution-correlation task ID is created here, in the
+    # execution path only, and after the preview branch has returned. It stays
+    # out of ``decision_body`` and ``decision_id`` by construction, so a run
+    # without ``--task-id`` produces the same decision ID as an otherwise
+    # identical run.
     task_id = args.task_id or str(uuid.uuid4())
     packet = TaskPacket(
-        prompt=args.prompt,
+        prompt=snapshot.instruction_bytes.decode("utf-8"),
         data=data,
         task_id=task_id,
         privacy_metadata=privacy_metadata,
@@ -1200,12 +1235,13 @@ def tc_run(args, client=None) -> None:
         print(f"Blocked (privacy fail-closed): {exc}")
         sys.exit(2)
 
-    # Resolve metadata-only capability evidence after privacy preflight and
-    # before any ledger append. The same immutable resolution is reused by the
-    # governed router below.
+    # Metadata-only capability evidence, resolved once at the seam and reused
+    # here. Under CR-DD-012B it constrains execution binding only: it did not
+    # reach the governed decision above, so a local backend that briefly
+    # disappears cannot change the decision ID or the route policy.
     from triage_core import capability_evidence as capability_module
 
-    capability = capability_module.resolve_from_config(default_config)
+    capability = governed.presentation.capability
 
     # 4. Ledger wiring (enabled by default; --no-ledger warns).
     ledger = None
@@ -1260,10 +1296,18 @@ def tc_run(args, client=None) -> None:
     # than being synthesized into local health.
     print(capability_module.describe_for_operator(capability))
 
-    # 7. Governed loop. Privacy/safety failures fail closed (exit 2).
+    # 7. Governed loop. The completed decision and the snapshot it binds are
+    # handed to the same execution path the preview described; policy is
+    # consumed there, never re-derived. Privacy/safety failures fail closed
+    # (exit 2), as does any governed-consumption inconsistency.
     try:
         result = client.run_task(
-            task_packet=packet, ledger=ledger, task_id=task_id, capability=capability
+            task_packet=packet,
+            ledger=ledger,
+            task_id=task_id,
+            capability=capability,
+            snapshot=snapshot,
+            decision=decision,
         )
     except PrivacyViolationError as exc:
         print(f"Blocked (privacy fail-closed): {exc}")
@@ -1273,6 +1317,9 @@ def tc_run(args, client=None) -> None:
         sys.exit(2)
     except UnsafePacketError as exc:
         print(f"Blocked (unsafe packet, failing closed): {exc}")
+        sys.exit(2)
+    except GovernedBindingError as exc:
+        print(f"Blocked (governed decision not consumable, failing closed): {exc}")
         sys.exit(2)
 
     # 8. Interpret outcome.

@@ -223,13 +223,17 @@ def test_plan_output_escapes_unicode_path_task_id_and_configured_model(
         _args(
             prompt="Refactor this",
             files=[str(source)],
-            task_id="t\u00e2sk-\u2603",
+            # CR-DD-012B: the governed snapshot bounds an explicit task ID to
+            # letters, marks, numbers and ``._:+-``. A non-ASCII *letter* still
+            # exercises the escaping this test exists to prove; a symbol such as
+            # U+2603 is now rejected at the seam rather than rendered.
+            task_id="t\u00e2sk-1",
         )
     )
 
     out = capsys.readouterr().out
     out.encode("ascii")
-    assert "t\\xe2sk-\\u2603" in out
+    assert "t\\xe2sk-1" in out
     assert "caf\\xe9-\\u2603.txt" in out
     assert "l\\xf6cal-\\u2603:" in out
 

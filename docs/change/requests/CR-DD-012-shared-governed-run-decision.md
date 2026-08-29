@@ -10,32 +10,45 @@ bounded implementation approval and is complete and merged through PR #107 as
 `bccaaad` as an internal, non-integrated foundation. Current CR-DD-009 through
 CR-DD-011 behavior remains unchanged.
 
-**CR-DD-012B status update.** Its sequencing prerequisite is now satisfied:
-CR-YK-002's atomic-claiming foundation is complete and merged through PR #117 as
-`5155bbb`. A documentation-only proposal for the slice now exists at
-`CR-DD-012B-shared-preview-execution-consumption.md`, settling the consumption
-questions this document deferred. **Neither the satisfied prerequisite nor the
-proposal is implementation approval.** CR-DD-012B still requires its own
-explicit human implementation approval and its own bounded file allowlist before
-any code is written. The proposal's three previously open questions are now
-settled by recorded decision, most importantly that CR-DD-013 capability evidence
+**CR-DD-012B status update.** Its sequencing prerequisite was satisfied by
+CR-YK-002's atomic-claiming foundation, complete and merged through PR #117 as
+`5155bbb`. `CR-DD-012B-shared-preview-execution-consumption.md` settled the
+consumption questions this document deferred, and the slice has since been
+**implemented** on `claude/cr-dd-012b-shared-preview-execution-35b467` under a
+direct implementation instruction that granted intent but named no bounded file
+allowlist; work proceeded under that document's provisional list as an *inferred*
+scope, which was not a grant, and the gap was closed afterwards by a one-time
+corrective ratification. Implementation authority is spent, an acceptance review at
+`909838f` withheld acceptance pending three repairs, all were implemented, and
+**implementation acceptance is now granted for exact head `bbe5336`. Merge,
+release, and closeout authority are withheld.** The original authority defect —
+the implementation instruction granted intent but named no bounded file allowlist
+— is preserved rather than erased, and was handled by a one-time corrective
+ratification pinned to `bbe5336`. That defect, the ratification, the two paths
+taken beyond the inferred allowlist, the behavioral changes acceptance approved,
+the one remaining place the built code is narrower than the recommendation, and
+an open discovery on the high-risk terminal exit class are all recorded in that
+document rather than absorbed. CR-DD-012A through CR-DD-011 behavior on `main` is unchanged until
+that slice is accepted and merged. The proposal's three previously open questions
+were settled by recorded decision, most importantly that CR-DD-013 capability evidence
 constrains **execution binding only** and never governed-decision formation: a
 volatile observation may execute, bind an already-authorized fallback, or fail
 closed, but may never invent a route the decision did not authorize. That is a
 deliberate correction to current `tc run` route selection and is recorded as
 such. The proposal also records five approval gates binding at two stages: two
-proposal-stage preconditions, already satisfied, and three test obligations that
-any bounded implementation approval must bind and that must pass before
-implementation acceptance, merge, or closeout.
+proposal-stage preconditions, satisfied before implementation, and three test
+obligations that were bound as implementation obligations and pass. Gates passing
+was evidence for the acceptance decision, not the decision; the decision is
+recorded separately and pinned to an exact head.
 
 The CR-DD-012A foundation is specified in
 `CR-DD-012A-governed-decision-foundation.md`. It resolves “exact bytes” as the
 established normalized worker-facing execution representation, not raw
 filesystem or backend transport bytes. CR-DD-012A implementation authority
 is limited to its exact internal module, focused test, and documentation
-allowlist. 012A has landed. The CR-YK-002 prerequisite has since been satisfied,
-so CR-DD-012B is now blocked solely on its own separate explicit approval and
-bounded file allowlist; its proposal is documentation-only and grants nothing.
+allowlist. 012A has landed, and CR-DD-012B has been implemented against it and
+accepted at exact head `bbe5336` on an unmerged branch; that branch is now
+blocked on merge authority, which is a gate this document does not grant.
 
 ## Decision
 
