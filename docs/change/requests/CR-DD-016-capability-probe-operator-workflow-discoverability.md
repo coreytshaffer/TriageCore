@@ -2,21 +2,33 @@
 
 ## Status
 
-- **Status:** Implementation candidate verified; completion is defined by merge of the
-  implementation PR into `main`.
+- **Status:** Complete. The requirements contract, its corrective amendment, and the
+  bounded implementation are all merged into `main`; the completion condition stated
+  below — merge of the implementation PR — was satisfied by PR #157 on 2026-08-11.
+  Closeout is granted and recorded. All CR-DD-016 authorities are spent; this CR
+  creates no standing authority.
 - **Type:** Documentation / Operator Workflow.
 - **Priority:** Research backlog. Downstream of CR-DD-013; does not reopen or amend it.
 - **Implementation authority:** Authorized for exactly the four-path Implementation
   Allowlist below, exercised only within it. No further changes are authorized. Merge of
-  the implementation PR is the final human gate; once merged, that bounded authority is
-  spent.
+  the implementation PR was the final human gate; it occurred at merge commit `7c7fb72`
+  on 2026-08-11, and that bounded authority is now spent.
 - **Human approval requirement:** Explicit human review and approval of this Change
   Request was required before implementation began, and was given separately. Merge of
-  the implementation PR is the final acceptance gate.
+  the implementation PR was the final acceptance gate, and it was satisfied at
+  `7c7fb72`.
+- **Closeout:** Granted by the human operator on 2026-08-29. This closeout-recording
+  grant separately and explicitly authorized exactly two paths — this CR file and
+  `docs/change/change_log.md` — to record CR-DD-016's completed lifecycle. It creates no
+  new implementation, runtime, or scope authority; it does not reopen the Authorized
+  Implementation Allowlist below, which is preserved as the historical record of what
+  the implementation stage was permitted to touch. This grant is spent upon writing the
+  closeout; it does not include merge authority for the closeout PR, which remains a
+  separate human decision. See the Closeout section at the end of this document.
 
-This document records a requirements contract with a verified implementation candidate,
-bounded to exactly the allowlist below. It grants no execution, integration, or standing
-authority beyond that bounded implementation.
+This document records a requirements contract whose bounded implementation is merged and
+closed out. It grants no execution, integration, or standing authority beyond that
+bounded, now-spent implementation.
 
 **Implementation evidence:** commit `01e8b14` on PR #157
 (`claude/cr-dd-016-implementation` → `main`).
@@ -203,6 +215,17 @@ bounded authority is spent. No further file on this list — or any other file �
 touched under this authorization, before or after merge, without a separate, explicit
 approval.
 
+> **Closeout note (2026-08-29):** The allowlist above reflects this CR's
+> implementation-stage authorization and is preserved as written for historical
+> accuracy — it is not silently rewritten, and it was honored exactly (see the Closeout
+> section for the verified file union). The separate, explicit approval its final
+> sentence requires was subsequently granted as a closeout-recording decision, which
+> additionally authorized exactly one path outside this list —
+> `docs/change/change_log.md` — bounded to recording CR-DD-016's completed lifecycle
+> only. That grant does not retroactively expand the implementation-stage allowlist
+> above, reopen any of the four paths for further implementation change, or authorize
+> any other file.
+
 ## Explicitly Out of Scope
 
 - **No default `--output` path for `tc probe`.** A predictable default location (something
@@ -306,3 +329,57 @@ read-only investigations that must not be combined with each other or with this 
   and the post-decision guard in `client.py`. Establish whether `privacy_level="local_ok"`
   is intentional normalization, legacy dead code, or a genuine propagation gap. Read-only
   until its own findings warrant a separately scoped CR.
+
+## Closeout
+
+Recorded 2026-08-29 under separately granted closeout authority (see Status).
+CR-DD-016's lifecycle is complete.
+
+**Merge record.** Three PRs, all merged into `main` on 2026-08-11:
+
+| Stage | PR | Merge commit |
+| --- | --- | --- |
+| Requirements contract (with in-review scope repair `afbd470`) | #155 | `a3bdd7ca6b940e48a8271d11de7ec5e166494615` |
+| Corrective amendment — capability-observation semantics | #156 | `35de5068f97090e5e32c24f8a8285a3cd86705f2` |
+| Bounded implementation (`01e8b14`, status wording `b2d56e3`) | #157 | `7c7fb720aea546763fe062dd08438125d81bdd8c` |
+
+**No false status language was retired.** This closeout differs from the CR-131,
+CR-DD-013, and CR-OC-001C closeouts in one respect worth recording: commit `b2d56e3`
+rephrased the Status, implementation-authority, and evidence wording *before* merge so
+the same text would remain true on both sides of it. Nothing in this document became
+false at the moment of merge, so this closeout records completion rather than repairing
+a stale claim.
+
+**Allowlist verification.** The union of files across all five CR-DD-016 commits
+(`76713fb`, `afbd470`, `65dca1e`, `01e8b14`, `b2d56e3`) is exactly the four authorized
+paths, and all five named exclusions — `local_backend_probe.py`,
+`capability_evidence.py`, `config.py`, `client.py`, `routing/resilience_router.py` —
+were untouched. The `triage_core/tc_cli.py` change is a single `argparse` `help=` string
+on `tc probe --output`. No schema, CLI flag shape, default value, command dispatch,
+probe execution, capability resolution, routing decision, or persistence behavior
+changed; CR-DD-013 remains the governing runtime semantics, unreopened.
+
+**Verification at closeout.** Re-run against merged `main` at `fa66c64`:
+`tests/test_tc_cli.py::test_tc_probe_help_names_capability_probe_record_path` passes,
+and `tests/test_tc_cli.py` with `tests/test_capability_binding.py` is 55 passed,
+0 failed. All five Invariants Preserved above remain true and unmodified by this slice.
+
+**Backlog.** No retirement was required. CR-DD-016 appears in neither `docs/backlog.md`
+nor `docs/current_backlog.md`, so this closeout touches no backlog file — unlike the
+CR-131 and CR-DD-013 closeouts, which each had a stale active-list entry to retire.
+
+**Release.** Not applicable — documentation and CLI help text only, with no package,
+deployment, runtime rollout, or artifact-publication action associated with this change.
+
+**Tracks B and C are not closed by this.** The classifier terminal `"refactor"` fallback
+and the hardcoded `privacy_level="local_ok"` normalization remain exactly as described
+in Sequencing above: independently scoped, read-only, and unresolved. No separate
+investigation record for either exists under `docs/` as of this closeout, and CR-DD-017
+independently records both as remaining separately scoped. Nothing here addresses,
+resolves, or folds them into CR-DD-016's acceptance.
+
+**Authorities.** Proposal acceptance, the bounded four-path implementation authority,
+and merge are all granted or decided and now **spent**. The closeout-recording grant of
+2026-08-29 is spent upon writing this record and did not include merge authority for the
+closeout PR. Any correction, expansion, or downstream integration requires new,
+separate, explicit authority.
