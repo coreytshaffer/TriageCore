@@ -33,6 +33,49 @@ This document does not modify, and should not be read as modifying:
   CR-DD-016's Sequencing rule and CR-DD-017's restatement of it;
 - any `triage_core/` source, schema, test, or fixture.
 
+## Reconciliation against `main` at `c798e0e` — added 2026-08-29, after PR #179 merged
+
+The findings below were established at `fa66c64`. While this record was being drafted,
+**PR #179 (CR-DD-012B, shared preview/execution consumption) merged**, moving `main` to
+`c798e0e` and landing work that overlaps Finding 3. This section reconciles the two rather
+than leaving the record to read as current when part of it no longer is.
+
+**What PR #179 added.** `governed_decision.py` now enumerates a closed
+`CLASSIFICATION_REASON_CODES` vocabulary including `deterministic_classifier_match` and
+`deterministic_classifier_default` (`governed_decision.py:65-72`). `run_plan.py` sets it
+via `_classification_reason_code` (`run_plan.py:221-235`, applied at `run_plan.py:468`),
+which distinguishes a genuine keyword match from the terminal default by reproducing that
+last branch's condition — and its docstring states the same fact this record establishes
+independently: `classify_deterministic` "returns `refactor` both for an explicit refactor
+request and as its terminal default, and it exposes no provenance."
+
+**Effect on Finding 3.** The governed-decision path now *can* distinguish the terminal
+fallback from a real `refactor` classification. That is exactly the provenance Finding 3
+reports as absent, so **Finding 3 is partially superseded for that path.** Two limits keep
+it from being fully resolved:
+
+- The new reason code is derived from `classify_deterministic` only. The ordinary `tc run`
+  execution path still calls `TaskClassifier.classify` with no provenance capture
+  (`client.py:215`), and `task_class_map`/`sensitivity_map` still collapse `bugfix` and
+  `refactor` onto `code_repair` with `sensitivity="low"` before any route evidence is
+  written (`client.py:774-821`).
+- `client.py` does consume a `GovernedDecision` (`client.py:551-574`), so on the
+  governed-plan path the reason can reach execution. **Whether it reaches persisted route
+  evidence was not traced**, and is not asserted here.
+
+**Effect on the other findings — none.** `classifier.py`, `resilience_router.py`, and
+`backends.py` are byte-identical between `fa66c64` and `c798e0e`, and the `client.py` maps
+moved without changing content. Findings 1, 2, and 4 through 7 stand unchanged. The
+`--plan`-versus-execution seam in Finding 7 arguably *widens*: the plan path gained
+classification provenance that the execution path still lacks.
+
+**Citation drift.** Line references to `classifier.py`, `routing/resilience_router.py`, and
+`backends.py` resolve at both commits. References to `client.py`, `run_plan.py`, and
+`routing/route_events.py` were verified at `fa66c64` and **do not resolve at `c798e0e`** —
+for example `run_plan.py:59` is now an import (`classify_deterministic` moved to line 360)
+and `route_events.py:217` is now a docstring (`task_sensitivity` moved to line 241). The
+findings' substance is unaffected; only the line anchors moved.
+
 ## Why this was investigated
 
 CR-DD-016 recorded the observation as an unconnected adjacent finding: `TaskClassifier`'s
@@ -221,11 +264,18 @@ This investigation's findings appear to warrant Change Requests, which is the co
 CR-DD-016 set for leaving read-only status. No identifier is minted and no authority is
 requested by this document. Two candidates are recorded, deliberately **not** combined:
 
-1. **Terminal-fallback semantics and its evidence.** Whether `"refactor"` should become a
-   neutral `"unknown"` with a conservative mapping, and whether the classifier's category
-   should be recorded in route evidence so the fallback's incidence becomes measurable.
-   Touches `classifier.py`, `client.py`'s maps, and — for the evidence half — a schema
-   decision that would have to be reconciled with CR-DD-018.
+1. **Terminal-fallback semantics, and the execution path's missing provenance.** Whether
+   `"refactor"` should become a neutral `"unknown"` with a conservative mapping, and
+   whether the classifier's category should be recorded in the *execution* path's route
+   evidence so the fallback's incidence becomes measurable there.
+
+   **Narrowed by PR #179 — see the Reconciliation section.** The governed-decision path
+   already gained this provenance through `CLASSIFICATION_REASON_CODES`, so a CR here must
+   not re-scope that work. What remains is the ordinary `tc run` path
+   (`client.py:215`) and the `bugfix`/`refactor` collapse in `client.py`'s maps. Any
+   evidence half would still need reconciling with CR-DD-018's contract, and should first
+   establish whether the existing governed-decision reason already reaches persisted route
+   evidence — a question this record leaves open rather than answers.
 2. **Classifier provenance and divergence.** The `"format"` disagreement between the model
    system prompt and the regex cascade, the `--plan`-versus-execution seam, and the
    timeout's measured 2× cost. Touches `classifier.py` and `run_plan.py`, and needs the
