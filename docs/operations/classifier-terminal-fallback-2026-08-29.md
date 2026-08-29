@@ -33,12 +33,22 @@ This document does not modify, and should not be read as modifying:
   CR-DD-016's Sequencing rule and CR-DD-017's restatement of it;
 - any `triage_core/` source, schema, test, or fixture.
 
-## Reconciliation against `main` at `c798e0e` — added 2026-08-29, after PR #179 merged
+## Reconciliation against `main` at `96eb3d3` — added 2026-08-29
 
 The findings below were established at `fa66c64`. While this record was being drafted,
-**PR #179 (CR-DD-012B, shared preview/execution consumption) merged**, moving `main` to
-`c798e0e` and landing work that overlaps Finding 3. This section reconciles the two rather
-than leaving the record to read as current when part of it no longer is.
+`main` advanced three times. This section reconciles the record against the current tip
+rather than leaving it to read as current when part of it no longer is.
+
+| merge | PR | what it changed | affects this record? |
+| --- | --- | --- | --- |
+| `c798e0e` | #179 — CR-DD-012B, shared preview/execution consumption | `run_plan.py`, `client.py`, `route_events.py`, `tc_cli.py`, new `runtime_observation.py` | **Yes** — overlaps Finding 3; see below |
+| `da96b66` | #180 — CR-DD-016 closeout | `docs/` only | No |
+| `96eb3d3` | #166 — CR-132 CLI architecture accounting | `docs/` only (one new CR document) | No |
+
+Only PR #179 touched `triage_core/`. Verified directly: `git diff c798e0e 96eb3d3 --
+triage_core/ tests/ schemas/` is empty, so every source fact below that held at `c798e0e`
+holds unchanged at `96eb3d3`. All citations in this section were re-verified against
+`96eb3d3`, including the two negative controls named under Citation drift.
 
 **What PR #179 added.** `governed_decision.py` now enumerates a closed
 `CLASSIFICATION_REASON_CODES` vocabulary including `deterministic_classifier_match` and
@@ -64,16 +74,18 @@ it from being fully resolved:
   evidence was not traced**, and is not asserted here.
 
 **Effect on the other findings — none.** `classifier.py`, `resilience_router.py`, and
-`backends.py` are byte-identical between `fa66c64` and `c798e0e`, and the `client.py` maps
+`backends.py` are byte-identical between `fa66c64` and `96eb3d3`, and the `client.py` maps
 moved without changing content. Findings 1, 2, and 4 through 7 stand unchanged. The
 `--plan`-versus-execution seam in Finding 7 arguably *widens*: the plan path gained
 classification provenance that the execution path still lacks.
 
 **Citation drift.** Line references to `classifier.py`, `routing/resilience_router.py`, and
-`backends.py` resolve at both commits. References to `client.py`, `run_plan.py`, and
-`routing/route_events.py` were verified at `fa66c64` and **do not resolve at `c798e0e`** —
-for example `run_plan.py:59` is now an import (`classify_deterministic` moved to line 360)
-and `route_events.py:217` is now a docstring (`task_sensitivity` moved to line 241). The
+`backends.py` resolve at every commit named here. References to `client.py`, `run_plan.py`,
+and `routing/route_events.py` were verified at `fa66c64` and **do not resolve at `c798e0e`
+or `96eb3d3`** — `run_plan.py:59` is now an import (`classify_deterministic` moved to line
+360) and `route_events.py:217` is now a docstring (`task_sensitivity` moved to line 241).
+Both were re-checked at `96eb3d3` as negative controls and still point at the wrong
+content, confirming the drift is real rather than an artifact of how it was measured. The
 findings' substance is unaffected; only the line anchors moved.
 
 ## Why this was investigated
