@@ -14,8 +14,23 @@
   network endpoint identities that are bound to its governed decision and authorized by
   trusted destination policy. A route's name is never treated as evidence of where its
   traffic goes.*
-- **Evidence baseline:** `main` at `1dc9b88631748a4c71ebdf331c0536f33a714256`. Every
-  repository fact below was observed at that commit. Re-verify when the pin changes.
+- **Evidence baseline:** the Problem Statement's established facts, and the other
+  repository facts from the original design investigation, were observed at `main` at
+  `1dc9b88631748a4c71ebdf331c0536f33a714256`. Re-verify when the pin changes. The
+  Post-Acceptance Record and the Slice 1 Review-Condition Checklist rest on later pins,
+  identified separately:
+  - `main@ed9e1651461188696ffdc704f4beeab3883994d9`: the merge record, the branch base,
+    and `backends.py:422-439`;
+  - `149aa8e`: the slice 1 files, test and function names, and the behaviour of
+    `backend_protocol_unsupported`;
+  - `a0bbd93`: the accepted design and its 17-code vocabulary;
+  - the PR #186 and PR #187 descriptions as of 2026-10-18;
+  - GitHub Actions run `39171753206`.
+
+  (First recorded as: "`main` at `1dc9b88631748a4c71ebdf331c0536f33a714256`. Every
+  repository fact below was observed at that commit. Re-verify when the pin changes."
+  Narrowed in the PR #188 correction cycle, because that statement no longer covered the
+  reconciliation sections.)
 - **Proposal drafting authority:** Granted by the human operator on 2026-10-18 for this
   single document. Recorded verbatim under Authority Record.
 - **Owner decisions:** Five recorded (D1–D5), plus two further approvals. See Owner
@@ -62,7 +77,7 @@
 | slice 1 corrective grants | four, same two files; exercised at `c228157`, `412dbf7`, `fc02328`, `149aa8e`; exhausted |
 | slice 1 implementation acceptance | **granted** 2026-10-18, pinned to `149aa8e`, recorded in PR #187 |
 | design amendment 1 (`backend_protocol_unsupported`) | **approved** 2026-10-18, separately from the `a0bbd93` design acceptance |
-| slice 1 review-condition reconciliation | checklist recorded; open decisions listed (see Slice 1 Review-Condition Checklist) |
+| slice 1 review-condition reconciliation | checklist recorded; U-1 and U-2 resolved 2026-10-18; U-3 open (see Slice 1 Review-Condition Checklist) |
 | accepted-design preservation | annotated tag `cr-135-design-accepted-a0bbd93` authorized (see Post-Acceptance Record) |
 | slice 1 merge / release / closeout | not granted |
 | slice 2 and slice 3 implementation authority | not granted |
@@ -469,7 +484,7 @@ Test names refer to `tests/test_destination_policy.py` at `149aa8e`.
 | C3 | `CONFIGURATION_VERSION`, existing schemas, configuration files and workflows unchanged | R-G | — | C1 scope | Met |
 | C4 | No external network in tests | R-G | Recording adapter on the guard's own session | Autouse socket-blocking fixture | Met |
 | C5 | **Parsing:** strict normalization, validated never repaired, per the endpoint-normalization and base-path tables | R-D, R-G category "parsing" | `normalize_endpoint`, `_split_endpoint`, `_parse_host`, `canonicalize_base_path` | `test_rejected_endpoint_forms_have_named_codes`, `test_noncanonical_base_paths_are_rejected`, `test_canonical_base_paths`, `test_trailing_slash_is_the_only_normalization_and_is_equivalent`, LAN, remote and cloud tests | Met for the design tables |
-| C6 | **Parsing:** preference for standard-library URL tokenization followed by strict validation | R-V, as reported in the PR #187 implementation review | Purpose-written tokenizer (`_split_endpoint`), not `urllib.parse.urlsplit` | — | **Deviation, recorded below; owner decision open (U-1)** |
+| C6 | **Parsing:** preference for standard-library URL tokenization followed by strict validation | R-V, as reported in the PR #187 implementation review | Purpose-written tokenizer (`_split_endpoint`), not `urllib.parse.urlsplit` | — | **Deviation, recorded below; accepted by the operator as a recorded deviation at `149aa8e` (U-1)** |
 | C7 | **Method-and-URL binding:** closed per-protocol request set; exact prepared method and URL match; no prefix matching; binding allowlist and policy both enforced | R-D (S3, protocol table), R-G, R-C (`412dbf7` finding 1) | `allowed_request_urls`; guard permits the intersection of `binding.allowed_requests` and `policy.permitted_calls` | `test_allowed_request_urls_are_exact_and_closed`, `test_guard_refuses_collisions_and_off_set_urls_before_send`, `test_guard_compares_the_url_actually_sent`, `test_guard_enforces_the_binding_allowlist_as_well_as_the_policy`, `test_guard_enforces_a_policy_that_removes_post`, `test_guard_cloud_route_permits_only_generation_on_the_canonical_url` | Met at unit level |
 | C8 | **Error provenance:** refusal type neither `RequestException` nor `ValueError`; messages carry the reason code and safe label only; inspection refusals carry no chained exception or inspected value | R-D (Propagation), R-G, grant 4 item 4 | `DestinationPolicyError`; refusals raised after the inspection `try` | `test_destination_error_is_not_a_swallowable_type`, `test_refusal_messages_never_carry_raw_input`, `test_inspection_failure_latches_and_stays_refused_after_restore` | Met. The engine re-raise is slice 2 |
 | C9 | **Runtime seal:** deterministic policy digest kept separate from the per-instance runtime seal; session checked against both before every send | R-D (correction 10, F12), R-G | `TransportPolicy.sha256`; `_session_fingerprint` and `_seal`; `_check_session` | `test_policy_digest_is_independent_of_runtime_objects`, `test_digests_are_identical_across_processes`, session-mutation tests at three stages | Met at unit level |
@@ -495,17 +510,31 @@ The source for C6 is the PR #187 implementation review at `5d72645`, recorded ve
 > existed.
 
 The read-only plan had already proposed a purpose-written parser. The implementation
-kept it, for these reasons:
+kept it as an implementation choice. Standard-library tokenization followed by strict
+validation of the raw substrings could also meet the design tables, because
+`urlsplit(...).netloc` preserves the host as written (only `.hostname` lowercases it). The
+purpose-written parser was chosen because:
 
-- `urlsplit` lowercases the host, which would hide case variants that the design rejects
-  rather than repairs;
-- `urlsplit` reports an invalid port only when `.port` is read, so a malformed port is not
-  a tokenization failure;
-- `urlsplit` tokenizes some forms (backslashes, `@` placement) differently from how
-  `requests` prepares a URL, and the guard compares against the prepared URL.
+- validation runs on the raw string with no normalizing step, so nothing has to avoid
+  accessors such as `.hostname`;
+- `urlsplit` defers port errors: an out-of-range or non-decimal port raises only when
+  `.port` is read;
+- `urlsplit` and `requests` can disagree about the host. For
+  `http://127.0.0.1\@evil.example/v1`:
+  - `urlsplit` reports `evil.example`;
+  - urllib3, used by `requests`, reports `127.0.0.1`;
+  - `requests` prepares `http://127.0.0.1/%5C@evil.example/v1`;
+  - the purpose-written parser refuses it as `endpoint_credentials_embedded`.
+
+  Observed on Python 3.12.3 with `requests` 2.34.2.
+
+Neither approach is claimed to lose information the other keeps. (Corrected on
+2026-10-18 in the PR #188 correction cycle. The rationale first recorded at `4601191`
+stated that `urlsplit` lowercases the host. That holds only for `.hostname`, as the
+operator reproduced on Python 3.12.14.)
 
 The deviation stays a deviation. Neither this record nor implementation acceptance turns
-it into compliance.
+it into compliance. The operator accepted it as a recorded deviation under U-1.
 
 ### Evidence gap E-1: the operator's slice 1 review
 
@@ -520,14 +549,43 @@ it into compliance.
 - **What C5–C19 show:** they map the requirements that can be identified to evidence.
   They do **not** establish that the review's other, unseen conditions are satisfied.
 - **Nothing is waived.** This record does not waive those conditions.
+- **Retrieval:** the operator's later retrieval recovered summaries of the review, not
+  its original full text.
+- **Disposition (U-2):** E-1 is kept as a historical evidence gap. C1–C19 and the
+  recorded deviations (C6, C12) are adopted as the prospective review baseline for the
+  slice 1 implementation. The unseen conditions are not claimed to have been satisfied.
 
-### Unresolved decisions (returned for review)
+### Decisions returned for review
 
-| ID | Decision | Options |
-|---|---|---|
-| U-1 | Parser deviation (C6) | Accept the purpose-written parser as a recorded deviation; or require standard-library tokenization with strict validation, under a new grant naming the two slice 1 files |
-| U-2 | Evidence gap E-1 | Supply the review text for reconciliation against C1–C19; or decide explicitly how its unseen conditions are to be treated. This record makes neither choice |
-| U-3 | Owner-type regression coverage | Schedule the test under a future grant naming `tests/test_destination_policy.py`, or carry it into slice 2 |
+At `4601191` this subsection was headed "Unresolved decisions (returned for review)".
+It listed U-1 to U-3 as open, and stated for U-2 that "This record makes neither choice".
+
+| ID | Decision | Options as returned at `4601191` | Status |
+|---|---|---|---|
+| U-1 | Parser deviation (C6) | Accept the purpose-written parser as a recorded deviation; or require standard-library tokenization with strict validation, under a new grant naming the two slice 1 files | **Resolved 2026-10-18:** custom parser accepted at `149aa8e` as a recorded deviation, with its rationale corrected; no parser rewrite |
+| U-2 | Evidence gap E-1 | Supply the review text for reconciliation against C1–C19; or decide explicitly how its unseen conditions are to be treated | **Resolved 2026-10-18:** E-1 kept as a historical gap; C1–C19 and the recorded deviations adopted as the prospective review baseline; unseen conditions not claimed satisfied |
+| U-3 | Owner-type regression coverage | Schedule the test under a future grant naming `tests/test_destination_policy.py`, or carry it into slice 2 | **Open.** The operator recommended a separate test-only cycle before merging PR #187, then review of the resulting head. Not yet granted |
+
+**Decision record for U-1 and U-2.** On 2026-10-18 at 22:56 UTC (15:56 PDT) the
+operator wrote, recorded verbatim:
+
+> Grant the PR #188 correction cycle and record U-1 and U-2
+
+That instruction adopted the dispositions the operator had recommended in their
+documentation review of PR #188 at `4601191`, recorded verbatim:
+
+> U-1: parser deviation	Accept the custom parser at 149aa8e as a recorded deviation after correcting its rationale. No parser rewrite needed.
+
+> U-2: missing review	Retain E-1 as a historical evidence gap. Explicitly adopt C1–C19 and the recorded deviations as the prospective review baseline, without claiming unseen conditions were satisfied. Retrieval recovered summaries, not the original full text.
+
+The same review recommended, recorded verbatim, and this record does not adopt as a
+decision:
+
+> U-3: owner-type test	Add the regression in a separate test-only cycle before merging PR #187, then review the resulting head. It does not reopen the resolved inspection-failure finding.
+
+Neither decision grants anything downstream. Neither grants a parser change, a test
+change, merge, release, closeout or slice 2 work. A test-only commit for U-3 would move
+PR #187's head past `149aa8e`, and that head would need its own review and acceptance.
 
 The test file at `149aa8e` still describes `backend_protocol_unsupported` in a comment as
 "flagged for implementation-acceptance review". The comment is now out of date. It is
