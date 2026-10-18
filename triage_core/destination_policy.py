@@ -36,6 +36,7 @@ from typing import Any, Dict, FrozenSet, List, Mapping, Optional, Sequence, Tupl
 
 import requests
 from requests.adapters import BaseAdapter
+from requests.structures import CaseInsensitiveDict
 
 
 DESTINATION_POLICY_SCHEMA = "triagecore.destination_policy.v1"
@@ -822,14 +823,22 @@ class GuardedTransport:
     1. the call's keyword arguments against a closed allowlist;
     2. that an owner has been bound and the transport has not already refused;
     3. that the live session conforms to the canonical :class:`TransportPolicy` and
-       still equals the runtime seal recorded at construction;
+       still equals the runtime seal recorded at construction, which covers its
+       headers, cookies and parameters as well as its transport settings;
     4. that the owner's *current* ``base_url`` still produces the frozen identity,
        independently of the request URL;
     5. that the prepared request's method and URL exactly equal a pair the binding
        allows *and* the transport policy permits; a policy can only remove calls.
 
-    Any refusal latches: every later call in the attempt is refused without sending.
-    A 3xx response is a late refusal: the redirect is never followed.
+    Requests are prepared on their own, never merged with session state, so session
+    headers, cookies, authentication and parameters cannot reach the wire even if the
+    seal were bypassed. Each request carries a fixed copy of the default headers an
+    ordinary ``requests.Session`` adds, captured once at construction, plus the call's
+    own headers.
+
+    Any refusal latches: every later call in the attempt is refused without sending,
+    and :meth:`verify_integrity` reports the latched refusal. A 3xx response is a late
+    refusal: the redirect is never followed.
     """
 
     def __init__(
@@ -842,10 +851,14 @@ class GuardedTransport:
             raise TypeError("GuardedTransport requires a RouteBinding and TransportPolicy")
         self._binding = binding
         self._policy = policy
+        # Permitted only when both the binding and the policy allow the request.
         self._suffixes = {
-            (method, f"{binding.endpoint.canonical}/{suffix}"): suffix
+            (method, url): suffix
             for method, suffix in policy.permitted_calls(binding.protocol)
+            for url in (f"{binding.endpoint.canonical}/{suffix}",)
+            if (method, url) in binding.allowed_requests
         }
+        self._default_headers = tuple(requests.utils.default_headers().items())
         session = requests.Session()
         session.trust_env = policy.trust_env
         session.proxies = dict(policy.proxies)
@@ -899,6 +912,8 @@ class GuardedTransport:
     def verify_integrity(self) -> None:
         """The S2 check: policy conformance, runtime seal and owner identity."""
 
+        if self._state.refusal is not None:
+            raise DestinationPolicyError(self._state.refusal, self._binding.safe_label)
         if self._state.owner is None:
             self._refuse("transport_not_guarded")
         self._check_session()
@@ -943,6 +958,14 @@ class GuardedTransport:
             id(session.auth) if session.auth is not None else None,
             hooks,
             tuple((prefix, id(adapter)) for prefix, adapter in session.adapters.items()),
+            tuple(sorted((key.lower(), value) for key, value in session.headers.items())),
+            tuple(
+                sorted(
+                    (cookie.domain, cookie.path, cookie.name, cookie.value)
+                    for cookie in session.cookies
+                )
+            ),
+            repr(session.params),
         )
 
     def _check_session(self) -> None:
@@ -987,12 +1010,13 @@ class GuardedTransport:
         if type(url) is not str:
             self._refuse("transport_request_not_permitted")
         try:
-            prepared = self._session.prepare_request(
-                requests.Request(
-                    method, url, headers=kwargs.get("headers"), json=kwargs.get("json")
-                )
-            )
-        except (requests.RequestException, ValueError):
+            headers = CaseInsensitiveDict(self._default_headers)
+            headers.update(kwargs.get("headers") or {})
+            # Prepared on its own: no session headers, cookies, auth or params merge in.
+            prepared = requests.Request(
+                method, url, headers=headers, json=kwargs.get("json")
+            ).prepare()
+        except (requests.RequestException, ValueError, TypeError):
             self._refuse("transport_request_not_permitted")
         suffix = self._suffixes.get((prepared.method, prepared.url))
         if suffix is None:

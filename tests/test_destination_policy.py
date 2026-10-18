@@ -11,6 +11,7 @@ runtime uses this module yet.
 from __future__ import annotations
 
 import ast
+import dataclasses
 import itertools
 import json
 import os
@@ -765,6 +766,22 @@ def _raise_redirect_limit(session):
     session.max_redirects = 30
 
 
+def _set_authorization_header(session):
+    session.headers["Authorization"] = "Bearer injected"
+
+
+def _change_default_header(session):
+    session.headers["User-Agent"] = "spoofed"
+
+
+def _set_cookie(session):
+    session.cookies.set("session", "injected")
+
+
+def _set_params(session):
+    session.params = {"q": "1"}
+
+
 SESSION_MUTATIONS = [
     _set_trust_env,
     _set_proxy,
@@ -774,6 +791,10 @@ SESSION_MUTATIONS = [
     _set_auth,
     _set_cert,
     _raise_redirect_limit,
+    _set_authorization_header,
+    _change_default_header,
+    _set_cookie,
+    _set_params,
 ]
 
 
@@ -1112,6 +1133,80 @@ def test_guard_refuses_every_send_after_policy_tampering():
     assert refusal(guard.get, binding.endpoint.canonical + "/models") == (
         "transport_settings_changed"
     )
+    assert adapter.calls == []
+
+
+def test_guard_enforces_the_binding_allowlist_as_well_as_the_policy():
+    """Third corrective review, finding 1: the intersection of both allowlists."""
+
+    binding = _local_binding()
+    empty = dataclasses.replace(binding, allowed_requests=frozenset())
+    for method, suffix in (("get", "/models"), ("post", "/chat/completions")):
+        guard, adapter = _bound_guard(empty, DEFAULT_TRANSPORT_POLICY)
+        send = getattr(guard, method)
+        assert refusal(send, binding.endpoint.canonical + suffix, json={}) == (
+            "transport_request_not_permitted"
+        )
+        assert adapter.calls == []
+
+    get_only = dataclasses.replace(
+        binding,
+        allowed_requests=frozenset({("GET", binding.endpoint.canonical + "/models")}),
+    )
+    guard, adapter = _bound_guard(get_only, DEFAULT_TRANSPORT_POLICY)
+    guard.get(binding.endpoint.canonical + "/models")
+    assert refusal(guard.post, binding.endpoint.canonical + "/chat/completions", json={}) == (
+        "transport_request_not_permitted"
+    )
+    assert [c["method"] for c in adapter.calls] == ["GET"]
+
+
+def test_guard_never_inherits_session_state_even_if_the_seal_were_bypassed():
+    """Third corrective review, finding 2: session state cannot reach the wire."""
+
+    binding = _local_binding()
+    guard, adapter = _bound_guard(binding, DEFAULT_TRANSPORT_POLICY)
+    guard._session.headers["Authorization"] = "Bearer injected"
+    guard._session.cookies.set("session", "injected")
+    guard._session.auth = None
+    guard._seal = guard._session_fingerprint()  # simulate a bypassed seal
+    guard.post(binding.endpoint.canonical + "/chat/completions", json={"model": "fixed"})
+    (call,) = adapter.calls
+    assert "Authorization" not in call["headers"]
+    assert "Cookie" not in call["headers"]
+
+
+def test_guard_headers_match_an_ordinary_session_and_keep_call_headers():
+    binding = _local_binding()
+    guard, adapter = _bound_guard(binding, DEFAULT_TRANSPORT_POLICY)
+    url = binding.endpoint.canonical + "/chat/completions"
+    guard.post(url, json={"model": "fixed"}, headers={"X-Test": "1"})
+    expected = requests.Session().prepare_request(
+        requests.Request("POST", url, json={"model": "fixed"}, headers={"X-Test": "1"})
+    )
+    (call,) = adapter.calls
+    assert call["headers"] == dict(expected.headers)
+    assert call["headers"]["X-Test"] == "1"
+
+
+def test_guard_refuses_malformed_call_headers_without_sending():
+    binding = _local_binding()
+    guard, adapter = _bound_guard(binding, DEFAULT_TRANSPORT_POLICY)
+    assert refusal(guard.get, binding.endpoint.canonical + "/models", headers=["bad"]) == (
+        "transport_request_not_permitted"
+    )
+    assert adapter.calls == []
+
+
+def test_verify_integrity_reports_a_latched_refusal():
+    """Third corrective review, finding 3."""
+
+    binding = _local_binding()
+    guard, adapter = _bound_guard(binding, DEFAULT_TRANSPORT_POLICY)
+    assert refusal(guard.post, binding.endpoint.canonical + "/embeddings", json={}) == (
+        "transport_request_not_permitted"
+    )
+    assert refusal(guard.verify_integrity) == "transport_request_not_permitted"
     assert adapter.calls == []
 
 
