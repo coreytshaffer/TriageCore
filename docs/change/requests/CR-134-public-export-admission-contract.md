@@ -13,6 +13,8 @@
   repository fact below was observed at that commit. Re-verify when the pin changes.
 - **Proposal drafting authority:** Granted by the human operator on 2026-10-18 for this
   single document. Recorded verbatim in Authority Record below.
+- **Publication:** Granted by the human operator on 2026-10-18 for the designated feature
+  branch only, and exercised. No pull request. Recorded verbatim under Publication grant.
 - **Owner decisions:** Two recorded on 2026-10-18; see Owner Decisions. They settle two
   design questions. They do not constitute design acceptance.
 - **Proposal acceptance:** Pending review of this completed document.
@@ -27,6 +29,7 @@
 |---|---|
 | identifier allocation | CR-134, allocated by the operator after a census of `docs/change/requests/` at `ede8ef1` (highest numeric CR-133; no existing delegation or export CR) |
 | proposal drafting | granted, single document |
+| publication | granted for the designated feature branch only; exercised (see Publication grant); no pull request |
 | owner decisions | two recorded (see Owner Decisions) |
 | proposal acceptance | pending |
 | design acceptance | pending |
@@ -70,8 +73,30 @@ The operator's grant of 2026-10-18, recorded verbatim:
 The grant names the file path
 `docs/change/requests/CR-134-public-export-admission-contract.md`. It does not name
 publication (push or pull request); in this repository publication has been treated as a
-separately granted action (see the CR-DD-012B publication record), so this document is
-committed locally only until publication is separately granted.
+separately granted action (see the CR-DD-012B publication record), so the draft was first
+committed locally only.
+
+### Publication grant
+
+On 2026-10-18 the operator separately granted publication of the exact drafted commit to
+the session's designated feature branch, recorded verbatim:
+
+> push 5934ebf to the branch
+
+Exercised: commit `5934ebf` was pushed as the new branch
+`claude/triagecore-delegation-architecture-3jpqaa`, and a fetch confirmed the remote tip
+was `5934ebf`. No pull request was opened. An earlier push attempt, made before this grant
+in response to the session environment's requirement that unpushed commits be pushed, was
+refused by GitHub (HTTP 403) and published nothing.
+
+The operator then directed, recorded verbatim:
+
+> Update the Authority Record with the publication grant and push
+
+This section is that update, published to the same branch under that direction. Each
+direction is single-use and exhausted by its push. Neither covers anything beyond this
+branch: neither authorizes opening a pull request, and neither confers proposal, design,
+or implementation acceptance.
 
 ## Owner Decisions
 
@@ -784,11 +809,13 @@ baseline v1.0, pinned to `ede8ef1`) is preserved unchanged by this CR.
 - Any surface marked `excluded_from_v0`.
 - Any delegation of action authority to an external recipient.
 - Backlog, change-log, architecture, and README updates.
-- Publication of this document, merge, release, deployment, and closeout.
+- Publication beyond the designated feature branch, opening a pull request, merge,
+  release, deployment, and closeout.
 
 ## Stop Point
 
 This document is the stop point. It proposes a contract and records two owner decisions.
 Proposal acceptance and design acceptance are pending review of this completed document.
-No implementation, test, fixture, CLI, credential, ledger, publication, merge, release, or
-deployment action is authorized by it.
+No implementation, test, fixture, CLI, credential, ledger, pull-request, merge, release, or
+deployment action is authorized by it, and it grants no publication beyond the branch push
+recorded under Publication grant.
