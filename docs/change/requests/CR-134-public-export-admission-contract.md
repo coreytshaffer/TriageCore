@@ -14,7 +14,10 @@
 - **Proposal drafting authority:** Granted by the human operator on 2026-10-18 for this
   single document. Recorded verbatim in Authority Record below.
 - **Publication:** Granted by the human operator on 2026-10-18 for the designated feature
-  branch only, and exercised. No pull request. Recorded verbatim under Publication grant.
+  branch only, and exercised. Recorded verbatim under Publication grant.
+- **Draft pull request:** Directed by the human operator on 2026-10-18 and opened as draft
+  [PR #184](https://github.com/coreytshaffer/TriageCore/pull/184). Review exposure only.
+  Recorded verbatim under Draft pull request direction.
 - **Owner decisions:** Two recorded on 2026-10-18; see Owner Decisions. They settle two
   design questions. They do not constitute design acceptance.
 - **Proposal acceptance:** Pending review of this completed document.
@@ -29,7 +32,8 @@
 |---|---|
 | identifier allocation | CR-134, allocated by the operator after a census of `docs/change/requests/` at `ede8ef1` (highest numeric CR-133; no existing delegation or export CR) |
 | proposal drafting | granted, single document |
-| publication | granted for the designated feature branch only; exercised (see Publication grant); no pull request |
+| publication | granted for the designated feature branch only; exercised (see Publication grant) |
+| draft pull request | directed by the operator; opened as draft [PR #184](https://github.com/coreytshaffer/TriageCore/pull/184) (see Draft pull request direction) |
 | owner decisions | two recorded (see Owner Decisions) |
 | proposal acceptance | pending |
 | design acceptance | pending |
@@ -97,6 +101,23 @@ This section is that update, published to the same branch under that direction. 
 direction is single-use and exhausted by its push. Neither covers anything beyond this
 branch: neither authorizes opening a pull request, and neither confers proposal, design,
 or implementation acceptance.
+
+### Draft pull request direction
+
+On 2026-10-18 the operator separately directed, recorded verbatim:
+
+> Open a draft PR for CR-134
+
+Exercised: draft
+[PR #184](https://github.com/coreytshaffer/TriageCore/pull/184) was opened from
+`claude/triagecore-delegation-architecture-3jpqaa` (head `c747276`) into `main`. The
+operator then directed, recorded verbatim:
+
+> Record the draft PR direction and watch the PR
+
+This subsection is that record, pushed to the same branch. Opening the draft is review
+exposure only. It does not mark the pull request ready for review, and it confers no
+proposal, design, implementation, merge, or release authority.
 
 ## Owner Decisions
 
@@ -809,13 +830,13 @@ baseline v1.0, pinned to `ede8ef1`) is preserved unchanged by this CR.
 - Any surface marked `excluded_from_v0`.
 - Any delegation of action authority to an external recipient.
 - Backlog, change-log, architecture, and README updates.
-- Publication beyond the designated feature branch, opening a pull request, merge,
-  release, deployment, and closeout.
+- Publication beyond the designated feature branch and draft PR #184, marking that pull
+  request ready for review, merge, release, deployment, and closeout.
 
 ## Stop Point
 
 This document is the stop point. It proposes a contract and records two owner decisions.
 Proposal acceptance and design acceptance are pending review of this completed document.
-No implementation, test, fixture, CLI, credential, ledger, pull-request, merge, release, or
-deployment action is authorized by it, and it grants no publication beyond the branch push
-recorded under Publication grant.
+No implementation, test, fixture, CLI, credential, ledger, merge, release, or deployment
+action is authorized by it, and it grants no publication beyond the branch pushes and the
+draft pull request recorded under Authority Record.
