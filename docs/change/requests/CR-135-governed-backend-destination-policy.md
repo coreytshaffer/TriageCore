@@ -3,8 +3,12 @@
 ## Status
 
 - **Status:** Proposal and design accepted by the human operator on 2026-10-18, pinned
-  to `a0bbd93fd4b82167c07e901dbdc7feac22847975`. Implementation not authorized. (First recorded as: Proposed.
-  Proposal-only documentation.)
+  to `a0bbd93fd4b82167c07e901dbdc7feac22847975`. Design amendment 1
+  (`backend_protocol_unsupported`) approved separately on 2026-10-18. Slice 1 (contract
+  module, not integrated) implemented and accepted at
+  `149aa8e4d01e19f5c9e4f791822613f9402b978c`. Slice 2 not authorized. (First recorded as:
+  Proposed. Proposal-only documentation. Then, at `e127d7e`: Proposal and design
+  accepted; implementation not authorized.)
 - **Type:** Governance kernel: privacy and provenance, capability and effect bounds.
   The invariant this CR strengthens: *a governed `tc run` attempt sends requests only to
   network endpoint identities that are bound to its governed decision and authorized by
@@ -29,8 +33,15 @@
 - **Design acceptance:** Granted by the human operator on 2026-10-18 for the design as
   recorded in this document at `a0bbd93`. Recorded verbatim under Acceptance record.
   (First recorded as: Not granted.)
-- **Implementation authority:** Not granted.
-- **Implementation acceptance / merge / release / closeout:** Not granted.
+- **Documentation merge:** PR #186 squash-merged into `main` by the operator as
+  `ed9e1651461188696ffdc704f4beeab3883994d9`. See Post-Acceptance Record.
+- **Implementation authority:** Slice 1 only: one implementation grant and four
+  corrective grants, all exercised and exhausted. Slice 2 and slice 3: not granted.
+  (First recorded as: Not granted.)
+- **Implementation acceptance:** Slice 1 only, pinned to `149aa8e`, recorded in
+  [PR #187](https://github.com/coreytshaffer/TriageCore/pull/187). (First recorded as: Not
+  granted.)
+- **Slice 1 merge / release / closeout:** Not granted.
 
 ### Lifecycle state
 
@@ -46,11 +57,21 @@
 | final design review at `a0bbd93` | proposal and design acceptance recommended; no further document corrections required |
 | proposal acceptance | **granted** 2026-10-18, pinned to `a0bbd93` (see Acceptance record) |
 | design acceptance | **granted** 2026-10-18 for the design as recorded at `a0bbd93` (see Acceptance record) |
-| implementation authority | not granted |
-| implementation acceptance | not granted |
-| merge authority | not granted |
-| release authority | not granted |
-| closeout | not granted |
+| documentation merge | PR #186 squash-merged by the operator as `ed9e165`; file content identical to `e127d7e` (see Post-Acceptance Record) |
+| slice 1 implementation authority | granted 2026-10-18 (P1(a), two-file allowlist); exercised at `5d72645`; exhausted |
+| slice 1 corrective grants | four, same two files; exercised at `c228157`, `412dbf7`, `fc02328`, `149aa8e`; exhausted |
+| slice 1 implementation acceptance | **granted** 2026-10-18, pinned to `149aa8e`, recorded in PR #187 |
+| design amendment 1 (`backend_protocol_unsupported`) | **approved** 2026-10-18, separately from the `a0bbd93` design acceptance |
+| slice 1 review-condition reconciliation | checklist recorded; open decisions listed (see Slice 1 Review-Condition Checklist) |
+| accepted-design preservation | annotated tag `cr-135-design-accepted-a0bbd93` authorized (see Post-Acceptance Record) |
+| slice 1 merge / release / closeout | not granted |
+| slice 2 and slice 3 implementation authority | not granted |
+| CR-135 closeout | not granted |
+
+Rows above "documentation merge" are as recorded at `e127d7e`, except that the last five
+rows recorded there (implementation authority, implementation acceptance, merge
+authority, release authority, closeout: all "not granted") are replaced by the rows
+from "documentation merge" down.
 
 ## Scope
 
@@ -59,6 +80,9 @@ Exactly one file: this document.
 No code, test, schema, configuration, CLI, credential, evidence-ledger, backlog,
 change-log, architecture, or README change is made or authorized. This grant does not
 authorize branch publication, push, pull request, merge, release, or deployment.
+
+This section records the drafting grant's scope, as first recorded. Later grants, each
+with its own scope, are recorded under Post-Acceptance Record.
 
 ## Human Approval Requirement
 
@@ -72,7 +96,13 @@ results when such an allowlist is inferred instead of granted.
 ## Implementation Authority
 
 **Not granted.** The Proposed Implementation Slices section is a proposal for review, not
-an allowlist anyone may act on.
+an allowlist anyone may act on. (As first recorded.)
+
+**Slice 1 only, now exhausted.** The operator later granted one slice 1 implementation
+grant and four corrective grants, each naming the same two-file allowlist. All five were
+exercised and are exhausted (see Post-Acceptance Record). No implementation authority is
+currently open for this CR. Slice 2 and slice 3 each need their own grant naming an exact
+file allowlist.
 
 ## Authority Record
 
@@ -166,6 +196,343 @@ Scope and limits of both decisions:
   into runtime.
 - **Unchanged.** CR-134's accepted design, the NIST/ISO assessment scores, and the
   separate M03/M09a records are unchanged.
+
+## Post-Acceptance Record (reconciliation, 2026-10-18)
+
+This section was added on `claude/cr-135-slice1-reconciliation`, branched from
+`main@ed9e1651461188696ffdc704f4beeab3883994d9`. It records decisions made after the
+acceptance record at `e127d7e`. The rest of the document is kept as recorded. The only
+changes elsewhere are later-status notes in these sections, each of which keeps its
+earlier text:
+
+- Status;
+- Lifecycle state;
+- Scope;
+- Implementation Authority;
+- Proposed Implementation Slices;
+- Deferred Work;
+- Explicit Exclusions;
+- Stop Point.
+
+The design as accepted at `a0bbd93` is unchanged. The one addition to it is the
+Reason-code vocabulary subsection, which lists the 17 accepted codes and design
+amendment 1, recorded separately below.
+
+Quotations are verbatim from the operator's messages in the session that carried out
+this work, or from the PR descriptions cited. Where only a short instruction exists, the
+scope it approved is described and attributed, and is not presented as a quotation.
+
+### Documentation merge (PR #186)
+
+- **Merged by:** the operator (GitHub `merged_by`: `coreytshaffer`), on 2026-10-18 at
+  06:59:47 UTC (2026-10-17 23:59:47 PDT). No merge authority was issued to the agent; the
+  operator performed the merge.
+- **Squash commit:** `ed9e1651461188696ffdc704f4beeab3883994d9`, parent `main@1dc9b88`,
+  one file.
+- **Content:** the merged file's git blob (`5301b317feaef4e3bfd09971c0dcd261878e981e`) is
+  identical to the file at the PR head `e127d7e`: 887 lines, SHA-256
+  `c21a336b26acd40d5581e6ac985965ae1b0e54b0b39ff4115e814ad356505fe4`.
+- **Accepted-design commit:** `a0bbd93` is reachable from `e127d7e` but not from `main`,
+  because the merge was a squash. See Accepted-design preservation.
+
+The operator's disposition after the merge, recorded verbatim:
+
+> Disposition: CR-135's accepted design is now recorded on `main`. M04 remains
+> design-complete, not implementation-complete. No NIST/ISO assessment scores or security
+> assurance claims change as a result of this merge.
+
+### Slice 1 implementation grant (exercised; exhausted)
+
+Granted on 2026-10-18 at 07:12 UTC (00:12 PDT), after a read-only slice 1 plan. Recorded
+verbatim:
+
+> CR-135 Slice 1 — Implementation authorization
+>
+> I authorize one bounded implementation candidate for CR-135 Slice 1, selecting P1(a).
+>
+> Baseline: "main@ed9e1651461188696ffdc704f4beeab3883994d9"
+>
+> Branch: "claude/cr-135-slice1-destination-policy", created separately from the M03/M09a and CR-135 documentation branches.
+>
+> Exact writable allowlist:
+>
+> - "triage_core/destination_policy.py" — new file
+> - "tests/test_destination_policy.py" — new file
+>
+> Implement the accepted destination-policy contract, strict endpoint normalization, pure configuration resolution, deterministic policy digests, route bindings, and "GuardedTransport" with its offline recording-adapter tests.
+>
+> Follow the additional parsing, method-and-URL binding, error-provenance, runtime-seal and test-evidence conditions established in the Slice 1 review.
+>
+> Publication authority: After focused tests, the full test suite, diff checks and import-isolation checks pass, you may create a local commit, push the candidate to the named feature branch, and open one draft PR against "main" for review exposure.
+>
+> Restrictions: No modifications outside the two-file allowlist. No integration with existing runtime modules, no live backend or provider calls, no external network requests in tests, and no changes to "CONFIGURATION_VERSION", existing schemas, configuration files or workflows. Do not mark the PR ready, enable auto-merge, merge, release or close out the work.
+>
+> Preserve the test results, revision identifiers, environment details, and exact assurance limitations. If scope expands, the baseline changes materially, or verification reveals a blocking failure, stop and report rather than extending authority.
+>
+> This grant is single-use and expires when the initial reviewable Slice 1 candidate is published. Implementation acceptance and all later stages require separate approval.
+
+P1(a) is the read-only plan's option to include `GuardedTransport` and its adapter-level
+tests in slice 1. Exercised in
+`5d7264547e9e5839a2faff0f9ca3dce403d9d916`, published as draft
+[PR #187](https://github.com/coreytshaffer/TriageCore/pull/187). Under its own terms the
+grant expired at that publication.
+
+### Slice 1 corrective grants (four; each exercised; all exhausted)
+
+Each corrective grant named the same two files, one commit pushed to
+`claude/cr-135-slice1-destination-policy`, a PR #187 description update, and the PR kept
+as a draft.
+
+| # | Review it answered | Grant | Exercised in |
+|---|---|---|---|
+| 1 | Implementation review at `5d72645`: configuration precedence; transport-policy floor and enforcement | "Grant the corrective fix for the same two files", approving the scope proposed in the preceding session message (the two fixes, their regression tests and parity grid, and the PR description correction) | `c2281573bb7402dbb467a8ea9485b8e49149c988` |
+| 2 | Corrective review at `c228157`: transport-policy immutability | "Grant the corrective fix for the same two files", approving the proposed freeze-on-construction fix, policy-digest recheck and regressions | `412dbf7d8bdac7e01cca4a9676fcb8b08b9dc6dc` |
+| 3 | Review at `412dbf7`: binding allowlist; session headers and cookies; latched `verify_integrity` | "Grant the corrective fix for the same two files", approving the proposed binding/policy intersection, standalone request preparation, seal extension and latched integrity check | `fc02328a0eda407a4afbee7850adcf5ff05b8b5a` |
+| 4 | Changes requested at `fc02328`: inspection failures did not latch a refusal | Recorded verbatim below | `149aa8e4d01e19f5c9e4f791822613f9402b978c` |
+
+The quoted text in rows 1–3 is the operator's whole instruction. The scope descriptions
+are this record's summary of the proposal each instruction answered, not quotations.
+
+Corrective grant 4, recorded verbatim:
+
+> For CR-135 Slice 1, authorize one corrective implementation cycle based on "fc02328" on "claude/cr-135-slice1-destination-policy".
+>
+> Writable file allowlist:
+>
+> - "triage_core/destination_policy.py"
+> - "tests/test_destination_policy.py"
+>
+> Implement the proposed inspection-failure repair:
+>
+> 1. Cover session-policy conformance, fingerprinting, and policy-digest inspection. Inspection failures must latch "transport_settings_changed".
+> 2. Cover owner-identity inspection, including reading and normalizing "base_url". Inspection failures must latch "destination_binding_mismatch".
+> 3. Preserve refusals already raised and latched by the guard. Catch "Exception" at these inspection boundaries; do not catch "BaseException" or extend this handling around adapter I/O.
+> 4. Preserve safe error provenance: refusal messages must not include raw inspected values or underlying exception messages.
+>
+> Add regressions for the six reported session-state replacements and the raising owner property, each at S2, before the first send, and between discovery and generation. Assert the expected reason code, latched state, zero additional sends, and continued refusal after restoring valid state.
+>
+> Keep the existing binding intersection, request isolation, policy immutability, digest behavior, and refusal semantics intact. Do not add reason codes or integrate the module into runtime.
+>
+> Run the focused suite and appropriate regression checks. Report any full-suite failures with their baseline comparison.
+>
+> Publication authority is limited to:
+>
+> - One corrective commit containing only the two allowlisted files.
+> - Pushing that commit to the existing branch.
+> - Updating PR #187’s description with the correction and evidence.
+> - Keeping the PR in draft.
+>
+> Stop afterward and report the commit SHA, both file hashes, and verification results. If the branch head differs from "fc02328", establish and report the difference before making changes.
+>
+> This grant does not resolve the "backend_protocol_unsupported" amendment, the earlier review-condition reconciliation, or the parser deviation. It grants no implementation acceptance, ready-for-review transition, merge, release, closeout, or Slice 2 work.
+
+### Slice 1 implementation acceptance (pinned to `149aa8e`)
+
+On 2026-10-18 at 22:25 UTC (15:25 PDT), after reviewing both files at `149aa8e`, the
+operator wrote, recorded verbatim:
+
+> Implementation granted
+
+Asked to confirm what this recorded, the operator selected these answers:
+
+- **Decision:** "Accept Slice 1 at 149aa8e".
+- **Open review items:** "Accept code, keep items open".
+- **Where recorded:** "Update PR #187 description".
+
+The acceptance is recorded in the PR #187 description, and here by reference.
+
+- **Pinned to `149aa8e4d01e19f5c9e4f791822613f9402b978c`.** It covers exactly
+  `triage_core/destination_policy.py` (1053 lines, SHA-256
+  `dda7ebf75556163717b9aa852e653a59947f0d9dc14a17522cfc6cdb1ced9275`) and
+  `tests/test_destination_policy.py` (1493 lines, SHA-256
+  `2af4c049bad6413c64fb4ef066927e6b185462746431af01d348e0cfff60f6fa`).
+- **Verification evidence cited by PR #187 at that commit:**
+  - 465 focused tests passed on Python 3.12.3 and 3.11.17 (`requests` 2.34.2);
+  - full suite 24 failed / 2172 passed / 77 skipped, with the failure set identical to the
+    `ed9e165` baseline (environmental: 11 `tkinter`, 13 `test_build_review_cli`);
+  - GitHub Actions run `39171753206`: `pytest` 3.10, 3.11 and 3.12 and `windows_executor`
+    passed.
+- **Items kept open at acceptance:** the reason-code amendment, now approved as design
+  amendment 1, and the review-condition reconciliation, now carried by the checklist
+  below.
+- **No downstream authority.** It granted no ready-for-review transition, merge, release,
+  closeout or slice 2 work.
+
+The operator later confirmed, recorded verbatim:
+
+> Your implementation acceptance stands. The next decisions concern the remaining
+> design/review reconciliation and eventual merge authority. No additional repair is
+> required for the inspection-failure finding.
+
+### Design amendment 1: `backend_protocol_unsupported` (approved 2026-10-18)
+
+This is a separate design decision. It is **not** part of the design acceptance at
+`a0bbd93`, which remains pinned and unchanged. The operator approved, recorded verbatim:
+
+> Approve adding "backend_protocol_unsupported" to CR-135’s closed reason-code vocabulary, matching its existing behavior at "149aa8e": refuse unsupported backend protocols before network contact. This authorizes no additional protocol, endpoint, route, or fallback.
+
+Background: the PR #187 implementation review at `5d72645` recommended keeping the code,
+recorded verbatim:
+
+> `backend_protocol_unsupported`: I recommend retaining this new reason code. It is more
+> informative than treating an unknown protocol as a malformed endpoint. However, it
+> extends CR-135's accepted closed vocabulary and should receive an explicit owner design
+> amendment before implementation acceptance.
+
+The behaviour approved is the behaviour at `149aa8e`:
+
+- **Local routes.** `bind_route_endpoints` refuses a `local_fast` or `local_heavy` member
+  whose backend type does not map to a supported local protocol. The supported types are
+  the ones `create_backend` already recognizes (`backends.py:422-439`), mapped to the two
+  protocols in the protocol table:
+  - Ollama: `ollama`, or an empty type, which `create_backend` treats as `ollama`;
+  - OpenAI-compatible: `lmstudio`, `lm_studio`, `vllm`, `llama.cpp`, `llamacpp`,
+    `custom`.
+
+  The member's endpoint is normalized first, so an invalid endpoint reports its endpoint
+  code instead.
+- **Request URLs.** `allowed_request_urls` refuses a protocol absent from the protocol
+  table.
+- **Refusal class.** A binding-time (S1) pre-contact refusal: zero requests, and once
+  integrated, exit 2 for the whole attempt under D4, with no fallback.
+
+The amendment adds no protocol, backend type, endpoint, profile, route or fallback, and
+changes no other reason code. The closed vocabulary with this amendment is listed under
+Design, Reason-code vocabulary.
+
+### Reconciliation grant (this commit)
+
+On 2026-10-18 at 22:32 UTC (15:32 PDT) the operator wrote "Authorize one bounded CR-135
+reconciliation pass." The grant's scope, as granted:
+
+- this document as the sole writable repository file, in one documentation-only commit on
+  `claude/cr-135-slice1-reconciliation`, branched from verified `main@ed9e165`, without the
+  slice 1 implementation commits;
+- one draft PR for that branch;
+- a title-only update to PR #187, which stays a draft;
+- an annotated preservation tag for `a0bbd93`.
+
+It granted no code change, ready-for-review transition, merge, release, closeout or slice
+2 work.
+
+### Accepted-design preservation
+
+- **Tag:** `cr-135-design-accepted-a0bbd93`, annotated, authorized by the reconciliation
+  grant.
+- **Target:** exactly `a0bbd93fd4b82167c07e901dbdc7feac22847975`.
+- **Annotation:** identifies proposal and design acceptance only. It is not a release
+  tag, and it carries no implementation, merge, release, deployment or closeout
+  authority.
+- **Why:** after the squash merge, `a0bbd93` is reachable only from
+  `claude/cr-135-governed-backend-destination-policy`. The tag keeps it reachable if that
+  branch is ever deleted.
+- **Branches:** neither existing CR-135 branch is deleted by this grant.
+- **Publication:** the tag's publication state is reported in the reconciliation PR, not
+  in this record.
+
+### Follow-up: owner-type regression coverage (open)
+
+At `149aa8e`, 21 mutation probes were run against the guard, and PR #187 records one
+survivor:
+
+- **The survivor:** removing the owner-type comparison (`type(owner) is
+  self._state.owner_type`) in `GuardedTransport._check_owner_identity` is not detected by
+  any test.
+- **The check works.** It is present and enforced. The gap is in test coverage, not
+  behaviour.
+- **Reachability:** reaching it needs a write to the private `_state.owner`.
+- **No finding reopened.** It does not reopen the repaired inspection-failure finding.
+
+A regression test for it needs a future grant naming `tests/test_destination_policy.py`.
+No test is added, and the backlog is not edited, in this reconciliation.
+
+## Slice 1 Review-Condition Checklist (reconciliation, 2026-10-18)
+
+### Sources
+
+| ID | Source | Availability |
+|---|---|---|
+| R-D | This design at `a0bbd93`: slice 1 description, normalization and base-path tables, guarded transport, refusal classes, propagation, F-series | In this document |
+| R-G | Slice 1 implementation grant (verbatim above): allowlist, restrictions, pre-commit checks, and five named condition categories | In this document |
+| R-P | The read-only slice 1 plan, sections 2 to 6, which the grant's P1(a) refers to | In the session that carried out this work. Not in the repository |
+| R-V | The operator's slice 1 review, which established "the additional parsing, method-and-URL binding, error-provenance, runtime-seal and test-evidence conditions" | **Unavailable** (gap E-1) |
+| R-C | Operator reviews at `5d72645`, `c228157`, `412dbf7`, `fc02328`, and corrective grant 4 | Findings in the PR #187 description; grant 4 verbatim above |
+
+### Checklist
+
+Test names refer to `tests/test_destination_policy.py` at `149aa8e`.
+
+| # | Requirement | Source | Implementation at `149aa8e` | Verification evidence | Status |
+|---|---|---|---|---|---|
+| C1 | Only the two allowlisted files change | R-G | — | `git diff --name-only ed9e165 149aa8e` lists exactly the two files; PR #187 file list | Met |
+| C2 | Not integrated; imports only the standard library and `requests` | R-D (slice 1), R-G | No `triage_core` module imports it | `test_module_imports_only_stdlib_and_requests` (AST); `git grep destination_policy -- triage_core` | Met |
+| C3 | `CONFIGURATION_VERSION`, existing schemas, configuration files and workflows unchanged | R-G | — | C1 scope | Met |
+| C4 | No external network in tests | R-G | Recording adapter on the guard's own session | Autouse socket-blocking fixture | Met |
+| C5 | **Parsing:** strict normalization, validated never repaired, per the endpoint-normalization and base-path tables | R-D, R-G category "parsing" | `normalize_endpoint`, `_split_endpoint`, `_parse_host`, `canonicalize_base_path` | `test_rejected_endpoint_forms_have_named_codes`, `test_noncanonical_base_paths_are_rejected`, `test_canonical_base_paths`, `test_trailing_slash_is_the_only_normalization_and_is_equivalent`, LAN, remote and cloud tests | Met for the design tables |
+| C6 | **Parsing:** preference for standard-library URL tokenization followed by strict validation | R-V, as reported in the PR #187 implementation review | Purpose-written tokenizer (`_split_endpoint`), not `urllib.parse.urlsplit` | — | **Deviation, recorded below; owner decision open (U-1)** |
+| C7 | **Method-and-URL binding:** closed per-protocol request set; exact prepared method and URL match; no prefix matching; binding allowlist and policy both enforced | R-D (S3, protocol table), R-G, R-C (`412dbf7` finding 1) | `allowed_request_urls`; guard permits the intersection of `binding.allowed_requests` and `policy.permitted_calls` | `test_allowed_request_urls_are_exact_and_closed`, `test_guard_refuses_collisions_and_off_set_urls_before_send`, `test_guard_compares_the_url_actually_sent`, `test_guard_enforces_the_binding_allowlist_as_well_as_the_policy`, `test_guard_enforces_a_policy_that_removes_post`, `test_guard_cloud_route_permits_only_generation_on_the_canonical_url` | Met at unit level |
+| C8 | **Error provenance:** refusal type neither `RequestException` nor `ValueError`; messages carry the reason code and safe label only; inspection refusals carry no chained exception or inspected value | R-D (Propagation), R-G, grant 4 item 4 | `DestinationPolicyError`; refusals raised after the inspection `try` | `test_destination_error_is_not_a_swallowable_type`, `test_refusal_messages_never_carry_raw_input`, `test_inspection_failure_latches_and_stays_refused_after_restore` | Met. The engine re-raise is slice 2 |
+| C9 | **Runtime seal:** deterministic policy digest kept separate from the per-instance runtime seal; session checked against both before every send | R-D (correction 10, F12), R-G | `TransportPolicy.sha256`; `_session_fingerprint` and `_seal`; `_check_session` | `test_policy_digest_is_independent_of_runtime_objects`, `test_digests_are_identical_across_processes`, session-mutation tests at three stages | Met at unit level |
+| C10 | Owner-identity check before every send, independent of URL equality (F7(g)) | R-D (correction 9) | `_check_owner_identity` | `test_guard_owner_identity_mismatch_refuses_even_with_allowed_url`, `test_guard_owner_mutation_before_first_send_is_refused` | Met; coverage gap on the owner-type comparison (Follow-up) |
+| C11 | Sealed surface: forbidden per-call arguments refused; redirects never followed; 3xx is a late refusal; environment proxy, `.netrc` and CA variables ignored | R-D (S3, F8, F9 at unit level) | Keyword allowlist; `adapter.send(..., proxies={}, cert=None)` | `test_guard_refuses_behaviour_changing_call_arguments`, `test_guard_redirects_on_generation_are_late_refusals`, `test_guard_redirects_on_discovery_are_late_refusals`, `test_guard_ignores_environment_proxies_netrc_and_ca_bundle` | Met at recording-adapter level only. Real-Requests proof is F8/F9 in slice 2 |
+| C12 | Send path | R-P (planned `session.send(prepared, allow_redirects=False)`) | Direct `adapter.send`: `Session.send` runs redirect resolution even with redirects disabled, and with `max_redirects=0` that raises `TooManyRedirects` instead of the guard's late refusal | Redirect tests above | Deviation from the plan. The PR #187 implementation review judged it "Acceptable as a proposed Slice 1 implementation strategy", with real Requests behaviour still requiring F8/F9 in slice 2 |
+| C13 | Effective-configuration precedence matches the runtime | R-D (refinement C), R-C (`5d72645` finding 1) | `resolve_effective_configuration`, `_env_then_toml`, `_backend_fallthrough` | `test_empty_base_url_variable_beats_toml_and_falls_through_to_backend_env`; parity grid `test_*_resolution_matches_config_and_create_backend` | Met |
+| C14 | Policy may only tighten the v1 floor, and is deeply immutable | R-C (`5d72645` finding 2, `c228157`) | `TransportPolicy.__post_init__`, `_freeze_calls`; policy digest rechecked by the guard | `test_transport_policy_cannot_weaken_the_v1_floor`, `test_policy_ignores_caller_mutation_after_the_guard_is_built`, `test_policy_mutation_before_the_guard_cannot_widen_the_floor`, `test_policy_inner_list_mutation_cannot_widen_the_floor`, `test_guard_refuses_every_send_after_policy_tampering` | Met |
+| C15 | No session headers, cookies, auth or params reach a request | R-C (`412dbf7` finding 2) | Standalone `Request(...).prepare()` with default headers captured once; headers and cookies in the seal | `test_guard_never_inherits_session_state_even_if_the_seal_were_bypassed`, `test_guard_headers_match_an_ordinary_session_and_keep_call_headers` | Met |
+| C16 | Refusals latch; `verify_integrity` reports a latched refusal; uninspectable state latches and stays refused after restore | R-C (`412dbf7` finding 3, `fc02328` P2), grant 4 items 1–3 | `_refuse`; inspection boundaries catch `Exception` only; adapter I/O not wrapped | `test_verify_integrity_reports_a_latched_refusal`, `test_inspection_failure_latches_and_stays_refused_after_restore` (21 cases, all failing against the `fc02328` module) | Met |
+| C17 | Closed reason-code vocabulary | R-D, design amendment 1 | `REASON_CODES`: the 17 codes at `a0bbd93` plus `backend_protocol_unsupported` | `test_reason_code_vocabulary_is_closed_and_complete` | Met with amendment 1 |
+| C18 | **Test evidence:** focused tests, full suite, diff check and import isolation before commit; results, revisions, environment and assurance limits preserved | R-G, R-P (section 6) | — | PR #187 Verification and Assurance limits sections | Met |
+| C19 | Fixture coverage for slice 1: F3, F4 and F12 at unit level, plus normalization positive controls | R-D (slice 1) | — | C5, C9 tests; additional unit- and adapter-level cases for F1, F2, F5, F6, F7(e)/(g), F8, F9, F10, F11 | Met at unit level. These are not the F-series integration results that implementation acceptance of the governed path requires |
+
+### Parser deviation (C6)
+
+The source for C6 is the PR #187 implementation review at `5d72645`, recorded verbatim:
+
+> My preceding Slice 1 review did establish additional implementation conditions,
+> including a preference for standard-library URL tokenization followed by strict
+> validation. The custom parser is a deviation from that preference, not automatically a
+> blocker; record its rationale rather than stating that no separate review conditions
+> existed.
+
+The read-only plan had already proposed a purpose-written parser. The implementation
+kept it, for these reasons:
+
+- `urlsplit` lowercases the host, which would hide case variants that the design rejects
+  rather than repairs;
+- `urlsplit` reports an invalid port only when `.port` is read, so a malformed port is not
+  a tokenization failure;
+- `urlsplit` tokenizes some forms (backslashes, `@` placement) differently from how
+  `requests` prepares a URL, and the guard compares against the prepared URL.
+
+The deviation stays a deviation. Neither this record nor implementation acceptance turns
+it into compliance.
+
+### Evidence gap E-1: the operator's slice 1 review
+
+- **What is missing:** the text of the operator's slice 1 review. It was written between
+  the read-only slice 1 plan and the slice 1 implementation grant on 2026-10-18.
+- **Where it was looked for:** this repository at `ed9e165`, the PR #186 and PR #187
+  descriptions and comments, and the session that carried out the work. It is in none of
+  them.
+- **What is known of it:** the five condition categories the grant names (parsing,
+  method-and-URL binding, error-provenance, runtime-seal and test-evidence), and the
+  tokenization preference quoted under Parser deviation.
+- **What C5–C19 show:** they map the requirements that can be identified to evidence.
+  They do **not** establish that the review's other, unseen conditions are satisfied.
+- **Nothing is waived.** This record does not waive those conditions.
+
+### Unresolved decisions (returned for review)
+
+| ID | Decision | Options |
+|---|---|---|
+| U-1 | Parser deviation (C6) | Accept the purpose-written parser as a recorded deviation; or require standard-library tokenization with strict validation, under a new grant naming the two slice 1 files |
+| U-2 | Evidence gap E-1 | Supply the review text for reconciliation against C1–C19; or decide explicitly how its unseen conditions are to be treated. This record makes neither choice |
+| U-3 | Owner-type regression coverage | Schedule the test under a future grant naming `tests/test_destination_policy.py`, or carry it into slice 2 |
+
+The test file at `149aa8e` still describes `backend_protocol_unsupported` in a comment as
+"flagged for implementation-acceptance review". The comment is now out of date. It is
+code-adjacent and outside this grant, so it is left for the next grant that names that
+file.
 
 ## Owner Decisions
 
@@ -636,6 +1003,20 @@ refusals use a dedicated exception type that is neither a `RequestException` nor
 so `tc run` reports it as exit 2 with its reason code. Refusal messages carry the
 reason code and safe label only, never a raw URL.
 
+### Reason-code vocabulary (closed)
+
+Added by the reconciliation on 2026-10-18. The first 17 codes are the codes defined in
+the sections above, accepted with the design at `a0bbd93`; this list adds no meaning to
+them. The 18th is added by design amendment 1 (see Post-Acceptance Record) and is not
+part of the `a0bbd93` acceptance.
+
+| Source | Codes |
+|---|---|
+| Design at `a0bbd93` (17) | `endpoint_malformed`, `endpoint_scheme_not_permitted`, `endpoint_credentials_embedded`, `endpoint_query_or_fragment`, `hostname_not_literal_loopback`, `endpoint_deceptive_identity`, `endpoint_not_device_local`, `trusted_lan_not_in_profile`, `cloud_endpoint_not_approved`, `endpoint_path_noncanonical`, `cloud_model_unbound`, `configuration_unreadable`, `destination_binding_mismatch`, `transport_not_guarded`, `transport_settings_changed`, `transport_request_not_permitted`, `endpoint_redirect_refused` |
+| Design amendment 1, 2026-10-18 (1) | `backend_protocol_unsupported`: a local route's backend type maps to no supported local protocol, or a protocol is absent from the protocol table. Refused at binding (S1) before network contact; a pre-contact refusal. Adds no protocol, endpoint, route or fallback |
+
+No other code may be added without a further design amendment.
+
 ### Ordering
 
 ```text
@@ -827,6 +1208,10 @@ left loopback, plus evidence of the local service's own forwarding configuration
 
 For review only. Each slice needs its own grant naming its exact file allowlist.
 
+Later status (reconciliation, 2026-10-18): slice 1 was granted, implemented and accepted
+at `149aa8e` (see Post-Acceptance Record). Slices 2 and 3 remain not authorized. The
+slice descriptions below are kept as accepted at `a0bbd93`.
+
 1. **Contract module** (about 2–3 hours).
    - Files: new `triage_core/destination_policy.py` (profiles, normalization, effective-config
      snapshot type, binding digest, guarded transport, reason codes) and new
@@ -864,11 +1249,15 @@ For review only. Each slice needs its own grant naming its exact file allowlist.
   independently approved as new runtime behavior. It stays a proposed reason code until
   design acceptance. Proposed semantics: a missing cloud model identity is distinct from
   an endpoint-policy violation; it refuses before network contact whenever a cloud
-  binding is required; and no fallback may conceal it.
+  binding is required; and no fallback may conceal it. (Later status: accepted with the
+  design at `a0bbd93`; see Acceptance record.)
 - **Legacy paths.** Bringing any of them under the guard is separate work.
 - **Integration evidence for G1.** See Non-Claims.
 
 ## Explicit Exclusions
+
+These are the drafting grant's exclusions, as first recorded. Each later grant's own
+limits are recorded with it under Post-Acceptance Record.
 
 - Any code, test, fixture file, schema, configuration, CLI, credential, or ledger change.
 - Any network or provider call, or any probe.
@@ -879,9 +1268,17 @@ For review only. Each slice needs its own grant naming its exact file allowlist.
 
 ## Stop Point
 
-This document is the stop point. It records CR-135's allocation, five owner decisions,
-the required refinements, the design, the acceptance fixtures, and the non-claims, and
-the operator's proposal and design acceptance at `a0bbd93` (Acceptance record). It
-grants no implementation, implementation-acceptance, merge, release, or closeout
-authority. (First recorded as: "It grants no acceptance and no implementation,
-publication, merge, release, or closeout authority.")
+This document is the stop point. It records:
+
+- CR-135's allocation, five owner decisions, the required refinements, the design, the
+  acceptance fixtures, and the non-claims;
+- the operator's proposal and design acceptance at `a0bbd93` (Acceptance record);
+- the PR #186 merge, the exhausted slice 1 grants, slice 1 implementation acceptance at
+  `149aa8e`, design amendment 1, the preservation tag, and the slice 1 review-condition
+  checklist (Post-Acceptance Record and checklist).
+
+It grants no slice 1 merge, release or closeout authority, no slice 2 or slice 3
+implementation authority, and no CR-135 closeout. (First recorded as: "It grants no
+acceptance and no implementation, publication, merge, release, or closeout authority."
+Then, at `e127d7e`: "It grants no implementation, implementation-acceptance, merge,
+release, or closeout authority.")
