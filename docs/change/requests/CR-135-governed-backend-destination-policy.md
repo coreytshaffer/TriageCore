@@ -16,8 +16,9 @@
   Decisions.
 - **Publication and review:** Published as draft
   [PR #186](https://github.com/coreytshaffer/TriageCore/pull/186). The operator's
-  full-document review at `b057945` requested five corrections; this revision makes them
-  (see Review Corrections).
+  full-document review at `b057945` requested five corrections, made in `55a3f32`. The
+  design review at `55a3f32` requested three further corrections and two editorial
+  changes; this revision makes them (see Review Corrections).
 - **Proposal acceptance / design acceptance:** Not granted.
 - **Implementation authority:** Not granted.
 - **Implementation acceptance / merge / release / closeout:** Not granted.
@@ -30,7 +31,8 @@
 | proposal drafting | granted, single document |
 | owner decisions | D1–D5 approved with binding qualifications; HTTPS-only remote transport and separate destination kinds approved |
 | publication | fresh branch from `main@1dc9b88`; draft [PR #186](https://github.com/coreytshaffer/TriageCore/pull/186) |
-| full-document review | revisions requested 2026-10-18 at `b057945`; one documentation-only correction cycle confined to this file on the PR #186 branch (see Review Corrections) |
+| full-document review | revisions requested 2026-10-18 at `b057945`; one documentation-only correction cycle confined to this file on the PR #186 branch, made in `55a3f32` (see Review Corrections) |
+| design review at `55a3f32` | minor design revisions requested; proposal judged ready for owner acceptance on technical grounds; design acceptance pending these corrections (see Review Corrections) |
 | proposal acceptance | not granted |
 | design acceptance | not granted; requires a reviewable contract, seams, and F1–F14 specification (see Acceptance Criteria) |
 | implementation authority | not granted |
@@ -243,6 +245,26 @@ implicit: the engine converts every backend exception into a handoff (fact 12), 
 guard refusal would today surface as exit 3. The Propagation requirement under Refusal
 Classes, and `triage_core/engine.py` in the proposed slice 2 file list, address it.
 
+### Second review, at `55a3f32`
+
+The operator's design review at `55a3f32` found the earlier corrections substantially
+resolved and confirmed the engine exception-propagation finding. It requested three
+further corrections before design acceptance, plus two editorial changes:
+
+| # | Requested correction | Where it is addressed |
+|---|---|---|
+| 6 | Transport mutation after S2: identity of the transport object is not enough, because the same session's `trust_env`, proxies, TLS settings or adapters could change. Make effective settings immutable, or revalidate before every send, with `transport_settings_changed` and zero additional sends. | Guarded transport: sealed wrapper and per-send settings revalidation; F7(e) |
+| 7 | Verified execution set → engine: the engine calls `self.backend.generate`; specify how it receives the verified instance, and confirm the object actually executing generation is the verified one | Per-invocation engine; F7(c), F7(d) |
+| 8 | Windows coverage: the mandatory Windows group runs a fixed set of three test files, so a new test file would not run there | Windows F9 placement; Design Assumptions; slice 2 file list |
+| E1 | Say explicitly that `/v1` and `/v1/` are equivalent after the permitted trailing-slash removal | Base-path canonicalization |
+| E2 | F8's one-request POST cases need a fixed model, so model discovery does not change the expected count | F8 |
+
+One consequence of correction 7 is recorded rather than left implicit: model discovery
+and generation both happen inside a single `generate` call (`backends.py:136-138`,
+`:294-296`), so no pre-invocation check sits between them. F7(g), a mutation between
+discovery and generation, is therefore caught by S3's per-send check, not by the
+pre-invocation check as `55a3f32` stated. F7(g) is corrected accordingly.
+
 ## Design
 
 ### Destination kinds
@@ -309,7 +331,7 @@ the same request path.
 | Base-path input | Outcome |
 |---|---|
 | Empty, or a single `/` | Canonical empty base path |
-| One trailing `/` (e.g. `/v1/`) | Removed; this is the only normalization applied |
+| One trailing `/` (e.g. `/v1/`) | Removed; this is the only normalization applied. `/v1` and `/v1/` are therefore intentionally equivalent and produce the same canonical identity and digest |
 | Segments of RFC 3986 unreserved characters only (`A–Z a–z 0–9 - . _ ~`) | Accepted as written; case is preserved and compared exactly |
 | Dot segments (`.` or `..`), anywhere | `endpoint_path_noncanonical` |
 | Any percent-encoding (`%2F`, `%5C`, `%2E`, or any other `%XX`) | `endpoint_path_noncanonical` |
@@ -415,9 +437,25 @@ confirms that:
 - the instance's `base_url` and protocol still produce the bound canonical identity.
 
 Any failure gives `destination_binding_mismatch` (instance or fields changed) or
-`transport_not_guarded` (transport replaced). Swapping the engine's backend after S2 is
-therefore inert: the swapped-in object is never called. The `model` field remains
-mutable by design (`client.py:490`), because the model is not part of endpoint identity.
+`transport_not_guarded` (transport replaced). The `model` field remains mutable by
+design (`client.py:490`), because the model is not part of endpoint identity.
+
+**How the engine receives the verified instance (correction 7).** At `1dc9b88`,
+`TriageEngine.execute_task` calls `self.backend.generate` (`engine.py:32`), and the
+client's engine is a long-lived attribute (`client.py:83`). Governed execution therefore
+does not use `self.engine`. After S2 it constructs a **per-invocation engine**,
+`TriageEngine(backend=<verified instance>, timeout_seconds=...)`, held only in a local
+variable for that call. This mirrors how the cloud path already builds a call-local
+engine (`client.py:756`), which now receives the pre-built, verified cloud instance. The
+pre-invocation check runs immediately before that engine's `execute_task`. Because the
+per-invocation engine is never stored on the client, replacing `self.engine.backend`,
+or `self.engine` itself, after S2 has no path to execution: the swapped-in object is
+never called.
+
+Discovery and generation both happen inside one `generate` call
+(`backends.py:136-138`, `:294-296`), so the pre-invocation check runs once per
+`generate`. Anything that changes between the requests inside that call is caught by
+S3's per-send checks below.
 
 The pre-invocation check is defence in depth. S3 does not depend on it: the guard
 compares each prepared URL against the URL set bound at S1, not against the backend's
@@ -428,7 +466,7 @@ S3 even if the check were bypassed.
 
 Every governed backend instance receives an injected transport. Its HTTP calls go only
 through that transport; no governed request may reach module-level `requests`. The
-transport is a session with:
+transport's settings are:
 
 - environment trust disabled: no environment proxies, no `.netrc`, no CA-bundle
   variables;
@@ -436,6 +474,27 @@ transport is a session with:
 - redirects disabled on every call; and
 - a per-call check of scheme, host, port, method and path against the bound identity and
   the protocol table below.
+
+**Sealed wrapper with per-send revalidation (correction 6).** Checking that the
+transport is the same object is not enough, because the settings of one `requests.Session`
+can be changed in place. The design uses both protections:
+
+1. **Sealed surface.** The backend receives a `GuardedTransport` wrapper, never the
+   session. The wrapper owns a private session, is built from a frozen `TransportPolicy`,
+   and exposes only the send operations the protocol table needs. Per-call keyword
+   arguments that would change transport behaviour (`proxies`, `verify`, `cert`,
+   `allow_redirects=True`, `auth`, `hooks`) are refused with
+   `transport_settings_changed`. The wrapper forces `allow_redirects=False` itself.
+2. **Revalidation before every send.** Immediately before each request, the wrapper
+   recomputes a fingerprint of the session's effective settings and compares it with the
+   bound `transport_policy_sha256`. The fingerprint covers `trust_env`, `proxies`,
+   `verify`, `cert`, `max_redirects`, `auth`, `hooks`, and the ordered mounted-adapter
+   prefixes together with the identity of each mounted adapter object. A mismatch is
+   refused with `transport_settings_changed`, with zero additional sends.
+
+Test adapters, such as the recording adapter in the fixture harness, are supplied when
+the wrapper is constructed, so they are part of the bound fingerprint. Mounting one later
+is itself a settings change.
 
 | Backend protocol | Allowed calls, relative to the bound base path |
 |---|---|
@@ -591,8 +650,8 @@ relevant request goes through the enforced transport.
 | F4 | `192.168.1.10`, `10.0.0.2`, `fe80::1` on a local route | `trusted_lan_not_in_profile` | S1 | 0 |
 | F5 | Public task, `--allow-cloud`, cloud enabled, approved Qwen identity | `remote_cloud` binding; one POST to the approved origin; never labelled device-local | — | 1 |
 | F6 | **Cloud-host substitution:** `TRIAGE_QWEN_BASE_URL` set to another `https` host, to an `http` URL, or to the approved host with a different path or port | `cloud_endpoint_not_approved` / `endpoint_scheme_not_permitted`; the local route does **not** proceed (D4) | S1 | 0 |
-| F7 | **Mutation after decision:** (a) `TRIAGE_BASE_URL` and `triagecore.toml` changed to a different loopback port, and separately to a remote URL, after S1 and before construction; (b) `backend.base_url` mutated after S2, before the first call; (c) engine backend replaced by a different object after S2; (d) cloud instance replaced after S2; (e) transport setting changed after S2; (f) a backend built from a different snapshot handed to S2; (g) `backend.base_url` mutated **between** model discovery and generation | (a) **No refusal**: the attempt contacts only the frozen S1 destination; the changed values are never contacted (the server on the new port records zero connections). (b) `destination_binding_mismatch` at the pre-invocation check. (c) The replacement object is never called; execution proceeds through the verified instance, and a test double asserts the replacement received zero calls. (d) Same as (c) for the cloud route. (e) `transport_settings_changed` at S2, or `transport_not_guarded` at the pre-invocation check. (f) `destination_binding_mismatch` at S2. (g) `destination_binding_mismatch` at the pre-invocation check before generation; S3 would independently refuse the off-set URL | (a, c, d) —; (b, e, f) S2 / pre-invocation; (g) pre-invocation | (a) as F1, frozen destination only; (b, e, f) 0; (c, d) as F1, verified instance only; (g) 1 permitted (discovery), 0 additional |
-| F8 | **Redirects (loopback server harness):** the bound endpoint server answers 301, 302, 303, 307 and 308, each with `Location` pointing at a second loopback server standing in for a remote host, on both the discovery GET and the generation POST (streaming and not) | Late refusal `endpoint_redirect_refused`, exit 2; the redirect-target server records **zero** connections; the marker body is never re-sent; no fallback | S3 (late) | 1 permitted (the request that drew the 3xx), 0 additional |
+| F7 | **Mutation after decision:** (a) `TRIAGE_BASE_URL` and `triagecore.toml` changed to a different loopback port, and separately to a remote URL, after S1 and before construction; (b) `backend.base_url` mutated after S2, before the first call; (c) engine backend, and separately the client's engine, replaced by a different object after S2; (d) cloud instance replaced after S2; (e) transport settings changed in place on the same session: `trust_env=True`, a proxy entry, `verify=False`, a newly mounted adapter, an added hook, `auth` set, and a per-call `proxies=` or `allow_redirects=True` argument, each applied (e1) before S2, (e2) after S2 and before the first request, and (e3) between model discovery and generation; (f) a backend built from a different snapshot handed to S2; (g) `backend.base_url` mutated **between** model discovery and generation, inside one `generate` call | (a) **No refusal**: the attempt contacts only the frozen S1 destination; the changed values are never contacted (the server on the new port records zero connections). (b) `destination_binding_mismatch` at the pre-invocation check. (c) The replacement is never called. The test confirms that the object whose `generate` actually executed is the verified instance (per-instance call counter, and the recording adapter's log attributes every request to that instance's transport), and that an instrumented replacement recorded zero `generate` calls and zero requests. (d) Same as (c) for the cloud route and the call-local cloud engine. (e1) `transport_settings_changed` at S2. (e2) `transport_settings_changed` at S3 pre-send. (e3) `transport_settings_changed` at S3 pre-send, before generation. (f) `destination_binding_mismatch` at S2. (g) `transport_request_not_permitted` at S3 pre-send: the mutated URL is outside the bound set. The pre-invocation check does not run between the two requests | (a, c, d) —; (b) pre-invocation; (e1, f) S2; (e2, e3, g) S3 pre-send | (a) as F1, frozen destination only; (b, e1, e2, f) 0; (c, d) as F1, verified instance only; (e3, g) 1 permitted (discovery), 0 additional |
+| F8 | **Redirects (loopback server harness):** the bound endpoint server answers 301, 302, 303, 307 and 308, each with `Location` pointing at a second loopback server standing in for a remote host, on both the discovery GET (auto model) and the generation POST (streaming and not). The POST cases use a **fixed, non-sentinel model**, so no discovery request precedes the POST | Late refusal `endpoint_redirect_refused`, exit 2; the redirect-target server records **zero** connections; the marker body is never re-sent; no fallback | S3 (late) | 1 permitted (the request that drew the 3xx), 0 additional |
 | F9 | **Proxy and `.netrc` isolation (loopback server harness):** `HTTP_PROXY`, `HTTPS_PROXY` and `ALL_PROXY` point at a recording proxy server, with no `NO_PROXY`; a temporary `HOME` with a `.netrc` entry for `127.0.0.1`; `REQUESTS_CA_BUNDLE` set to a nonexistent path | The bound endpoint server receives the request directly; the proxy server records zero connections; the endpoint server sees no `Authorization` header; the CA variable has no effect (no error, and the session's merged settings show no `verify` override) | — | 1 per call, bound endpoint only |
 | F10 | **Every governed request path (recording adapter):** discovery GET for both protocols; streaming and non-streaming POST for both protocols; cloud POST; `ping` reached through a governed instance, including the Ollama LM Studio side-contact; prefix-collision and equivalent-representation URLs (`/v1evil/chat/completions`, `/v1/../chat/completions`, `/v1//chat/completions`, `/V1/chat/completions`) issued directly through the guarded session, bypassing the pre-invocation check so that S3 is tested on its own | Every permitted call passes through the guarded session and is recorded by its adapter; the side-contact and every collision URL give pre-send `transport_request_not_permitted`; the module-level tripwire is never hit, and the session tripwire is hit only by registered guarded sessions | S3 (pre-send) | permitted calls only; 0 for each refused URL |
 | F11 | **TOML failure:** unparsable `triagecore.toml`; unreadable file; parser unavailable | `configuration_unreadable`, exit 2; legacy behaviour unchanged for non-governed commands | S1 | 0 |
@@ -655,7 +714,19 @@ left loopback, plus evidence of the local service's own forwarding configuration
 - Requests' prepared URL is the URL put on the wire. F10's collision cases and F8's
   loopback-server harness must confirm this for the installed version.
 - Windows proxy-bypass behaviour (registry and system settings) is not separately
-  examined. F9 must also run in the `windows_executor` job.
+  examined, so F9 must also run in the `windows_executor` job (correction 8). At
+  `1dc9b88` that job's mandatory group runs exactly three files:
+  `tests/test_mediated_executor.py`, `tests/test_privacy_invariants.py` and
+  `tests/test_governed_consumption_parity.py` (`.github/workflows/tests.yml`). Its gate
+  fails on **any skip** and runs with `-m "not windows_optional"`. The design therefore
+  places the Windows-required F9 cases (the proxy-variable and `.netrc` cases, using the
+  loopback server harness) in `tests/test_governed_consumption_parity.py`. They must run
+  without skipping on both Windows and Linux and must not carry the `windows_optional`
+  marker. The remaining F7–F10 cases may live in the new
+  `tests/test_endpoint_transport_guard.py`, which runs only in the Ubuntu jobs. No
+  workflow change is proposed. If the owner prefers to run the new file on Windows
+  instead, `.github/workflows/tests.yml` must be named in a separate implementation
+  grant.
 
 ## Proposed Implementation Slices (not authorized)
 
@@ -678,8 +749,10 @@ For review only. Each slice needs its own grant naming its exact file allowlist.
      destination refusals instead of converting them to a handoff),
      `triage_core/tc_cli.py` (exit-2 mapping, snapshot hand-off), `triagecore.toml`
      (literal default; a configuration change the grant must name), new
-     `tests/test_endpoint_transport_guard.py` (F7–F10), and updates to
-     `tests/test_governed_consumption_parity.py` (F1, F2, F5, F6, F11, F13) and
+     `tests/test_endpoint_transport_guard.py` (F7, F8, F10, and the F9 cases not
+     required on Windows), and updates to `tests/test_governed_consumption_parity.py`
+     (F1, F2, F5, F6, F11, F13, and the Windows-required F9 cases, which must not skip)
+     and
      `tests/test_backends.py` (preset assertions).
    - Stop point: governed `tc run` enforces S1–S3, with legacy paths untouched and
      documented.
