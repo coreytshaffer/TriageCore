@@ -19,6 +19,39 @@ and closeout authority are WITHHELD.** Published as
 | release authority | withheld |
 | closeout | withheld |
 
+### Dated merge fact — recorded 2026-10-17 PDT / 2026-10-18 UTC
+
+*Added under the named grant "M03 documentation reconciliation, 2026-10-17".
+The status heading, the lifecycle table above, and every "withheld" statement in
+this document are preserved unchanged as the historical pre-merge record. So is
+the original authority-defect record below.*
+
+PR #179 **was merged**. Observed facts:
+
+- Merged revision: PR head `5cb95057ac7c498b9256f9688dc6e47483b85ae5`
+  (documentation-record corrections on top of `e5f3218`).
+- Merge commit: `c798e0ed19d3ca59cfb464ffe8476a4e30a0c1e8`, parents
+  `fa66c644c95dcdd68c879313225822d696568643` and `5cb9505`. It is in the current
+  `main` lineage.
+- Merge time: 2026-08-29 11:28:35 PDT / 2026-08-29 18:28:35 UTC, merged by
+  `coreytshaffer`.
+- `git diff bbe5336 5cb9505 -- triage_core/ tests/` is empty. The merged code
+  and tests are the accepted state. The only later non-documentation change is
+  the one authorized line in `.github/workflows/tests.yml`.
+- CI at `5cb9505`: Actions run `32584514430`. `pytest` 3.10/3.11/3.12 and
+  `windows_executor` succeeded.
+- Evidence sources: `git log`, `git diff`, and `git merge-base --is-ancestor`
+  against this checkout. GitHub PR #179 metadata (`head.sha`, `merged_at`,
+  `merged_by`), reviews (none submitted), and check runs.
+
+**Authorization-record reconciliation is REQUIRED.** The original merge-authority
+grant for PR #179 has not been located, and whether its conditions were
+satisfied, including completion of the independent review this document awaited,
+remains unresolved. The merge is a recorded fact, not evidence of authority. The
+M03 grant authorizes only this documentation entry and does **not**
+retroactively authorize the merge. **Release and closeout remain withheld.** See
+`docs/operations/m03-evidence-and-authorization-index-2026-10-17.md`, Entry 2.
+
 The accepted candidate is the code and test state at `bbe5336`, and acceptance
 attaches to that state rather than to whatever the branch's tip commit happens to
 be. `git diff bbe5336 HEAD -- triage_core/ tests/` is empty and stays empty: this
@@ -156,6 +189,11 @@ GitHub Actions run **#482** succeeded at that head across all four jobs —
 `pytest` on 3.10, 3.11 and 3.12, plus the mandatory `windows_executor`.
 
 Merge authority remains withheld pending independent review.
+
+*Dated merge fact (recorded 2026-10-17 PDT / 2026-10-18 UTC): PR #179 was
+merged as `c798e0e` at head `5cb9505` on 2026-08-29 18:28:35 UTC. The sentence
+above is preserved as written. The merge-authority grant has not been located;
+see **Dated merge fact** under **Status**.*
 
 ### Corrective publication clarification — branch selector
 
