@@ -6,9 +6,12 @@
   to `a0bbd93fd4b82167c07e901dbdc7feac22847975`. Design amendment 1
   (`backend_protocol_unsupported`) approved separately on 2026-10-18. Slice 1 (contract
   module, not integrated) implemented and accepted at
-  `149aa8e4d01e19f5c9e4f791822613f9402b978c`. Slice 2 not authorized. (First recorded as:
-  Proposed. Proposal-only documentation. Then, at `e127d7e`: Proposal and design
-  accepted; implementation not authorized.)
+  `149aa8e4d01e19f5c9e4f791822613f9402b978c`. Slice 1 merged to `main` by the operator
+  on 2026-10-18 as `1ef3f5d49f2e39e97bfa556787573e42cd0aa175`, from head `c2dc932`, whose
+  runtime module is byte-identical to `149aa8e`; still not integrated. Slice 2 not
+  authorized. (First recorded as: Proposed. Proposal-only documentation. Then, at
+  `e127d7e`: Proposal and design accepted; implementation not authorized. Then, at
+  `df23d62`: as above, without the slice 1 merge.)
 - **Type:** Governance kernel: privacy and provenance, capability and effect bounds.
   The invariant this CR strengthens: *a governed `tc run` attempt sends requests only to
   network endpoint identities that are bound to its governed decision and authorized by
@@ -25,7 +28,11 @@
     `backend_protocol_unsupported`;
   - `a0bbd93`: the accepted design and its 17-code vocabulary;
   - the PR #186 and PR #187 descriptions as of 2026-10-18;
-  - GitHub Actions run `39171753206`.
+  - GitHub Actions run `39171753206`;
+  - for the U-3 cycle and the slice 1 merge: `c2dc932` (the test-only delta),
+    `main@1ef3f5d49f2e39e97bfa556787573e42cd0aa175` (the merged files), the operator's
+    U-3 grant, the PR #187 description at merge, and GitHub Actions runs `39175265145`,
+    `39174512255` and `39176615964`.
 
   (First recorded as: "`main` at `1dc9b88631748a4c71ebdf331c0536f33a714256`. Every
   repository fact below was observed at that commit. Re-verify when the pin changes."
@@ -50,13 +57,19 @@
   (First recorded as: Not granted.)
 - **Documentation merge:** PR #186 squash-merged into `main` by the operator as
   `ed9e1651461188696ffdc704f4beeab3883994d9`. See Post-Acceptance Record.
-- **Implementation authority:** Slice 1 only: one implementation grant and four
-  corrective grants, all exercised and exhausted. Slice 2 and slice 3: not granted.
-  (First recorded as: Not granted.)
+- **Implementation authority:** Slice 1 only: one implementation grant, four corrective
+  grants and one test-only grant (U-3), all exercised and exhausted. Slice 2 and slice
+  3: not granted. (First recorded as: Not granted. Then, at `df23d62`: the implementation
+  grant and four corrective grants only.)
 - **Implementation acceptance:** Slice 1 only, pinned to `149aa8e`, recorded in
-  [PR #187](https://github.com/coreytshaffer/TriageCore/pull/187). (First recorded as: Not
-  granted.)
-- **Slice 1 merge / release / closeout:** Not granted.
+  [PR #187](https://github.com/coreytshaffer/TriageCore/pull/187). No separate operator
+  acceptance of the merged head `c2dc932` was found; see Slice 1 merge (PR #187). (First
+  recorded as: Not granted.)
+- **Slice 1 merge:** Performed by the operator: PR #187 squash-merged into `main` as
+  `1ef3f5d49f2e39e97bfa556787573e42cd0aa175` on 2026-10-18. No merge authority was issued
+  to the agent. See Slice 1 merge (PR #187).
+- **Slice 1 release / closeout:** Not granted. (First recorded as: "Slice 1 merge /
+  release / closeout: Not granted.")
 
 ### Lifecycle state
 
@@ -77,9 +90,13 @@
 | slice 1 corrective grants | four, same two files; exercised at `c228157`, `412dbf7`, `fc02328`, `149aa8e`; exhausted |
 | slice 1 implementation acceptance | **granted** 2026-10-18, pinned to `149aa8e`, recorded in PR #187 |
 | design amendment 1 (`backend_protocol_unsupported`) | **approved** 2026-10-18, separately from the `a0bbd93` design acceptance |
-| slice 1 review-condition reconciliation | checklist recorded; U-1 and U-2 resolved 2026-10-18; U-3 open (see Slice 1 Review-Condition Checklist) |
+| slice 1 review-condition reconciliation | checklist recorded; U-1 and U-2 resolved 2026-10-18; U-3 technically resolved at `c2dc932` (see Slice 1 Review-Condition Checklist) |
 | accepted-design preservation | annotated tag `cr-135-design-accepted-a0bbd93` authorized (see Post-Acceptance Record) |
-| slice 1 merge / release / closeout | not granted |
+| reconciliation documentation (draft PR #188) | accepted by the operator 2026-10-18 at `df23d62`; not merged |
+| U-3 test-only grant | granted 2026-10-18; exercised at `c2dc932`; exhausted |
+| acceptance of `c2dc932` | no separate explicit operator acceptance found; implementation acceptance stays pinned to `149aa8e` (see Slice 1 merge) |
+| slice 1 merge | performed by the operator 2026-10-18: PR #187 squash-merged as `1ef3f5d`; not integrated |
+| slice 1 release / closeout | not granted |
 | slice 2 and slice 3 implementation authority | not granted |
 | CR-135 closeout | not granted |
 
@@ -87,6 +104,10 @@ Rows above "documentation merge" are as recorded at `e127d7e`, except that the l
 rows recorded there (implementation authority, implementation acceptance, merge
 authority, release authority, closeout: all "not granted") are replaced by the rows
 from "documentation merge" down.
+
+At `df23d62`, the review-condition row ended "U-3 open", and a single row read "slice 1
+merge / release / closeout | not granted". The rows from "reconciliation documentation"
+to "slice 1 release / closeout" were added after PR #187 was merged.
 
 ## Scope
 
@@ -118,6 +139,10 @@ grant and four corrective grants, each naming the same two-file allowlist. All f
 exercised and are exhausted (see Post-Acceptance Record). No implementation authority is
 currently open for this CR. Slice 2 and slice 3 each need their own grant naming an exact
 file allowlist.
+
+Later status (after the PR #187 merge, 2026-10-18): a sixth, test-only grant (U-3), naming
+only `tests/test_destination_policy.py`, was exercised at `c2dc932` and is exhausted. No
+implementation authority is currently open for this CR.
 
 ## Authority Record
 
@@ -236,6 +261,11 @@ amendment 1, recorded separately below.
 Quotations are verbatim from the operator's messages in the session that carried out
 this work, or from the PR descriptions cited. Where only a short instruction exists, the
 scope it approved is described and attributed, and is not presented as a quotation.
+
+Three subsections were added after PR #187 was merged: U-3 test-only grant, Independent
+review of `c2dc932`, and Slice 1 merge (PR #187). The same update adds later-status notes
+to the sections listed above and to the checklist. The U-3 grant is quoted from the
+operator's message in the session that carried out the U-3 cycle, read without change.
 
 ### Documentation merge (PR #186)
 
@@ -445,7 +475,7 @@ It granted no code change, ready-for-review transition, merge, release, closeout
 - **Publication:** the tag's publication state is reported in the reconciliation PR, not
   in this record.
 
-### Follow-up: owner-type regression coverage (open)
+### Follow-up: owner-type regression coverage (resolved at `c2dc932`)
 
 At `149aa8e`, 21 mutation probes were run against the guard, and PR #187 records one
 survivor:
@@ -461,6 +491,150 @@ survivor:
 A regression test for it needs a future grant naming `tests/test_destination_policy.py`.
 No test is added, and the backlog is not edited, in this reconciliation.
 
+Later status: the gap is closed at `c2dc932` by
+`test_guard_owner_replaced_by_another_type_latches_and_stays_refused`, added under the
+U-3 test-only grant. The text above describes `149aa8e`, as recorded at `df23d62`, where
+this subsection was headed "(open)".
+
+### U-3 test-only grant (exercised at `c2dc932`; exhausted)
+
+On 2026-10-18 at 23:05 UTC (16:05 PDT) the operator wrote, recorded verbatim:
+
+> Accept PR #188’s documentation at "df23d6206d048dfbacc3169ae6feb11fde012cbd". This grants no ready-for-review transition or merge.
+>
+> Authorize one bounded U-3 test-only cycle on "claude/cr-135-slice1-destination-policy", starting from verified "149aa8e4d01e19f5c9e4f791822613f9402b978c". If the head differs, report the difference before editing.
+>
+> Sole writable repository file:
+>
+> - "tests/test_destination_policy.py"
+>
+> Add regressions that replace the bound owner through private state with an instance of a different class carrying the same valid "base_url". Cover S2, before the first send, and between discovery and generation.
+>
+> Each case must assert "destination_binding_mismatch", a latched refusal, zero additional sends, and continued refusal after restoring the original owner.
+>
+> Demonstrate that the regressions detect removal of the owner-type comparison using a temporary or in-memory mutation. Do not edit the tracked runtime module. You may also correct the stale "backend_protocol_unsupported" comment in the test file.
+>
+> Run the focused suite and standard checks. Run the full suite and report any failures against the unchanged baseline.
+>
+> Publication authority:
+>
+> - One test-only commit, pushed to the existing branch.
+> - Update PR #187’s description with the new candidate head and verification evidence.
+> - Correct its withdrawn lowercase claim and synchronize its reconciliation status with PR #188, preserving the historical acceptance at "149aa8e".
+> - Keep both PRs in draft.
+>
+> The new head requires separate review and acceptance. Stop after publication and report its SHA, test-file hash, mutation result, and verification results.
+>
+> No runtime changes, tag push, merge, release, closeout, or Slice 2 work are authorized.
+
+Its first sentence also records the operator's acceptance of this document as it stood
+at `df23d62` (draft PR #188). That acceptance does not extend to later revisions.
+
+The cycle was exercised in `c2dc93264043c2b30bfdaf89eb72b77f69ab7e3b`:
+
+- **Scope.** `149aa8e..c2dc932` changes only `tests/test_destination_policy.py`: 62
+  insertions, 1 deletion. The runtime module, the reason-code set and the default digests
+  are unchanged.
+- **New test.** `test_guard_owner_replaced_by_another_type_latches_and_stays_refused`, six
+  parameterized cases:
+  - two replacement types: an unrelated class, and a `StubBackend` subclass;
+  - three stages: S2 integrity, before the first send, and between discovery and
+    generation.
+- **What each case checks.** The bound owner is replaced, through private state, by the
+  other type carrying the same valid `base_url`. The test first asserts that the endpoint
+  identity still matches, so only the exact-type check can refuse. It then asserts:
+  - `destination_binding_mismatch`;
+  - a latched refusal;
+  - zero additional sends;
+  - error text with only the code and safe label, and no chained exception;
+  - continued refusal after the original owner is restored.
+- **Comment.** The reason-code comment that read "flagged for implementation-acceptance
+  review" at `149aa8e` now cites design amendment 1.
+
+**Disposition.** U-3 is technically resolved: executed regression tests now cover the
+owner-type comparison, and an independent review recommended acceptance (below). That is
+an evidence disposition. It is not operator acceptance of `c2dc932`, which the grant
+reserved as a separate decision (see Slice 1 merge).
+
+### Independent review of `c2dc932`
+
+These results were reported by the independent reviewer. They are copied here, not
+re-run for this record.
+
+- **Method.** A clean, detached checkout of `c2dc932`, and a separate archived copy for
+  mutation testing. The reviewed checkout remained clean.
+- **Environment.** Python 3.12.14, pytest 9.1.1, Requests 2.34.2.
+- **Focused suite.** `python -m pytest -q tests/test_destination_policy.py`: 471 passed.
+- **Owner-type mutant.** With only `type(owner) is self._state.owner_type` removed from
+  `_check_owner_identity`, in the scratch copy: exactly 6 failed and 465 passed. All six
+  failures are the new U-3 cases, each because `DestinationPolicyError` is not raised.
+- **Other checks.** The runtime module's hash matches `149aa8e`; `git diff --check` is
+  clean; the corrected parser example and the PR #188 table column counts were checked
+  independently.
+- **After the merge.** Both merged Git blobs were compared with the reviewed source blobs
+  and matched.
+- **Recommendation.** Acceptance, with no blocking issue in the test-only delta.
+- **Not covered.** The reviewer did not re-run the full repository suite locally. The
+  local reproduction was the focused suite and its owner-type mutant.
+
+CI, read from the GitHub API on 2026-10-18 after the merge:
+
+| Run | Commit | Result |
+|---|---|---|
+| [`39175265145`](https://github.com/coreytshaffer/TriageCore/actions/runs/39175265145) | PR #187 at `c2dc932` | `pytest` 3.10, 3.11 and 3.12, and `windows_executor`: success |
+| [`39174512255`](https://github.com/coreytshaffer/TriageCore/actions/runs/39174512255) | PR #188 at `df23d62` | the same four jobs: success |
+| [`39176615964`](https://github.com/coreytshaffer/TriageCore/actions/runs/39176615964) | push to `main` at `1ef3f5d` | `tests` workflow run: success |
+
+- **Check runs, not check suites.** At `c2dc932` all seven check runs have completed:
+  four Actions successes and three neutral Netlify checks. At the reviewer's last check a
+  separate Claude check suite was still queued with no check runs. So "no failed checks"
+  is supported; "all check suites finished" is not. Check-suite state was not re-checked
+  for this record.
+- **Windows.** `windows_executor` runs the workflow's mandatory Windows executor group.
+  Its result does not show that `tests/test_destination_policy.py` ran on Windows.
+
+### Slice 1 merge (PR #187)
+
+- **Merged by:** the operator (GitHub `merged_by`: `coreytshaffer`), on 2026-10-18 at
+  23:27:45 UTC (16:27:45 PDT). No merge authority was issued to the agent; the operator
+  performed the merge.
+- **Squash commit:** `1ef3f5d49f2e39e97bfa556787573e42cd0aa175`, parent `main@ed9e165`,
+  two new files.
+- **Source head:** `c2dc93264043c2b30bfdaf89eb72b77f69ab7e3b`, the reviewed U-3 head.
+  PR #187 was out of draft when merged (GitHub `draft: false`).
+- **Content:** each merged file has the same Git blob as at `c2dc932`:
+
+  | File | Git blob | Lines | SHA-256 |
+  |---|---|---|---|
+  | `triage_core/destination_policy.py` | `e17feb6dfc3c081955a08bedb9af9c58071fd31c` | 1053 | `dda7ebf75556163717b9aa852e653a59947f0d9dc14a17522cfc6cdb1ced9275` |
+  | `tests/test_destination_policy.py` | `fe4cacb85df9c764e593264996ad43e3edceaa8d` | 1554 | `e719713c3e1d74208629dd2600e67a5b7de856964d92d16ff2eb644e6e2725fb` |
+
+  The runtime module is byte-identical to the accepted implementation at `149aa8e`.
+- **State:** merged and unintegrated. At `1ef3f5d`, `git grep destination_policy --
+  triage_core` matches only the module itself.
+
+Acceptance and the merge are kept distinct:
+
+- **Implementation acceptance** was granted for exactly `149aa8e` and stays pinned there.
+- **The independent review** of `c2dc932` recommended acceptance and found no blocking
+  issue in its test-only delta.
+- **The operator then merged PR #187.** The merge is a completed action by the operator.
+  This record reports it; it neither reauthorizes nor repeats it.
+- **No separate acceptance of `c2dc932` was found.** Where it was looked for: the
+  operator's messages in the session that carried out the U-3 cycle, from the grant at
+  23:05 UTC (16:05 PDT) to that session's last activity at 23:33 UTC (16:33 PDT), and the
+  PR #187 description at merge, which still listed `c2dc932` as "Pending review and
+  acceptance". This record does not move the acceptance pin from `149aa8e`, and does not
+  read the merge as an acceptance grant.
+
+**No further authority or claim.** Neither the review nor the merge authorizes release,
+closeout, slice 2, or any G1 change. No existing runtime module imports
+`destination_policy`, so this is unit- and recording-adapter evidence for a contract
+module. Governed-path integration, real-transport F8/F9 proof, the Windows-required F9
+integration cases, and the other slice 2 obligations remain future work. No containment,
+deployment, G1, assessment-score, release or closeout claim follows from the merge or
+from this record.
+
 ## Slice 1 Review-Condition Checklist (reconciliation, 2026-10-18)
 
 ### Sources
@@ -475,7 +649,8 @@ No test is added, and the backlog is not edited, in this reconciliation.
 
 ### Checklist
 
-Test names refer to `tests/test_destination_policy.py` at `149aa8e`.
+Test names refer to `tests/test_destination_policy.py` at `149aa8e`, except where a row
+names `c2dc932`.
 
 | # | Requirement | Source | Implementation at `149aa8e` | Verification evidence | Status |
 |---|---|---|---|---|---|
@@ -488,7 +663,7 @@ Test names refer to `tests/test_destination_policy.py` at `149aa8e`.
 | C7 | **Method-and-URL binding:** closed per-protocol request set; exact prepared method and URL match; no prefix matching; binding allowlist and policy both enforced | R-D (S3, protocol table), R-G, R-C (`412dbf7` finding 1) | `allowed_request_urls`; guard permits the intersection of `binding.allowed_requests` and `policy.permitted_calls` | `test_allowed_request_urls_are_exact_and_closed`, `test_guard_refuses_collisions_and_off_set_urls_before_send`, `test_guard_compares_the_url_actually_sent`, `test_guard_enforces_the_binding_allowlist_as_well_as_the_policy`, `test_guard_enforces_a_policy_that_removes_post`, `test_guard_cloud_route_permits_only_generation_on_the_canonical_url` | Met at unit level |
 | C8 | **Error provenance:** refusal type neither `RequestException` nor `ValueError`; messages carry the reason code and safe label only; inspection refusals carry no chained exception or inspected value | R-D (Propagation), R-G, grant 4 item 4 | `DestinationPolicyError`; refusals raised after the inspection `try` | `test_destination_error_is_not_a_swallowable_type`, `test_refusal_messages_never_carry_raw_input`, `test_inspection_failure_latches_and_stays_refused_after_restore` | Met. The engine re-raise is slice 2 |
 | C9 | **Runtime seal:** deterministic policy digest kept separate from the per-instance runtime seal; session checked against both before every send | R-D (correction 10, F12), R-G | `TransportPolicy.sha256`; `_session_fingerprint` and `_seal`; `_check_session` | `test_policy_digest_is_independent_of_runtime_objects`, `test_digests_are_identical_across_processes`, session-mutation tests at three stages | Met at unit level |
-| C10 | Owner-identity check before every send, independent of URL equality (F7(g)) | R-D (correction 9) | `_check_owner_identity` | `test_guard_owner_identity_mismatch_refuses_even_with_allowed_url`, `test_guard_owner_mutation_before_first_send_is_refused` | Met; coverage gap on the owner-type comparison (Follow-up) |
+| C10 | Owner-identity check before every send, independent of URL equality (F7(g)) | R-D (correction 9) | `_check_owner_identity` | `test_guard_owner_identity_mismatch_refuses_even_with_allowed_url`, `test_guard_owner_mutation_before_first_send_is_refused`; at `c2dc932`, `test_guard_owner_replaced_by_another_type_latches_and_stays_refused` (6 cases) | Met. The owner-type comparison, untested at `149aa8e`, is covered at `c2dc932` (U-3). At `df23d62`: "Met; coverage gap on the owner-type comparison (Follow-up)" |
 | C11 | Sealed surface: forbidden per-call arguments refused; redirects never followed; 3xx is a late refusal; environment proxy, `.netrc` and CA variables ignored | R-D (S3, F8, F9 at unit level) | Keyword allowlist; `adapter.send(..., proxies={}, cert=None)` | `test_guard_refuses_behaviour_changing_call_arguments`, `test_guard_redirects_on_generation_are_late_refusals`, `test_guard_redirects_on_discovery_are_late_refusals`, `test_guard_ignores_environment_proxies_netrc_and_ca_bundle` | Met at recording-adapter level only. Real-Requests proof is F8/F9 in slice 2 |
 | C12 | Send path | R-P (planned `session.send(prepared, allow_redirects=False)`) | Direct `adapter.send`: `Session.send` runs redirect resolution even with redirects disabled, and with `max_redirects=0` that raises `TooManyRedirects` instead of the guard's late refusal | Redirect tests above | Deviation from the plan. The PR #187 implementation review judged it "Acceptable as a proposed Slice 1 implementation strategy", with real Requests behaviour still requiring F8/F9 in slice 2 |
 | C13 | Effective-configuration precedence matches the runtime | R-D (refinement C), R-C (`5d72645` finding 1) | `resolve_effective_configuration`, `_env_then_toml`, `_backend_fallthrough` | `test_empty_base_url_variable_beats_toml_and_falls_through_to_backend_env`; parity grid `test_*_resolution_matches_config_and_create_backend` | Met |
@@ -564,7 +739,7 @@ It listed U-1 to U-3 as open, and stated for U-2 that "This record makes neither
 |---|---|---|---|
 | U-1 | Parser deviation (C6) | Accept the purpose-written parser as a recorded deviation; or require standard-library tokenization with strict validation, under a new grant naming the two slice 1 files | **Resolved 2026-10-18:** custom parser accepted at `149aa8e` as a recorded deviation, with its rationale corrected; no parser rewrite |
 | U-2 | Evidence gap E-1 | Supply the review text for reconciliation against C1–C19; or decide explicitly how its unseen conditions are to be treated | **Resolved 2026-10-18:** E-1 kept as a historical gap; C1–C19 and the recorded deviations adopted as the prospective review baseline; unseen conditions not claimed satisfied |
-| U-3 | Owner-type regression coverage | Schedule the test under a future grant naming `tests/test_destination_policy.py`, or carry it into slice 2 | **Open.** The operator recommended a separate test-only cycle before merging PR #187, then review of the resulting head. Not yet granted |
+| U-3 | Owner-type regression coverage | Schedule the test under a future grant naming `tests/test_destination_policy.py`, or carry it into slice 2 | **Technically resolved 2026-10-18:** test-only cycle granted and exercised at `c2dc932`; covered by executed regression tests and independently reviewed; no separate operator acceptance of `c2dc932` found (see Slice 1 merge). At `df23d62`: "Open. The operator recommended a separate test-only cycle before merging PR #187, then review of the resulting head. Not yet granted" |
 
 **Decision record for U-1 and U-2.** On 2026-10-18 at 22:56 UTC (15:56 PDT) the
 operator wrote, recorded verbatim:
@@ -586,11 +761,17 @@ decision:
 Neither decision grants anything downstream. Neither grants a parser change, a test
 change, merge, release, closeout or slice 2 work. A test-only commit for U-3 would move
 PR #187's head past `149aa8e`, and that head would need its own review and acceptance.
+(Later status: the operator granted that cycle on 2026-10-18 at 23:05 UTC (16:05 PDT);
+see U-3 test-only grant.)
 
 The test file at `149aa8e` still describes `backend_protocol_unsupported` in a comment as
 "flagged for implementation-acceptance review". The comment is now out of date. It is
 code-adjacent and outside this grant, so it is left for the next grant that names that
 file.
+
+Later status: under the U-3 grant, `c2dc932` corrected that comment to cite design
+amendment 1, so the merged test file no longer carries it. The paragraph above describes
+`149aa8e`.
 
 ## Owner Decisions
 
@@ -1268,7 +1449,8 @@ For review only. Each slice needs its own grant naming its exact file allowlist.
 
 Later status (reconciliation, 2026-10-18): slice 1 was granted, implemented and accepted
 at `149aa8e` (see Post-Acceptance Record). Slices 2 and 3 remain not authorized. The
-slice descriptions below are kept as accepted at `a0bbd93`.
+slice descriptions below are kept as accepted at `a0bbd93`. Slice 1 was then merged to
+`main` as `1ef3f5d`, still not integrated (see Slice 1 merge).
 
 1. **Contract module** (about 2–3 hours).
    - Files: new `triage_core/destination_policy.py` (profiles, normalization, effective-config
@@ -1333,10 +1515,14 @@ This document is the stop point. It records:
 - the operator's proposal and design acceptance at `a0bbd93` (Acceptance record);
 - the PR #186 merge, the exhausted slice 1 grants, slice 1 implementation acceptance at
   `149aa8e`, design amendment 1, the preservation tag, and the slice 1 review-condition
-  checklist (Post-Acceptance Record and checklist).
+  checklist (Post-Acceptance Record and checklist);
+- the U-3 test-only cycle at `c2dc932`, its independent review, and the operator's merge
+  of PR #187 as `1ef3f5d` (Post-Acceptance Record).
 
-It grants no slice 1 merge, release or closeout authority, no slice 2 or slice 3
-implementation authority, and no CR-135 closeout. (First recorded as: "It grants no
-acceptance and no implementation, publication, merge, release, or closeout authority."
-Then, at `e127d7e`: "It grants no implementation, implementation-acceptance, merge,
-release, or closeout authority.")
+It grants no slice 1 release or closeout authority, no slice 2 or slice 3 implementation
+authority, and no CR-135 closeout. It records the slice 1 merge; it does not grant or
+repeat it. (First recorded as: "It grants no acceptance and no implementation,
+publication, merge, release, or closeout authority." Then, at `e127d7e`: "It grants no
+implementation, implementation-acceptance, merge, release, or closeout authority." Then,
+at `df23d62`: "It grants no slice 1 merge, release or closeout authority, no slice 2 or
+slice 3 implementation authority, and no CR-135 closeout.")
