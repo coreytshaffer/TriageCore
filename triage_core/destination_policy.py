@@ -424,7 +424,14 @@ def allowed_request_urls(
 
 @dataclass(frozen=True)
 class TransportPolicy:
-    """The canonical transport policy. Contains nothing process-specific."""
+    """The canonical transport policy. Contains nothing process-specific.
+
+    A policy may only tighten the v1 security floor. Environment trust, proxies,
+    redirect handling, the redirect limit and TLS verification are fixed, and each
+    protocol's calls must be a subset of the built-in :data:`PROTOCOL_CALLS`. A policy
+    that would weaken the floor is a programming error and raises ``TypeError`` at
+    construction, so no weakened policy can ever reach a guarded transport.
+    """
 
     version: str = TRANSPORT_POLICY_VERSION
     trust_env: bool = False
@@ -435,6 +442,34 @@ class TransportPolicy:
     calls: Tuple[Tuple[str, Tuple[Tuple[str, str], ...]], ...] = tuple(
         sorted(PROTOCOL_CALLS.items())
     )
+
+    def __post_init__(self) -> None:
+        floor_held = (
+            self.version == TRANSPORT_POLICY_VERSION
+            and self.trust_env is False
+            and self.proxies == ()
+            and self.redirects == "refuse"
+            and type(self.max_redirects) is int
+            and self.max_redirects == 0
+            and self.tls_verify is True
+        )
+        if not floor_held:
+            raise TypeError("transport policy weakens the v1 security floor")
+        seen = set()
+        for entry in self.calls:
+            protocol, calls = entry
+            if protocol not in PROTOCOL_CALLS or protocol in seen:
+                raise TypeError("transport policy names an unknown or repeated protocol")
+            seen.add(protocol)
+            if len(set(calls)) != len(calls) or not set(calls) <= set(
+                PROTOCOL_CALLS[protocol]
+            ):
+                raise TypeError("transport policy permits a call outside the v1 table")
+
+    def permitted_calls(self, protocol: str) -> Tuple[Tuple[str, str], ...]:
+        """This policy's calls for ``protocol``; none when the policy omits it."""
+
+        return dict(self.calls).get(protocol, ())
 
     def canonical_body(self) -> Dict[str, Any]:
         return {
@@ -491,14 +526,25 @@ class EffectiveBackendConfiguration:
     version: str = EFFECTIVE_CONFIGURATION_VERSION
 
 
-def _first_value(
-    candidates: Sequence[Tuple[Any, str]], default: Any, default_source: str
+def _backend_fallthrough(
+    configured: ConfiguredValue,
+    env: Mapping[str, str],
+    fallback_env: Optional[str],
+    fallback_source: str,
+    default: Any,
+    default_source: str,
 ) -> ConfiguredValue:
-    """First non-empty candidate. Mirrors ``create_backend``'s ``base_url or ...``."""
+    """Mirror ``create_backend``: an empty configured value falls through.
 
-    for value, source in candidates:
-        if value not in (None, ""):
-            return ConfiguredValue(value, source)
+    ``create_backend`` treats the value it receives with ``value or os.getenv(name,
+    default)``. A falsy value from the ``Config`` layer therefore yields the fallback
+    variable when it is present (even when empty), and otherwise the default.
+    """
+
+    if configured.value not in (None, ""):
+        return configured
+    if fallback_env and env.get(fallback_env) is not None:
+        return ConfiguredValue(env[fallback_env], fallback_source)
     return ConfiguredValue(default, default_source)
 
 
@@ -549,15 +595,16 @@ def resolve_effective_configuration(
     model = _env_then_toml(env, "TRIAGE_MODEL", backend_section, "default_model", "auto")
     normalized_type = backend_protocol_key(backend_type.value)
     backend_env_name = _BACKEND_URL_ENV.get(normalized_type)
-    url_candidates: List[Tuple[Any, str]] = [
-        (env.get("TRIAGE_BASE_URL"), "env:TRIAGE_BASE_URL"),
-        (backend_section.get("base_url"), toml_source),
-    ]
-    if backend_env_name:
-        url_candidates.append((env.get(backend_env_name), f"backend_env:{backend_env_name}"))
     preset = GOVERNED_LOCAL_PRESETS.get(normalized_type)
-    local_base_url = _first_value(
-        url_candidates, preset, "preset" if preset is not None else "absent"
+    # Config.get_backend_base_url: a present TRIAGE_BASE_URL wins even when empty,
+    # then the TOML value. create_backend then falls through on an empty value.
+    local_base_url = _backend_fallthrough(
+        _env_then_toml(env, "TRIAGE_BASE_URL", backend_section, "base_url", None),
+        env,
+        backend_env_name,
+        f"backend_env:{backend_env_name}",
+        preset,
+        "preset" if preset is not None else "absent",
     )
 
     timeout_raw = _env_then_toml(
@@ -588,12 +635,16 @@ def resolve_effective_configuration(
         )
     else:
         cloud_model = cloud_model_raw
-    cloud_base_url = _env_then_toml(
+    default_cloud_url = f"https://{_APPROVED_CLOUD_HOST}{_APPROVED_CLOUD_BASE_PATH}"
+    cloud_base_url = _backend_fallthrough(
+        _env_then_toml(
+            env, "TRIAGE_QWEN_BASE_URL", qwen_section, "base_url", default_cloud_url
+        ),
         env,
         "TRIAGE_QWEN_BASE_URL",
-        qwen_section,
-        "base_url",
-        f"https://{_APPROVED_CLOUD_HOST}{_APPROVED_CLOUD_BASE_PATH}",
+        "env:TRIAGE_QWEN_BASE_URL",
+        default_cloud_url,
+        "preset",
     )
 
     return EffectiveBackendConfiguration(
@@ -739,7 +790,8 @@ class GuardedTransport:
        still equals the runtime seal recorded at construction;
     4. that the owner's *current* ``base_url`` still produces the frozen identity,
        independently of the request URL;
-    5. that the prepared request's method and URL exactly equal an allowed pair.
+    5. that the prepared request's method and URL exactly equal a pair the binding
+       allows *and* the transport policy permits; a policy can only remove calls.
 
     Any refusal latches: every later call in the attempt is refused without sending.
     A 3xx response is a late refusal: the redirect is never followed.
@@ -757,7 +809,7 @@ class GuardedTransport:
         self._policy = policy
         self._suffixes = {
             (method, f"{binding.endpoint.canonical}/{suffix}"): suffix
-            for method, suffix in PROTOCOL_CALLS[binding.protocol]
+            for method, suffix in policy.permitted_calls(binding.protocol)
         }
         session = requests.Session()
         session.trust_env = policy.trust_env

@@ -11,7 +11,9 @@ runtime uses this module yet.
 from __future__ import annotations
 
 import ast
+import itertools
 import json
+import os
 import pathlib
 import re
 import socket
@@ -382,6 +384,29 @@ def test_api_key_presence_is_recorded_never_its_value():
     assert secret not in repr(configuration)
 
 
+def test_empty_base_url_variable_beats_toml_and_falls_through_to_backend_env():
+    """Review finding 1: the exact conflicting case."""
+
+    configuration = resolve_effective_configuration(
+        {"TRIAGE_BASE_URL": "", "TRIAGE_OLLAMA_BASE_URL": "http://127.0.0.1:7"},
+        {"backend": {"default_type": "ollama", "base_url": "http://127.0.0.1:5"}},
+    )
+    assert configuration.local_base_url.value == "http://127.0.0.1:7"
+    assert configuration.local_base_url.source == "backend_env:TRIAGE_OLLAMA_BASE_URL"
+
+
+def test_empty_cloud_url_layers_follow_create_backend():
+    from_toml = resolve_effective_configuration({}, {"qwen": {"base_url": ""}})
+    assert from_toml.cloud_base_url.value == CLOUD_URL
+    assert from_toml.cloud_base_url.source == "preset"
+    from_env = resolve_effective_configuration(
+        {"TRIAGE_QWEN_BASE_URL": "", "TRIAGE_QWEN_ENABLED": "1"},
+        {"qwen": {"base_url": "https://evil.example/v1"}},
+    )
+    assert from_env.cloud_base_url.value == ""
+    assert refusal(bind_route_endpoints, ("cloud_primary",), from_env) == "endpoint_malformed"
+
+
 def test_cloud_enable_flag_parsing():
     assert resolve_effective_configuration({"TRIAGE_QWEN_ENABLED": "yes"}, None).cloud_enabled.value
     assert not resolve_effective_configuration({"TRIAGE_QWEN_ENABLED": "no"}, None).cloud_enabled.value
@@ -490,6 +515,15 @@ def _lines(env, envelope=("local_fast", "local_heavy"), policy=DEFAULT_TRANSPORT
     return binding_digest_lines(bind_route_endpoints(envelope, configuration), policy)
 
 
+GET_ONLY_OPENAI = TransportPolicy(
+    calls=(
+        ("ollama", dp.PROTOCOL_CALLS["ollama"]),
+        ("openai_compatible", (("GET", "models"),)),
+        ("qwen", dp.PROTOCOL_CALLS["qwen"]),
+    )
+)
+
+
 def test_digest_lines_change_with_port_order_and_policy():
     base = _lines({})
     assert base[0] == "destination_binding_version=triagecore.destination_binding.v1"
@@ -497,9 +531,32 @@ def test_digest_lines_change_with_port_order_and_policy():
     assert base[-1] == f"destination_profiles_sha256={dp.destination_profiles_sha256()}"
     assert _lines({"TRIAGE_BASE_URL": "http://127.0.0.1:1235/v1"}) != base
     assert _lines({}, envelope=("local_heavy", "local_fast")) != base
-    assert _lines({}, policy=TransportPolicy(tls_verify=False)) != base
-    assert TransportPolicy(max_redirects=1).sha256 != DEFAULT_TRANSPORT_POLICY.sha256
+    assert _lines({}, policy=GET_ONLY_OPENAI) != base
+    assert GET_ONLY_OPENAI.sha256 != DEFAULT_TRANSPORT_POLICY.sha256
     assert _lines({}) == base
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"trust_env": True},
+        {"proxies": (("http", "http://127.0.0.1:3128"),)},
+        {"redirects": "follow"},
+        {"max_redirects": 1},
+        {"max_redirects": False},
+        {"tls_verify": False},
+        {"version": "triagecore.transport_policy.v0"},
+        {"calls": (("openai_compatible", (("POST", "embeddings"),)),)},
+        {"calls": (("grpc", (("POST", "x"),)),)},
+        {"calls": (("qwen", (("GET", "models"),)),)},
+        {"calls": (("qwen", ()), ("qwen", ()))},
+        {"calls": (("ollama", (("GET", "api/tags"), ("GET", "api/tags"))),)},
+    ],
+    ids=lambda overrides: "-".join(f"{k}={v!r}"[:40] for k, v in overrides.items()),
+)
+def test_transport_policy_cannot_weaken_the_v1_floor(overrides):
+    with pytest.raises(TypeError):
+        TransportPolicy(**overrides)
 
 
 def test_policy_digest_is_independent_of_runtime_objects():
@@ -911,6 +968,222 @@ def test_guard_requires_a_single_matching_owner():
     )
 
 
+def test_guard_enforces_a_policy_that_removes_post():
+    """Review finding 2: the guard's permitted calls come from the policy."""
+
+    configuration = resolve_effective_configuration({}, None)
+    (binding,) = bind_route_endpoints(("local_fast",), configuration)
+    adapter = RecordingAdapter()
+    guard = GuardedTransport(
+        binding, policy=GET_ONLY_OPENAI, adapters={"http://": adapter, "https://": adapter}
+    )
+    guard.bind_owner(StubBackend(binding.endpoint.canonical))
+    assert guard.transport_policy_sha256 == GET_ONLY_OPENAI.sha256
+    assert ("POST", binding.endpoint.canonical + "/chat/completions") in binding.allowed_requests
+    assert refusal(guard.post, binding.endpoint.canonical + "/chat/completions", json={}) == (
+        "transport_request_not_permitted"
+    )
+    assert adapter.calls == []
+
+
+def test_guard_permits_the_calls_a_tightened_policy_keeps():
+    configuration = resolve_effective_configuration({}, None)
+    (binding,) = bind_route_endpoints(("local_fast",), configuration)
+    adapter = RecordingAdapter()
+    guard = GuardedTransport(binding, policy=GET_ONLY_OPENAI, adapters={"http://": adapter})
+    guard.bind_owner(StubBackend(binding.endpoint.canonical))
+    guard.get(binding.endpoint.canonical + "/models")
+    assert [c["method"] for c in adapter.calls] == ["GET"]
+
+
+def test_policy_omitting_a_protocol_permits_nothing_for_it():
+    policy = TransportPolicy(calls=(("ollama", dp.PROTOCOL_CALLS["ollama"]),))
+    configuration = resolve_effective_configuration({}, None)
+    (binding,) = bind_route_endpoints(("local_fast",), configuration)
+    adapter = RecordingAdapter()
+    guard = GuardedTransport(binding, policy=policy, adapters={"http://": adapter})
+    guard.bind_owner(StubBackend(binding.endpoint.canonical))
+    assert refusal(guard.get, binding.endpoint.canonical + "/models") == (
+        "transport_request_not_permitted"
+    )
+    assert adapter.calls == []
+
+
 def test_guard_construction_requires_contract_types():
     with pytest.raises(TypeError):
         GuardedTransport("not-a-binding")
+
+
+# --- Parity with the existing runtime configuration path ---------------------------
+#
+# These tests import config.py and backends.py to compare the pure resolver with the
+# behaviour governed ``tc run`` has at the baseline. They are verification only; the
+# module under test still imports neither.
+
+LEGACY_LOCAL_PRESETS = {
+    "ollama": "http://localhost:11434",
+    "lmstudio": "http://localhost:1234/v1",
+    "vllm": "http://localhost:8000/v1",
+    "custom": None,
+}
+_ABSENT = object()
+
+
+def _toml_text(sections):
+    lines = []
+    for section, values in sections.items():
+        present = {k: v for k, v in values.items() if v is not _ABSENT}
+        if not present:
+            continue
+        lines.append(f"[{section}]")
+        for key, value in present.items():
+            rendered = ("true" if value else "false") if isinstance(value, bool) else json.dumps(value)
+            lines.append(f"{key} = {rendered}")
+    return "\n".join(lines) + "\n"
+
+
+def _toml_mapping(sections):
+    return {
+        section: {k: v for k, v in values.items() if v is not _ABSENT}
+        for section, values in sections.items()
+    }
+
+
+def _runtime(monkeypatch, tmp_path, env, sections):
+    from triage_core.config import Config
+
+    for name in list(os.environ):
+        if name.startswith("TRIAGE_"):
+            monkeypatch.delenv(name)
+    for name, value in env.items():
+        if value is not _ABSENT:
+            monkeypatch.setenv(name, value)
+    (tmp_path / "triagecore.toml").write_text(_toml_text(sections), encoding="utf-8")
+    return Config(root_dir=str(tmp_path))
+
+
+def _resolve(env, sections):
+    present_env = {k: v for k, v in env.items() if v is not _ABSENT}
+    return resolve_effective_configuration(present_env, _toml_mapping(sections))
+
+
+LAYER_VALUES = (_ABSENT, "", "LAYER")
+
+
+@pytest.mark.parametrize(
+    "backend_type, env_url, toml_url, backend_env_url",
+    list(itertools.product(("ollama", "lmstudio", "vllm", "custom"), LAYER_VALUES, LAYER_VALUES, LAYER_VALUES)),
+)
+def test_local_url_resolution_matches_config_and_create_backend(
+    monkeypatch, tmp_path, backend_type, env_url, toml_url, backend_env_url
+):
+    from triage_core import backends as runtime_backends
+
+    def layer(value, port):
+        return f"http://127.0.0.1:{port}/v1" if value == "LAYER" else value
+
+    backend_env_name = {"ollama": "TRIAGE_OLLAMA_BASE_URL", "lmstudio": "TRIAGE_SUPERVISOR_BASE_URL"}.get(
+        backend_type, "TRIAGE_OLLAMA_BASE_URL"
+    )
+    env = {"TRIAGE_BASE_URL": layer(env_url, 1001), backend_env_name: layer(backend_env_url, 1003)}
+    sections = {"backend": {"default_type": backend_type, "base_url": layer(toml_url, 1002)}}
+    config = _runtime(monkeypatch, tmp_path, env, sections)
+    try:
+        actual = runtime_backends.create_backend(
+            config.get_backend_type(),
+            model=config.get_backend_model(),
+            base_url=config.get_backend_base_url(),
+        ).base_url
+    except ValueError:
+        actual = None
+    resolved = _resolve(env, sections).local_base_url
+
+    if resolved.source == "preset":
+        assert actual == LEGACY_LOCAL_PRESETS[backend_type]
+        assert resolved.value == dp.GOVERNED_LOCAL_PRESETS[backend_type]
+    elif resolved.source == "absent":
+        assert actual is None
+    elif resolved.value == "":
+        assert actual in ("", None)
+    else:
+        assert resolved.value == actual
+
+
+@pytest.mark.parametrize(
+    "env_url, toml_url", list(itertools.product(LAYER_VALUES, LAYER_VALUES))
+)
+def test_cloud_url_resolution_matches_config_and_create_backend(
+    monkeypatch, tmp_path, env_url, toml_url
+):
+    from triage_core import backends as runtime_backends
+
+    def layer(value, host):
+        return f"https://{host}.example/v1" if value == "LAYER" else value
+
+    env = {"TRIAGE_QWEN_BASE_URL": layer(env_url, "env"), "TRIAGE_QWEN_API_KEY": "k"}
+    sections = {"qwen": {"base_url": layer(toml_url, "toml")}}
+    config = _runtime(monkeypatch, tmp_path, env, sections)
+    actual = runtime_backends.create_backend(
+        "qwen",
+        model=config.get_qwen_model(),
+        base_url=config.get_qwen_base_url(),
+        api_key=config.get_qwen_api_key(),
+    ).base_url
+    assert _resolve(env, sections).cloud_base_url.value == actual
+
+
+@pytest.mark.parametrize(
+    "env_model, toml_model",
+    list(itertools.product((_ABSENT, "", "auto", "env-model"), (_ABSENT, "auto", "toml-model"))),
+)
+def test_cloud_model_resolution_matches_config_and_create_backend(
+    monkeypatch, tmp_path, env_model, toml_model
+):
+    from triage_core import backends as runtime_backends
+
+    env = {"TRIAGE_QWEN_MODEL": env_model, "TRIAGE_QWEN_API_KEY": "k"}
+    sections = {"qwen": {"model": toml_model}}
+    config = _runtime(monkeypatch, tmp_path, env, sections)
+    actual = runtime_backends.create_backend(
+        "qwen", model=config.get_qwen_model(), base_url=None, api_key="k"
+    ).model
+    assert _resolve(env, sections).cloud_model.value == actual
+
+
+@pytest.mark.parametrize(
+    "env_type, toml_type, env_model, toml_model",
+    list(
+        itertools.product(
+            (_ABSENT, "", "vllm"), (_ABSENT, "ollama"), (_ABSENT, "", "env-model"), (_ABSENT, "toml-model")
+        )
+    ),
+)
+def test_backend_type_and_model_resolution_matches_config(
+    monkeypatch, tmp_path, env_type, toml_type, env_model, toml_model
+):
+    from triage_core import backends as runtime_backends
+
+    env = {"TRIAGE_BACKEND_TYPE": env_type, "TRIAGE_MODEL": env_model}
+    sections = {"backend": {"default_type": toml_type, "default_model": toml_model}}
+    config = _runtime(monkeypatch, tmp_path, env, sections)
+    resolved = _resolve(env, sections)
+    assert resolved.backend_type.value == config.get_backend_type()
+    assert resolved.model.value == config.get_backend_model()
+    backend = runtime_backends.create_backend(config.get_backend_type(), base_url="http://127.0.0.1:1")
+    expected_protocol = "ollama" if isinstance(backend, runtime_backends.OllamaBackend) else "openai_compatible"
+    assert dp._BACKEND_PROTOCOLS[dp.backend_protocol_key(resolved.backend_type.value)] == expected_protocol
+
+
+@pytest.mark.parametrize(
+    "env_enabled, toml_enabled, env_key",
+    list(itertools.product((_ABSENT, "", "1", "0", "yes"), (_ABSENT, True, False), (_ABSENT, "", "k"))),
+)
+def test_cloud_enable_and_key_presence_match_config(
+    monkeypatch, tmp_path, env_enabled, toml_enabled, env_key
+):
+    env = {"TRIAGE_QWEN_ENABLED": env_enabled, "TRIAGE_QWEN_API_KEY": env_key}
+    sections = {"qwen": {"enabled": toml_enabled}}
+    config = _runtime(monkeypatch, tmp_path, env, sections)
+    resolved = _resolve(env, sections)
+    assert resolved.cloud_enabled.value == config.get_qwen_enabled()
+    assert resolved.cloud_api_key_present == bool(config.get_qwen_api_key())
