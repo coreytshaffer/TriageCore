@@ -1009,6 +1009,112 @@ def test_policy_omitting_a_protocol_permits_nothing_for_it():
     assert adapter.calls == []
 
 
+def _local_binding():
+    configuration = resolve_effective_configuration({}, None)
+    (binding,) = bind_route_endpoints(("local_fast",), configuration)
+    return binding
+
+
+def _bound_guard(binding, policy):
+    adapter = RecordingAdapter()
+    guard = GuardedTransport(binding, policy=policy, adapters={"http://": adapter})
+    guard.bind_owner(StubBackend(binding.endpoint.canonical))
+    return guard, adapter
+
+
+def test_policy_ignores_caller_mutation_after_the_guard_is_built():
+    """Corrective review case A: tightening the caller's list afterwards changes nothing."""
+
+    binding = _local_binding()
+    calls = [("openai_compatible", (("GET", "models"), ("POST", "chat/completions")))]
+    policy = TransportPolicy(calls=calls)
+    digest = policy.sha256
+    guard, adapter = _bound_guard(binding, policy)
+    calls[0] = ("openai_compatible", (("GET", "models"),))
+    assert type(policy.calls) is tuple
+    assert policy.sha256 == digest == guard.transport_policy_sha256
+    guard.post(binding.endpoint.canonical + "/chat/completions", json={})
+    assert [c["method"] for c in adapter.calls] == ["POST"]
+
+
+def test_policy_mutation_before_the_guard_cannot_widen_the_floor():
+    """Corrective review case B: a post-validation swap cannot add a call."""
+
+    binding = _local_binding()
+    calls = [("openai_compatible", (("GET", "models"),))]
+    policy = TransportPolicy(calls=calls)
+    calls[0] = ("openai_compatible", (("GET", "models"), ("POST", "embeddings")))
+    guard, adapter = _bound_guard(binding, policy)
+    assert policy.permitted_calls("openai_compatible") == (("GET", "models"),)
+    assert refusal(guard.post, binding.endpoint.canonical + "/embeddings", json={}) == (
+        "transport_request_not_permitted"
+    )
+    assert adapter.calls == []
+
+
+def test_policy_inner_list_mutation_cannot_widen_the_floor():
+    """Corrective review case C: the inner call list is copied, not referenced."""
+
+    binding = _local_binding()
+    inner = [["GET", "models"]]
+    policy = TransportPolicy(calls=(("openai_compatible", inner),))
+    inner.append(["POST", "embeddings"])
+    inner[0][1] = "embeddings"
+    guard, adapter = _bound_guard(binding, policy)
+    assert policy.permitted_calls("openai_compatible") == (("GET", "models"),)
+    assert refusal(guard.post, binding.endpoint.canonical + "/embeddings", json={}) == (
+        "transport_request_not_permitted"
+    )
+    guard_get, adapter_get = _bound_guard(binding, policy)
+    guard_get.get(binding.endpoint.canonical + "/models")
+    assert adapter.calls == [] and len(adapter_get.calls) == 1
+
+
+def test_policy_input_order_and_container_type_do_not_change_the_digest():
+    reordered = [
+        ["qwen", [["POST", "chat/completions"]]],
+        ["openai_compatible", [["POST", "chat/completions"], ["GET", "models"]]],
+        ["ollama", [["POST", "api/chat"], ["GET", "api/tags"]]],
+    ]
+    assert TransportPolicy(calls=reordered).sha256 == DEFAULT_TRANSPORT_POLICY.sha256
+    assert TransportPolicy(calls=reordered).calls == DEFAULT_TRANSPORT_POLICY.calls
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"calls": "openai_compatible"},
+        {"calls": {"openai_compatible": (("GET", "models"),)}},
+        {"calls": [("openai_compatible",)]},
+        {"calls": [("openai_compatible", "GET models")]},
+        {"calls": [("openai_compatible", [("GET",)])]},
+        {"calls": [("openai_compatible", [("GET", "models", "extra")])]},
+        {"calls": [("openai_compatible", [("GET", 1)])]},
+        {"calls": [(1, [("GET", "models")])]},
+        {"calls": [("openai_compatible", {("GET", "models")})]},
+        {"proxies": []},
+    ],
+    ids=lambda kwargs: repr(kwargs)[:50],
+)
+def test_policy_rejects_malformed_call_structures(kwargs):
+    with pytest.raises(TypeError):
+        TransportPolicy(**kwargs)
+
+
+def test_guard_refuses_every_send_after_policy_tampering():
+    """Defence in depth: a policy changed by bypassing the frozen dataclass."""
+
+    binding = _local_binding()
+    policy = TransportPolicy()
+    guard, adapter = _bound_guard(binding, policy)
+    object.__setattr__(policy, "calls", (("openai_compatible", (("GET", "models"),)),))
+    assert refusal(guard.verify_integrity) == "transport_settings_changed"
+    assert refusal(guard.get, binding.endpoint.canonical + "/models") == (
+        "transport_settings_changed"
+    )
+    assert adapter.calls == []
+
+
 def test_guard_construction_requires_contract_types():
     with pytest.raises(TypeError):
         GuardedTransport("not-a-binding")

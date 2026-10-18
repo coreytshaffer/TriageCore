@@ -431,6 +431,10 @@ class TransportPolicy:
     protocol's calls must be a subset of the built-in :data:`PROTOCOL_CALLS`. A policy
     that would weaken the floor is a programming error and raises ``TypeError`` at
     construction, so no weakened policy can ever reach a guarded transport.
+
+    ``calls`` is copied at construction into sorted, nested tuples of strings, and
+    the frozen copy is what is validated and enforced. Nothing the caller still holds
+    can change a constructed policy.
     """
 
     version: str = TRANSPORT_POLICY_VERSION
@@ -444,9 +448,12 @@ class TransportPolicy:
     )
 
     def __post_init__(self) -> None:
+        # Freeze first, then validate only the frozen copy.
+        object.__setattr__(self, "calls", _freeze_calls(self.calls))
         floor_held = (
             self.version == TRANSPORT_POLICY_VERSION
             and self.trust_env is False
+            and type(self.proxies) is tuple
             and self.proxies == ()
             and self.redirects == "refuse"
             and type(self.max_redirects) is int
@@ -456,8 +463,7 @@ class TransportPolicy:
         if not floor_held:
             raise TypeError("transport policy weakens the v1 security floor")
         seen = set()
-        for entry in self.calls:
-            protocol, calls = entry
+        for protocol, calls in self.calls:
             if protocol not in PROTOCOL_CALLS or protocol in seen:
                 raise TypeError("transport policy names an unknown or repeated protocol")
             seen.add(protocol)
@@ -487,6 +493,35 @@ class TransportPolicy:
     @property
     def sha256(self) -> str:
         return _sha256(_TRANSPORT_POLICY_DOMAIN, _canonical_json(self.canonical_body()))
+
+
+def _freeze_calls(value: Any) -> Tuple[Tuple[str, Tuple[Tuple[str, str], ...]], ...]:
+    """Copy ``calls`` into sorted nested tuples of strings, or raise ``TypeError``.
+
+    Only lists and tuples are accepted at each level, so no caller-held mutable
+    container survives into the policy.
+    """
+
+    if type(value) not in (tuple, list):
+        raise TypeError("transport policy calls must be a sequence of entries")
+    entries = []
+    for entry in value:
+        if type(entry) not in (tuple, list) or len(entry) != 2:
+            raise TypeError("transport policy call entries are (protocol, calls) pairs")
+        protocol, calls = entry
+        if type(protocol) is not str or type(calls) not in (tuple, list):
+            raise TypeError("transport policy call entries are (protocol, calls) pairs")
+        frozen = []
+        for call in calls:
+            if (
+                type(call) not in (tuple, list)
+                or len(call) != 2
+                or any(type(part) is not str for part in call)
+            ):
+                raise TypeError("transport policy calls are (method, suffix) string pairs")
+            frozen.append((call[0], call[1]))
+        entries.append((protocol, tuple(sorted(frozen))))
+    return tuple(sorted(entries))
 
 
 DEFAULT_TRANSPORT_POLICY = TransportPolicy()
@@ -820,6 +855,10 @@ class GuardedTransport:
             session.mount(prefix, adapter)
         self._session = session
         self._seal = self._session_fingerprint()
+        # The digest of the policy this guard was built to enforce. A policy changed
+        # after construction (only possible by bypassing the frozen dataclass) no
+        # longer matches, and every later send is refused.
+        self._policy_sha256 = policy.sha256
         self._state = _GuardState()
 
     # Read-only views for S2 and for evidence.
@@ -834,7 +873,7 @@ class GuardedTransport:
 
     @property
     def transport_policy_sha256(self) -> str:
-        return self._policy.sha256
+        return self._policy_sha256
 
     @property
     def owner(self) -> Any:
@@ -918,7 +957,11 @@ class GuardedTransport:
             and session.auth is None
             and all(not hooks for hooks in session.hooks.values())
         )
-        if not conforms or self._session_fingerprint() != self._seal:
+        if (
+            not conforms
+            or self._session_fingerprint() != self._seal
+            or self._policy.sha256 != self._policy_sha256
+        ):
             self._refuse("transport_settings_changed")
 
     def _check_owner_identity(self) -> None:
