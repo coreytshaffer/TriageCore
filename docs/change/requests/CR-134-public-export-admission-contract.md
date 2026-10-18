@@ -2,7 +2,9 @@
 
 ## Status
 
-- **Status:** Proposed. Proposal-only documentation.
+- **Status:** Proposal and design accepted by the human operator on 2026-10-18.
+  Implementation not authorized. (First recorded as: Proposed. Proposal-only
+  documentation.)
 - **Type:** Governance kernel — privacy and provenance; identity and authority;
   capability and effect bounds; review and human control. Classified under the
   [Backlog Scope Taxonomy](../../current_backlog.md) by the invariant it strengthens:
@@ -20,11 +22,16 @@
   Recorded verbatim under Draft pull request direction.
 - **Owner decisions:** Two recorded on 2026-10-18; see Owner Decisions. They settle two
   design questions. They do not constitute design acceptance.
-- **Proposal acceptance:** Pending review of this completed document.
-- **Design acceptance:** Pending. Explicitly withheld until the completed proposal is
-  reviewed.
-- **Implementation authority:** Not granted.
-- **Implementation acceptance / merge / release / closeout:** Not granted.
+- **Proposal acceptance:** Granted by the human operator on 2026-10-18. Recorded verbatim
+  under Acceptance and merge record. It was pending when this document was first merged.
+- **Design acceptance:** Granted by the human operator on 2026-10-18 for the design as
+  recorded in this document at `cd9a6c9`. Recorded verbatim under Acceptance and merge
+  record. It was pending when this document was first merged.
+- **Implementation authority:** Not granted. Design acceptance does not carry it.
+- **Merge:** [PR #184](https://github.com/coreytshaffer/TriageCore/pull/184) was merged
+  manually by the operator as `8f463a5`. At that time this document recorded merge
+  authority as not granted; that state is preserved in the lifecycle table below.
+- **Implementation acceptance / release / closeout:** Not granted.
 
 ### Lifecycle state
 
@@ -33,13 +40,13 @@
 | identifier allocation | CR-134, allocated by the operator after a census of `docs/change/requests/` at `ede8ef1` (highest numeric CR-133; no existing delegation or export CR) |
 | proposal drafting | granted, single document |
 | publication | granted for the designated feature branch only; exercised (see Publication grant) |
-| draft pull request | directed by the operator; opened as draft [PR #184](https://github.com/coreytshaffer/TriageCore/pull/184) (see Draft pull request direction) |
+| draft pull request | directed by the operator; opened as draft [PR #184](https://github.com/coreytshaffer/TriageCore/pull/184) (see Draft pull request direction); later marked ready for review and merged by the operator |
 | owner decisions | two recorded (see Owner Decisions) |
-| proposal acceptance | pending |
-| design acceptance | pending |
+| proposal acceptance | granted 2026-10-18 (pending when first merged; see Acceptance and merge record) |
+| design acceptance | granted 2026-10-18 for the design at `cd9a6c9` (pending when first merged; see Acceptance and merge record) |
 | implementation authority | not granted |
 | implementation acceptance | not granted |
-| merge authority | not granted |
+| merge authority | not granted by this document when PR #184 merged; the operator merged it manually as `8f463a5` (see Acceptance and merge record) |
 | release authority | not granted |
 | closeout | not granted |
 
@@ -118,6 +125,57 @@ operator then directed, recorded verbatim:
 This subsection is that record, pushed to the same branch. Opening the draft is review
 exposure only. It does not mark the pull request ready for review, and it confers no
 proposal, design, implementation, merge, or release authority.
+
+### Acceptance and merge record
+
+**Merge.** The operator marked PR #184 ready for review at 2026-10-18T04:00:56Z and merged
+it at 2026-10-18T04:01:02Z (2026-10-17 21:01:02 PDT). The merge commit is
+`8f463a5696a80829787d8e01bf478833c6cef620`, with parents `ede8ef1` (`main`) and `cd9a6c9`
+(the pull request head). Before the merge, every CI job on `cd9a6c9` passed: `pytest` on
+Python 3.10, 3.11, and 3.12, and `windows_executor`. The operator's account of the merge,
+recorded verbatim:
+
+> I merged manually using the GitHub Android app
+
+When the merge happened, this document recorded merge authority as "not granted" and
+proposal and design acceptance as "pending", and the pull request title read "acceptance
+pending". Those entries accurately recorded what this document had granted at that point,
+and they are preserved in the lifecycle table rather than rewritten. The merge was the
+operator's own direct action. It was not an exercise of authority conferred by this
+document.
+
+**Acceptance.** On 2026-10-18 the operator directed, recorded verbatim:
+
+> Record merge, and acceptance
+
+Because proposal acceptance and design acceptance are separate decisions in this
+repository, the operator was asked which was meant, and answered, recorded verbatim:
+
+> Proposal and design
+
+Asked how far to publish this record, the operator answered, recorded verbatim:
+
+> Push and open PR (Recommended)
+
+Scope of the acceptance:
+
+- **Proposal acceptance** accepts the problem statement, objective, and profile scope.
+- **Design acceptance** attaches to the design as recorded in this document at
+  `cd9a6c9`. That includes the two owner decisions and the Approval Gates design point
+  that gates on `network_access` and `external_api_call` are satisfied by the local
+  confirmation. This record-keeping update changes no design content.
+- Neither carries implementation authority, implementation acceptance, release, or
+  closeout. No code, test, fixture file, schema, CLI, credential, or ledger work is
+  authorized. Any future implementation grant must name a bounded file allowlist, as
+  [change management](../change_management.md) requires; CR-DD-012B preserves the defect
+  that follows when one is inferred instead.
+- The provider questions and the readiness gates for later live integration stay open.
+  The NIST/ISO assessment scores, the recommended sequencing after M04, and the separate
+  PR #179 reconciliation item are unchanged.
+
+**Publication of this record.** The designated branch was restarted from `main` at
+`8f463a5`. This update was committed there, pushed, and proposed through a follow-up pull
+request, under the direction above.
 
 ## Owner Decisions
 
@@ -830,13 +888,14 @@ baseline v1.0, pinned to `ede8ef1`) is preserved unchanged by this CR.
 - Any surface marked `excluded_from_v0`.
 - Any delegation of action authority to an external recipient.
 - Backlog, change-log, architecture, and README updates.
-- Publication beyond the designated feature branch and draft PR #184, marking that pull
-  request ready for review, merge, release, deployment, and closeout.
+- Publication beyond the designated feature branch, PR #184, and the follow-up pull request
+  that records acceptance; release, deployment, and closeout. (The operator's own merge of
+  PR #184 is recorded under Acceptance and merge record.)
 
 ## Stop Point
 
 This document is the stop point. It proposes a contract and records two owner decisions.
-Proposal acceptance and design acceptance are pending review of this completed document.
-No implementation, test, fixture, CLI, credential, ledger, merge, release, or deployment
-action is authorized by it, and it grants no publication beyond the branch pushes and the
-draft pull request recorded under Authority Record.
+The operator accepted its proposal and design on 2026-10-18 (Acceptance and merge record).
+No implementation, test, fixture, CLI, credential, ledger, release, or deployment action is
+authorized by it, and it grants no publication beyond what is recorded under Authority
+Record. Implementation requires a separate grant that names a bounded file allowlist.
