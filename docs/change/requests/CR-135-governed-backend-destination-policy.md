@@ -2,7 +2,9 @@
 
 ## Status
 
-- **Status:** Proposed. Proposal-only documentation.
+- **Status:** Proposal and design accepted by the human operator on 2026-10-18, pinned
+  to `a0bbd93fd4b82167c07e901dbdc7feac22847975`. Implementation not authorized. (First recorded as: Proposed.
+  Proposal-only documentation.)
 - **Type:** Governance kernel: privacy and provenance, capability and effect bounds.
   The invariant this CR strengthens: *a governed `tc run` attempt sends requests only to
   network endpoint identities that are bound to its governed decision and authorized by
@@ -19,8 +21,14 @@
   full-document review at `b057945` requested five corrections, made in `55a3f32`. The
   design review at `55a3f32` requested three further corrections and two editorial
   changes, made in `44faec2`. The design-acceptance review at `44faec2` requested two
-  final S3 corrections; this revision makes them (see Review Corrections).
-- **Proposal acceptance / design acceptance:** Not granted.
+  final S3 corrections, made in `a0bbd93`. The final design review at `a0bbd93`
+  recommended acceptance with no further corrections (see Review Corrections).
+- **Proposal acceptance:** Granted by the human operator on 2026-10-18, pinned to
+  `a0bbd93`. Recorded verbatim under Acceptance record. (First recorded as: Not
+  granted.)
+- **Design acceptance:** Granted by the human operator on 2026-10-18 for the design as
+  recorded in this document at `a0bbd93`. Recorded verbatim under Acceptance record.
+  (First recorded as: Not granted.)
 - **Implementation authority:** Not granted.
 - **Implementation acceptance / merge / release / closeout:** Not granted.
 
@@ -34,9 +42,10 @@
 | publication | fresh branch from `main@1dc9b88`; draft [PR #186](https://github.com/coreytshaffer/TriageCore/pull/186) |
 | full-document review | revisions requested 2026-10-18 at `b057945`; one documentation-only correction cycle confined to this file on the PR #186 branch, made in `55a3f32` (see Review Corrections) |
 | design review at `55a3f32` | minor design revisions requested; proposal judged ready for owner acceptance on technical grounds; made in `44faec2` (see Review Corrections) |
-| design-acceptance review at `44faec2` | proposal technically acceptable; design acceptance not recommended at `44faec2`; two S3 corrections requested (see Review Corrections) |
-| proposal acceptance | not granted |
-| design acceptance | not granted; requires a reviewable contract, seams, and F1–F14 specification (see Acceptance Criteria) |
+| design-acceptance review at `44faec2` | proposal technically acceptable; design acceptance not recommended at `44faec2`; two S3 corrections requested; made in `a0bbd93` (see Review Corrections) |
+| final design review at `a0bbd93` | proposal and design acceptance recommended; no further document corrections required |
+| proposal acceptance | **granted** 2026-10-18, pinned to `a0bbd93` (see Acceptance record) |
+| design acceptance | **granted** 2026-10-18 for the design as recorded at `a0bbd93` (see Acceptance record) |
 | implementation authority | not granted |
 | implementation acceptance | not granted |
 | merge authority | not granted |
@@ -114,6 +123,49 @@ for refinement A, recorded verbatim:
 
 > Cloud intent permits consideration of an already-authorized cloud destination; it does
 > not authorize an arbitrary URL.
+
+### Acceptance record
+
+On 2026-10-18 (2026-10-17 PDT), after the final design review at `a0bbd93`, the operator
+granted, recorded verbatim:
+
+> Grant proposal and design acceptance at a0bbd93 and record both
+
+Proposal acceptance and design acceptance are separate decisions in this repository.
+This instruction grants both and names both, and they are recorded as two decisions:
+
+- **Proposal acceptance** accepts the problem statement, objective, scope, and
+  boundaries, as recorded at `a0bbd93fd4b82167c07e901dbdc7feac22847975`.
+- **Design acceptance** attaches to the design as recorded in this document at
+  `a0bbd93fd4b82167c07e901dbdc7feac22847975`. That covers:
+  - D1–D5 and the two further approvals;
+  - refinements A–E;
+  - review corrections 1–10;
+  - the S1, S2, pre-invocation and S3 enforcement sequence;
+  - the refusal classes and propagation requirement;
+  - the F1–F14 fixture specification;
+  - the non-claims.
+
+  `cloud_model_unbound` was recorded at `a0bbd93` as a proposed reason code subject to
+  design acceptance, and is accepted with this design.
+
+Scope and limits of both decisions:
+
+- **Pinned to `a0bbd93`.** This record is added in a later commit, which changes only
+  the Status, Lifecycle state, Acceptance record, and Stop Point text. Any later change
+  to design content needs its own review and acceptance. Acceptance does not follow the
+  branch tip.
+- **No downstream authority.** Neither decision carries implementation authority,
+  implementation acceptance, merge, release, or closeout.
+- **Bounded allowlist still required.** Any implementation grant must name a bounded
+  file allowlist, as [change management](../change_management.md) requires.
+- **Planned tests, not evidence.** F1–F14 remain planned tests. Green CI on this
+  document is not evidence of endpoint containment.
+- **Recommended starting point.** The final review recommended that any implementation,
+  if separately authorized, begin with slice 1, the contract module that is not wired
+  into runtime.
+- **Unchanged.** CR-134's accepted design, the NIST/ISO assessment scores, and the
+  separate M03/M09a records are unchanged.
 
 ## Owner Decisions
 
@@ -828,6 +880,8 @@ For review only. Each slice needs its own grant naming its exact file allowlist.
 ## Stop Point
 
 This document is the stop point. It records CR-135's allocation, five owner decisions,
-the required refinements, the design, the acceptance fixtures, and the non-claims. It
-grants no acceptance and no implementation, publication, merge, release, or closeout
-authority.
+the required refinements, the design, the acceptance fixtures, and the non-claims, and
+the operator's proposal and design acceptance at `a0bbd93` (Acceptance record). It
+grants no implementation, implementation-acceptance, merge, release, or closeout
+authority. (First recorded as: "It grants no acceptance and no implementation,
+publication, merge, release, or closeout authority.")
