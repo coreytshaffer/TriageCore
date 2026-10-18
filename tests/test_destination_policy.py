@@ -659,7 +659,7 @@ def test_reason_code_vocabulary_is_closed_and_complete():
         "transport_request_not_permitted",
         "endpoint_redirect_refused",
     }
-    # One code beyond CR-135's list, flagged for implementation-acceptance review.
+    # Added to CR-135's closed vocabulary by design amendment 1 (2026-10-18).
     assert dp.REASON_CODES == accepted | {"backend_protocol_unsupported"}
     assert _string_codes_raised_in_module() <= dp.REASON_CODES
 
@@ -1306,6 +1306,67 @@ def test_inspection_failure_latches_and_stays_refused_after_restore(case, stage)
     assert "secret" not in str(error) and "injected" not in str(error)
 
     restore_state()
+    assert refusal(guard.verify_integrity) == code
+    assert refusal(guard.get, models) == code
+    assert refusal(guard.post, chat, json={"model": "fixed"}) == code
+    assert len(adapter.calls) == sends_before
+    assert guard.refusal == code
+
+
+class _UnrelatedBackend:
+    """A different class from the bound owner's, carrying the same valid ``base_url``."""
+
+    def __init__(self, base_url):
+        self.base_url = base_url
+
+
+class _StubBackendSubclass(StubBackend):
+    """A subclass is still a different type from the bound owner's."""
+
+
+@pytest.mark.parametrize("stage", STAGES)
+@pytest.mark.parametrize("impostor_type", [_UnrelatedBackend, _StubBackendSubclass])
+def test_guard_owner_replaced_by_another_type_latches_and_stays_refused(
+    impostor_type, stage
+):
+    """U-3: the owner-type comparison refuses even when the endpoint still matches."""
+
+    guard, owner, adapter, binding = make_guard()
+    code = "destination_binding_mismatch"
+    models = binding.endpoint.canonical + "/models"
+    chat = binding.endpoint.canonical + "/chat/completions"
+    impostor = impostor_type(owner.base_url)
+    # Same valid endpoint, so only the type comparison can tell the two apart.
+    assert (
+        normalize_endpoint(impostor.base_url, binding.route).identity_sha256
+        == binding.identity_sha256
+    )
+
+    if stage == "before_first_send":
+        guard.verify_integrity()
+    elif stage == "between_discovery_and_generation":
+        guard.get(models)
+    sends_before = len(adapter.calls)
+    guard._state.owner = impostor
+
+    with pytest.raises(DestinationPolicyError) as info:
+        if stage == "s2_integrity":
+            guard.verify_integrity()
+        elif stage == "before_first_send":
+            guard.get(models)
+        else:
+            guard.post(chat, json={"model": "fixed"})
+
+    error = info.value
+    assert error.code == code
+    assert guard.refusal == code
+    assert len(adapter.calls) == sends_before
+    assert len(guard.sends) == sends_before
+    assert str(error) == f"{code} ({binding.safe_label})"
+    assert error.__cause__ is None and error.__context__ is None
+
+    guard._state.owner = owner
+    assert guard.owner is owner
     assert refusal(guard.verify_integrity) == code
     assert refusal(guard.get, models) == code
     assert refusal(guard.post, chat, json={"model": "fixed"}) == code
