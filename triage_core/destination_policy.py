@@ -969,33 +969,41 @@ class GuardedTransport:
         )
 
     def _check_session(self) -> None:
-        session = self._session
-        policy = self._policy
-        conforms = (
-            session.trust_env is policy.trust_env
-            and dict(session.proxies) == dict(policy.proxies)
-            and session.verify is policy.tls_verify
-            and session.cert is None
-            and session.max_redirects == policy.max_redirects
-            and session.auth is None
-            and all(not hooks for hooks in session.hooks.values())
-        )
-        if (
-            not conforms
-            or self._session_fingerprint() != self._seal
-            or self._policy.sha256 != self._policy_sha256
-        ):
+        # Inspection boundary: state that cannot even be inspected is a changed
+        # setting. The refusal is raised after the ``try`` so it latches, and so it
+        # carries neither the inspected value nor the underlying exception.
+        try:
+            session = self._session
+            policy = self._policy
+            intact = (
+                session.trust_env is policy.trust_env
+                and dict(session.proxies) == dict(policy.proxies)
+                and session.verify is policy.tls_verify
+                and session.cert is None
+                and session.max_redirects == policy.max_redirects
+                and session.auth is None
+                and all(not hooks for hooks in session.hooks.values())
+                and self._session_fingerprint() == self._seal
+                and self._policy.sha256 == self._policy_sha256
+            )
+        except Exception:
+            intact = False
+        if not intact:
             self._refuse("transport_settings_changed")
 
     def _check_owner_identity(self) -> None:
-        owner = self._state.owner
-        if type(owner) is not self._state.owner_type:
-            self._refuse("destination_binding_mismatch")
+        # Inspection boundary for the owner, on the same terms as _check_session.
         try:
-            current = normalize_endpoint(getattr(owner, "base_url", None), self.route)
-        except DestinationPolicyError:
-            self._refuse("destination_binding_mismatch")
-        if current.identity_sha256 != self._binding.identity_sha256:
+            owner = self._state.owner
+            matches = (
+                type(owner) is self._state.owner_type
+                and normalize_endpoint(getattr(owner, "base_url", None), self.route)
+                .identity_sha256
+                == self._binding.identity_sha256
+            )
+        except Exception:
+            matches = False
+        if not matches:
             self._refuse("destination_binding_mismatch")
 
     def _send(self, method: str, url: Any, kwargs: Dict[str, Any]) -> requests.Response:

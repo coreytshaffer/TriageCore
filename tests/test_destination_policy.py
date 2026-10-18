@@ -1210,6 +1210,109 @@ def test_verify_integrity_reports_a_latched_refusal():
     assert adapter.calls == []
 
 
+class _RaisingRepr:
+    """A parameter object whose inspection fails, carrying a marker in its message."""
+
+    def __repr__(self):
+        raise RuntimeError("raw-inspected-secret")
+
+
+class _RaisingOwner:
+    """A backend stand-in whose ``base_url`` raises once ``fail`` is set."""
+
+    def __init__(self, base_url):
+        self._base_url = base_url
+        self.fail = False
+
+    @property
+    def base_url(self):
+        if self.fail:
+            raise RuntimeError("raw-owner-secret")
+        return self._base_url
+
+
+# Each entry: (attribute replaced on the session, replacement value factory).
+UNINSPECTABLE_SESSION_STATE = {
+    "headers_none": ("headers", lambda: None),
+    "cookies_plain_dict": ("cookies", lambda: {"session": "injected"}),
+    "hooks_none": ("hooks", lambda: None),
+    "proxies_none": ("proxies", lambda: None),
+    "adapters_none": ("adapters", lambda: None),
+    "params_raising_repr": ("params", _RaisingRepr),
+}
+INSPECTION_FAILURES = [*UNINSPECTABLE_SESSION_STATE, "owner_base_url_raises"]
+STAGES = ["s2_integrity", "before_first_send", "between_discovery_and_generation"]
+
+
+def _inspection_guard(case):
+    binding = _local_binding()
+    adapter = RecordingAdapter()
+    guard = GuardedTransport(binding, adapters={"http://": adapter})
+    owner = _RaisingOwner(binding.endpoint.canonical)
+    guard.bind_owner(owner)
+
+    if case == "owner_base_url_raises":
+        code = "destination_binding_mismatch"
+
+        def break_state():
+            owner.fail = True
+
+        def restore_state():
+            owner.fail = False
+
+    else:
+        code = "transport_settings_changed"
+        attribute, factory = UNINSPECTABLE_SESSION_STATE[case]
+        original = getattr(guard._session, attribute)
+
+        def break_state():
+            setattr(guard._session, attribute, factory())
+
+        def restore_state():
+            setattr(guard._session, attribute, original)
+
+    return guard, adapter, binding, code, break_state, restore_state
+
+
+@pytest.mark.parametrize("stage", STAGES)
+@pytest.mark.parametrize("case", INSPECTION_FAILURES)
+def test_inspection_failure_latches_and_stays_refused_after_restore(case, stage):
+    """Fourth corrective review: inspection failures refuse, latch and never revive."""
+
+    guard, adapter, binding, code, break_state, restore_state = _inspection_guard(case)
+    models = binding.endpoint.canonical + "/models"
+    chat = binding.endpoint.canonical + "/chat/completions"
+
+    if stage == "between_discovery_and_generation":
+        guard.get(models)
+    sends_before = len(adapter.calls)
+    break_state()
+
+    with pytest.raises(DestinationPolicyError) as info:
+        if stage == "s2_integrity":
+            guard.verify_integrity()
+        elif stage == "before_first_send":
+            guard.get(models)
+        else:
+            guard.post(chat, json={"model": "fixed"})
+
+    error = info.value
+    assert error.code == code
+    assert guard.refusal == code
+    assert len(adapter.calls) == sends_before
+    # Safe provenance: only the reason code and safe label, no chained exception.
+    assert str(error) == f"{code} ({binding.safe_label})"
+    assert error.__cause__ is None and error.__context__ is None
+    assert "secret" not in str(error) and "injected" not in str(error)
+
+    restore_state()
+    assert refusal(guard.verify_integrity) == code
+    assert refusal(guard.get, models) == code
+    assert refusal(guard.post, chat, json={"model": "fixed"}) == code
+    assert len(adapter.calls) == sends_before
+    assert guard.refusal == code
+
+
 def test_guard_construction_requires_contract_types():
     with pytest.raises(TypeError):
         GuardedTransport("not-a-binding")
