@@ -1,0 +1,330 @@
+{
+  "case": "F33",
+  "envelopes": [
+    {
+      "context_views": {},
+      "record": {
+        "contract_version": "mci/0.1",
+        "kind": "observation",
+        "occurred_at": 0,
+        "payload": {
+          "action": "tool.synthetic.write",
+          "attempt_id": "attempt-a",
+          "epoch_id": "epoch-a",
+          "retry_of": null,
+          "type": "admit"
+        },
+        "policy_digest": "a6281c75d18d7c81eb85e90bf7d5c2b7d0fe3670e66675b0c93b31142264293c",
+        "record_id": "controller-a-1",
+        "run_id": "run-a",
+        "sequence": 1,
+        "source_id": "controller-a"
+      },
+      "visible_at": 0
+    },
+    {
+      "context_views": {},
+      "record": {
+        "contract_version": "mci/0.1",
+        "kind": "observation",
+        "occurred_at": 0,
+        "payload": {
+          "epoch_id": "epoch-a",
+          "new_context_digest": null,
+          "parent_epoch_id": null,
+          "prior_context_digest": null,
+          "type": "epoch_open"
+        },
+        "policy_digest": "a6281c75d18d7c81eb85e90bf7d5c2b7d0fe3670e66675b0c93b31142264293c",
+        "record_id": "witness-a-1",
+        "run_id": "run-a",
+        "sequence": 1,
+        "source_id": "witness-a"
+      },
+      "visible_at": 0
+    },
+    {
+      "context_views": {
+        "attempt-a": {
+          "action": "tool.synthetic.write",
+          "before_content": "old",
+          "model": "no-model",
+          "proposed_content": "new",
+          "protocol": "synthetic-tool",
+          "target_token": "fixture-target-a"
+        }
+      },
+      "record": {
+        "contract_version": "mci/0.1",
+        "kind": "observation",
+        "occurred_at": 1,
+        "payload": {
+          "action": "tool.synthetic.write",
+          "attempt_id": "attempt-a",
+          "epoch_id": "epoch-a",
+          "input_digest": "34c512ce11b8dd539283f3b61001a1419be2d7467d377f752a45f025214258d4",
+          "retry_of": null,
+          "type": "dispatch"
+        },
+        "policy_digest": "a6281c75d18d7c81eb85e90bf7d5c2b7d0fe3670e66675b0c93b31142264293c",
+        "record_id": "witness-a-2",
+        "run_id": "run-a",
+        "sequence": 2,
+        "source_id": "witness-a"
+      },
+      "visible_at": 1
+    },
+    {
+      "context_views": {
+        "attempt-a": {
+          "input": {
+            "action": "tool.synthetic.write",
+            "before_content": "old",
+            "model": "no-model",
+            "proposed_content": "new",
+            "protocol": "synthetic-tool",
+            "target_token": "fixture-target-a"
+          },
+          "result": {
+            "outcome": "completed",
+            "output": "new",
+            "output_state": "complete"
+          }
+        }
+      },
+      "record": {
+        "contract_version": "mci/0.1",
+        "kind": "observation",
+        "occurred_at": 2,
+        "payload": {
+          "attempt_id": "attempt-a",
+          "epoch_id": "epoch-a",
+          "input_digest": "34c512ce11b8dd539283f3b61001a1419be2d7467d377f752a45f025214258d4",
+          "outcome": "completed",
+          "output_state": "complete",
+          "review_digest": "b072513ce2963e58d4471d039a2334b315ea4e8052dfdab714cd4f7449fe484e",
+          "type": "terminal"
+        },
+        "policy_digest": "a6281c75d18d7c81eb85e90bf7d5c2b7d0fe3670e66675b0c93b31142264293c",
+        "record_id": "witness-a-3",
+        "run_id": "run-a",
+        "sequence": 3,
+        "source_id": "witness-a"
+      },
+      "visible_at": 2
+    },
+    {
+      "context_views": {
+        "attempt-a": {
+          "input": {
+            "action": "tool.synthetic.write",
+            "before_content": "old",
+            "model": "no-model",
+            "proposed_content": "new",
+            "protocol": "synthetic-tool",
+            "target_token": "fixture-target-a"
+          },
+          "result": {
+            "outcome": "completed",
+            "output": "new",
+            "output_state": "complete"
+          }
+        }
+      },
+      "record": {
+        "contract_version": "mci/0.1",
+        "kind": "receipt",
+        "occurred_at": 3,
+        "payload": {
+          "completed_at": 3,
+          "members": [
+            {
+              "attempt_id": "attempt-a",
+              "epoch_id": "epoch-a",
+              "input_digest": "34c512ce11b8dd539283f3b61001a1419be2d7467d377f752a45f025214258d4",
+              "review_digest": "b072513ce2963e58d4471d039a2334b315ea4e8052dfdab714cd4f7449fe484e",
+              "verdict": "clear"
+            }
+          ],
+          "stage": "evaluated",
+          "type": "review"
+        },
+        "policy_digest": "a6281c75d18d7c81eb85e90bf7d5c2b7d0fe3670e66675b0c93b31142264293c",
+        "record_id": "monitor-a-1",
+        "run_id": "run-a",
+        "sequence": 1,
+        "source_id": "monitor-a"
+      },
+      "visible_at": 3
+    }
+  ],
+  "format": "mci-fixture/1",
+  "manifest": {
+    "admission_wait": 3,
+    "census_assurance": "unknown",
+    "checkpoint_count": 3,
+    "checkpoint_grace": 2,
+    "checkpoint_interval": 10,
+    "contract_version": "mci/0.1",
+    "eligible_actions": [
+      "tool.synthetic.write"
+    ],
+    "excluded_surfaces": [
+      "cloud",
+      "gui",
+      "library",
+      "other_cli",
+      "probe"
+    ],
+    "inhibition": "not_implemented",
+    "known_bypasses": [
+      "excluded_capability_routes"
+    ],
+    "model": "no-model",
+    "policy_id": "policy-a",
+    "privacy_profile": "synthetic_public_context_only",
+    "profile": "synthetic_tool",
+    "protocol": "synthetic-tool",
+    "review_wait": 3,
+    "run_id": "run-a",
+    "sources": {
+      "controller": "controller-a",
+      "human_authority": "human-a",
+      "monitor": "monitor-a",
+      "witness": "witness-a"
+    },
+    "terminal_wait": 5
+  },
+  "pins": {
+    "contract": {
+      "path": "docs/research/monitoring-coverage-contract-v0.1.md",
+      "revision": "r5",
+      "sha256": "f8ece79edc562a30c413f7b3946151b6a87213ad4d5c6e67a4ebfc9b83e3d643"
+    },
+    "fixture_specification": {
+      "path": "docs/research/monitoring-coverage-fixture-spec-v0.1.md",
+      "revision": "r5",
+      "sha256": "9039f4ea979823c7a713ec28842c6a73b1880c80f275f9e8ca18b839974ab024"
+    }
+  },
+  "reports": [
+    {
+      "as_of": 4,
+      "expected": {
+        "admission_states": [
+          {
+            "admission_record_ids": [
+              "controller-a-1"
+            ],
+            "admission_tick": 0,
+            "attempt_id": "attempt-a",
+            "deadline": 3,
+            "epoch_id": "epoch-a",
+            "resolution_record_ids": [
+              "witness-a-2"
+            ],
+            "state": "dispatched"
+          }
+        ],
+        "as_of": 4,
+        "census_assurance": "unknown",
+        "checkpoint_states": [],
+        "contract_version": "mci/0.1",
+        "counts_by_action": [
+          {
+            "action": "tool.synthetic.write",
+            "coverage_ratio": [
+              1,
+              1
+            ],
+            "exempt_unreviewed": 0,
+            "observed": 1,
+            "pending_within_deadline": 0,
+            "ratio_status": "observed_only",
+            "reviewed": 1,
+            "uncovered": 0
+          }
+        ],
+        "diagnostics": [],
+        "historical_violations": [],
+        "inhibition": "not_implemented",
+        "input_set_digest": "1548a925a31aeda962e2f41494730b70e23e6c2e9a642b8f9da9933dd8725672",
+        "policy_digest": "a6281c75d18d7c81eb85e90bf7d5c2b7d0fe3670e66675b0c93b31142264293c",
+        "run_id": "run-a",
+        "source_states": [
+          {
+            "accepted_prefix": 1,
+            "disputed_record_ids": [],
+            "highest_seen": 1,
+            "missing_sequences": [],
+            "source_id": "controller-a",
+            "state": "contiguous",
+            "watermark_sequence": null,
+            "watermark_tick": null
+          },
+          {
+            "accepted_prefix": 0,
+            "disputed_record_ids": [],
+            "highest_seen": 0,
+            "missing_sequences": [],
+            "source_id": "human-a",
+            "state": "contiguous",
+            "watermark_sequence": null,
+            "watermark_tick": null
+          },
+          {
+            "accepted_prefix": 1,
+            "disputed_record_ids": [],
+            "highest_seen": 1,
+            "missing_sequences": [],
+            "source_id": "monitor-a",
+            "state": "contiguous",
+            "watermark_sequence": null,
+            "watermark_tick": null
+          },
+          {
+            "accepted_prefix": 3,
+            "disputed_record_ids": [],
+            "highest_seen": 3,
+            "missing_sequences": [],
+            "source_id": "witness-a",
+            "state": "contiguous",
+            "watermark_sequence": null,
+            "watermark_tick": null
+          }
+        ],
+        "unit_states": [
+          {
+            "action": "tool.synthetic.write",
+            "attempt_id": "attempt-a",
+            "dispatch_record_ids": [
+              "witness-a-2"
+            ],
+            "dispatch_tick": 1,
+            "disputed": false,
+            "epoch_id": "epoch-a",
+            "exemption_ids": [],
+            "input_digest": "34c512ce11b8dd539283f3b61001a1419be2d7467d377f752a45f025214258d4",
+            "outcome": "completed",
+            "output_state": "complete",
+            "partition": "reviewed",
+            "retry_of": null,
+            "review_deadline": 4,
+            "review_digest": "b072513ce2963e58d4471d039a2334b315ea4e8052dfdab714cd4f7449fe484e",
+            "review_record_ids": [
+              "monitor-a-1"
+            ],
+            "terminal_deadline": 6,
+            "terminal_record_id": "witness-a-3",
+            "verdicts": [
+              "clear"
+            ]
+          }
+        ],
+        "window_state": "open"
+      }
+    }
+  ],
+  "title": "Isolated synthetic tool effect",
+  "variant": "main"
+}

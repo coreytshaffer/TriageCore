@@ -1,0 +1,215 @@
+{
+  "case": "F14",
+  "envelopes": [
+    {
+      "context_views": {},
+      "record": {
+        "contract_version": "mci/0.1",
+        "kind": "observation",
+        "occurred_at": 0,
+        "payload": {
+          "action": "inference.local.generate",
+          "attempt_id": "attempt-a",
+          "epoch_id": "epoch-a",
+          "retry_of": null,
+          "type": "admit"
+        },
+        "policy_digest": "8b2be92aa12cee21e6958bb5b04fbb4f77630f8190e64c85a2607dac36f61c8a",
+        "record_id": "controller-a-1",
+        "run_id": "run-a",
+        "sequence": 1,
+        "source_id": "controller-a"
+      },
+      "visible_at": 0
+    },
+    {
+      "context_views": {},
+      "record": {
+        "contract_version": "mci/0.1",
+        "kind": "observation",
+        "occurred_at": 0,
+        "payload": {
+          "epoch_id": "epoch-a",
+          "new_context_digest": null,
+          "parent_epoch_id": null,
+          "prior_context_digest": null,
+          "type": "epoch_open"
+        },
+        "policy_digest": "8b2be92aa12cee21e6958bb5b04fbb4f77630f8190e64c85a2607dac36f61c8a",
+        "record_id": "witness-a-1",
+        "run_id": "run-a",
+        "sequence": 1,
+        "source_id": "witness-a"
+      },
+      "visible_at": 0
+    },
+    {
+      "context_views": {},
+      "record": {
+        "contract_version": "mci/0.1",
+        "kind": "observation",
+        "occurred_at": 1,
+        "payload": {
+          "attempt_id": "attempt-a",
+          "epoch_id": "epoch-a",
+          "type": "cancel"
+        },
+        "policy_digest": "8b2be92aa12cee21e6958bb5b04fbb4f77630f8190e64c85a2607dac36f61c8a",
+        "record_id": "controller-a-2",
+        "run_id": "run-a",
+        "sequence": 2,
+        "source_id": "controller-a"
+      },
+      "visible_at": 1
+    }
+  ],
+  "format": "mci-fixture/1",
+  "manifest": {
+    "admission_wait": 3,
+    "census_assurance": "unknown",
+    "checkpoint_count": 3,
+    "checkpoint_grace": 2,
+    "checkpoint_interval": 10,
+    "contract_version": "mci/0.1",
+    "eligible_actions": [
+      "inference.local.generate"
+    ],
+    "excluded_surfaces": [
+      "cloud",
+      "gui",
+      "library",
+      "other_cli",
+      "probe"
+    ],
+    "inhibition": "not_implemented",
+    "known_bypasses": [
+      "excluded_capability_routes"
+    ],
+    "model": "synthetic-model",
+    "policy_id": "policy-a",
+    "privacy_profile": "synthetic_public_context_only",
+    "profile": "synthetic_inference",
+    "protocol": "synthetic-local",
+    "review_wait": 3,
+    "run_id": "run-a",
+    "sources": {
+      "controller": "controller-a",
+      "human_authority": "human-a",
+      "monitor": "monitor-a",
+      "witness": "witness-a"
+    },
+    "terminal_wait": 5
+  },
+  "pins": {
+    "contract": {
+      "path": "docs/research/monitoring-coverage-contract-v0.1.md",
+      "revision": "r5",
+      "sha256": "f8ece79edc562a30c413f7b3946151b6a87213ad4d5c6e67a4ebfc9b83e3d643"
+    },
+    "fixture_specification": {
+      "path": "docs/research/monitoring-coverage-fixture-spec-v0.1.md",
+      "revision": "r5",
+      "sha256": "9039f4ea979823c7a713ec28842c6a73b1880c80f275f9e8ca18b839974ab024"
+    }
+  },
+  "reports": [
+    {
+      "as_of": 4,
+      "expected": {
+        "admission_states": [
+          {
+            "admission_record_ids": [
+              "controller-a-1"
+            ],
+            "admission_tick": 0,
+            "attempt_id": "attempt-a",
+            "deadline": 3,
+            "epoch_id": "epoch-a",
+            "resolution_record_ids": [],
+            "state": "unresolved"
+          }
+        ],
+        "as_of": 4,
+        "census_assurance": "unknown",
+        "checkpoint_states": [],
+        "contract_version": "mci/0.1",
+        "counts_by_action": [
+          {
+            "action": "inference.local.generate",
+            "coverage_ratio": null,
+            "exempt_unreviewed": 0,
+            "observed": 0,
+            "pending_within_deadline": 0,
+            "ratio_status": "no_observed_units",
+            "reviewed": 0,
+            "uncovered": 0
+          }
+        ],
+        "diagnostics": [
+          {
+            "code": "ADMISSION_UNRESOLVED",
+            "first_due_tick": 3,
+            "subject_id": "attempt-a"
+          }
+        ],
+        "historical_violations": [
+          {
+            "code": "ADMISSION_UNRESOLVED",
+            "first_due_tick": 3,
+            "subject_id": "attempt-a"
+          }
+        ],
+        "inhibition": "not_implemented",
+        "input_set_digest": "1e3a9e73ec8fd08e916ca5c8367fbf4963bd38c207c85f0158a174dd35eda542",
+        "policy_digest": "8b2be92aa12cee21e6958bb5b04fbb4f77630f8190e64c85a2607dac36f61c8a",
+        "run_id": "run-a",
+        "source_states": [
+          {
+            "accepted_prefix": 2,
+            "disputed_record_ids": [],
+            "highest_seen": 2,
+            "missing_sequences": [],
+            "source_id": "controller-a",
+            "state": "contiguous",
+            "watermark_sequence": null,
+            "watermark_tick": null
+          },
+          {
+            "accepted_prefix": 0,
+            "disputed_record_ids": [],
+            "highest_seen": 0,
+            "missing_sequences": [],
+            "source_id": "human-a",
+            "state": "contiguous",
+            "watermark_sequence": null,
+            "watermark_tick": null
+          },
+          {
+            "accepted_prefix": 0,
+            "disputed_record_ids": [],
+            "highest_seen": 0,
+            "missing_sequences": [],
+            "source_id": "monitor-a",
+            "state": "contiguous",
+            "watermark_sequence": null,
+            "watermark_tick": null
+          },
+          {
+            "accepted_prefix": 1,
+            "disputed_record_ids": [],
+            "highest_seen": 1,
+            "missing_sequences": [],
+            "source_id": "witness-a",
+            "state": "contiguous",
+            "watermark_sequence": null,
+            "watermark_tick": null
+          }
+        ],
+        "unit_states": [],
+        "window_state": "open"
+      }
+    }
+  ],
+  "title": "Cancellation without witness confirmation",
+  "variant": "unsupported"
+}
