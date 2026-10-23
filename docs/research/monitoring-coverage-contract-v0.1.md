@@ -5,9 +5,10 @@ Status: **draft design for review; unaccepted; not implemented**.
 Recorded: 2026-10-22 PDT / 2026-10-23 UTC. Repository baseline:
 `610c13f253ba631d7052727abe3d68845bb09bb5` (remote `main` rechecked).
 Contract identifier: `mci/0.1`; this is a document version, not a CR number.
-Revision: **r1** (2026-10-23 review revision of the frozen handoff draft r0;
-see section 10). Wire identifiers and digest domains remain `mci/0.1`; r1 adds
-no record field. Later artifacts must pin `mci/0.1` r1, not the identifier alone.
+Revision: **r2** (2026-10-23; see section 10). Wire identifiers and digest
+domains remain `mci/0.1`, and no revision adds a record field, so `mci/0.1` alone
+cannot distinguish r0, r1 and r2. Reference results must record the contract
+revision and the SHA-256 of this contract and of the fixture specification.
 
 This document develops the [candidate](candidates/monitoring-coverage-integrity.md)
 and [source inventory](../operations/monitoring-coverage-baseline-2026-10-22.md).
@@ -81,8 +82,12 @@ prove an evaluator actually reasoned over them or that the fixture author is
 independent. Sidecars arrive with their record, are included in input identity,
 and cannot be fetched from a live provider. Later context delivery is outside v0.1.
 
-All deliveries at a tick are processed before deadlines at that tick. Evidence
-delivered exactly at a deadline can satisfy it. An unmet obligation becomes due
+All deliveries at a tick are processed before deadlines at that tick. Each tick
+runs four steps in order: (1) admit the envelopes visible at that tick and extend
+source prefixes; (2) resolve dependencies among usable records; (3) create that
+tick's timer, count and final cuts, then match usable checkpoint receipts; (4)
+assess obligations due at that tick. Delivery order inside a tick never matters.
+Evidence delivered exactly at a deadline can satisfy it. An unmet obligation becomes due
 when `as_of >= deadline`. Backfill ages an obligation from its occurrence tick,
 not delivery. No heartbeat, new attempt, compaction or restart refreshes it.
 
@@ -164,13 +169,27 @@ It creates a boundary violation. Initial `epoch_open` occurs at tick 0. A child
 epoch requires an earlier known parent and non-null context commitments. It may
 have outstanding parent obligations; they remain in the same run.
 
-Epoch lineage is linear in this profile. `prior_context_digest` must match the
-parent's latest dispatched input before the opening (witness sequence breaks
-same-tick ties); `new_context_digest` must match the child's first dispatch.
-An empty parent cannot be compacted in v0.1. Child opening ends new dispatches in
-the parent, but parent terminals/reviews remain admissible. Missing dependencies
-keep continuity unresolved; contradictory bindings are integrity failures.
-These links establish byte identity, not semantic equivalence of a summary.
+Epoch lineage is linear in this profile and ordered by witness sequence, not
+occurrence tick. `prior_context_digest` must match the input of the parent's
+last dispatch sequenced before the opening; `new_context_digest` must match the
+child's first dispatch. Child opening ends new dispatches in the parent, but
+parent terminals/reviews remain admissible. These links establish byte identity,
+not semantic equivalence of a summary.
+
+An opening is accepted only if it is the initial opening (the witness's first
+`epoch_open`, at tick 0, all three nullable fields null) or opens a new epoch ID
+whose parent is the latest accepted epoch, has at least one dispatch, and is
+bound by non-null commitments with a matching `prior_context_digest`. In
+particular, an empty parent cannot be compacted. Any other opening is rejected:
+it consumes its position, opens and ends nothing, and records persistent
+`EPOCH_CONTINUITY_FAILURE`; later records naming its epoch follow the
+unopened-epoch rule (section 4). A dispatch naming an epoch after a child of
+that epoch has opened is accepted as a disputed unit with persistent
+`EPOCH_CONTINUITY_FAILURE`; it receives no review credit, and earlier valid
+evidence is unaffected. A child's first dispatch that contradicts
+`new_context_digest` is a contradictory binding: it disputes that child's units
+and persists `EPOCH_CONTINUITY_FAILURE`. Before that first dispatch, the binding
+is pending rather than failed.
 
 Only an exact retransmission of the original producer record is idempotent.
 A fresh record ID/sequence cannot repeat `admit`, `dispatch`, `terminal` or
@@ -210,8 +229,12 @@ both verdicts, and flag behavioral disagreement for human assessment. Conflictin
 source sequences/record IDs are integrity failures, not competing opinions.
 
 A checkpoint receipt has sorted unique attempt IDs as `members` (possibly empty),
-matching the recomputed cumulative membership exactly. It records completed checkpoint work,
-not individual evaluation. Individual reviews/exemptions and source watermarks
+matching the recomputed cumulative membership exactly. Its `checkpoint_id` must
+be `cp-` followed by its decimal `cut_tick`; otherwise it is `INVALID_RECORD`. A
+receipt naming a cut that does not exist once that tick's cuts are created
+(section 2, step 3) is `ORPHAN_RECEIPT`: it creates no checkpoint and grants no
+coverage. Cuts are created only at their own tick, so it can never resolve.
+It records completed checkpoint work, not individual evaluation. Individual reviews/exemptions and source watermarks
 must also satisfy section 6. `cut_tick <= completed_at <= occurred_at <= visible_at`.
 
 ### 3.4 Exemptions
@@ -234,7 +257,10 @@ A structurally valid human revoke restricts its named grant from delivery, even
 if buffered; withholding an earlier sequence cannot defer that restriction.
 Revocation at the dispatch tick wins. Later expiry/revocation
 does not erase an exemption valid for an already dispatched unit, nor does it
-authorize later attempts. Duplicate grants cannot extend validity.
+authorize later attempts. Duplicate grants cannot extend validity: the first
+accepted grant for an `exemption_id` (human sequence order) is the only one, and
+a later fresh grant reusing that ID is `EXEMPTION_INVALID` and leaves the
+original unchanged. An exact retransmission stays idempotent.
 
 Exemptions waive only that unit's review obligation. They waive neither independent
 witnessing nor authorization, terminal accounting, checkpoint delivery or incident
@@ -292,6 +318,19 @@ is the first tick all completion conditions were usable, not the producer's
 timestamp. `as_of` is a nonnegative integer. Source states are `incomplete` for
 a blocked prefix or hole, `conflicted` for quarantine, otherwise `contiguous`.
 
+Evidence fields show only what is currently credited, from accepted records
+outside quarantine: `terminal_record_id`, `review_record_ids` and `verdicts`
+come from the credited terminal and evaluated reviews; `exemption_ids` lists
+grants applicable at dispatch; checkpoint `receipt_record_ids` lists receipts
+meeting completion condition 1; and admission `resolution_record_ids` lists the
+matching dispatch, or else the controller cancel/plan record and its witness
+`not_dispatched`. A matching dispatch, disputed or not, gives state `dispatched`.
+`dispatch_record_ids` and `admission_record_ids` list every syntactically valid
+dispatch or admit placing the attempt in its row, including conflicting or
+quarantined variants. Uncredited evidence appears only as a finding subject, and
+verdict codes come only from credited reviews. `disputed_record_ids` lists every
+record ID in that source's quarantined suffix, including conflicting variants.
+
 All keyed output arrays are sorted by their identifier. Findings sort by
 `(code, subject_id, first_due_tick)`, lexicographically for strings and with null
 before integer ticks. Duplicate identical finding rows collapse to one.
@@ -339,9 +378,12 @@ not auto-repaired in this version; human disposition requires a new profile/run.
 A unit whose own dispatch position is contested is disputed even if it was
 established earlier. Every unit in `O`, disputed or not, keeps the per-unit
 obligations of section 5 (dispatch admission, terminal and review deadlines),
-computed from its retained descriptor's dispatch occurrence. Findings about a
-disputed unit are conservative candidate findings; they establish neither its
-existence nor its multiplicity.
+computed from its retained descriptor's dispatch occurrence. Once its dispute
+is discovered, its terminal and review obligations cannot be satisfied, and it
+gains no credit. Findings about a disputed unit are conservative candidate
+findings; they establish neither its existence nor its multiplicity. They stay
+identifiable through the subject unit's `unit_states.disputed`; consumers must
+not present them as confirmed execution.
 
 Apply the same quarantine rule to a watermark contradiction, starting at the
 contradictory watermark. `ATTEMPT_IDENTITY_CONFLICT` disputes that attempt and
@@ -362,9 +404,9 @@ attempt are orphaned. An unknown-source input is retained
 as invalid evidence without impersonating or advancing a named source.
 
 First derive all obligations known at `as_of`, including backfilled dispatches.
-Compute historical violations by replaying distinct delivery ticks and those
-obligation deadlines up to `as_of`. At each tick, admit all then-visible records, resolve
-dependencies, then assess due obligations. Reordering a file without changing
+Compute historical violations by replaying distinct delivery ticks, timer-grid
+ticks and those obligation deadlines up to `as_of`. At each tick, run the four
+steps of section 2. Reordering a file without changing
 delivery ticks must not change results. A record that arrived before a deadline
 but was buffered behind a missing prefix was not usable at that deadline.
 Late records can resolve current states but cannot erase the historical interval
@@ -398,7 +440,10 @@ Coverage ratio is the exact integer pair `[reviewed, observed]`, not a rounded
 percentage. It is null with `ratio_status=no_observed_units` when the denominator
 is zero, or `ratio_status=integrity_uncertain` when a source gap/blocked prefix,
 source conflict, disputed attempt or unresolved epoch prevents reliable accounting.
-Integrity uncertainty is run-wide and takes precedence even for zero observed units. A semantic
+Integrity uncertainty is run-wide and takes precedence even for zero observed units. An epoch
+is unresolved only while witness records are blocked on it or its units are
+disputed; a rejected opening with no dependent records, or a child awaiting its
+first dispatch, does not by itself suppress the ratio. A semantic
 receipt failure alone does not suppress an otherwise known observed-only ratio;
 it prevents credit and remains a finding. Otherwise `ratio_status=observed_only`;
 the ratio is conditional on observations and must be presented with
@@ -440,7 +485,10 @@ availability, not agent turn completion. Three triggers apply:
 - Count: every `checkpoint_count` distinct units first becoming usable from the
   witness creates a cut at that usability tick. Count new units in attempt-ID
   order within a tick; a burst creates at most one cut that tick. Backfill can
-  trigger a present checkpoint, never postpone original per-unit deadlines.
+  trigger a present checkpoint, never postpone original per-unit deadlines. A
+  unit that is disputed after step 2 of the tick it first becomes usable never
+  advances this count; a unit that advanced it keeps that contribution if it is
+  disputed later. Timer cuts do not depend on the count.
 - Final: the first usable controller `run_close` creates a cut at its usability
   tick. A further fresh run-close record consumes its source position, creates no
   cut and is retained as `INVALID_RECORD`; an exact retransmission stays idempotent.
@@ -534,7 +582,8 @@ codes only for distinct failed rules; do not duplicate a count per code.
 
 Finding subjects are deterministic: source sequence/conflict/watermark codes use
 `source_id`; lifecycle, attempt identity, behavioral verdict and exemption-not-
-applicable codes use `attempt_id`; epoch continuity uses `epoch_id`; checkpoint
+applicable codes use `attempt_id`; epoch continuity uses the `epoch_id` named by
+the offending record (a dispatch's or terminal's epoch, an opening's own); checkpoint
 codes use `checkpoint_id`; exemption-invalid uses `exemption_id`. All remaining
 input/context/receipt codes use the offending `record_id`. If that ID is absent
 or invalid, use the 64-hex SHA-256 of its canonical envelope as the subject.
@@ -627,8 +676,11 @@ semantic changes require an explicit version/revision and synchronized expectati
 It is not a claim that a test suite was executed or a human accepted the design.
 
 The present docs-only slice may proceed with the existing baseline. Before later
-test-only implementation, select a formal CR with exact paths and reconcile any
-separately governed monitoring study (including TC-AM-001). Before a runtime pilot,
+test-only implementation, select a formal CR with exact paths and check whether
+any separately governed monitoring study (including TC-AM-001, which this
+repository does not contain) applies or would interfere. Neither that study nor
+the open daily-use evidence window is a blanket prerequisite for isolated
+synthetic work. Before a runtime pilot,
 resolve credential/transport custody, source authenticity, clocks, effective-context
 capture, checkpoint scheduling independent of workers, incident ownership and
 actual refusal behavior. CR-135 integration is conditional on using its transport;
@@ -662,3 +714,24 @@ codes for a parent dispatch after its child opens and for opening a child of an
 empty parent; a reissued grant reusing an existing `exemption_id`; and whether
 units first known only as disputed advance the checkpoint count trigger. No
 F01–F33 case depends on these choices.
+
+- **r2** — 2026-10-23, synchronized with fixture specification r2, which adds
+  F34–F38 for the new rules without changing any F01–F33 expectation.
+  - *Operator-directed:* the five items above (orphaned checkpoint receipt after
+    same-tick cuts; disputed parent dispatch after a child opens; rejected
+    empty-parent opening; rejected reuse of an `exemption_id`; disputed units and
+    the count trigger); disputed-unit findings identifiable through
+    `unit_states.disputed`; and reference results pinned to the contract revision
+    and file hashes. The TC-AM-001 and evidence-window wording in section 9
+    follows the operator's correction.
+  - *Agent-proposed determinism supports (for review):* the four-step tick order
+    and timer-grid replay ticks; the `cp-<cut_tick>` identifier check; lineage
+    ordered by witness sequence; rejection of every other invalid opening, and
+    pending (not failed) continuity before a child's first dispatch; the epoch
+    finding subject; disputed units satisfying no terminal or review obligation
+    after discovery, while their dispatch still resolves an admission; when an
+    epoch is unresolved for ratio purposes; and evidence-field projection rules,
+    with verdict codes only from credited reviews.
+
+No open semantic item is known after r2. Freezing complete expected reports may
+expose more; any found requires a synchronized revision before it is frozen.

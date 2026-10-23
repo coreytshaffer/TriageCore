@@ -33,7 +33,10 @@ describes gaps between traffic intended for monitoring and traffic actually
 evaluated, including compaction and delayed monitoring triggers. Its historical
 findings motivate testing coverage accounting as a separate property from
 the accuracy of a behavioral monitor. They do not establish TC vulnerabilities
-or validate the design proposed here.
+or validate the design proposed here. The operator checked this citation on
+2026-10-23: the report supports the investigation dates, an uncertain coverage
+estimate of roughly 10%, and an exploit affecting hundreds of actions. METR did
+not verify OpenAI's reported fixes in that report.
 
 ## Three distinct claims
 
@@ -152,8 +155,10 @@ may only add constraints; it must not replace existing human authorization.
   its governed transport. It is not a prerequisite for a pure synthetic contract.
 - Resolve the old evidence window's disposition before changing its execution
   or evidence semantics. Keep all synthetic work outside natural-use evidence.
-- Reconcile any separately governed monitoring study, including TC-AM-001,
-  before implementation. This candidate adopts no off-repository decision text,
+- Before implementation, check whether any separately governed monitoring
+  study, including TC-AM-001 (not present in this repository), applies or would
+  interfere. Neither it nor the open evidence window automatically blocks
+  isolated synthetic work. This candidate adopts no off-repository decision text,
   renews no earlier grant, and authorizes no live observation or intervention.
 - Export, external-evaluator, and key-lifecycle work become dependencies only
   when the selected profile actually uses them. Do not require the whole backlog.
@@ -166,8 +171,9 @@ runtime protection.
 
 ## Review and promotion
 
-The detailed contract and fixture specification (revision r1, after an agent
-review of the r0 handoff draft) are ready for design review.
+The detailed contract and fixture specification (revision r2, after agent review
+of the r0 handoff draft and operator decisions on the items r1 left open) are
+ready for design review.
 Review their frozen identities, partition rules, original deadlines, prospective
 exemptions, independent checkpoint obligations and explicit unknowns before
 acceptance. The fixture outcomes are manually specified expectations, not test

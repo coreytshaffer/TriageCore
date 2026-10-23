@@ -1,8 +1,7 @@
 # Monitoring Coverage Integrity — Fixture Specification v0.1
 
 Status: **draft specification / unaccepted / no executable fixtures or results**.
-Revision: **r1** (2026-10-23 review revision of frozen draft r0, synchronized with
-contract r1; see section 9).
+Revision: **r2** (2026-10-23, synchronized with contract r2; see section 10).
 
 Repository baseline: `610c13f253ba631d7052727abe3d68845bb09bb5`.
 Companion: [Monitoring Coverage Contract v0.1](monitoring-coverage-contract-v0.1.md),
@@ -216,12 +215,30 @@ work; the named malformed/binding variants here still have explicit expectations
 A second reader must derive counts, deadline histories, source prefix/quarantine,
 and checkpoint state from these documents without a future implementation oracle.
 Later artifacts must pin contract/fixture versions, exact expanded records,
-delivery schedule, expected output and execution provenance. An implementation
+delivery schedule, expected output and execution provenance. Reference results
+record the contract and fixture revisions and the SHA-256 of both files, because
+`mci/0.1` alone does not distinguish revisions. That pin belongs in
+reference-result metadata, never in the closed report shape. An implementation
 failure cannot silently change this oracle. Any semantic correction requires a
 synchronized explicit revision and review. No natural-use trial, live coverage
 claim, test pass, implementation grant or evidence-window closeout is created.
 
-## 9. Revision record
+## 9. Revision r2 cases
+
+These cases exercise the rules added in contract r2. They use the common baseline,
+expansion and section 7 `K`/`W` notation, with the same partial-result discipline
+as section 2. `D(b)'` is a second witness dispatch with b's identical descriptor
+and input, but a fresh witness sequence and record ID.
+
+| Case | Exact timeline change / reports | Required result |
+| --- | --- | --- |
+| F34 — Checkpoint receipt without a cut | (a) Baseline plus V(a)@3 and K(5,[a])@5; report5. (b) Fresh timeline: A(b/c)@0, D(b)@2, D(c)@3, V(a)@3, then K(3,[a,b,c])@3; no b/c terminals; report3. | (a) `1/1/0/0/0`, ratio `[1,1]`, `ORPHAN_RECEIPT`; no checkpoint row exists and no coverage is granted. (b) `3/1/0/2/0`, ratio `[1,3]`. The count cut cp-3 is created at3 before the receipt is matched, so there is no `ORPHAN_RECEIPT`; cp-3 is `pending` (deadline5) with that receipt in `receipt_record_ids`. Delivery order inside tick3 cannot change this. |
+| F35 — Parent dispatch after child opening | F22's compaction timeline (child epoch-b@2, A(b)@2, D(b)@3 with I_SUM, T(b)@4 with C_SUM, V(b)@5, no V(a)), plus A(c)@2 in epoch-a, witness D(c)@3 in epoch-a with I_A listed after D(b), T(c)@4, and V(c)@4 with `input-a`/`review-a` views; report6. | `3/1/0/0/2`, ratio null/integrity_uncertain. Persistent `EPOCH_CONTINUITY_FAILURE` for epoch-a. c is disputed: V(c) gives no credit, and c's `MISSED_REVIEW_DEADLINE` due6 is a candidate finding. a keeps `MISSED_REVIEW_DEADLINE` due4. b is reviewed, and epoch-b's bindings stay valid because D(c) is sequenced after the opening. c was disputed when first usable, so it does not advance the count trigger: no count cut exists. |
+| F36 — Empty-parent compaction | Remove A/D/T and keep open@0. Witness child epoch-b@1 (parent epoch-a, prior I_A, new I_SUM); A(b)@1 in epoch-b; D(b)@2 with I_SUM; T(b)@3 with C_SUM; report4. | The opening is rejected because epoch-a has no dispatch: persistent `EPOCH_CONTINUITY_FAILURE` for epoch-b. D(b) then names an unopened epoch and blocks the witness prefix after sequence 2 (`incomplete`, no missing sequence). Counts `0/0/0/0/0`, ratio null/integrity_uncertain; admission b `unresolved` with `ADMISSION_UNRESOLVED` due4. |
+| F37 — Reused exemption ID | F16's grant (human seq1). (a) Add a fresh human grant@0 (seq2) reusing `exemption-a` for [a] with valid_from=2, valid_until=3. (b) Instead retransmit the original grant's exact bytes at1. No review; report4. | (a) `1/0/1/0/0`, ratio `[0,1]`, `EXEMPTION_INVALID` for exemption-a; the original grant still covers dispatch1, so no review deadline is missed. (b) `1/0/1/0/0` with no exemption finding; exact retransmission is idempotent. |
+| F38 — Disputed units and the count trigger | Add A(b)@0, A(c)@3, D(b)@2, T(b)@3, D(c)@5; no review. (a) `D(b)'` at4. (b) `D(b)'` instead at2, sequenced right after D(b). Report5; continue (b) to report10. | Both at5: `3/0/0/1/2`, ratio null/integrity_uncertain, `ATTEMPT_IDENTITY_CONFLICT`; b is disputed, with `MISSED_REVIEW_DEADLINE` due5 as a candidate finding. (a) b advanced the count when first usable at2 and keeps that contribution, so c creates count cut cp-5 (pending, deadline7, members [a,b,c]). (b) b was disputed when first usable, so no count cut exists at5. At10, (b) has `3/0/0/0/3`, and timer cut cp-10 exists, pending, with members [a,b,c]: timer cuts do not depend on the count trigger. |
+
+## 10. Revision record
 
 - **r0** — frozen handoff draft (file SHA-256
   `6706a62525850238e08504a3d61e5f0f7f8e4c779c022035e3123a6b7d9c6ed8`).
@@ -231,3 +248,8 @@ claim, test pass, implementation grant or evidence-window closeout is created.
   witness prefix block, F25's empty finding lists for `closed_reconciled`, and
   F27's `UNADMITTED_DISPATCH`. No count tuple, ratio, deadline or window state
   in r0 changes. This is agent review output, not human design acceptance.
+- **r2** — 2026-10-23, synchronized with contract r2. Adds F34–F38 (section 9)
+  for the operator-directed r2 rules and the agent-proposed supports that make
+  them deterministic, and requires reference results to pin both file hashes.
+  No F01–F33 expectation changes. F34–F38 are specified expectations, not
+  executed tests, and this revision is not human design acceptance.
