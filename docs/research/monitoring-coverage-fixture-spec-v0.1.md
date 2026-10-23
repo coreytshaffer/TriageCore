@@ -1,7 +1,7 @@
 # Monitoring Coverage Integrity — Fixture Specification v0.1
 
 Status: **draft specification / unaccepted / no executable fixtures or results**.
-Revision: **r4** (2026-10-23, synchronized with contract r4; see section 11).
+Revision: **r5** (2026-10-23, synchronized with contract r5; see section 11).
 
 Repository baseline: `610c13f253ba631d7052727abe3d68845bb09bb5`.
 Companion: [Monitoring Coverage Contract v0.1](monitoring-coverage-contract-v0.1.md),
@@ -289,3 +289,6 @@ the order A(a), open, D(a), T(a). Every expected result is exactly
   reports), defines the case-file mapping to reconciler input, and adds raw-byte
   ingestion cases I01–I06 (section 10). No F01–F39 expectation text changes. The
   frozen reports are hand-authored oracles, not executed test results.
+- **r5** — 2026-10-23, synchronized with contract r5's wording correction. The
+  frozen inputs and expected report payloads are unchanged; only their pins and
+  file hashes are updated to r5.

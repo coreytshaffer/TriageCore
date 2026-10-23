@@ -5,7 +5,7 @@ Status: **draft design for review; unaccepted; not implemented**.
 Recorded: 2026-10-22 PDT / 2026-10-23 UTC. Repository baseline:
 `610c13f253ba631d7052727abe3d68845bb09bb5` (remote `main` rechecked).
 Contract identifier: `mci/0.1`; this is a document version, not a CR number.
-Revision: **r4** (2026-10-23; see section 10). Wire identifiers and digest
+Revision: **r5** (2026-10-23; see section 10). Wire identifiers and digest
 domains remain `mci/0.1`, and no revision adds a record field, so `mci/0.1` alone
 cannot distinguish its revisions. Reference results must record the contract
 revision and the SHA-256 of this contract and of the fixture specification.
@@ -245,7 +245,9 @@ coverage. Cuts are created only at their own tick, so it can never resolve.
 `CHECKPOINT_MEMBERSHIP_MISMATCH` applies to a receipt whose members differ from
 the membership known when it first becomes usable. A receipt that matched then
 but no longer matches after membership grows is not a mismatch: its checkpoint is
-invalidated if it was complete, and otherwise stays pending or overdue.
+invalidated if it was complete, and otherwise stays pending or overdue. A receipt
+that mismatched when it first became usable stays ineligible even if membership
+later grows to match it.
 It records completed checkpoint work, not individual evaluation. Individual reviews/exemptions and source watermarks
 must also satisfy section 6. `cut_tick <= completed_at <= occurred_at <= visible_at`.
 
@@ -344,11 +346,15 @@ syntactically valid dispatch or admit placing the attempt in its row, including
 conflicting or quarantined variants. Candidate dispatches are accepted,
 conflicting-variant or quarantined dispatch records that place a unit in `O`; a
 record buffered behind a hole or blocked prefix is not yet usable and resolves
-nothing. A unit's `input_digest`, `review_digest`, `outcome` and `output_state`
-come from its credited dispatch and terminal; one that fails a binding leaves
-them null. `source_states` has exactly one row per manifest source.
-`highest_seen` counts every delivered record carrying that source ID, including
-invalid or buffered ones. `watermark_sequence` and `watermark_tick` describe the
+nothing. A unit's `input_digest` comes from its credited dispatch; its
+`review_digest`, `outcome` and `output_state` come from its credited terminal. A
+failed binding clears only the fields that depend on it, while a disputed unit
+clears all four. `source_states` has exactly one row per manifest source.
+`highest_seen` is the maximum positive integer sequence among visible records
+carrying that source ID, or 0 when there is none. Invalid or buffered records
+count when their sequence value is valid; a malformed sequence value does not.
+Retransmissions and conflicting variants never raise it merely by adding
+records. `watermark_sequence` and `watermark_tick` describe the
 latest watermark inside the accepted prefix; a quarantined watermark is not
 accepted. `disputed_record_ids` lists every record ID
 in that source's quarantined suffix, including conflicting variants.
@@ -811,3 +817,10 @@ expose more; any found requires a synchronized revision before it is frozen.
   atomicity, not orphaned or unsealed on that account); backfilled admissions
   assessed at their original deadline; and when each finding code is current. No
   F01–F39 expectation text changes.
+- **r5** — 2026-10-23 wording correction directed by the operator, synchronized
+  with fixture specification r5. Retains the r4 rules. Unit `input_digest`
+  depends on the credited dispatch, and the other three fields on the credited
+  terminal; a failed binding clears only its dependent fields, and a disputed
+  unit clears all four. `highest_seen` is a maximum of valid sequence values, not
+  a record count. A receipt that mismatched when first usable stays ineligible
+  after membership growth. No expected report changes.

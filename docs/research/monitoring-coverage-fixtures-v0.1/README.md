@@ -1,20 +1,23 @@
 # Monitoring Coverage Integrity — Frozen Fixtures v0.1
 
 Status: **hand-authored expected results for an unaccepted draft**. These files
-are an oracle for a future test-only reference reconciler. No reconciler exists,
-no conformance test has run, and nothing here is a test result, design
-acceptance, CR or implementation authority.
+are an oracle for a test-only reference reconciler. They are not test results,
+and they confer no design acceptance, CR or implementation authority. A
+reconciler that disagrees with them is wrong until a reviewed, synchronized
+revision says otherwise.
 
 Pinned specification (also recorded in `index.json` and every case file):
 
 | Document | Revision | SHA-256 |
 | --- | --- | --- |
-| [Contract](../monitoring-coverage-contract-v0.1.md) | r4 | `4211b17699926ca9bf073aee69d0457c3aa2c3ed22ad543f95e406024648ae6c` |
-| [Fixture specification](../monitoring-coverage-fixture-spec-v0.1.md) | r4 | `29c8cb7fe89edb573ce6b48fdca54a2381bcccdea5284c045eabf50b31674271` |
+| [Contract](../monitoring-coverage-contract-v0.1.md) | r5 | `f8ece79edc562a30c413f7b3946151b6a87213ad4d5c6e67a4ebfc9b83e3d643` |
+| [Fixture specification](../monitoring-coverage-fixture-spec-v0.1.md) | r5 | `9039f4ea979823c7a713ec28842c6a73b1880c80f275f9e8ca18b839974ab024` |
 
 `mci/0.1` alone does not identify a revision. A change to either document makes
 these files stale until they are re-derived and re-pinned in a synchronized
-revision. An implementation failure never changes them.
+revision. The r5 re-pin changed only pins and file hashes; every input and
+expected report payload is byte-identical to the r4 freeze. An implementation
+failure never changes them.
 
 ## Layout
 
