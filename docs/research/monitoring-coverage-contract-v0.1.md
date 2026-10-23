@@ -5,7 +5,7 @@ Status: **draft design for review; unaccepted; not implemented**.
 Recorded: 2026-10-22 PDT / 2026-10-23 UTC. Repository baseline:
 `610c13f253ba631d7052727abe3d68845bb09bb5` (remote `main` rechecked).
 Contract identifier: `mci/0.1`; this is a document version, not a CR number.
-Revision: **r3** (2026-10-23; see section 10). Wire identifiers and digest
+Revision: **r4** (2026-10-23; see section 10). Wire identifiers and digest
 domains remain `mci/0.1`, and no revision adds a record field, so `mci/0.1` alone
 cannot distinguish its revisions. Reference results must record the contract
 revision and the SHA-256 of this contract and of the fixture specification.
@@ -107,7 +107,10 @@ where input_index is -1 for the manifest and otherwise the zero-based envelope
 index; the digest covers the exact rejected manifest/envelope bytes. No coverage report or
 partial success is returned. If several inputs fail, report the lowest index; the
 reordering invariance in section 4 applies only to datasets that pass this boundary.
-This validation result is not a governance record.
+This validation result is not a governance record. The reconciler input is the
+manifest bytes, an ordered sequence of envelope byte strings and `as_of`;
+`input_index` is the zero-based position in that sequence. The fixture
+specification maps fixture files to this input.
 Canonicalizable but wrong-shaped/typed records remain inspectable report inputs;
 they are structurally invalid and block an identifiable source prefix. Thus an
 invalid input is never silently normalized merely to obtain an input-set digest.
@@ -121,7 +124,7 @@ One immutable manifest is available at tick 0. Its exact fields are:
 | `contract_version`, `run_id`, `policy_id` | `mci/0.1`, token, token |
 | `profile` | `synthetic_inference` or `synthetic_tool` |
 | `protocol`, `model` | Fixed synthetic identifiers, never discovered dynamically |
-| `sources` | Exactly four role-to-source-ID bindings; all distinct |
+| `sources` | Object with exactly the keys `controller`, `witness`, `monitor`, `human_authority`; four distinct source IDs |
 | `eligible_actions` | Sorted unique action tokens; primary profile has `inference.local.generate` only |
 | `excluded_surfaces`, `known_bypasses` | Sorted unique descriptive tokens; empty is an explicit declaration, not assurance |
 | `review_wait`, `admission_wait`, `terminal_wait` | Positive integer ticks from dispatch, admission, dispatch respectively |
@@ -239,6 +242,10 @@ be `cp-` followed by its decimal `cut_tick`; otherwise it is `INVALID_RECORD`. A
 receipt naming a cut that does not exist once that tick's cuts are created
 (section 2, step 3) is `ORPHAN_RECEIPT`: it creates no checkpoint and grants no
 coverage. Cuts are created only at their own tick, so it can never resolve.
+`CHECKPOINT_MEMBERSHIP_MISMATCH` applies to a receipt whose members differ from
+the membership known when it first becomes usable. A receipt that matched then
+but no longer matches after membership grows is not a mismatch: its checkpoint is
+invalidated if it was complete, and otherwise stays pending or overdue.
 It records completed checkpoint work, not individual evaluation. Individual reviews/exemptions and source watermarks
 must also satisfy section 6. `cut_tick <= completed_at <= occurred_at <= visible_at`.
 
@@ -334,7 +341,16 @@ record and its witness `not_dispatched`. A matching candidate dispatch gives
 state `dispatched`; it establishes neither confirmed occurrence nor
 authorization. `dispatch_record_ids` and `admission_record_ids` list every
 syntactically valid dispatch or admit placing the attempt in its row, including
-conflicting or quarantined variants. `disputed_record_ids` lists every record ID
+conflicting or quarantined variants. Candidate dispatches are accepted,
+conflicting-variant or quarantined dispatch records that place a unit in `O`; a
+record buffered behind a hole or blocked prefix is not yet usable and resolves
+nothing. A unit's `input_digest`, `review_digest`, `outcome` and `output_state`
+come from its credited dispatch and terminal; one that fails a binding leaves
+them null. `source_states` has exactly one row per manifest source.
+`highest_seen` counts every delivered record carrying that source ID, including
+invalid or buffered ones. `watermark_sequence` and `watermark_tick` describe the
+latest watermark inside the accepted prefix; a quarantined watermark is not
+accepted. `disputed_record_ids` lists every record ID
 in that source's quarantined suffix, including conflicting variants.
 
 The report is not an exhaustive evidence index. The exact input envelopes retain
@@ -395,7 +411,10 @@ computed from its retained descriptor's dispatch occurrence. Once its dispute
 is discovered, its terminal and review obligations cannot be satisfied, and it
 gains no credit. A later dispute never invents a historical miss: an obligation
 whose deadline tick precedes the discovery tick keeps the assessment made at that
-deadline (see the end of this section). Findings about a disputed unit are conservative candidate
+deadline (see the end of this section). A receipt member naming a disputed unit
+is never credited and counts as unresolved for batch atomicity; it is not
+reported orphaned or unsealed on that account, and only checks against its own
+fields, sidecar and manifest apply. Findings about a disputed unit are conservative candidate
 findings; they establish neither its existence nor its multiplicity. They stay
 identifiable through the subject unit's `unit_states.disputed`; consumers must
 not present them as confirmed execution.
@@ -426,8 +445,9 @@ delivery ticks must not change results. A record that arrived before a deadline
 but was buffered behind a missing prefix was not usable at that deadline.
 Late records can resolve current states but cannot erase the historical interval
 in which a deadline was missed. This rule avoids using producer timestamps to
-backdate apparent compliance. A newly discovered overdue dispatch is evaluated
-against what was usable at its original deadline, even if it is reviewed now.
+backdate apparent compliance. A newly discovered overdue dispatch or admission is
+evaluated against what was usable at its original deadline, even if it is
+reviewed or resolved now.
 A later-discovered conflict or dispute invalidates current evidence from
 discovery onward; it does not retroactively invent a missed deadline that was
 satisfied then.
@@ -596,6 +616,23 @@ invalidate truthful review. Impossible record shape/time is `INVALID_RECORD`;
 receipt-specific completion ordering uses `RECEIPT_TIME_INVALID`. Assign multiple
 codes only for distinct failed rules; do not duplicate a count per code.
 
+A finding is current while its condition holds. Findings about a defective record
+or a fixed event stay current permanently: `INVALID_RECORD`, `POLICY_MISMATCH`,
+`SOURCE_ROLE_MISMATCH`, `SOURCE_CONFLICT`, `WATERMARK_CONTRADICTION`,
+`ATTEMPT_IDENTITY_CONFLICT`, `CONTEXT_UNAVAILABLE`, `CONTEXT_MISMATCH`,
+`RECEIPT_TIME_INVALID`, `EXEMPTION_INVALID`, `EXEMPTION_NOT_APPLICABLE`,
+`UNADMITTED_DISPATCH`, `CANCEL_DISPATCH_CONFLICT`, `POST_CLOSE_DISPATCH`,
+`OUT_OF_SCOPE_EVENT` and `CHECKPOINT_MEMBERSHIP_MISMATCH`. Every other code is
+current only while: a sequence hole remains (`SOURCE_SEQUENCE_GAP`); its receipt
+is uncorroborated (`ORPHAN_RECEIPT`), awaits a credited terminal
+(`CONTEXT_UNSEALED`) or has a member without credited evaluation
+(`RECEIPT_NOT_EVALUATED`); a credited review or terminal shows it (the behavioral
+codes and `EXECUTION_OUTCOME_UNKNOWN`); its epoch is unresolved
+(`EPOCH_CONTINUITY_FAILURE`, section 5); its admission is `unresolved`; an
+obligation missed at its deadline is still unmet (`TERMINAL_MISSING`,
+`MISSED_REVIEW_DEADLINE`); or its checkpoint is overdue or invalidated. An
+obligation met at its deadline is never later reported missed.
+
 Finding subjects are deterministic: source sequence/conflict/watermark codes use
 `source_id`; lifecycle, attempt identity, behavioral verdict and exemption-not-
 applicable codes use `attempt_id`; epoch continuity uses the `epoch_id` named by
@@ -762,3 +799,15 @@ expose more; any found requires a synchronized revision before it is frozen.
   attempt-level verdicts or behavioral codes. A later dispute never invents a
   historical deadline miss. Fixture r3 adds F09(c), F36(b) and F39; no earlier
   expectation changes.
+- **r4** — 2026-10-23, synchronized with fixture specification r4, which freezes
+  complete expected reports and adds raw-byte ingestion cases I01–I06. The full
+  derivation needed further rules, all *agent-proposed for review*: the reconciler
+  input sequence behind `input_index`; the `sources` object shape; membership
+  mismatch only against membership known when a receipt first becomes usable;
+  the meaning of a candidate dispatch (buffered records resolve nothing); unit
+  commitments and outcome only from credited dispatch and terminal; one source
+  row per manifest source, with `highest_seen` and watermark fields defined;
+  receipts naming a disputed unit (never credited, unresolved for batch
+  atomicity, not orphaned or unsealed on that account); backfilled admissions
+  assessed at their original deadline; and when each finding code is current. No
+  F01–F39 expectation text changes.

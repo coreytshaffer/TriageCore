@@ -1,0 +1,2 @@
+# Fixture bytes and recorded SHA-256 values must survive checkout unchanged.
+* -text

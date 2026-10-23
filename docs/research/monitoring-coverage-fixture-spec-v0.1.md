@@ -1,7 +1,7 @@
 # Monitoring Coverage Integrity — Fixture Specification v0.1
 
 Status: **draft specification / unaccepted / no executable fixtures or results**.
-Revision: **r3** (2026-10-23, synchronized with contract r3; see section 10).
+Revision: **r4** (2026-10-23, synchronized with contract r4; see section 11).
 
 Repository baseline: `610c13f253ba631d7052727abe3d68845bb09bb5`.
 Companion: [Monitoring Coverage Contract v0.1](monitoring-coverage-contract-v0.1.md),
@@ -120,7 +120,12 @@ the lists are not exhaustive. Explicit exclusions ("no …", "must not …", "is
 missed") are frozen negative assertions. Before a reference reconciler's output
 is compared with these cases, complete expected reports (including source,
 admission and checkpoint rows) must be hand-derived and frozen in a synchronized
-revision.
+revision. r4 freezes them, with every case's exact inputs, in
+[monitoring-coverage-fixtures-v0.1](monitoring-coverage-fixtures-v0.1/README.md).
+For a case file, the reconciler input (contract section 3) is the canonical bytes
+of `manifest`, then the canonical bytes of each element of `envelopes` in file
+order, and each `as_of` listed under `reports`. Raw-byte cases (section 10) supply
+their bytes directly.
 
 ## 3. Review timing and denominator cases
 
@@ -239,7 +244,28 @@ and input, but a fresh witness sequence and record ID.
 | F38 — Disputed units and the count trigger | Add A(b)@0, A(c)@3, D(b)@2, T(b)@3, D(c)@5; no review. (a) `D(b)'` at4. (b) `D(b)'` instead at2, sequenced right after D(b). Report5; continue (b) to report10. | Both at5: `3/0/0/1/2`, ratio null/integrity_uncertain, `ATTEMPT_IDENTITY_CONFLICT`; b is disputed, with `MISSED_REVIEW_DEADLINE` due5 as a candidate finding. (a) b advanced the count when first usable at2 and keeps that contribution, so c creates count cut cp-5 (pending, deadline7, members [a,b,c]). (b) b was disputed when first usable, so no count cut exists at5. At10, (b) has `3/0/0/0/3`, and timer cut cp-10 exists, pending, with members [a,b,c]: timer cuts do not depend on the count trigger. |
 | F39 — Rejected epoch reopening | (a) Active epoch: baseline plus a fresh witness `epoch_open` reusing epoch-a with all lineage fields null@2 after T(a); A(b)@2, D(b)@3 in epoch-a with I_A, T(b)@4; V(a)@3, V(b)@5; report5. (b) Retired epoch: F22's compaction timeline (no V(a)) plus a fresh witness `epoch_open` reusing epoch-a@4 after T(b) (parent epoch-b, prior I_SUM, new I_A); A(c)@4 in epoch-a; D(c)@5 in epoch-a with I_A; report6. | (a) The reopening is rejected (epoch-a was already accepted) and changes nothing: epoch-a stays the active epoch, so D(b) is valid. `2/2/0/0/0`, ratio `[2,2]`, persistent `EPOCH_CONTINUITY_FAILURE` for epoch-a. (b) The reopening is rejected and epoch-b remains the latest epoch. D(c) names retired epoch-a, so c is disputed under the parent-after-child rule. `3/1/0/0/2`, ratio null/integrity_uncertain, persistent `EPOCH_CONTINUITY_FAILURE` for epoch-a; a keeps `MISSED_REVIEW_DEADLINE` due4; b is reviewed. c was disputed when first usable, so no count cut exists. |
 
-## 10. Revision record
+## 10. Ingestion boundary cases (raw bytes)
+
+These cases test the ingestion boundary of contract section 3, where encoding
+matters, so their inputs are exact bytes. Each case directory holds
+`manifest.json` (the manifest bytes, no trailing newline), `envelopes.jsonl` and
+`expected.json`. `envelopes.jsonl` is a sequence of LF-terminated lines; each
+line, without its LF, is one envelope's bytes, and its zero-based line number is
+its `input_index`. The well-formed lines are the canonical baseline envelopes in
+the order A(a), open, D(a), T(a). Every expected result is exactly
+`{status: "input_error", code: "INVALID_RECORD", input_index, raw_sha256}`, with
+`raw_sha256` over the rejected line or manifest bytes. No report is produced.
+
+| Case | Change to the baseline bytes | Required result |
+| --- | --- | --- |
+| I01 — Malformed JSON | Line 2 (D(a)) loses its final byte | `input_index` 2 |
+| I02 — Duplicate key | Line 1 (open) repeats `"sequence":1` | `input_index` 1 |
+| I03 — Float | Line 3 (T(a)) writes `occurred_at` as `2.0` | `input_index` 3 |
+| I04 — Non-ASCII value | Line 2's user message content uses raw UTF-8 `"Say pöng."` | `input_index` 2 |
+| I05 — Invalid manifest | The manifest declares `census_assurance` `complete`; lines unchanged | `input_index` -1, digest over the manifest bytes |
+| I06 — Lowest index | Line 1 as in I02 and line 3 as in I03 | `input_index` 1, the lowest failing index |
+
+## 11. Revision record
 
 - **r0** — frozen handoff draft (file SHA-256
   `6706a62525850238e08504a3d61e5f0f7f8e4c779c022035e3123a6b7d9c6ed8`).
@@ -258,3 +284,8 @@ and input, but a fresh witness sequence and record ID.
   F09(c) (mismatched-context receipt claiming `flagged`), F36(b) (corrected reuse
   of a rejected fresh epoch ID) and F39 (rejected reopening of an active or
   retired epoch). No earlier expectation changes.
+- **r4** — 2026-10-23, synchronized with contract r4. Freezes complete expected
+  reports and exact inputs for every F01–F39 case and variant (71 case files, 85
+  reports), defines the case-file mapping to reconciler input, and adds raw-byte
+  ingestion cases I01–I06 (section 10). No F01–F39 expectation text changes. The
+  frozen reports are hand-authored oracles, not executed test results.
