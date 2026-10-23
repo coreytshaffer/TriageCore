@@ -163,7 +163,26 @@ corpus that check is equivalent to the human-gap suspension: a grant first usabl
 dispatch implies a missing earlier human record at dispatch. The mutation check is
 supporting evidence only.
 
-CI on Python 3.10–3.12 has not been observed for this candidate.
+### CI evidence
+
+Draft [PR #189](https://github.com/coreytshaffer/TriageCore/pull/189) was opened at the
+operator's direction to obtain this evidence. It is not a merge request. GitHub Actions
+run [`39931698354`](https://github.com/coreytshaffer/TriageCore/actions/runs/39931698354)
+ran the `tests` workflow on head `77447bc2fdbc09182f4a1b2f15cc180bd9cd2bd8` (the
+candidate plus the evidence record above) on 2026-10-23. All four jobs succeeded.
+
+| Job | Result |
+| --- | --- |
+| `pytest (3.10)` | success; `python -m pytest -q`: 2439 passed, 77 skipped |
+| `pytest (3.11)` | success; 2439 passed, 77 skipped |
+| `pytest (3.12)` | success; 2439 passed, 77 skipped |
+| `windows_executor` | success; 214 mandatory tests, 0 skipped |
+
+The Ubuntu totals equal the local collection: 2428 passed plus 11 failed plus 77
+skipped, 2516 in all. So all 237 CR-136 tests ran and passed on each Python version, and
+the 11 UI tests that failed locally for lack of `tkinter` pass in CI. `windows_executor`
+runs only its three named suites, not the CR-136 tests. This CI result is evidence for
+the candidate. It is not implementation acceptance.
 
 ## Implementation Interpretations Outside the Frozen Oracle
 
@@ -208,6 +227,6 @@ closeout authority.
 
 - Implementation acceptance of the candidate, against the criteria above.
 - Disposition of each implementation interpretation.
-- Merge authority, and observation of CI on Python 3.10–3.12.
+- Merge authority. CI on Python 3.10–3.12 has been observed; see CI evidence.
 - Whether TC-AM-001, absent from this repository, applies to or would interfere with
   this test-only work.
