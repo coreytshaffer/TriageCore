@@ -12,6 +12,22 @@ the covering tests passed in the full-suite run recorded in
 This checklist restates existing invariants. It grants nothing, changes
 nothing, and is not a certification.
 
+## Current Source Discrepancy Recorded 2026-10-22
+
+At `main@610c13f253ba631d7052727abe3d68845bb09bb5`, row 6's blanket
+GUI claim is contradicted by `triage_core/ui/app.py`: direct backend generation,
+review-event appends, and a handoff-file write exist outside the read-only
+`triagedesk_adapter.py` surface. The
+[monitoring coverage baseline](monitoring-coverage-baseline-2026-10-22.md)
+records the inspected symbols and pinned source locations.
+
+The 2026-07-07 results below remain historical records; no tests were rerun for
+this source finding. An adapter-only check cannot establish the zero-effect
+property for the whole GUI. Row 6's invariant text is retained rather than
+silently narrowed: this discrepancy is open, and this note neither authorizes
+GUI effects nor relaxes the invariant. Any change to its intended boundary
+requires its own explicit decision under the Rules for Future Slices.
+
 ## The Invariants
 
 | # | Invariant | Enforced by | Reviewer verification | Status |
@@ -21,7 +37,7 @@ nothing, and is not a certification.
 | 3 | Signatures prove provenance and tamper evidence only — never approval, safety, correctness, or execution authority. | Doc + CLI wording throughout; verification output is metadata-only | `tc audit --verify-signatures --kind route_decision`; confirm output claims verification counts only | Verified 2026-07-07 (valid_signed=2, invalid=0, unsigned=0, malformed=0) |
 | 4 | A passing authority manifest grants nothing; validation is static and metadata-only; denied actions take precedence; omissions never waive review gates. | `triage_core/agent_authority.py` (CR-095, PR #80 hardening) | `tc authority check --manifest docs/security/examples/agent_authority_manifest_reviewer.json`; `pytest tests/test_agent_authority.py -q` | Verified 2026-07-07 (in full suite) |
 | 5 | Local-only routing fails closed before the bounded external-safe Qwen path is considered. | CR-004B enforcement in routing; `triage_core/safe_task_packet.py` | `pytest tests/test_local_only_routing.py tests/test_qwen_cloud_routing.py -q` | Verified 2026-07-07 (in full suite) |
-| 6 | TriageDesk GUI is read-only: zero direct LLM calls, file writes, or ledger mutations; all access via `triagedesk_adapter.py`. | Adapter-only architecture (baseline tag `triagedesk-daily-driver-baseline-2026-06-25`) | `pytest tests/test_cybernetic_validators.py -q` and adapter tests; code inspection of `triage_core/triagedesk_adapter.py` | Verified 2026-07-07 (in full suite) |
+| 6 | TriageDesk GUI is read-only: zero direct LLM calls, file writes, or ledger mutations; all access via `triagedesk_adapter.py`. | Adapter-only architecture (baseline tag `triagedesk-daily-driver-baseline-2026-06-25`) | `pytest tests/test_cybernetic_validators.py -q` and adapter tests; code inspection of `triage_core/triagedesk_adapter.py` | Historical verification recorded 2026-07-07; whole-GUI claim contradicted by source at `610c13f` (see discrepancy above) |
 | 7 | Read-only by default; explicit mutation only; exports have no default write location, fail closed on existing files, and repeat byte-identically. | Runtime strategy export path (CR-109/CR-112); workspace write commands require explicit intent | `pytest tests/test_reports.py -q` plus runtime-strategy tests; attempt an export without `--output` | Verified 2026-07-07 (in full suite) |
 | 8 | Deterministic fixture reports never ingest recorded or probe data; recorded/probe tiers are always labeled and validated via strict mapping (unknown fields rejected). | `triage_core/runtime_strategy_evidence.py` (CR-104 → CR-112); boundary for future telemetry defined in [local-backend-telemetry.md](local-backend-telemetry.md) | Runtime-strategy focused tests; confirm `recorded-report` requires explicit `--input` | Verified 2026-07-07 (in full suite) |
 | 9 | Failure reporting uses closed vocabularies (reason codes), never raw error text; quality gates qualify cost interpretations but never rewrite or rank them. | CR-106/CR-108 vocabularies; CR-097 categories; CR-113 brief for future telemetry | Grep CLI output in tests for reason codes; confirm no "best strategy" output exists | Verified 2026-07-07 (in full suite) |
