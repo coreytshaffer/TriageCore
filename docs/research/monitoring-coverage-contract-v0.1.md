@@ -5,9 +5,9 @@ Status: **draft design for review; unaccepted; not implemented**.
 Recorded: 2026-10-22 PDT / 2026-10-23 UTC. Repository baseline:
 `610c13f253ba631d7052727abe3d68845bb09bb5` (remote `main` rechecked).
 Contract identifier: `mci/0.1`; this is a document version, not a CR number.
-Revision: **r2** (2026-10-23; see section 10). Wire identifiers and digest
+Revision: **r3** (2026-10-23; see section 10). Wire identifiers and digest
 domains remain `mci/0.1`, and no revision adds a record field, so `mci/0.1` alone
-cannot distinguish r0, r1 and r2. Reference results must record the contract
+cannot distinguish its revisions. Reference results must record the contract
 revision and the SHA-256 of this contract and of the fixture specification.
 
 This document develops the [candidate](candidates/monitoring-coverage-integrity.md)
@@ -178,12 +178,17 @@ not semantic equivalence of a summary.
 
 An opening is accepted only if it is the initial opening (the witness's first
 `epoch_open`, at tick 0, all three nullable fields null) or opens a new epoch ID
-whose parent is the latest accepted epoch, has at least one dispatch, and is
-bound by non-null commitments with a matching `prior_context_digest`. In
-particular, an empty parent cannot be compacted. Any other opening is rejected:
-it consumes its position, opens and ends nothing, and records persistent
-`EPOCH_CONTINUITY_FAILURE`; later records naming its epoch follow the
-unopened-epoch rule (section 4). A dispatch naming an epoch after a child of
+(one not previously accepted) whose parent is the latest accepted epoch, has at
+least one dispatch, and is bound by non-null commitments with a matching
+`prior_context_digest`. In particular, an empty parent cannot be compacted. Any
+other opening is rejected: it consumes its position, opens and ends nothing, and
+records persistent `EPOCH_CONTINUITY_FAILURE`. Rejection neither reserves a fresh
+ID nor changes an existing epoch. A rejected opening that reuses an accepted ID
+leaves that epoch, its lineage and its records unchanged, and records naming it
+are judged against the accepted epoch. Records naming a never-accepted epoch
+follow the unopened-epoch rule (section 4). A later opening may use a previously
+rejected fresh ID with fresh record identity; it receives full validation, and
+the original violation remains. A dispatch naming an epoch after a child of
 that epoch has opened is accepted as a disputed unit with persistent
 `EPOCH_CONTINUITY_FAILURE`; it receives no review credit, and earlier valid
 evidence is unaffected. A child's first dispatch that contradicts
@@ -322,14 +327,22 @@ Evidence fields show only what is currently credited, from accepted records
 outside quarantine: `terminal_record_id`, `review_record_ids` and `verdicts`
 come from the credited terminal and evaluated reviews; `exemption_ids` lists
 grants applicable at dispatch; checkpoint `receipt_record_ids` lists receipts
-meeting completion condition 1; and admission `resolution_record_ids` lists the
-matching dispatch, or else the controller cancel/plan record and its witness
-`not_dispatched`. A matching dispatch, disputed or not, gives state `dispatched`.
-`dispatch_record_ids` and `admission_record_ids` list every syntactically valid
-dispatch or admit placing the attempt in its row, including conflicting or
-quarantined variants. Uncredited evidence appears only as a finding subject, and
-verdict codes come only from credited reviews. `disputed_record_ids` lists every
-record ID in that source's quarantined suffix, including conflicting variants.
+meeting completion condition 1. As the one candidate-evidence exception,
+admission `resolution_record_ids` lists every matching candidate dispatch record
+ID, including disputed or quarantined ones, or else the controller cancel/plan
+record and its witness `not_dispatched`. A matching candidate dispatch gives
+state `dispatched`; it establishes neither confirmed occurrence nor
+authorization. `dispatch_record_ids` and `admission_record_ids` list every
+syntactically valid dispatch or admit placing the attempt in its row, including
+conflicting or quarantined variants. `disputed_record_ids` lists every record ID
+in that source's quarantined suffix, including conflicting variants.
+
+The report is not an exhaustive evidence index. The exact input envelopes retain
+uncredited evidence; findings may identify it by record, attempt, epoch or
+source. Unit `verdicts` and the behavioral codes `REVIEW_FLAGGED`,
+`REVIEW_INDETERMINATE` and `REVIEW_VERDICT_DISAGREEMENT` come only from credited
+reviews. A receipt that fails a context or integrity binding keeps its own
+context/integrity findings, but its claimed verdict never reaches the attempt.
 
 All keyed output arrays are sorted by their identifier. Findings sort by
 `(code, subject_id, first_due_tick)`, lexicographically for strings and with null
@@ -380,7 +393,9 @@ established earlier. Every unit in `O`, disputed or not, keeps the per-unit
 obligations of section 5 (dispatch admission, terminal and review deadlines),
 computed from its retained descriptor's dispatch occurrence. Once its dispute
 is discovered, its terminal and review obligations cannot be satisfied, and it
-gains no credit. Findings about a disputed unit are conservative candidate
+gains no credit. A later dispute never invents a historical miss: an obligation
+whose deadline tick precedes the discovery tick keeps the assessment made at that
+deadline (see the end of this section). Findings about a disputed unit are conservative candidate
 findings; they establish neither its existence nor its multiplicity. They stay
 identifiable through the subject unit's `unit_states.disputed`; consumers must
 not present them as confirmed execution.
@@ -413,8 +428,9 @@ Late records can resolve current states but cannot erase the historical interval
 in which a deadline was missed. This rule avoids using producer timestamps to
 backdate apparent compliance. A newly discovered overdue dispatch is evaluated
 against what was usable at its original deadline, even if it is reviewed now.
-A later-discovered conflict invalidates current evidence from discovery onward;
-it does not retroactively invent a missed deadline that was satisfied then.
+A later-discovered conflict or dispute invalidates current evidence from
+discovery onward; it does not retroactively invent a missed deadline that was
+satisfied then.
 
 ## 5. Accounting and event lifecycle
 
@@ -735,3 +751,14 @@ F01–F33 case depends on these choices.
 
 No open semantic item is known after r2. Freezing complete expected reports may
 expose more; any found requires a synchronized revision before it is frozen.
+
+- **r3** — 2026-10-23 bounded correction directed by the operator, synchronized
+  with fixture specification r3. It keeps all seven r2 agent-proposed supports. A
+  "new epoch ID" means one not previously accepted, and a rejected opening
+  neither reserves an ID nor changes an accepted epoch. Admission resolution may
+  cite candidate dispatches, including disputed or quarantined ones, without
+  confirming occurrence or authorization. The report is not an exhaustive
+  evidence index, and verdicts from receipts that fail a binding never reach
+  attempt-level verdicts or behavioral codes. A later dispute never invents a
+  historical deadline miss. Fixture r3 adds F09(c), F36(b) and F39; no earlier
+  expectation changes.
