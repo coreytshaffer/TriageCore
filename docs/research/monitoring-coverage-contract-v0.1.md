@@ -5,6 +5,9 @@ Status: **draft design for review; unaccepted; not implemented**.
 Recorded: 2026-10-22 PDT / 2026-10-23 UTC. Repository baseline:
 `610c13f253ba631d7052727abe3d68845bb09bb5` (remote `main` rechecked).
 Contract identifier: `mci/0.1`; this is a document version, not a CR number.
+Revision: **r1** (2026-10-23 review revision of the frozen handoff draft r0;
+see section 10). Wire identifiers and digest domains remain `mci/0.1`; r1 adds
+no record field. Later artifacts must pin `mci/0.1` r1, not the identifier alone.
 
 This document develops the [candidate](candidates/monitoring-coverage-integrity.md)
 and [source inventory](../operations/monitoring-coverage-baseline-2026-10-22.md).
@@ -97,7 +100,9 @@ reconciliation. An invalid manifest also rejects the dataset. The validation res
 `{status: "input_error", code: "INVALID_RECORD", input_index: <integer>, raw_sha256: <64-hex>}`,
 where input_index is -1 for the manifest and otherwise the zero-based envelope
 index; the digest covers the exact rejected manifest/envelope bytes. No coverage report or
-partial success is returned. This validation result is not a governance record.
+partial success is returned. If several inputs fail, report the lowest index; the
+reordering invariance in section 4 applies only to datasets that pass this boundary.
+This validation result is not a governance record.
 Canonicalizable but wrong-shaped/typed records remain inspectable report inputs;
 they are structurally invalid and block an identifiable source prefix. Thus an
 invalid input is never silently normalized merely to obtain an input-set digest.
@@ -256,6 +261,8 @@ The output family has exactly these top-level fields:
   (`pending`, `complete`, `overdue`, `invalidated`), with historical violations retained.
 - `counts_by_action`: `observed`, `reviewed`, `exempt_unreviewed`,
   `pending_within_deadline`, `uncovered`, `coverage_ratio`, `ratio_status`.
+  Exactly one row per manifest eligible action, including all-zero rows; no
+  other action receives a row.
 - Diagnostics/violations are object rows with `code`, `subject_id`, `first_due_tick`;
   the latter is null for non-deadline findings. No raw exception messages.
 
@@ -329,6 +336,12 @@ or claim their multiplicity is certain. The candidate count is not a numerical
 lower or upper bound on real executions; its ratio remains suppressed. Downstream reviews relying on quarantined
 terminals cannot count. Healthy sources remain inspectable. Source conflict is
 not auto-repaired in this version; human disposition requires a new profile/run.
+A unit whose own dispatch position is contested is disputed even if it was
+established earlier. Every unit in `O`, disputed or not, keeps the per-unit
+obligations of section 5 (dispatch admission, terminal and review deadlines),
+computed from its retained descriptor's dispatch occurrence. Findings about a
+disputed unit are conservative candidate findings; they establish neither its
+existence nor its multiplicity.
 
 Apply the same quarantine rule to a watermark contradiction, starting at the
 contradictory watermark. `ATTEMPT_IDENTITY_CONFLICT` disputes that attempt and
@@ -340,7 +353,12 @@ context bytes violate profile/context binding. Its existence cannot disappear
 because its model/context is wrong; it cannot receive review credit until valid
 required bindings exist. This is distinct from disputed event identity.
 Epoch-binding conflicts dispute affected child units; missing epoch evidence
-buffers them and prevents complete accounting. An unknown-source input is retained
+buffers them and prevents complete accounting. Specifically, a witness dispatch
+or terminal naming an epoch not opened earlier in the witness's accepted prefix
+blocks that prefix at its position (`incomplete`); because an opening can only
+precede it in the same sequence, nothing later repairs that block in v0.1. Controller
+admits are not epoch-dependent and remain accepted; receipts naming a blocked
+attempt are orphaned. An unknown-source input is retained
 as invalid evidence without impersonating or advancing a named source.
 
 First derive all obligations known at `as_of`, including backfilled dispatches.
@@ -424,13 +442,18 @@ availability, not agent turn completion. Three triggers apply:
   order within a tick; a burst creates at most one cut that tick. Backfill can
   trigger a present checkpoint, never postpone original per-unit deadlines.
 - Final: the first usable controller `run_close` creates a cut at its usability
-  tick. Further run-close records are `INVALID_RECORD`.
+  tick. A further fresh run-close record consumes its source position, creates no
+  cut and is retained as `INVALID_RECORD`; an exact retransmission stays idempotent.
 
 IDs are stable `cp-<cut_tick>`, such as `cp-10`. Simultaneous triggers create one
 cut; count cuts do not reset the timer grid. `previous_cut` records the prior
 created cut (0 initially) but does not scope membership. Every checkpoint covers
 the cumulative set of witnessed units with dispatch occurrence at or before its
 cut. Overlap does not inflate event totals. Each deadline is `cut + checkpoint_grace`.
+With the fixture defaults (`checkpoint_grace` 2 < `review_wait` 3), a unit
+dispatched at a cut must be reviewed or exempt by `cut + 2` for that checkpoint
+to complete, although its own review deadline is unchanged; a timely per-unit
+review can therefore coexist with `CHECKPOINT_MISSED`.
 Timer cuts occur with no units. After close becomes usable, no later ordinary
 cuts are generated. A dispatch occurring later than that close tick is
 `POST_CLOSE_DISPATCH`, remains counted, and prevents clean closure.
@@ -463,10 +486,13 @@ receipt/heartbeat cannot stand in for this completed checkpoint. Checkpoints
 certify a bounded source scan, not census completeness or execution permission.
 
 `window_state` is `open` until `run_close` and the final checkpoint requirements
-are satisfied. It is `closed_with_findings` if they are satisfied but historical
-violations, orphan/invalid evidence, unresolved admissions, unknown terminal
-outcomes, flagged/indeterminate verdicts, or coverage gaps remain. It is
-`closed_reconciled` only with none of those findings. A still-waiting admission
+are satisfied. Once they are, it is `closed_reconciled` only if both `diagnostics`
+and `historical_violations` are empty; otherwise it is `closed_with_findings`.
+That covers historical violations, orphan/invalid evidence, unresolved admissions,
+unknown terminal outcomes, flagged/indeterminate verdicts, verdict disagreement,
+out-of-scope disclosures and coverage gaps. Exempt-unreviewed units carry no code
+and do not by themselves prevent `closed_reconciled`; they remain unmonitored and
+the counts must still show them. A still-waiting admission
 or any unit lacking a valid terminal keeps the window open until its deadline;
 thereafter an explicit unresolved/missing-terminal finding can close only as
 `closed_with_findings` if the final checkpoint conditions are otherwise satisfied.
@@ -485,7 +511,10 @@ and unsealed receipt findings clear once those dependencies validate; a queued
 receipt's `RECEIPT_NOT_EVALUATED` clears when valid evaluations cover all its
 members. Filled sequence gaps and successfully resolved admission/terminal/review
 obligations lose their current diagnostics, retaining any historical violations. Invalid evidence is retained for inspection, never silently
-dropped to make a window clean.
+dropped to make a window clean. A persisted code appears in both lists while its
+condition is currently applicable (for example, an uncovered unit's
+`MISSED_REVIEW_DEADLINE` or an unrepairable `UNADMITTED_DISPATCH`), and only in
+`historical_violations` after it is resolved.
 
 | Class | Codes |
 |---|---|
@@ -612,3 +641,24 @@ DD-012B lifecycle-record discrepancy remains unresolved; no grant is reconstruct
 This contract allocates no CR, changes no operational schemas and authorizes no
 code, live monitoring, publication, deployment, merge, release or closeout under
 [change management](../change/change_management.md).
+
+## 10. Revision record
+
+- **r0** — frozen handoff draft at the baseline above (file SHA-256
+  `3eddaeb45669cfe11f14f14b8d5c67b0bac19590ded6f3db19a7f297d04f7e0e`).
+- **r1** — 2026-10-23 agent review revision, synchronized with fixture
+  specification r1. It pins rules r0 left open: the lowest failing index for
+  multiple ingestion failures; one count row per eligible action; per-unit
+  obligations for disputed units, and disputed status for a contested own
+  dispatch position; the witness prefix block for a dispatch or terminal in an
+  unopened epoch; a duplicate run-close that consumes its position; the
+  checkpoint-grace interaction; `closed_reconciled` tied to empty finding lists;
+  and when a persisted code also appears in `diagnostics`. r1 changes no frozen
+  count tuple. It is agent review output, not human design acceptance.
+
+Still unpinned in r1, to be decided before any implementation treats them as an
+oracle: the finding for a checkpoint receipt naming a cut that was never created;
+codes for a parent dispatch after its child opens and for opening a child of an
+empty parent; a reissued grant reusing an existing `exemption_id`; and whether
+units first known only as disputed advance the checkpoint count trigger. No
+F01–F33 case depends on these choices.

@@ -93,7 +93,7 @@ of its behavioral verdict; a received-but-unevaluated item cannot.
 Exempt-unreviewed events are not counted as monitored. A zero denominator is
 not 100% coverage. Duplicate receipts cannot increase coverage.
 Late receipts may resolve the current state without
-erasing missed-deadline or unauthorized-execution violations.
+erasing missed-deadline or unadmitted-dispatch violations.
 
 Reconcile admissions and dispatch separately. Queued work and proven
 pre-dispatch cancellation are legitimate; unexplained execution outcomes after
@@ -111,7 +111,7 @@ and exact content/version identities.
 |---|---|
 | Endless activity | Checkpoint becomes due without an end-of-turn signal |
 | Compaction or restart | Link epochs and retain outstanding review obligations |
-| Unauthorized policy change | Preserve eligibility and report/refuse the change |
+| Unauthorized policy change | Preserve eligibility; report the change and never apply it to accounting |
 | Monitor outage | Pending becomes an explicit gap after the deadline |
 | Different worktree or no ledger | Local evidence absence cannot erase independently observed events |
 | Divergent context | Receipt fails the specified context binding |
@@ -166,7 +166,8 @@ runtime protection.
 
 ## Review and promotion
 
-The detailed contract and fixture specification are ready for design review.
+The detailed contract and fixture specification (revision r1, after an agent
+review of the r0 handoff draft) are ready for design review.
 Review their frozen identities, partition rules, original deadlines, prospective
 exemptions, independent checkpoint obligations and explicit unknowns before
 acceptance. The fixture outcomes are manually specified expectations, not test

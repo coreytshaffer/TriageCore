@@ -1,6 +1,8 @@
 # Monitoring Coverage Integrity — Fixture Specification v0.1
 
 Status: **draft specification / unaccepted / no executable fixtures or results**.
+Revision: **r1** (2026-10-23 review revision of frozen draft r0, synchronized with
+contract r1; see section 9).
 
 Repository baseline: `610c13f253ba631d7052727abe3d68845bb09bb5`.
 Companion: [Monitoring Coverage Contract v0.1](monitoring-coverage-contract-v0.1.md),
@@ -113,6 +115,14 @@ receipt/context failure alone consumes its source position and retains `[R,O]`.
 All cases keep census `unknown` and inhibition `not_implemented`. An open run
 stays `open`; a ratio of `[1,1]` does not close it.
 
+Each required result freezes only the counts, ratios, states and codes it names.
+Named codes must appear in the report's diagnostics or historical violations, but
+the lists are not exhaustive. Explicit exclusions ("no …", "must not …", "is not
+missed") are frozen negative assertions. Before a reference reconciler's output
+is compared with these cases, complete expected reports (including source,
+admission and checkpoint rows) must be hand-derived and frozen in a synchronized
+revision.
+
 ## 3. Review timing and denominator cases
 
 | Case | Exact timeline change / reports | Required result |
@@ -152,8 +162,8 @@ stays `open`; a ratio of `[1,1]` does not close it.
 | Case | Exact timeline change / reports | Required result |
 | --- | --- | --- |
 | F20 — Sequence hole and backfill | Witness order: open seq1@0; D(a) seq2@1; T(a) seq3@2; D(b) seq4 occurs2/delivered5; T(b) seq5@3. Add A(b)@0 and V(a)@3. Report4 and5. | At4: `1/1/0/0/0` as partial established counts, `SOURCE_SEQUENCE_GAP`, admission b unresolved due3; ratio null/integrity_uncertain. At5: `2/1/0/0/1`, b review due5 from dispatch occurrence2, not backfill5. Historical admission failure remains; resolved gap is no longer current. |
-| F21 — Conflicting source sequence | Keep baseline and V(a)@3. At4 deliver a different canonical witness record reusing seq2/record_id `witness-a-2`, describing D(b) at1 with epoch-a, baseline action and I_B plus b's input view. Report4. | Conservative counts `2/0/0/0/2`, ratio null/integrity_uncertain; `SOURCE_CONFLICT`. a is retained, b added disputed; original terminal suffix is quarantined so a's review cannot count. Do not choose a favorable branch or present two as certain multiplicity. At discovery/deadline4 the review obligation is unmet; a separate discovery5 variant must not invent a missed deadline4 for a that was validly reviewed then. |
-| F22 — Compaction and restart | Add witness child epoch-b@2 after T(a), parent=epoch-a, prior=I_A, new=I_SUM; add A(b)@2 in epoch-b, D(b)@3 with I_SUM, T(b)@4 with C_SUM, V(b)@5; no V(a); report5. Run as separately labeled compaction and process-restart variants. | `2/1/0/0/1`; a's deadline4 survives, no source sequence resets, b deadline6. Child context is not a review of discarded parent context. A variant omitting the child epoch_open has only a established (`1/0/0/0/1`), b's epoch-dependent records buffered, `EPOCH_CONTINUITY_FAILURE`, admission b unresolved due5, null ratio. |
+| F21 — Conflicting source sequence | Keep baseline and V(a)@3. At4 deliver a different canonical witness record reusing seq2/record_id `witness-a-2`, describing D(b) at1 with epoch-a, baseline action and I_B plus b's input view. Report4. | Conservative counts `2/0/0/0/2`, ratio null/integrity_uncertain; `SOURCE_CONFLICT`. a is retained and b added; both are disputed because a's own dispatch position is contested. The original terminal suffix is quarantined so a's review cannot count. Do not choose a favorable branch or present two as certain multiplicity. At discovery/deadline4 both review obligations are unmet; b's conservative candidate findings also include `UNADMITTED_DISPATCH`. A separate discovery5 variant must not invent a missed deadline4 for a that was validly reviewed then; newly discovered b still receives `MISSED_REVIEW_DEADLINE` due4. |
+| F22 — Compaction and restart | Add witness child epoch-b@2 after T(a), parent=epoch-a, prior=I_A, new=I_SUM; add A(b)@2 in epoch-b, D(b)@3 with I_SUM, T(b)@4 with C_SUM, V(b)@5; no V(a); report5. Run as separately labeled compaction and process-restart variants. | `2/1/0/0/1`; a's deadline4 survives, no source sequence resets, b deadline6. Child context is not a review of discarded parent context. A variant omitting the child epoch_open has only a established (`1/0/0/0/1`); D(b) blocks the witness prefix after sequence 3 (`incomplete`, no missing sequence), so b's witness records stay buffered and V(b) is orphaned; `EPOCH_CONTINUITY_FAILURE`, admission b unresolved due5, null ratio. |
 | F23 — Unauthorized policy/identity mutation | (a) Keep baseline; deliver V(a)@3 bound to a worker-selected different policy digest. (b) Fresh baseline adds a second D(a)@3 with the identical descriptor/input but a fresh source sequence and record ID. Report4. | No favorable policy or identity rewrite: a remains uncovered with its original deadline4; (a) `POLICY_MISMATCH`; (b) `ATTEMPT_IDENTITY_CONFLICT`, disputed a with O=1, not invented multiplicity. Ratio null/integrity_uncertain. Only byte-identical retransmission is idempotent. |
 
 ## 7. Checkpoint cases and exact watermark construction
@@ -173,9 +183,9 @@ Membership is cumulative through the cut, not only units since the preceding cut
 | Case | Exact timeline change / reports | Required result |
 | --- | --- | --- |
 | F24 — Independent timer with no return | Baseline plus V(a)@3; no run_close and no turn-return input. Report10 and12. Continue with K(10,[a])@13 and W(10,13), then report13. | Counts stay `1/1/0/0/0`. cp-10 pending at10, overdue at12 with `CHECKPOINT_MISSED` due12, complete at13 with that historical violation retained. Window stays open. Agent silence cannot postpone timer cut10. |
-| F25 — Count and final-close cuts | Count variant: A(b/c)@0, D(b)@2, D(c)@3, T(b/c)@4, evaluated batch[a,b,c]@4, K(3,[a,b,c])@5, W(3,5); report5, then10. Close variant: baseline plus V(a)@3, controller run_close@4, K(4,[a])@6, W(4,6); report6. | Count: `3/3/0/0/0`; cp-3 completed exactly at deadline5; no review missed (a due4). At10, cp-10 becomes pending with cumulative members[a,b,c]; count cut3 did not reset the timer to13. Close: `1/1/0/0/0`, cp-4 complete exactly deadline6 and `closed_reconciled`. Both retain unknown census. |
+| F25 — Count and final-close cuts | Count variant: A(b/c)@0, D(b)@2, D(c)@3, T(b/c)@4, evaluated batch[a,b,c]@4, K(3,[a,b,c])@5, W(3,5); report5, then10. Close variant: baseline plus V(a)@3, controller run_close@4, K(4,[a])@6, W(4,6); report6. | Count: `3/3/0/0/0`; cp-3 completed exactly at deadline5; no review missed (a due4). At10, cp-10 becomes pending with cumulative members[a,b,c]; count cut3 did not reset the timer to13. Close: `1/1/0/0/0`, cp-4 complete exactly deadline6 and `closed_reconciled`, with empty diagnostics and historical violations. Both retain unknown census. |
 | F26 — Checkpoint is not individual review | Fresh variants of baseline plus controller run_close@4: (a) V(a)@3, K(4,[])@6, W(4,6); (b) no V, K(4,[a])@6, W(4,6); (c) V(a)@3, K(4,[a])@6, W(4,6) omitting only human watermark. Report6. | (a) counts `1/1/0/0/0`, `CHECKPOINT_MEMBERSHIP_MISMATCH`. (b) `1/0/0/0/1`; checkpoint receipt does not evaluate a. (c) `1/1/0/0/0`; absent source watermark prevents completion. All have overdue cp-4, `CHECKPOINT_MISSED` due6 and window open. |
-| F27 — Empty cut and watermark contradiction | Empty variant removes A/D/T, keeps open, adds K(10,[])@12 and W(10,12); report12. Contradiction variant continues with witness D(a) occurring9/delivered13, next contiguous sequence, and report13. | Empty: counts zero, null ratio, cp-10 complete; window remains open. Later: disputed `1/0/0/0/1`, `WATERMARK_CONTRADICTION`, null ratio; cp-10 `invalidated`, current completed_at=null, `CHECKPOINT_INVALIDATED`. Its former completion at12 does not become an invented `CHECKPOINT_MISSED`; the newly discovered unit still retains `MISSED_REVIEW_DEADLINE` due12. |
+| F27 — Empty cut and watermark contradiction | Empty variant removes A/D/T, keeps open, adds K(10,[])@12 and W(10,12); report12. Contradiction variant continues with witness D(a) occurring9/delivered13, next contiguous sequence, and report13. | Empty: counts zero, null ratio, cp-10 complete; window remains open. Later: disputed `1/0/0/0/1`, `WATERMARK_CONTRADICTION`, null ratio; cp-10 `invalidated`, current completed_at=null, `CHECKPOINT_INVALIDATED`. Its former completion at12 does not become an invented `CHECKPOINT_MISSED`; the newly discovered unit still retains `MISSED_REVIEW_DEADLINE` due12 and, having no admission, `UNADMITTED_DISPATCH`. |
 | F28 — Early close with unresolved lifecycle | Admission variant: remove D/T; controller run_close@1, K(1,[])@2, W(1,2); report2 and3. Exempt variant: F16's grant, D(a)@1, no terminal, run_close@2, K(2,[a])@3, W(2,3); report3 and6. | Admission variant: zero counts, cp-1 complete but window open at2; at3 `ADMISSION_UNRESOLVED`, `closed_with_findings`. Exempt variant: `1/0/1/0/0`; cp-2 complete but window open at3; at6 `TERMINAL_MISSING`, `closed_with_findings`. Neither may report clean closure before its independent lifecycle deadline. |
 
 ## 8. Negative control, omissions and review discipline
@@ -210,3 +220,14 @@ delivery schedule, expected output and execution provenance. An implementation
 failure cannot silently change this oracle. Any semantic correction requires a
 synchronized explicit revision and review. No natural-use trial, live coverage
 claim, test pass, implementation grant or evidence-window closeout is created.
+
+## 9. Revision record
+
+- **r0** — frozen handoff draft (file SHA-256
+  `6706a62525850238e08504a3d61e5f0f7f8e4c779c022035e3123a6b7d9c6ed8`).
+- **r1** — 2026-10-23 agent review revision, synchronized with contract r1. It
+  declares named findings non-exhaustive while freezing explicit exclusions. It
+  states F21's disputed status and conservative candidate findings for b, F22's
+  witness prefix block, F25's empty finding lists for `closed_reconciled`, and
+  F27's `UNADMITTED_DISPATCH`. No count tuple, ratio, deadline or window state
+  in r0 changes. This is agent review output, not human design acceptance.
