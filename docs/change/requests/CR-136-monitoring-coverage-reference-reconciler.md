@@ -125,6 +125,46 @@ assurance stays `unknown` and inhibition stays `not_implemented` in every report
 6. The repository's existing tests are unaffected, and no file outside Scope changes.
 7. The corpus is not modified.
 
+## Implementation Candidate Evidence
+
+Observed on 2026-10-23 in the agent's cloud container at candidate commit
+`cd44e11752d26e477deb0b49bc8d1545a74b604e`, with a clean working tree, Python 3.13.16
+and pytest 9.1.1. This is local evidence, not CI.
+
+| Command | Result |
+| --- | --- |
+| `python -m pytest tests/test_mci_reference_reconciler.py -q` | 237 passed |
+| `python -m pytest -q` (full suite) | 2428 passed, 77 skipped, 11 failed |
+
+The 11 failures are in `tests/test_ui_smoke.py` and
+`tests/test_ui_execute_context_review.py`. Each raises `ModuleNotFoundError` for
+`tkinter`, which this container lacks. The same 11 fail with the two new test files
+moved aside, so they are environmental and unrelated to this change. The working tree
+stayed clean.
+
+Pinned inputs:
+
+| Document | Revision | SHA-256 |
+| --- | --- | --- |
+| Contract | r5 | `f8ece79edc562a30c413f7b3946151b6a87213ad4d5c6e67a4ebfc9b83e3d643` |
+| Fixture specification | r5 | `9039f4ea979823c7a713ec28842c6a73b1880c80f275f9e8ca18b839974ab024` |
+
+A mutation check was run outside the repository. Each mutant disabled one rule, and it
+was killed by the frozen cases that exercise that rule:
+- receipt time order: F10(c);
+- the count-trigger exclusion of initially disputed units: F35, F38(b) and F39(b);
+- deadline assessment at the deadline rather than now: F05, F21 and F32;
+- rejected reopenings leaving accepted epochs intact: F39;
+- first-grant binding of an exemption ID: F37(a);
+- sticky membership mismatch: F26(a).
+
+The mutant removing the check that a grant was usable at dispatch survived. In this
+corpus that check is equivalent to the human-gap suspension: a grant first usable after
+dispatch implies a missing earlier human record at dispatch. The mutation check is
+supporting evidence only.
+
+CI on Python 3.10–3.12 has not been observed for this candidate.
+
 ## Implementation Interpretations Outside the Frozen Oracle
 
 These choices are not pinned by r5 and are not exercised by any frozen case. They are
