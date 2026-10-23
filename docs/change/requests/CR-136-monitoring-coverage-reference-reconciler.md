@@ -2,8 +2,8 @@
 
 ## Status
 
-- **Status:** Proposed. An implementation candidate is prepared on the designated
-  development branch at the operator's direction (see Implementation Authority).
+- **Status:** Proposed. The implementation candidate, prepared at the operator's
+  direction (see Implementation Authority), reached `main` through PR #189 (see Merge).
 - **Type:** Evidence and reconstruction; review and human control. Test-only: no
   runtime, routing, CLI, ledger, schema or configuration component.
 - **Identifier allocation:** CR-136, allocated by this document after a census on
@@ -20,7 +20,13 @@
 - **Proposal acceptance / design acceptance:** Not separately recorded.
 - **Implementation authority:** Operator instruction of 2026-10-23, recorded verbatim
   under Implementation Authority. It is treated as bounded to the three files in Scope.
-- **Implementation acceptance / merge / release / closeout:** Not granted.
+- **Merge:** [PR #189](https://github.com/coreytshaffer/TriageCore/pull/189), opened as a
+  draft for CI evidence, was marked ready and merged by the operator on 2026-10-23 as
+  `98d967808f4c740cc05d58aa949efb7432b015e3`. It is a squash of head `77447bc`, with an
+  identical tree. At that time this record stated merge authority as not granted; that
+  statement is preserved in the lifecycle table. This record infers no implementation
+  acceptance from the merge. The CI-evidence record reached `main` in a later commit.
+- **Implementation acceptance / release / closeout:** Not granted.
 
 ### Lifecycle state
 
@@ -31,7 +37,7 @@
 | design acceptance | not separately recorded; r5 baseline statement quoted above |
 | implementation authority | operator instruction of 2026-10-23, bounded to Scope |
 | implementation acceptance | not granted |
-| merge authority | not granted |
+| merge authority | recorded as not granted; PR #189 merged by the operator as `98d9678` on 2026-10-23 |
 | release authority | not granted |
 | closeout | not granted |
 
@@ -227,6 +233,7 @@ closeout authority.
 
 - Implementation acceptance of the candidate, against the criteria above.
 - Disposition of each implementation interpretation.
-- Merge authority. CI on Python 3.10–3.12 has been observed; see CI evidence.
+- Whether the operator's merge of PR #189 should be recorded as any further lifecycle
+  decision. CI on Python 3.10–3.12 has been observed; see CI evidence.
 - Whether TC-AM-001, absent from this repository, applies to or would interfere with
   this test-only work.
