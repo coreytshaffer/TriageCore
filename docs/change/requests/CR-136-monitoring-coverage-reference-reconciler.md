@@ -2,8 +2,8 @@
 
 ## Status
 
-- **Status:** Proposed. An implementation candidate is prepared on the designated
-  development branch at the operator's direction (see Implementation Authority).
+- **Status:** Implementation accepted and merged by the operator (see Merge and
+  Implementation Acceptance). Release and closeout are not granted.
 - **Type:** Evidence and reconstruction; review and human control. Test-only: no
   runtime, routing, CLI, ledger, schema or configuration component.
 - **Identifier allocation:** CR-136, allocated by this document after a census on
@@ -20,7 +20,10 @@
 - **Proposal acceptance / design acceptance:** Not separately recorded.
 - **Implementation authority:** Operator instruction of 2026-10-23, recorded verbatim
   under Implementation Authority. It is treated as bounded to the three files in Scope.
-- **Implementation acceptance / merge / release / closeout:** Not granted.
+- **Implementation acceptance:** Accepted by the operator on 2026-10-24 PDT
+  (2026-10-25 UTC); see Merge and Implementation Acceptance.
+- **Merge:** Performed by the operator: PR #189, merged 2026-10-23T09:26:38Z.
+- **Release / closeout:** Not granted.
 
 ### Lifecycle state
 
@@ -30,8 +33,8 @@
 | proposal acceptance | not separately recorded |
 | design acceptance | not separately recorded; r5 baseline statement quoted above |
 | implementation authority | operator instruction of 2026-10-23, bounded to Scope |
-| implementation acceptance | not granted |
-| merge authority | not granted |
+| implementation acceptance | accepted by the operator, 2026-10-24 PDT (2026-10-25 UTC) |
+| merge authority | exercised by the operator: PR #189 merged 2026-10-23T09:26:38Z; confirmed 2026-10-24 PDT (2026-10-25 UTC) |
 | release authority | not granted |
 | closeout | not granted |
 
@@ -49,6 +52,27 @@ branch `ccr-a93d18f0-7tyn4t`. It does not read the instruction as acceptance, me
 authority or authority over any other path. If the operator did not intend
 implementation authority, the implementation lives in its own commit and can be
 reverted without touching this record.
+
+## Merge and Implementation Acceptance
+
+The operator merged PR #189 into `main` on 2026-10-23 at 09:26:38Z (merge commit
+`98d967808f4c740cc05d58aa949efb7432b015e3`). CI had passed at the PR head `77447bc` by
+09:26:05Z, before the merge. When merged, this record still showed merge authority and
+implementation acceptance as not granted.
+
+On 2026-10-24 PDT (2026-10-25 UTC), in a Claude Code session outside this repository,
+the operator was asked who merged PR #189 and whether the merge also meant accepting
+the implementation against this CR's acceptance criteria. The operator's answers,
+quoted without change:
+
+> I merged
+
+> Accepted by operator.
+
+This record reads those answers as the operator's own exercise of merge authority for
+PR #189 and as implementation acceptance of the candidate in Scope. It does not read
+them as release authority, closeout, disposition of the implementation interpretations
+below, or acceptance of the `mci/0.1` research drafts, which remain unaccepted.
 
 ## Scope
 
@@ -163,7 +187,10 @@ corpus that check is equivalent to the human-gap suspension: a grant first usabl
 dispatch implies a missing earlier human record at dispatch. The mutation check is
 supporting evidence only.
 
-CI on Python 3.10–3.12 has not been observed for this candidate.
+CI on Python 3.10–3.12 had not been observed when this section was written. It was
+later observed at the PR head `77447bc`: GitHub Actions run 39931698354 passed
+pytest on Python 3.10, 3.11 and 3.12 and the Windows executor job, completing by
+2026-10-23T09:26:05Z.
 
 ## Implementation Interpretations Outside the Frozen Oracle
 
@@ -206,8 +233,7 @@ closeout authority.
 
 ## Remaining Decisions
 
-- Implementation acceptance of the candidate, against the criteria above.
 - Disposition of each implementation interpretation.
-- Merge authority, and observation of CI on Python 3.10–3.12.
+- Release authority and closeout.
 - Whether TC-AM-001, absent from this repository, applies to or would interfere with
   this test-only work.
