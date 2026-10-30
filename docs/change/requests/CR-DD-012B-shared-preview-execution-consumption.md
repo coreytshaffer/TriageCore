@@ -2,8 +2,9 @@
 
 ## Status
 
-**Implementation acceptance GRANTED for exact head `bbe5336`. Merge, release,
-and closeout authority are WITHHELD.** Published as
+**Implementation acceptance GRANTED for exact head `bbe5336`. PR #179 is merged
+(observed action; see the dated reconciliation below). Release and closeout
+authority remain WITHHELD.** Published as
 [PR #179](https://github.com/coreytshaffer/TriageCore/pull/179) from branch
 `claude/cr-dd-012b-shared-preview-execution-35b467`.
 
@@ -15,9 +16,58 @@ and closeout authority are WITHHELD.** Published as
 | implementation authority | incomplete originally; defect preserved below |
 | corrective ratification | granted for exact `bbe5336` |
 | implementation acceptance | **granted** for exact `bbe5336` |
-| merge authority | withheld |
+| merge authority | separate grant not established in reviewed records; merge observed below |
 | release authority | withheld |
 | closeout | withheld |
+
+### Merge observation and documentation reconciliation — 2026-10-30
+
+Reconciliation base: `main@4e9f238512eec4d9fc417542745962783d3e675f`.
+[GitHub PR #179](https://github.com/coreytshaffer/TriageCore/pull/179) reports
+`merged=true`, merged by account `coreytshaffer` on 2026-08-29 at 11:28:35 PDT
+(18:28:35 UTC), as `c798e0ed19d3ca59cfb464ffe8476a4e30a0c1e8`. The merge is an
+ancestor of the reconciliation base: `git merge-base --is-ancestor` returned 0
+for those exact refs. These are observed repository facts, not a reconstruction
+of a separate pre-merge authorization grant.
+
+The accepted implementation remains pinned to
+`bbe533616bdbe997bff5540921d19be3f8104e59`, not the published PR tip
+`5cb95057ac7c498b9256f9688dc6e47483b85ae5` or the merge commit. Rechecking
+`git diff bbe5336 5cb9505 -- triage_core/ tests/` returned no changes. The full
+comparison contains four documentation paths and the one workflow-line repair
+recorded below. The
+[PR-tip CI run](https://github.com/coreytshaffer/TriageCore/actions/runs/32584514430)
+succeeded at `5cb9505`; this reconciliation did not rerun the historical tests.
+
+The original authority defect, corrective ratification, acceptance pin, and
+supplemental CI exception remain as recorded. A separate pre-merge grant was
+not established in the reviewed CR and PR records. Observing the merge does
+not supply that missing provenance or grant release or closeout authority.
+
+The operator's instruction on 2026-10-30, following the one-file candidate
+scoped in [CHE-18](https://linear.app/cherryvox/issue/CHE-18), was:
+
+> Continue with documentation reconciliation
+
+That instruction is applied to this documentation reconciliation only. It is
+not acceptance or publication authority for the resulting edit.
+
+The operator subsequently instructed on 2026-10-30:
+
+> Commit the CR-DD-012B documentation reconciliation and open a draft PR.
+
+This authorizes committing this one-file reconciliation, publishing its branch,
+and opening a draft PR. It grants no merge, release, or closeout authority and
+does not move the original implementation-acceptance pin.
+
+The acceptance and publication prose below is preserved as the historical
+pre-merge record. Its statements that merge authority is withheld or is the
+next gate describe that recorded stage, not an assertion that PR #179 remains
+open. Its accepted-candidate comparisons against `HEAD` refer to the published
+candidate at `5cb9505`, not to the later reconciliation base. The high-risk
+terminal exit-class discovery remains unresolved.
+
+### Historical accepted-candidate record
 
 The accepted candidate is the code and test state at `bbe5336`, and acceptance
 attaches to that state rather than to whatever the branch's tip commit happens to
