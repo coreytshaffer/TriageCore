@@ -892,3 +892,122 @@ def test_an_unbindable_local_route_is_still_fail_closed(tmp_path, monkeypatch):
 
     assert exc.value.code == 2
     assert backend.messages is None
+
+
+@pytest.fixture
+def cr019_stubbed_client(monkeypatch):
+    """Keep routing/evidence real and stop at the external execution boundary."""
+    backend = RecordingBackend()
+    client = TriageClient(backend=backend)
+    attempts = []
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("CR-DD-019 must not create or invoke a model backend")
+
+    def execute(**kwargs):
+        attempts.append(kwargs)
+        return {"status": "success", "source": "local", "output": "STUB_OUTPUT",
+                "worker_result_status": "completed", "validation_status": "not_run"}
+
+    monkeypatch.setattr(backend, "generate", forbidden)
+    monkeypatch.setattr(client.engine, "execute_task", execute)
+    monkeypatch.setattr("triage_core.client.create_backend", forbidden)
+    monkeypatch.setattr("triage_core.backends.create_backend", forbidden)
+    monkeypatch.setattr(tc_cli.default_config, "get_qwen_enabled", lambda: False)
+    return client, attempts
+
+
+@pytest.mark.parametrize("prompt,risk,sensitivity,route,exit_code", [
+    ("Update docs about sudo", "high", "high", "human_handoff", 2),
+    ("Design the architecture", "low", "medium", "local_heavy", None),
+    ("Review the sacred burial site survey", "low", "low", "human_handoff", 3),
+])
+def test_cr019_governed_risk_and_sensitivity_reach_actual_events(
+    tmp_path, monkeypatch, cr019_stubbed_client, prompt, risk, sensitivity, route, exit_code
+):
+    built = _capture_contexts(monkeypatch)
+    client, attempts = cr019_stubbed_client
+    args = _args(prompt=prompt, task_id="cr019-task", no_ledger=False, ledger_dir=str(tmp_path))
+    if exit_code is None:
+        tc_cli.tc_run(args, client=client)
+    else:
+        with pytest.raises(SystemExit) as caught:
+            tc_cli.tc_run(args, client=client)
+        assert caught.value.code == exit_code
+    events = _ledger_events(tmp_path / "ledger.jsonl")
+    route_event = next(e["payload"] for e in events if e["event_type"] == "route_decision")
+    assert route_event["task_sensitivity"] == sensitivity
+    assert route_event["governed_risk_posture"] == risk
+    assert route_event["selected_route"] == route
+    assert route_event["binding_outcome"] == "primary"
+    assert route_event["binding_reason_codes"] == (
+        ["terminal_human_handoff"] if route == "human_handoff" else ["bound_preferred_route"]
+    )
+    assert route_event["decision_id"] == built[0].decision.decision_id
+    assert route_event["reason"] == built[0].decision.policy.route_reason_codes[0]
+    assert len(attempts) == (1 if route == "local_heavy" else 0)
+    workers = [e["payload"] for e in events if e["event_type"] == "worker_result"]
+    assert len(workers) == (0 if exit_code == 2 else 1)
+    for payload in [route_event, *workers]:
+        assert_persistent_privacy_safe(payload)
+        for key in ("decision_id", "governed_risk_posture", "binding_outcome", "binding_reason_codes"):
+            assert payload[key] == route_event[key]
+    assert [e["event_type"] for e in events] == (
+        ["task_created", "runner_selected", "route_audit", "route_decision"]
+        + (["worker_result"] if workers else [])
+    )
+    from triage_core.task_ledger import TaskLedger
+    reduced = TaskLedger(str(tmp_path)).get_task("cr019-task")
+    assert reduced.selected_route == route
+    assert reduced.route_reason == route_event["reason"]
+
+
+def test_cr019_fallback_explains_binding_without_changing_decision(
+    tmp_path, monkeypatch, cr019_stubbed_client
+):
+    expected = run_plan.build_governed_run_context(
+        prompt="Fix the bug", sources=(), inline_data=None, privacy="local_only",
+        allow_cloud=False, model_profile="generic-8k", task_id="cr019-fallback",
+    )
+    fast_only = capability_evidence.resolve_capability(
+        record=None, declare_local_fast=True, declare_local_heavy=False,
+        local_fast_model=LOCAL_FAST_MODEL, local_heavy_model="",
+        config_reference="test:[capability]", freshness_seconds=300,
+    )
+    monkeypatch.setattr(capability_evidence, "resolve_from_config", lambda *a, **k: fast_only)
+    built = _capture_contexts(monkeypatch)
+    client, attempts = cr019_stubbed_client
+    tc_cli.tc_run(_args(prompt="Fix the bug", task_id="cr019-fallback", no_ledger=False,
+                        ledger_dir=str(tmp_path)), client=client)
+    assert serialize_governed_decision(built[0].decision) == serialize_governed_decision(expected.decision)
+    assert len(attempts) == 1
+    events = _ledger_events(tmp_path / "ledger.jsonl")
+    for payload in [e["payload"] for e in events if e["event_type"] in {"route_decision", "worker_result"}]:
+        assert payload["selected_route"] == "local_fast"
+        assert payload["selected_model"] == LOCAL_FAST_MODEL
+        assert payload["fallback_depth"] == 1
+        assert payload["reason"] == "local_heavy_available_for_medium_or_complex_task"
+        assert payload["binding_outcome"] == "authorized_fallback"
+        assert payload["binding_reason_codes"] == [
+            "local_capability_unavailable", "bound_authorized_fallback"
+        ]
+
+
+def test_cr019_unknown_routes_keep_duplicate_causes_and_block_before_execution(
+    tmp_path, monkeypatch, cr019_stubbed_client
+):
+    monkeypatch.setattr(capability_evidence, "resolve_from_config",
+                        lambda *a, **k: capability_evidence.unknown_resolution())
+    client, attempts = cr019_stubbed_client
+    with pytest.raises(SystemExit) as caught:
+        tc_cli.tc_run(_args(no_ledger=False, ledger_dir=str(tmp_path)), client=client)
+    assert caught.value.code == 2
+    assert attempts == []
+    events = _ledger_events(tmp_path / "ledger.jsonl")
+    assert not any(e["event_type"] == "worker_result" for e in events)
+    route = next(e["payload"] for e in events if e["event_type"] == "route_decision")
+    assert route["binding_outcome"] == "authorized_fallback"
+    assert route["fallback_depth"] == 2
+    assert route["binding_reason_codes"] == [
+        "local_capability_unknown", "local_capability_unknown", "terminal_human_handoff"
+    ]
