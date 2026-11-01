@@ -1,6 +1,6 @@
 """CR-DD-012B: the fail-closed matrix for governed consumption.
 
-Every condition in the CR's fail-closed table terminates the attempt **before
+Every condition in CR-DD-012B's fail-closed table terminates the attempt **before
 backend construction or invocation**, with no backend call and no
 privacy-unsafe ledger write. Termination is not repair: nothing here
 revalidates-and-rebuilds, because silent recomputation is the specific failure
@@ -10,6 +10,9 @@ Staleness is binding-defined, not clock-defined. No test below advances a clock,
 touches backend health, or reads current file contents to establish staleness.
 
 Every test is deterministic and fully offline.
+
+CR-DD-019 additionally covers evidence failures after a stubbed execution. Those
+failures propagate without pretending that the attempt never happened or retrying.
 """
 
 from __future__ import annotations
@@ -438,3 +441,105 @@ def test_no_decision_id_linkage_without_a_decision(tmp_path):
     ]
     for event in events:
         assert "decision_id" not in event["payload"]
+
+
+@pytest.fixture
+def cr019_attempt(tmp_path, monkeypatch):
+    """A real governed consumer with only the execution boundary stubbed."""
+    context = _context()
+    client = TriageClient(backend=FailClosedBackend())
+    ledger = TaskLedger(str(tmp_path))
+    calls = []
+
+    def execute(**kwargs):
+        calls.append(kwargs)
+        return {"status": "success", "source": "local", "output": "STUB_OUTPUT",
+                "worker_result_status": "completed", "validation_status": "not_run"}
+
+    monkeypatch.setattr(client.engine, "execute_task", execute)
+    return SimpleNamespace(context=context, client=client, ledger=ledger, calls=calls)
+
+
+def _cr019_consume(attempt, *, no_ledger=False, context=None):
+    context = attempt.context if context is None else context
+    return attempt.client.run_task(
+        task_packet=_packet(context), snapshot=context.snapshot, decision=context.decision,
+        capability=capability_evidence.resolve_from_config(default_config),
+        ledger=None if no_ledger else attempt.ledger,
+    )
+
+
+def _cr019_event_types(tmp_path):
+    path = tmp_path / "ledger.jsonl"
+    return ([json.loads(line)["event_type"] for line in path.read_text(encoding="utf-8").splitlines()]
+            if path.exists() else [])
+
+
+@pytest.mark.parametrize("no_ledger", [False, True])
+@pytest.mark.parametrize("prompt", ["Summarize this text", "Update docs about sudo"])
+@pytest.mark.parametrize("invalid_risk,reason_code", [
+    ("PRIVATE_VALUE", "invalid_governed_evidence_value"),
+    (None, "invalid_governed_evidence_shape"),
+])
+def test_cr019_invalid_route_extension_blocks_even_without_a_ledger(
+    tmp_path, monkeypatch, cr019_attempt, no_ledger, prompt, invalid_risk, reason_code
+):
+    import triage_core.client as client_module
+    original = client_module.build_route_decision_payload
+
+    def corrupt(*args, **kwargs):
+        evidence = dict(kwargs.get("governed_evidence") or {})
+        evidence["governed_risk_posture"] = invalid_risk
+        kwargs["governed_evidence"] = evidence
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(client_module, "build_route_decision_payload", corrupt)
+    with pytest.raises(GovernedBindingError, match=f"^{reason_code}$"):
+        _cr019_consume(cr019_attempt, no_ledger=no_ledger, context=_context(prompt=prompt))
+    assert cr019_attempt.calls == []
+    assert _cr019_event_types(tmp_path) == ([] if no_ledger else ["route_audit"])
+
+
+@pytest.mark.parametrize("stage,expected_calls,expected_events", [
+    ("route_decision", 0, ["route_audit"]),
+    ("worker_result", 1, ["route_audit", "route_decision"]),
+])
+def test_cr019_persistence_failure_preserves_execution_timing_without_retry(
+    tmp_path, monkeypatch, cr019_attempt, stage, expected_calls, expected_events
+):
+    original = cr019_attempt.ledger.append_event
+
+    def fail_at_stage(task_id, event_type, payload):
+        if event_type == stage:
+            assert payload["governed_risk_posture"] == "low"
+            raise OSError("injected evidence-store failure")
+        return original(task_id, event_type, payload)
+
+    monkeypatch.setattr(cr019_attempt.ledger, "append_event", fail_at_stage)
+    with pytest.raises(OSError, match="^injected evidence-store failure$"):
+        _cr019_consume(cr019_attempt)
+    assert len(cr019_attempt.calls) == expected_calls
+    assert _cr019_event_types(tmp_path) == expected_events
+
+
+@pytest.mark.parametrize("prompt,expected_calls", [
+    ("Summarize this text", 1), ("Review the sacred burial site survey", 0),
+])
+def test_cr019_worker_validation_failure_is_not_reclassified_as_preexecution(
+    tmp_path, monkeypatch, cr019_attempt, prompt, expected_calls
+):
+    import triage_core.client as client_module
+    original = client_module.build_worker_result_payload
+
+    def corrupt(route, result):
+        source = dict(route)
+        source["binding_outcome"] = "primary"
+        source.pop("binding_reason_codes", None)
+        return original(source, result)
+
+    monkeypatch.setattr(client_module, "build_worker_result_payload", corrupt)
+    with pytest.raises(ValueError, match="^invalid_governed_evidence_shape$") as caught:
+        _cr019_consume(cr019_attempt, context=_context(prompt=prompt))
+    assert not isinstance(caught.value, GovernedBindingError)
+    assert len(cr019_attempt.calls) == expected_calls
+    assert _cr019_event_types(tmp_path) == ["route_audit", "route_decision"]

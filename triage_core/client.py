@@ -15,6 +15,7 @@ from .agent_identity import AgentIdentityRegistry
 from .task_ledger import TaskLedger
 from .privacy_scanner import scan_task_packet, PrivacyViolationError
 from .config import default_config
+from .routing.route_events import GovernedEvidencePayloadError
 
 # CR-DD-012B: the two execution *parameters* the governed path still needs from
 # specialist routing, expressed as pure functions of the classification the
@@ -223,6 +224,7 @@ class TriageClient:
         if is_local_only:
             resilience_input.privacy_level = "local_only"
 
+        governed_evidence = None
         if governed:
             # Runtime binding is a filter over the decision's closed, ordered
             # envelope -- never a selection over the space of backends. The
@@ -249,6 +251,15 @@ class TriageClient:
             )
             selected_route = observation.selected_route
             selected_model = observation.model_binding
+            governed_evidence = {
+                "governed_risk_posture": decision.policy.risk_posture,
+                "binding_outcome": observation.binding_outcome,
+                "binding_reason_codes": list(observation.reason_codes),
+            }
+            # Evidence uses the same high-risk override as the construction seam.
+            # No router consumes this input again on the governed path.
+            if decision.policy.risk_posture == "high":
+                resilience_input.sensitivity = "high"
         else:
             resilience_decision = choose_resilience_route(resilience_input)
             selected_route = resilience_decision.selected_route
@@ -284,13 +295,19 @@ class TriageClient:
             if selected_route not in ["local_heavy", "local_fast", "deterministic"]:
                 audit = RouteDecisionAudit(task_id, privacy_level, True, True, selected_route, selected_backend_name, "blocked", "ambiguous_or_remote_route")
                 self._append_optional_event(ledger, task_id, "route_audit", audit.to_dict())
-                blocked_route_payload = build_route_decision_payload(
-                    resilience_input,
-                    resilience_decision,
-                    selected_backend=selected_backend_name,
-                    selected_model=selected_model,
-                    decision_id=decision_id,
-                )
+                try:
+                    blocked_route_payload = build_route_decision_payload(
+                        resilience_input,
+                        resilience_decision,
+                        selected_backend=selected_backend_name,
+                        selected_model=selected_model,
+                        decision_id=decision_id,
+                        governed_evidence=governed_evidence,
+                    )
+                except GovernedEvidencePayloadError as exc:
+                    if not governed:
+                        raise
+                    raise GovernedBindingError(exc.reason_code) from exc
                 self._append_route_decision_event(
                     ledger=ledger,
                     task_id=task_id,
@@ -326,13 +343,19 @@ class TriageClient:
             reason_code="route_allowed"
         )
         self._append_optional_event(ledger, task_id, "route_audit", audit.to_dict())
-        route_payload = build_route_decision_payload(
-            resilience_input,
-            resilience_decision,
-            selected_backend=selected_backend_name,
-            selected_model=selected_model,
-            decision_id=decision_id,
-        )
+        try:
+            route_payload = build_route_decision_payload(
+                resilience_input,
+                resilience_decision,
+                selected_backend=selected_backend_name,
+                selected_model=selected_model,
+                decision_id=decision_id,
+                governed_evidence=governed_evidence,
+            )
+        except GovernedEvidencePayloadError as exc:
+            if not governed:
+                raise
+            raise GovernedBindingError(exc.reason_code) from exc
         self._append_route_decision_event(
             ledger=ledger,
             task_id=task_id,

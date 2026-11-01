@@ -213,6 +213,88 @@ class DecisionLinkageError(ValueError):
     """Raised when governed-decision linkage evidence is not bounded."""
 
 
+class GovernedEvidencePayloadError(ValueError):
+    """A bounded CR-DD-019 validation failure, without caller-supplied text."""
+
+    def __init__(self, reason_code: str):
+        self.reason_code = reason_code
+        super().__init__(reason_code)
+
+
+# Independent of the producer's vocabulary: widening it requires contract review.
+_GOVERNED_EVIDENCE_FIELDS = frozenset({
+    "governed_risk_posture", "binding_outcome", "binding_reason_codes",
+})
+_GOVERNED_RISKS = frozenset({"low", "medium", "high"})
+_GOVERNED_OUTCOMES = frozenset({"primary", "authorized_fallback"})
+_GOVERNED_BOUND_ROUTES = frozenset({
+    "local_fast", "local_heavy", "cloud_primary", "cloud_secondary", "human_handoff",
+})
+_GOVERNED_FAILURE_CODES = frozenset({
+    "deterministic_executor_not_wired", "cloud_route_not_enabled",
+    "local_capability_unavailable", "local_capability_unknown", "route_model_binding_missing",
+})
+_GOVERNED_BINDING_CODES = _GOVERNED_FAILURE_CODES | frozenset({
+    "bound_preferred_route", "bound_authorized_fallback", "terminal_human_handoff",
+})
+
+
+def _validated_governed_evidence(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate a route's optional extension and return an owned forwarding copy.
+
+    The surrounding payload stays open. Linkage-only historical records stay
+    valid; these checks do not establish approval or independently redo binding.
+    """
+    present = _GOVERNED_EVIDENCE_FIELDS.intersection(payload)
+    if not present:
+        return {}
+    # A present null field is malformed shape, even when linkage is also bad.
+    if present != _GOVERNED_EVIDENCE_FIELDS or any(payload[key] is None for key in present):
+        raise GovernedEvidencePayloadError("invalid_governed_evidence_shape")
+
+    decision_id = payload.get("decision_id")
+    if type(decision_id) is not str or not _DECISION_ID_RE.fullmatch(decision_id):
+        raise GovernedEvidencePayloadError("invalid_governed_evidence_linkage")
+
+    risk = payload["governed_risk_posture"]
+    outcome = payload["binding_outcome"]
+    codes = payload["binding_reason_codes"]
+    route = payload.get("selected_route")
+    depth = payload.get("fallback_depth")
+    sensitivity = payload.get("task_sensitivity")
+    review = payload.get("human_review_required")
+    if (
+        type(risk) is not str or risk not in _GOVERNED_RISKS
+        or type(outcome) is not str or outcome not in _GOVERNED_OUTCOMES
+        or type(codes) is not list or not 1 <= len(codes) <= 6
+        or any(type(code) is not str or code not in _GOVERNED_BINDING_CODES for code in codes)
+        or type(route) is not str or route not in _GOVERNED_BOUND_ROUTES
+        or type(depth) is not int or not 0 <= depth <= 5
+        or type(sensitivity) is not str or sensitivity not in _GOVERNED_RISKS
+        or type(review) is not bool
+    ):
+        raise GovernedEvidencePayloadError("invalid_governed_evidence_value")
+
+    suffix = (
+        "terminal_human_handoff" if route == "human_handoff"
+        else "bound_preferred_route" if outcome == "primary"
+        else "bound_authorized_fallback"
+    )
+    if (
+        (outcome == "primary") != (depth == 0)
+        or len(codes) != depth + 1
+        or codes[-1] != suffix
+        or any(code not in _GOVERNED_FAILURE_CODES for code in codes[:-1])
+        or (risk == "high" and (sensitivity != "high" or not review))
+    ):
+        raise GovernedEvidencePayloadError("inconsistent_governed_evidence")
+    return {
+        "governed_risk_posture": risk,
+        "binding_outcome": outcome,
+        "binding_reason_codes": list(codes),
+    }
+
+
 def _bounded_decision_id(value: Any) -> str:
     """Reject anything that is not a bounded content-linkage digest.
 
@@ -234,6 +316,7 @@ def build_route_decision_payload(
     selected_model: str = "",
     route_source: str = "resilience_router_v1",
     decision_id: Any = None,
+    governed_evidence: Any = None,
 ) -> Dict[str, Any]:
     payload: Dict[str, Any] = {
         "task_class": route_input.task_class,
@@ -271,7 +354,17 @@ def build_route_decision_payload(
 
     # CR-DD-012B: bounded governed-decision linkage through the same open
     # extension point. Additive, so no schema-version bump is needed.
-    if decision_id is not None:
+    if governed_evidence is not None:
+        if (
+            type(governed_evidence) is not dict
+            or any(type(key) is not str for key in governed_evidence)
+            or set(governed_evidence) != _GOVERNED_EVIDENCE_FIELDS
+        ):
+            raise GovernedEvidencePayloadError("invalid_governed_evidence_shape")
+        payload.update(governed_evidence)
+        payload["decision_id"] = decision_id
+        payload.update(_validated_governed_evidence(payload))
+    elif decision_id is not None:
         payload["decision_id"] = _bounded_decision_id(decision_id)
 
     return payload
@@ -281,6 +374,9 @@ def build_worker_result_payload(
     route_payload: Dict[str, Any],
     result: Dict[str, Any],
 ) -> Dict[str, Any]:
+    # The route, not worker output, owns policy/binding provenance. Revalidation
+    # here can happen after execution and must never be labelled pre-execution.
+    governed_evidence = _validated_governed_evidence(route_payload)
     failure_type = result.get("failure_type")
     failure_stage = result.get("failure_stage")
     backend_failure = bool(failure_type == "backend_error" and failure_stage == "local_backend_generate")
@@ -313,5 +409,6 @@ def build_worker_result_payload(
     # from -- never re-derived here, and never synthesized when absent.
     if "decision_id" in route_payload:
         payload["decision_id"] = _bounded_decision_id(route_payload["decision_id"])
+    payload.update(governed_evidence)
 
     return payload
