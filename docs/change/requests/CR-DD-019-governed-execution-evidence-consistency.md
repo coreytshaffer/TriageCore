@@ -2,7 +2,8 @@
 
 ## Status
 
-- **Status:** Implementation accepted by the operator on 2026-10-31 after the read-only re-review confirmed both findings resolved. Acceptance is bound to the uncommitted candidate identified below. Latest recorded verification: 241 focused passes; full offline suite 2,605 passed, 6 skipped, 1 previously confirmed baseline failure. Commit and draft-PR preparation are now separately authorized below; merge, release, and closeout remain unauthorized.
+- **Status (reconciled 2026-11-09 Pacific / 2026-11-10 UTC):** Implementation accepted; [PR #192](https://github.com/coreytshaffer/TriageCore/pull/192) merged into `main` on 2026-11-01 at 22:20:13 UTC (14:20:13 PST), commit `92ee0adcf1a81ac9b1c8184f5cbdfcb9a3bb68c8`. The operator subsequently reported personally performing the merge through GitHub. Disposition: **operator-reported manual merge; contemporaneous authorization documentation incomplete**. See Merge Provenance Reconciliation below. Release and closeout authority are not established by this reconciliation.
+- **Status (historical, 2026-10-31):** Implementation accepted by the operator on 2026-10-31 after the read-only re-review confirmed both findings resolved. Acceptance is bound to the uncommitted candidate identified below. Latest recorded verification: 241 focused passes; full offline suite 2,605 passed, 6 skipped, 1 previously confirmed baseline failure. Commit and draft-PR preparation are now separately authorized below; merge, release, and closeout remain unauthorized.
 - **Type:** Evidence / Observability (Governance kernel: evidence and reconstruction).
 - **Documentation authority (historical):** The operator first authorized proposal preparation, then explicitly requested: "Go ahead with the design review for CR-DD-019. Settle the field names and validation rules, keeping this documentation-only. Don't change code or run models or backends." That review authorized changes to this CR document only. The subsequent implementation grant is recorded separately below.
 - **Implementation authority:** On 2026-10-31, after the settled design and its exact six-file scope were presented, the operator instructed: "Implementation granted". This authorizes implementing this design in the six paths under Implementation Allowlist below, with offline verification. It does not authorize a commit, PR, merge, release, or closeout. The previous no-model/no-backend restriction remains in force; execution boundaries in tests are stubs or test doubles only.
@@ -254,6 +255,34 @@ The commit uses the existing repository author identity `Corey Shaffer <78175888
 The known specification-pin failure is retained and must be disclosed in the draft PR alongside the passing scoped checks. The operator authorized draft publication after accepting this limitation; this neither fixes nor waives that unrelated failure. The draft remains subject to review and existing repository checks. Actual commit identity, branch publication, and PR metadata are recorded by Git and GitHub rather than inserting a commit's own hash into its content. No merge, release, closeout, or worktree cleanup is authorized or performed by this record.
 
 Fresh pre-commit verification on 2026-10-31: 241 focused tests passed in 0.89 seconds; the full offline suite again reported 2,605 passed, 6 skipped, and only the same baseline specification-pin failure. The disposable snapshot is `C:/Users/corey/AppData/Local/Temp/cr019-pr-check-24t3ixka/repo`, with `suite-verified.log` and `results-verified.json` in its parent. All five Python files match the accepted hashes and this snapshot. This CR received only this results note after the run. The existing offline guards and local wheels were reused; no models or backend services ran.
+
+## Merge Provenance Reconciliation (2026-11-09 Pacific / 2026-11-10 UTC)
+
+### Operator statement and documentation authority
+
+During the follow-up audit conversation on 2026-11-09 in America/Los_Angeles (2026-11-10 UTC), the operator stated: **"I remember manually merging through github, if that helps."** The operator then instructed: **"Let's document this properly"** in response to the recommendation for a dated addendum.
+
+This records the operator's later recollection of a personal manual merge, consistent with GitHub's account attribution. The source is the operator's statement in that conversation; its exact message timestamp and a public source URL are not available in this record. The statement is not a contemporaneous approval transcript. Its reporting date must not be substituted for the merge date.
+
+The documentation request is the authority for this bounded reconciliation and its publication for review, including a dated cross-reference in PR #192's description. It does not authorize an agent to merge this documentation amendment, release, close out CR-DD-019, or change implementation.
+
+### Verified GitHub chronology
+
+| Event | UTC | America/Los_Angeles | Source |
+| --- | --- | --- | --- |
+| PR #192 opened with draft-only description | 2026-10-31 09:16:14 | 2026-10-31 02:16:14 PDT | [PR metadata](https://api.github.com/repos/coreytshaffer/TriageCore/pulls/192) |
+| Marked ready for review, attributed to `coreytshaffer` | 2026-10-31 09:43:15 | 2026-10-31 02:43:15 PDT | [Ready event](https://api.github.com/repos/coreytshaffer/TriageCore/issues/events/34764699300) |
+| Merged and automatically closed, attributed to `coreytshaffer` | 2026-11-01 22:20:13 | 2026-11-01 14:20:13 PST | [Merge event](https://api.github.com/repos/coreytshaffer/TriageCore/issues/events/34857686616) and [timeline](https://api.github.com/repos/coreytshaffer/TriageCore/issues/192/timeline?per_page=100) |
+
+The published candidate `b7649029d5b95e43342e7f35128955a7d00c80c2` and merged commit `92ee0adcf1a81ac9b1c8184f5cbdfcb9a3bb68c8` have the same tree, `3d3ecb06c2b85049c9779f8071b3e909d02aeb9c`; the merged path set matches the six-file implementation allowlist. See the [candidate](https://api.github.com/repos/coreytshaffer/TriageCore/git/commits/b7649029d5b95e43342e7f35128955a7d00c80c2) and [merged commit](https://api.github.com/repos/coreytshaffer/TriageCore/commits/92ee0adcf1a81ac9b1c8184f5cbdfcb9a3bb68c8). This establishes content continuity and file-scope consistency, not implementation correctness or authorization.
+
+### Reconciled boundary and remaining limits
+
+- The historical 2026-10-31 grant authorized the bounded commit, push, and draft PR. Its prohibition on delegated merge, release, and closeout remains preserved. The operator's reported personal merge is a separate operator action; this record does not invent or backdate a grant to an agent.
+- The reconciled disposition is **operator-reported manual merge; contemporaneous authorization documentation incomplete**. GitHub verifies the merge event and account; the operator's statement supplies the manual-action provenance.
+- The readiness transition remains account-attributed. The operator's recollection specifically addresses the merge and does not establish who performed the earlier transition.
+- The read-only audit found no formal review submissions or inline review threads, and only a [Netlify preview comment](https://github.com/coreytshaffer/TriageCore/pull/192#issuecomment-6541586831). No independent review is established. Historical implementation acceptance and test evidence remain separate from authorization; no tests were rerun for this documentation correction.
+- Release and closeout remain separate decisions under [change management](../change_management.md). Automatic PR closure is not governance closeout. The old draft-status wording is historical; neither that wording nor its reconciliation supplies further authority.
 
 ## Verification Plan
 
