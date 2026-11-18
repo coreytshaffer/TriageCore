@@ -172,6 +172,14 @@ def test_deterministic_classifier_does_not_construct_backend(monkeypatch):
         ("Update the docs", "local_fast", "false"),
         ("Design the architecture", "local_heavy", "true"),
         ("Perform a security review", "human_handoff", "true"),
+        pytest.param("Summarize the information.", "local_heavy", "false", id="information"),
+        pytest.param("Summarize the transformation.", "local_heavy", "false", id="transformation"),
+        pytest.param("FORMAT the scratch drive.", "human_handoff", "true", id="format-drive"),
+        pytest.param("Reformat the scratch drive.", "human_handoff", "true", id="reformat-drive"),
+        pytest.param("Continue formatting the scratch drive.", "human_handoff", "true", id="formatting-drive"),
+        pytest.param("Remove all temporary files.", "human_handoff", "true", id="remove-all"),
+        pytest.param("Delete the temporary files.", "human_handoff", "true", id="delete-files"),
+        pytest.param("Wipe the scratch drive.", "human_handoff", "true", id="wipe-drive"),
     ],
 )
 def test_plan_renders_deterministic_route_shapes(
@@ -181,6 +189,8 @@ def test_plan_renders_deterministic_route_shapes(
     out = capsys.readouterr().out.lower()
     assert f"proposed_route: {route}" in out
     assert f"human_review_required: {review_required}" in out
+    assert "backend_probe_performed: false" in out
+    assert "execution_performed: false" in out
 
 
 def test_plan_reports_specialist_risk_conditions_and_model_binding(capsys):
