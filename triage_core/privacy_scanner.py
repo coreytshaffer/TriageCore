@@ -24,7 +24,21 @@ PHONE_REGEX = re.compile(r'\b(?:\+\d{1,2}\s)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}
 CC_CANDIDATE_REGEX = re.compile(r'\b(?:\d[ -]*?){13,19}\b')
 
 SENSITIVE_MARKERS_REGEX = re.compile(r'\b(confidential|internal only|proprietary)\b', re.IGNORECASE)
-SECRET_KEYS_REGEX = re.compile(r'\b(api_key\s*=|secret\s*=|token\s*=|bearer\s+token|sk-[a-zA-Z0-9]{20,}|ghp_[a-zA-Z0-9]{36})\b', re.IGNORECASE)
+SECRET_KEYS_REGEX = re.compile(
+    r"""
+    # Credential assignments and quoted JSON-style values.
+    \b(?:api_key|secret|token)\b
+    (?:\s*=[ \t]*|["']?[ \t]*:[ \t]*(?=["']))
+    (?: "[ \t]*[^"\s] | '[ \t]*[^'\s] | \w )
+    # Bearer authorization header and legacy bearer marker.
+    | \bauthorization\b["']?[ \t]*:[ \t]*["']?bearer[ \t]+[a-z0-9._~+/-]+
+    | \bbearer\s+token\b
+    # Standalone key formats, including hyphens and underscores in sk- keys.
+    | \bsk-[a-z0-9][a-z0-9_-]{19,}(?![\w-])
+    | \bghp_[a-z0-9]{36}\b
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
 
 LAT_LON_REGEX = re.compile(r'\b-?\d{1,2}\.\d{4,},\s*-?\d{1,3}\.\d{4,}\b')
 
