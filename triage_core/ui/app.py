@@ -1,14 +1,14 @@
 """
 TriageDesk GUI Application
 
-This module provides the read-only operator console for TriageCore.
-To ensure safety and prevent the GUI from becoming a hidden automation surface,
-all data flow follows this strict pattern:
+The GUI uses triagedesk_adapter.py for status and review queue snapshots and
+planning previews. Dispatch can call a model backend for classification.
+Local Draft and Auto Pipeline call the active backend to generate a draft.
 
-TriageCore modules -> triagedesk_adapter.py -> TriageDesk UI
-
-The GUI relies on `triagedesk_adapter.py` to fetch state and perform dry-runs.
-It does not execute tasks, call LLMs directly, write files, or mutate ledgers.
+Dispatch writes context-pack JSON and appends local ledger events for runner
+selection and draft or handoff results. Codex Handoff writes a Markdown review
+packet, and Antigravity Handoff writes a TASK.md bundle. These local writes can
+occur even when the task's recommended permission profile is read-only.
 """
 
 try:
