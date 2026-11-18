@@ -4,6 +4,12 @@ from dataclasses import dataclass, field
 
 class TaskClassifier:
     """Classifies prompts into task categories."""
+
+    _DESTRUCTIVE_REQUEST = re.compile(
+        r"\b(?:delete[ds]?|deleting|remove\s+all|wipe[ds]?|wiping|"
+        r"(?:re)?format(?:s|ted|ting)?)\b",
+        re.IGNORECASE,
+    )
     CATEGORIES = [
         "docs_update", "bugfix", "test_addition", "refactor", 
         "packaging", "security_review", "architecture_planning", "blocked_or_high_risk"
@@ -61,7 +67,7 @@ class TaskClassifier:
     def classify_deterministic(cls, prompt: str) -> str:
         """Classify without constructing or calling a model backend."""
         prompt_lower = prompt.lower()
-        if any(word in prompt_lower for word in ["delete", "remove all", "wipe", "format"]):
+        if cls._DESTRUCTIVE_REQUEST.search(prompt):
             return "blocked_or_high_risk"
         if "test" in prompt_lower or "pytest" in prompt_lower:
             return "test_addition"
