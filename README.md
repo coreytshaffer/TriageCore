@@ -403,11 +403,18 @@ That demo is designed to support:
 - Clear Lake Watch or other environmental edge workflows as a future extension
 
 ### 1. The TriageDesk GUI
-Launch the local control plane GUI to actively review tasks, monitor telemetry, and perform context planning:
+Launch the local control plane GUI to review tasks, monitor telemetry, plan context, and dispatch tasks:
 ```bash
 triagecore desk
 ```
-- **Read-Only Operator Console (Baseline Tag: `triagedesk-daily-driver-baseline-2026-06-25`):** The GUI acts strictly as a read-only telemetry and context-planning tool. To ensure the UI does not become a hidden execution surface, it relies exclusively on `triagedesk_adapter.py` and performs zero LLM calls, file writes, or ledger mutations directly.
+- **Planning and dispatch:** TriageDesk uses `triagedesk_adapter.py` for status
+  and review queue snapshots and planning previews. Dispatch can call a model
+  backend to classify a request. Local Draft and Auto Pipeline also call the
+  active backend to generate a draft. Dispatch writes context-pack JSON and
+  appends local ledger events for runner selection and draft or handoff results.
+  Codex Handoff writes a Markdown review packet, and Antigravity Handoff writes
+  a `TASK.md` bundle. These local writes can occur even when the task's
+  recommended permission profile is `read-only`.
 - **Energy-Aware Routing:** `psutil` integration actively monitors your battery life. If your battery dips below 20% while unplugged, TriageCore refuses to run heavy LLM tasks and prompts you to plug in (Permacomputing in action).
 - **Telemetry & Resource Accounting:** Tracks measured or heuristic resource estimates for energy consumption (kWh/Joules) and carbon emissions (gCO2e) in a local append-only ledger (`.triagecore/ledger.jsonl`).
 - **Local-First Benefit Signals:** The dashboard foregrounds accepted yield, local-first routing share, accepted local work, and review-light tasks so the bench encourages continued evidence collection while formal reports remain baseline-bound.
