@@ -106,6 +106,16 @@ class ProjectManager:
         max_tokens: int = self.budgets.get("max_tokens", 800)
         max_repair_attempts: int = self.budgets.get("max_local_attempts", 2)
 
+        # Requested roles that no registered worker can serve. These are tracked
+        # here, not in ProjectSteward.evaluate, because the steward is also called
+        # with an empty order list by ordinary preflight (run_plan, client), where
+        # no work was requested and an empty list is a valid input.
+        unroutable_roles: List[str] = []
+        for role in required_roles:
+            if role not in self.registry.workers and role not in unroutable_roles:
+                unroutable_roles.append(role)
+        validation_exhausted = False
+
         # ── 1. Pre-scan target files for chunking ────────────────────────────
         file_chunk_map: Dict[str, List[Tuple[int, Optional[int]]]] = {}
         for fp in target_files:
@@ -211,6 +221,8 @@ class ProjectManager:
 
             worker = self.registry.get_worker(order.assigned_role)
             if not worker:
+                if order.assigned_role not in unroutable_roles:
+                    unroutable_roles.append(order.assigned_role)
                 self.board.update_status(
                     order.work_order_id,
                     "failed",
@@ -388,6 +400,7 @@ class ProjectManager:
                                     )
                                 )
                             else:
+                                validation_exhausted = True
                                 if stream_callback:
                                     stream_callback(
                                         "\n↳ [ESCALATION] Validator failed after max repair "
@@ -448,6 +461,37 @@ class ProjectManager:
                     "local execution."
                 )
                 evaluation["recommended_escalation"] = "codex"
+
+        # Requested work that did not complete can never be "sufficient".
+        # A council that was asked for no roles is left to the steward's verdict.
+        incomplete_reasons: List[str] = []
+        if unroutable_roles:
+            incomplete_reasons.append(
+                "Requested worker role(s) not available: "
+                f"{', '.join(unroutable_roles)}."
+            )
+        if required_roles and not completed:
+            incomplete_reasons.append("No requested work order completed.")
+        if validation_exhausted:
+            incomplete_reasons.append(
+                "Deterministic validation still failed after "
+                f"{max_repair_attempts} repair attempt(s)."
+            )
+        evaluation["unroutable_roles"] = list(unroutable_roles)
+        evaluation["validation_exhausted"] = validation_exhausted
+        if incomplete_reasons:
+            if evaluation.get("local_result_status") == "insufficient":
+                # Keep the existing escalation target (for example a firewall's
+                # human_only); only add the evidence.
+                prior_reason = evaluation.get("reason") or ""
+                evaluation["reason"] = " ".join(
+                    part for part in [prior_reason, *incomplete_reasons] if part
+                )
+            else:
+                evaluation["local_result_status"] = "insufficient"
+                evaluation["reason"] = " ".join(incomplete_reasons)
+                evaluation["recommended_escalation"] = "codex"
+                evaluation["recommended_permission_profile"] = "workspace"
 
         # ── 5. Write escalation packet if needed ─────────────────────────────
         packet_path = None
