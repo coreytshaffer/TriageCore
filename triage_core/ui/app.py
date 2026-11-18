@@ -4112,6 +4112,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
                 resp = self.active_backend.generate(
                     messages, stream_callback=_stream_cb
                 )
+                served_model = resp.raw.get("model") or self._model_label(self.active_backend)
                 duration = time.time() - t0
                 samples = sampler.stop()
 
