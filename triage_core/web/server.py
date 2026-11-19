@@ -1,16 +1,45 @@
 import os
+import sys
 from enum import Enum
 from hmac import compare_digest
 from ipaddress import ip_address
 from typing import Any, Dict, Optional
 
-import uvicorn
-from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, status
-from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+if sys.version_info[:2] < (3, 11):
+    raise RuntimeError("TriageCore Mobile requires Python 3.11 or later.")
 
-from triage_core.task_ledger import TaskLedger, TaskRecord
+_MINIMUM_FASTAPI = "0.163.2"
+_FASTAPI_REQUIREMENT = (
+    f"TriageCore Mobile requires FastAPI {_MINIMUM_FASTAPI} or later. "
+    "From the repository root, run python -m pip install '.[mobile]'."
+)
+
+try:
+    import fastapi
+    from packaging.version import InvalidVersion, Version
+except ModuleNotFoundError as exc:
+    if exc.name not in {"fastapi", "packaging", "packaging.version"}:
+        raise
+    raise RuntimeError(_FASTAPI_REQUIREMENT) from exc
+
+_fastapi_version = getattr(fastapi, "__version__", None)
+if not isinstance(_fastapi_version, str):
+    raise RuntimeError(_FASTAPI_REQUIREMENT)
+try:
+    _installed_fastapi = Version(_fastapi_version)
+except InvalidVersion as exc:
+    raise RuntimeError(_FASTAPI_REQUIREMENT) from exc
+if _installed_fastapi < Version(_MINIMUM_FASTAPI):
+    raise RuntimeError(_FASTAPI_REQUIREMENT)
+
+# Load the server and app dependencies after checking the mobile environment.
+import uvicorn  # noqa: E402
+from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, status  # noqa: E402
+from fastapi.responses import HTMLResponse  # noqa: E402
+from fastapi.staticfiles import StaticFiles  # noqa: E402
+from pydantic import BaseModel  # noqa: E402
+
+from triage_core.task_ledger import TaskLedger, TaskRecord  # noqa: E402
 
 app = FastAPI(title="TriageCore Mobile")
 

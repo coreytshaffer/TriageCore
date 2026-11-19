@@ -1,9 +1,68 @@
 import json
+import runpy
+import sys
+from pathlib import Path
 
+import fastapi
 import pytest
 from fastapi.testclient import TestClient
 
 from triage_core.task_ledger import TaskLedger
+
+
+SERVER_PATH = Path(__file__).resolve().parents[1] / "triage_core/web/server.py"
+FASTAPI_REQUIREMENT = r"TriageCore Mobile requires FastAPI 0\.163\.2 or later"
+
+
+@pytest.fixture
+def startup_ledger_path(tmp_path, monkeypatch):
+    path = tmp_path / "startup-ledger"
+    monkeypatch.setenv("TRIAGECORE_LEDGER_DIR", str(path))
+    return path
+
+
+@pytest.mark.parametrize("dependency", ["fastapi", "packaging.version"])
+def test_mobile_import_rejects_missing_dependency(
+    dependency, startup_ledger_path, monkeypatch
+):
+    monkeypatch.setitem(sys.modules, dependency, None)
+
+    with pytest.raises(RuntimeError, match=FASTAPI_REQUIREMENT) as error:
+        runpy.run_path(str(SERVER_PATH))
+
+    assert ".[mobile]" in str(error.value)
+    assert not startup_ledger_path.exists()
+
+
+@pytest.mark.parametrize("version", ["0.163.1", "0.163.2rc1", "invalid", None])
+def test_mobile_import_rejects_unsupported_fastapi(
+    version, startup_ledger_path, monkeypatch
+):
+    monkeypatch.setattr(fastapi, "__version__", version)
+
+    with pytest.raises(RuntimeError, match=FASTAPI_REQUIREMENT):
+        runpy.run_path(str(SERVER_PATH))
+
+    assert not startup_ledger_path.exists()
+
+
+def test_mobile_import_rejects_absent_fastapi_version(startup_ledger_path, monkeypatch):
+    monkeypatch.delattr(fastapi, "__version__")
+
+    with pytest.raises(RuntimeError, match=FASTAPI_REQUIREMENT):
+        runpy.run_path(str(SERVER_PATH))
+
+    assert not startup_ledger_path.exists()
+
+
+@pytest.mark.parametrize("version", ["0.163.2", "0.163.2.post1"])
+def test_mobile_import_accepts_supported_fastapi(version, startup_ledger_path, monkeypatch):
+    monkeypatch.setattr(fastapi, "__version__", version)
+
+    module = runpy.run_path(str(SERVER_PATH))
+
+    assert module["app"].title == "TriageCore Mobile"
+    assert startup_ledger_path.is_dir()
 
 
 @pytest.fixture
