@@ -70,6 +70,21 @@ This file provides a chronological, human-readable record of applied codebase an
 - Implemented CR-101 (Add Route/Worker Ledger Inspection CLI): Added `tc route-worker-ledger inspect --ledger <path>` to validate explicit CR-100 telemetry JSONL files and print read-only reviewer summaries by event type and worker status, failing closed on missing files, malformed JSON, invalid records, and unknown or prohibited fields without changing routing, execution, admission, approval, identity, or persistence defaults.
 - Implemented CR-100 (Record Route-Decision and Worker-Result Ledger Events): Added a standalone metadata-only route/worker ledger event contract with validated builders, bounded worker statuses, prohibited raw/secret-key rejection, and deterministic JSONL append behavior without changing routing, execution, admission, approval, or identity semantics.
 
+## [cr-137-mobile-security-floor] - 2026-11-18
+
+- Closed out CR-137 for GHSA-f56c-v883-vx8r. The mobile API now requires
+  Python 3.11 or later and FastAPI 0.163.2 or later, while core supports
+  Python 3.10. PR #199 was squash-merged into `main` as
+  `42d561976100a5e38836301ad502c22872af9ff0`. All four jobs passed in
+  post-merge CI run `44454436452` for that commit. GitHub published the
+  source release under `cr-137-mobile-security-floor-2026-11-18`.
+  The tag points to `42d5619`, and both source archives matched the six
+  scoped Git blobs.
+  [CR-137 closeout](requests/CR-137-fastapi-mobile-security-floor.md#closeout) ·
+  [PR #199](https://github.com/coreytshaffer/TriageCore/pull/199) ·
+  [Post-merge CI](https://github.com/coreytshaffer/TriageCore/actions/runs/44454436452) ·
+  [Verified source release](https://github.com/coreytshaffer/TriageCore/releases/tag/cr-137-mobile-security-floor-2026-11-18)
+
 ## [0.1.0-reviewer-checkpoint] - 2026-07-02
 - Implemented CR-098 (Add Task Evidence Show Command): Added a read-only CLI command `tc task show <task_id>` to display a task's complete ledger-derived evidence timeline and status, fail closed with a bounded `task_not_found` error on missing tasks, and cleanly print a note indicating signatures are not checked.
 - Implemented CR-097 (Fail-Closed Identity Registry Load Handling): Replaced unhandled identity registry IO/parse exceptions with safe typed exceptions, added a CLI failure helper, and wrapped reviewer-facing CLI call sites (`tc identity list`, `tc audit --verify-signatures`, `tc audit --signed-smoke-test`, etc.) to produce a bounded `registry_load_failed` output on malformed or unreadable registries without leaking stack traces or secret strings.

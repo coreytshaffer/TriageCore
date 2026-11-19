@@ -2,14 +2,17 @@
 
 ## Status
 
+**Closed out on 2026-11-18 (Pacific time).** The
+[closeout record](#closeout) records the operator's merge, release, and
+closeout decisions and the corresponding evidence.
+
 Proposed and accepted on 2026-11-18. The operator recorded the decision in
 the CR-137 chat: “I accept the CR-137 proposal.”
 
 Design accepted and bounded implementation authorized on 2026-11-18.
 Implementation accepted on 2026-11-18 against the locally verified candidate
-identified below. Commit, push, and pull request creation are authorized for
-the six paths in the exact file scope. Merge, release, and closeout remain
-pending.
+identified below. The operator authorized the commit, push, and pull request
+for the six paths in the exact file scope.
 
 CR-137 is the next numeric identifier in the observed namespace. CR-136 was the
 highest numeric request in local Git history. The GitHub comparison from local
@@ -84,20 +87,20 @@ or skipped mobile suite fails the mobile jobs.
 
 ## Acceptance criteria
 
-- [ ] Core and development extras install on Python 3.10 and the core regression
+- [x] Core and development extras install on Python 3.10 and the core regression
   suite passes with only the mobile test module excluded by CI configuration.
-- [ ] In a clean Python 3.10 environment, explicitly requesting `.[mobile]`
+- [x] In a clean Python 3.10 environment, explicitly requesting `.[mobile]`
   fails dependency resolution because of the mobile FastAPI requirement. An
   unrelated install or index failure does not satisfy this check.
-- [ ] On Python 3.11 and 3.12, mobile installs and passes the full test suite,
+- [x] On Python 3.11 and 3.12, mobile installs and passes the full test suite,
   including the mobile tests. Python 3.11 verifies FastAPI 0.163.2 exactly.
-- [ ] Direct mobile startup on Python 3.10 reports the Python requirement.
+- [x] Direct mobile startup on Python 3.10 reports the Python requirement.
   Missing FastAPI and versions below 0.163.2 are rejected before the ASGI app is
   constructed. Use synthetic version inputs for these checks.
-- [ ] Existing bearer authentication, task projection, review behavior, and
+- [x] Existing bearer authentication, task projection, review behavior, and
   loopback binding tests pass with patched FastAPI, consistent with
   [CR-019](CR-019-mobile-api-access-boundary.md).
-- [ ] The README records the compatibility split and migration instructions.
+- [x] The README records the compatibility split and migration instructions.
   Implementation evidence identifies the exact commit, commands, environments,
   and results. Deployment remediation requires separate runtime evidence.
 
@@ -220,8 +223,10 @@ acceptance and the next bounded actions in the CR-137 chat on 2026-11-18.
 > dedicated branch, push it, and open a PR. Verify hosted CI and report the
 > results. Stop before merging or releasing.
 
-[TriageCore change management](../change_management.md) requires subsequent
-explicit human decisions for merge authority, release authority, and closeout.
+[TriageCore change management](../change_management.md) requires separate
+human decisions for merge authority, release authority, and closeout.
+The operator's decisions and their evidence appear in the
+[closeout record](#closeout).
 
 ## Implementation verification
 
@@ -269,3 +274,30 @@ The full Ubuntu suites reported 46 warnings each.
 `git diff --check` passed for the reviewed candidate. Hosted verification
 is tracked in the pull request's GitHub Actions checks. Deployment
 verification requires separate runtime evidence.
+
+## Closeout
+
+- **Merge** — The operator authorized merging PR #199 at head
+  `e68468c3ea58f8673cd8105c234216859874f885`. GitHub confirmed the squash
+  merge to `main` as `42d561976100a5e38836301ad502c22872af9ff0` on
+  2026-11-18 at 19:52:26 PST. The merge commit contains the six scoped paths.
+  [PR #199](https://github.com/coreytshaffer/TriageCore/pull/199) ·
+  [Merge commit](https://github.com/coreytshaffer/TriageCore/commit/42d561976100a5e38836301ad502c22872af9ff0)
+- **Post-merge CI** — Run `44454436452` completed successfully for the push
+  to `main` at `42d561976100a5e38836301ad502c22872af9ff0`. All four jobs
+  passed. Python 3.10 passed 2,571 tests and confirmed mobile install and
+  startup rejection. Python 3.11 and 3.12 each passed 2,590 tests, including
+  all 19 mobile tests. The Windows executor passed 219 mandatory tests and
+  the supplemental symlink test.
+  [Post-merge CI](https://github.com/coreytshaffer/TriageCore/actions/runs/44454436452)
+- **Release** — The operator authorized release from `main` at `42d5619`.
+  GitHub published the source release under tag
+  `cr-137-mobile-security-floor-2026-11-18` on 2026-11-18 at 19:58:46 PST.
+  The tag resolves to `42d561976100a5e38836301ad502c22872af9ff0`. The ZIP
+  and tarball each matched all six scoped Git blobs. Both archives retain
+  core Python 3.10 support and include the mobile requirements of Python
+  3.11 or later and FastAPI 0.163.2 or later.
+  [Verified source release](https://github.com/coreytshaffer/TriageCore/releases/tag/cr-137-mobile-security-floor-2026-11-18)
+- **Closeout authority** — The operator authorized closeout in the CR-137
+  chat on 2026-11-18. The record covers this CR and the
+  [change log](../change_log.md#cr-137-mobile-security-floor---2026-11-18).
