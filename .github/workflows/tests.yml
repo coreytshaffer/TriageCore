@@ -24,12 +24,92 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install package
+        env:
+          PYTHON_VERSION: ${{ matrix.python-version }}
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev,mobile]"
+          case "$PYTHON_VERSION" in
+            3.10)
+              python -m pip install -e '.[dev]'
+              ;;
+            3.11)
+              constraints="$RUNNER_TEMP/triagecore-fastapi-constraints.txt"
+              printf '%s\n' 'fastapi==0.163.2' > "$constraints"
+              python -m pip install -c "$constraints" -e '.[dev,mobile]'
+              ;;
+            *)
+              python -m pip install -e '.[dev,mobile]'
+              ;;
+          esac
 
-      - name: Run tests
-        run: python -m pytest -q
+      - name: Run core tests
+        if: matrix.python-version == '3.10'
+        run: python -m pytest -q --ignore=tests/test_mobile_web.py
+
+      - name: Verify mobile is rejected on Python 3.10
+        if: matrix.python-version == '3.10'
+        run: |
+          resolver_log="$RUNNER_TEMP/triagecore-mobile-resolver.log"
+          if python -m pip install --dry-run --ignore-installed '.[mobile]' > "$resolver_log" 2>&1; then
+            echo "Mobile dependency resolution unexpectedly succeeded."
+            exit 1
+          fi
+          if ! grep -Fq 'No matching distribution found for fastapi>=0.163.2' "$resolver_log" ||
+             ! grep -Eq '0\.163\.2 Requires-Python >=3\.11([,;[:space:]]|$)' "$resolver_log"; then
+            cat "$resolver_log"
+            exit 1
+          fi
+          echo "Mobile resolution rejected FastAPI 0.163.2 because it requires Python 3.11 or later."
+
+          startup_log="$RUNNER_TEMP/triagecore-mobile-startup.log"
+          ledger="$RUNNER_TEMP/triagecore-python310-ledger"
+          if TRIAGECORE_MOBILE_TOKEN= TRIAGECORE_LEDGER_DIR="$ledger" \
+             python -m triage_core.web.server > "$startup_log" 2>&1; then
+            echo "Mobile startup unexpectedly succeeded."
+            exit 1
+          fi
+          if ! grep -Fq 'TriageCore Mobile requires Python 3.11 or later.' "$startup_log" ||
+             [[ -e "$ledger" ]]; then
+            cat "$startup_log"
+            exit 1
+          fi
+          echo "Mobile startup rejected Python 3.10 before creating a ledger."
+
+      - name: Verify mobile runtime and run full suite
+        if: matrix.python-version != '3.10'
+        run: |
+          python - <<'PY'
+          import sys
+
+          import fastapi
+          from packaging.version import Version
+
+          installed = Version(fastapi.__version__)
+          minimum = Version("0.163.2")
+          print(f"Python {sys.version.split()[0]}, FastAPI {installed}")
+          if sys.version_info[:2] == (3, 11) and installed != minimum:
+              raise SystemExit(f"Expected minimum supported FastAPI {minimum}.")
+          if installed < minimum:
+              raise SystemExit(f"FastAPI must be {minimum} or later.")
+          PY
+
+          python -m pytest -q --junitxml="$RUNNER_TEMP/triagecore-pytest.xml"
+
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from xml.etree import ElementTree
+
+          report = Path(os.environ["RUNNER_TEMP"]) / "triagecore-pytest.xml"
+          cases = ElementTree.parse(report).findall(".//testcase[@classname='tests.test_mobile_web']")
+          if not cases or any(
+              case.find(outcome) is not None
+              for case in cases
+              for outcome in ("skipped", "failure", "error")
+          ):
+              raise SystemExit("The mobile test module must run and pass without skips.")
+          print(f"Mobile tests passed: {len(cases)}")
+          PY
 
   # CR-OC-001C Windows/NTFS evidence. Additive: the Ubuntu matrix above is
   # unchanged, and is deliberately NOT converted into an OS x Python matrix.

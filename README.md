@@ -388,6 +388,18 @@ cd TriageCore
 pip install -e .
 ```
 
+TriageCore core supports Python 3.10 and later. The optional mobile API
+requires Python 3.11 or later and FastAPI 0.163.2 or later. To migrate an
+existing mobile instance, create an environment with Python 3.11 or later.
+Activate it and run these commands from the repository root before
+restarting the mobile server with that environment.
+
+```bash
+python -m pip install '.[mobile]'
+python --version
+python -c "import fastapi; print(fastapi.__version__)"
+```
+
 ## Features
 
 ## Hackathon Demo
