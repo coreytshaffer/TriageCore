@@ -41,6 +41,38 @@ class PythonSyntaxValidator:
             os.remove(path)
 
 
+class JsonSyntaxValidator:
+    """Check JSON syntax without requiring a particular payload shape."""
+
+    @staticmethod
+    def validate(output: str) -> bool:
+        cleaned = output.strip()
+        if cleaned.startswith("```") and cleaned.endswith("```"):
+            cleaned = _strip_markdown_fence(cleaned)
+        try:
+            json.loads(
+                cleaned,
+                parse_int=str,
+                parse_float=str,
+                parse_constant=_reject_json_constant,
+            )
+        except (ValueError, RecursionError):
+            return False
+        return True
+
+
+def _reject_json_constant(value: str) -> None:
+    raise ValueError(f"Invalid JSON constant: {value}")
+
+
+class MarkdownContentValidator:
+    """Require content without imposing a particular Markdown structure."""
+
+    @staticmethod
+    def validate(output: str) -> bool:
+        return bool(_strip_markdown_fence(output))
+
+
 class MonitoringJsonValidator:
     """Validator for the Study 001 monitoring-site extraction fixture."""
 
