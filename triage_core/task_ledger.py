@@ -751,7 +751,10 @@ def verify_route_audit_event_signature(
     signing_registry: AgentIdentityRegistry,
 ) -> bool:
     signature_metadata = event.get("signature_metadata")
-    if not signature_metadata:
+    if (
+        not isinstance(signature_metadata, dict)
+        or signature_metadata.get("capability") != ROUTE_AUDIT_SIGN_CAPABILITY
+    ):
         return False
     return signing_registry.verify_signed_payload(
         route_audit_signature_payload(event),
@@ -764,7 +767,10 @@ def verify_validation_result_event_signature(
     signing_registry: AgentIdentityRegistry,
 ) -> bool:
     signature_metadata = event.get("signature_metadata")
-    if not signature_metadata:
+    if (
+        not isinstance(signature_metadata, dict)
+        or signature_metadata.get("capability") != VALIDATION_RESULT_SIGN_CAPABILITY
+    ):
         return False
     return signing_registry.verify_signed_payload(
         validation_result_signature_payload(event),
@@ -777,7 +783,10 @@ def verify_route_decision_event_signature(
     signing_registry: AgentIdentityRegistry,
 ) -> bool:
     signature_metadata = event.get("signature_metadata")
-    if not signature_metadata:
+    if (
+        not isinstance(signature_metadata, dict)
+        or signature_metadata.get("capability") != ROUTE_DECISION_SIGN_CAPABILITY
+    ):
         return False
     return signing_registry.verify_signed_payload(
         route_decision_signature_payload(event),

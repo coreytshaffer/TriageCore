@@ -1,6 +1,7 @@
 import os
 import uuid
 import tempfile
+from unittest.mock import patch
 import pytest
 
 from triage_core.agent_identity import (
@@ -563,6 +564,64 @@ def test_ledger_tracks_provenance_fields():
         assert record is not None
         assert record.backend_uri == "http://localhost:11434"
         assert record.execution_node == "localhost"
+
+
+@pytest.mark.parametrize(
+    ("event_type", "append_signed_event", "verify_event"),
+    [
+        (
+            "route_audit",
+            TaskLedger.append_signed_route_audit_event,
+            verify_route_audit_event_signature,
+        ),
+        (
+            "route_decision",
+            TaskLedger.append_signed_route_decision_event,
+            verify_route_decision_event_signature,
+        ),
+        (
+            "validation_result",
+            TaskLedger.append_signed_validation_result_event,
+            verify_validation_result_event_signature,
+        ),
+    ],
+    ids=["route_audit", "route_decision", "validation_result"],
+)
+@pytest.mark.parametrize(
+    "capability_override",
+    [
+        pytest.param("unrelated:sign", id="wrong-capability"),
+        pytest.param(None, id="missing-capability"),
+    ],
+)
+def test_ledger_signature_verification_requires_event_capability(
+    tmp_path, event_type, append_signed_event, verify_event, capability_override
+):
+    ledger = TaskLedger(ledger_dir=tmp_path)
+    registry = AgentIdentityRegistry(ledger_dir=tmp_path)
+    registry.generate_identity("test-signer", "project_steward", [f"{event_type}:sign"])
+    event = append_signed_event(
+        ledger,
+        "test-task",
+        {},
+        signing_registry=registry,
+        signing_agent_id="test-signer",
+    )
+
+    assert verify_event(event, registry) is True
+
+    metadata = event["signature_metadata"].copy()
+    if capability_override is None:
+        del metadata["capability"]
+    else:
+        metadata["capability"] = capability_override
+    invalid_event = {**event, "signature_metadata": metadata}
+
+    with patch.object(
+        registry, "verify_signed_payload", wraps=registry.verify_signed_payload
+    ) as verify_payload:
+        assert verify_event(invalid_event, registry) is False
+        verify_payload.assert_not_called()
 
 
 def test_append_signed_route_audit_event_writes_signature_metadata():
