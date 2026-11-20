@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Any, List
-from .validators import PythonSyntaxValidator, MonitoringJsonValidator, ErrorWarningMarkdownValidator
+
+from .validators import JsonSyntaxValidator, MarkdownContentValidator, PythonSyntaxValidator
 
 @dataclass
 class ValidationResult:
@@ -38,18 +39,18 @@ class ValidatorTools:
                     issues=[] if passed else ["PythonSyntaxValidator failed. Expected valid python code."]
                 ))
             elif v == "json_parse":
-                passed = MonitoringJsonValidator.validate(text)
+                passed = JsonSyntaxValidator.validate(text)
                 results.append(ValidationResult(
                     passed=passed,
                     validator=v,
-                    issues=[] if passed else ["MonitoringJsonValidator failed. Expected specific JSON schema."]
+                    issues=[] if passed else ["Expected valid JSON."]
                 ))
             elif v == "markdown_basic":
-                passed = ErrorWarningMarkdownValidator.validate(text)
+                passed = MarkdownContentValidator.validate(text)
                 results.append(ValidationResult(
                     passed=passed,
                     validator=v,
-                    issues=[] if passed else ["ErrorWarningMarkdownValidator failed. Ensure markdown contains required sections."]
+                    issues=[] if passed else ["Expected nonempty Markdown."]
                 ))
             else:
                 # unknown validator - maybe log it, but for now we ignore or pass

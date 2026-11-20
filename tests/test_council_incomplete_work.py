@@ -1,9 +1,6 @@
-"""Council results must not read as success when requested work did not complete.
+"""Offline regressions for council dispatch, validation, and preflight.
 
-Covers bug-scan findings S03 (requested roles missing from the registry) and S04
-(deterministic validation still failing after the repair budget). The last two
-tests pin the distinction the fix relies on: an empty order list is valid when no
-work was requested, as in ordinary preflight.
+An empty order list is valid when no work was requested, as in ordinary preflight.
 """
 
 from types import SimpleNamespace
@@ -201,6 +198,88 @@ def test_s04_recovery_within_budget_stays_sufficient(isolated_config):
     assert evaluation["validation_exhausted"] is False
     assert evaluation["unroutable_roles"] == []
     assert result["escalation_packet"] is None
+
+
+# ── S07: generic checks for JSON and Markdown output ───────────────────────
+
+
+@pytest.mark.parametrize(
+    ("filename", "output", "validator"),
+    [
+        pytest.param("settings.json", '{"enabled": true}', "json_parse", id="json-object"),
+        pytest.param("items.json", '["alpha", "beta"]', "json_parse", id="json-array"),
+        pytest.param("flag.json", "false", "json_parse", id="json-scalar"),
+        pytest.param(
+            "settings.json",
+            '```json\n{"enabled": true}\n```',
+            "json_parse",
+            id="fenced-json",
+        ),
+        pytest.param(
+            "guide.md", "# Guide\n\nSetup instructions.", "markdown_basic", id="md"
+        ),
+        pytest.param(
+            "guide.markdown",
+            "# Guide\n\n1. Run the setup step.",
+            "markdown_basic",
+            id="markdown",
+        ),
+    ],
+)
+def test_s07_council_accepts_generic_json_and_markdown(
+    isolated_config, filename, output, validator
+):
+    implementer = DummyWorker("implementer", [{"repaired_code": output}])
+    reviewer = DummyWorker("review_worker", [{"is_valid": True, "issues_found": []}])
+    manager = _manager({"implementer": implementer, "review_worker": reviewer})
+
+    result = manager.dispatch_task(
+        prompt="Update the sample artifact",
+        target_files=[filename],
+        required_roles=["implementer", "review_worker"],
+    )
+
+    assert result["evaluation"]["local_result_status"] == "sufficient"
+    assert result["evaluation"]["validation_exhausted"] is False
+    assert result["escalation_packet"] is None
+    assert implementer.call_count == reviewer.call_count == 1
+    assert result["all_orders"][0].result["validation_run"] == {
+        "validators": [validator],
+        "passed": True,
+        "issues": [],
+    }
+
+
+@pytest.mark.parametrize(
+    ("filename", "output", "validator"),
+    [
+        pytest.param("settings.json", '{"enabled":', "json_parse", id="malformed-json"),
+        pytest.param(
+            "settings.json", '{"value": NaN}', "json_parse", id="nonstandard-json-number"
+        ),
+        pytest.param("guide.md", " \n\t", "markdown_basic", id="blank-markdown"),
+    ],
+)
+def test_s07_council_rejects_invalid_json_and_blank_markdown(
+    isolated_config, filename, output, validator
+):
+    implementer = DummyWorker("implementer", [{"repaired_code": output}])
+    manager = _manager({"implementer": implementer}, budgets={"max_local_attempts": 1})
+
+    result = manager.dispatch_task(
+        prompt="Update the sample artifact",
+        target_files=[filename],
+        required_roles=["implementer"],
+    )
+
+    assert result["evaluation"]["local_result_status"] == "insufficient"
+    assert result["evaluation"]["validation_exhausted"] is True
+    assert implementer.call_count == 2
+    for order in result["all_orders"]:
+        validation = order.result["validation_run"]
+        assert validation["validators"] == [validator]
+        assert validation["passed"] is False
+        assert validation["issues"]
 
 
 # ── No work requested: empty order lists stay valid ─────────────────────────
