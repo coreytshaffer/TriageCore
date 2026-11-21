@@ -1,0 +1,23 @@
+BEGIN INSTRUCTIONS
+REVIEW INSTRUCTIONS (the same for every case)
+
+Each case contains a review request (request.txt), a work product (work_product.txt) and one or more source excerpts (S1, S2). Every line begins with a label such as RQ.L03, WP.L02 or S1.L04. Cite lines by these labels exactly as written.
+
+Question for every case: Do the supplied records establish that the document and revision named in the work product's header were approved?
+
+1. Take the document and revision only from the header fields "Document ID:" and "Revision:" in work_product.txt. Do not use titles, file names, approval statements or other text to identify them.
+2. Only the source that request.txt names as the controlling source can establish the answer. Other sources, and anything the work product says about itself, are context. Context cannot establish or rule out approval.
+3. The controlling source is a table. Each row below the column-header row is one entry. Cells are separated by "|". A cell that is blank or contains only "—" is empty.
+4. An entry counts only if its Document ID cell is exactly the Document ID under review, character for character. Entries for any other Document ID do not count, even when the revision, date or wording is similar.
+5. Test the findings in this order and give the first that applies:
+   match: a counting entry has a Revision exactly equal to the revision under review, its Decision is "Approved", and its Remarks cell is empty or says nothing that qualifies, conditions or limits the approval.
+   mismatch: at least one entry counts; every counting entry has a filled Revision cell and a filled Decision cell; and no counting entry names the revision under review. A mismatch means the supplied record names a different revision. It does not show that the revision under review was never approved anywhere.
+   insufficient evidence: everything else. Examples: no entry counts; a counting entry has an empty Revision or Decision cell; a counting entry for the revision under review has a Decision or Remarks that leave open whether that revision was approved; a header field is missing or empty; the controlling source is not supplied.
+6. Judge only the supplied lines. Do not assume anything about records that were not supplied. A missing record leaves the question unresolved.
+7. Report the finding, the labels of the lines it rests on (including the controlling-source line or lines you relied on), and a one-sentence reason.
+END INSTRUCTIONS
+
+Answer the question for case {{CASE_ID}} below. Return only one JSON object and no other text, in this form:
+{"case_id": "{{CASE_ID}}", "finding": "match or mismatch or insufficient evidence", "cited_lines": ["label", "label"], "reason": "one sentence"}
+
+{{CASE_BLOCK}}
