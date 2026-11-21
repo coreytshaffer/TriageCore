@@ -86,8 +86,11 @@ class FakeSocket:
     def __init__(self):
         self.timeouts = []
         self.shut = False
+        self.closed = False
 
     def settimeout(self, value):
+        if self.closed:
+            raise OSError("response socket is closed")
         self.timeouts.append(value)
 
     def shutdown(self, how):
@@ -112,7 +115,12 @@ class FakeResponse:
     def getheader(self, name, default=None):
         return self._headers.get(name.lower(), default)
 
+    def isclosed(self):
+        return self.closed
+
     def read1(self, amount=-1):
+        if self.closed:
+            return b""
         if self.connection.closed:
             raise ValueError("I/O operation on closed connection")
         self.reads += 1
@@ -129,10 +137,14 @@ class FakeResponse:
         size = min(amount, self.reply.chunk_size)
         chunk = self.reply.body[self.offset:self.offset + size]
         self.offset += len(chunk)
+        if self.reply.close_after_headers and self.getheader("Content-Length") == str(self.offset):
+            self.close()
         return chunk
 
     def close(self):
         self.closed = True
+        if self.reply.close_after_headers:
+            self.socket.closed = True
 
 
 class FakeConnection:
@@ -238,8 +250,9 @@ def chat_body(content='{"case_id": "DC-03"}', **extra) -> bytes:
 # --- Preflight: GET /api/tags -----------------------------------------------
 
 
-def test_preflight_uses_the_fixed_loopback_get_and_checks_tag_and_digest(clock):
-    wire = Wire(clock, Reply(body=GOOD_TAGS))
+@pytest.mark.parametrize("close_after_headers", [False, True], ids=["retained-socket", "released-socket"])
+def test_preflight_uses_the_fixed_loopback_get_and_checks_tag_and_digest(clock, close_after_headers):
+    wire = Wire(clock, Reply(body=GOOD_TAGS, close_after_headers=close_after_headers))
     result = model_for(wire, clock).preflight(MODEL_TAG, MODEL_DIGEST)
     assert result.status == "ok"
     assert result.reason_code is None
@@ -250,7 +263,7 @@ def test_preflight_uses_the_fixed_loopback_get_and_checks_tag_and_digest(clock):
     assert [(m, u, b) for m, u, b, _ in wire.requests] == [("GET", "/api/tags", None)]
     assert connection.closed
     assert 0 < connection.timeout <= 5.0
-    assert all(0 < value <= 5.0 for value in connection.sock.timeouts)
+    assert all(0 < value <= 5.0 for value in connection.response.socket.timeouts)
     assert ManualTimer.created[0].interval == pytest.approx(5.0)
     assert ManualTimer.created[0].started and ManualTimer.created[0].cancelled
 
@@ -366,8 +379,9 @@ def _request_body() -> bytes:
     return cr.build_chat_request(model_tag=MODEL_TAG, case=case)
 
 
-def test_chat_posts_the_exact_body_to_the_fixed_endpoint(clock):
-    wire = Wire(clock, Reply(body=chat_body("reply text")))
+@pytest.mark.parametrize("close_after_headers", [False, True], ids=["retained-socket", "released-socket"])
+def test_chat_posts_the_exact_body_to_the_fixed_endpoint(clock, close_after_headers):
+    wire = Wire(clock, Reply(body=chat_body("reply text"), close_after_headers=close_after_headers))
     body = _request_body()
     result = model_for(wire, clock).chat(body)
     assert result.status == "completed"

@@ -275,7 +275,8 @@ class ReviewModel:
             chunks = []
             total = 0
             try:
-                while True:
+                # http.client can release the socket when the final body bytes arrive.
+                while not response.isclosed():
                     deadline.check()
                     self._bound(sock, deadline, inactivity)
                     chunk = response.read1(min(READ_CHUNK_BYTES, cap + 1 - total))
