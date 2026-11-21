@@ -79,6 +79,7 @@ class Reply:
     connect_seconds: float = 0.0
     response_error: Optional[BaseException] = None
     fire_watchdog_on_read: bool = False
+    close_after_headers: bool = False
 
 
 class FakeSocket:
@@ -99,6 +100,8 @@ class FakeResponse:
         self.status = reply.status
         self.clock = clock
         self.connection = connection
+        self.socket = connection.sock
+        self.closed = False
         self.offset = 0
         self.reads = 0
         headers = {k.lower(): v for k, v in reply.headers.items()}
@@ -129,7 +132,7 @@ class FakeResponse:
         return chunk
 
     def close(self):
-        pass
+        self.closed = True
 
 
 class FakeConnection:
@@ -141,6 +144,7 @@ class FakeConnection:
         self.timeout = timeout
         self.sock = None
         self.requests = []
+        self.response = None
         self.closed = False
 
     def connect(self):
@@ -155,7 +159,11 @@ class FakeConnection:
     def getresponse(self):
         if self.reply.response_error is not None:
             raise self.reply.response_error
-        return FakeResponse(self.reply, self.clock, self)
+        self.response = FakeResponse(self.reply, self.clock, self)
+        if self.reply.close_after_headers:
+            # http.client leaves the socket with the response in this case.
+            self.sock = None
+        return self.response
 
     def close(self):
         self.closed = True
@@ -267,6 +275,7 @@ def test_the_loopback_destination_is_not_configurable():
         (Reply(body=tags_body({"model": MODEL_TAG, "digest": MODEL_DIGEST})), "tags_invalid_response"),
         (Reply(body=tags_body({"name": MODEL_TAG})), "tags_invalid_response"),
         (Reply(body=GOOD_TAGS[:40], headers={"Content-Length": str(len(GOOD_TAGS))}, truncate=True), "tags_invalid_response"),
+        (Reply(body=GOOD_TAGS, headers={"Content-Length": str(len(GOOD_TAGS) + 1)}), "tags_invalid_response"),
         (Reply(body=b"x" * (256 * 1024 + 1)), "tags_response_too_large"),
         (Reply(body=b"x" * (256 * 1024 + 1), declare_length=False), "tags_response_too_large"),
         (Reply(status=301, headers={"Location": "http://example.invalid/api/tags"}), "transport_refused"),
@@ -292,6 +301,7 @@ def test_the_loopback_destination_is_not_configurable():
         "entry-without-name",
         "match-without-digest",
         "truncated",
+        "declared-body-eof",
         "oversize-declared",
         "oversize-undeclared",
         "redirect-301",
@@ -326,6 +336,26 @@ def test_endless_tags_body_is_aborted_at_the_absolute_deadline(clock):
     assert result.reason_code == "tags_timeout"
     assert clock.monotonic() - started <= 5.0 + 0.25
     assert wire.connections[0].closed
+
+
+def test_deadline_retains_response_socket_after_headers(clock):
+    reply = Reply(
+        body=GOOD_TAGS,
+        chunk_size=8,
+        seconds_per_chunk=0.25,
+        fire_watchdog_on_read=True,
+        close_after_headers=True,
+    )
+    wire = Wire(clock, reply)
+
+    result = model_for(wire, clock).preflight(MODEL_TAG, MODEL_DIGEST)
+
+    assert result.status == "stopped"
+    assert result.reason_code == "tags_timeout"
+    response = wire.connections[0].response
+    assert response.socket.shut
+    assert response.socket.timeouts[-1] == pytest.approx(4.75)
+    assert response.closed
 
 
 # --- Chat: POST /api/chat ---------------------------------------------------
@@ -372,6 +402,19 @@ def test_chat_runtime_metadata_left_unknown_when_absent(clock):
 
 
 @pytest.mark.parametrize(
+    "reason, expected",
+    [("length", "length"), ("runtime_status", "other"), (["stop"], "other")],
+)
+def test_chat_records_only_known_termination_reasons(clock, reason, expected):
+    wire = Wire(clock, Reply(body=chat_body(done_reason=reason)))
+
+    result = model_for(wire, clock).chat(_request_body())
+
+    assert result.status == "completed"
+    assert result.runtime["done_reason"] == expected
+
+
+@pytest.mark.parametrize(
     "reply, code",
     [
         (Reply(status=302, headers={"Location": "http://example.invalid/"}), "transport_refused"),
@@ -386,6 +429,7 @@ def test_chat_runtime_metadata_left_unknown_when_absent(clock):
         (Reply(body=b"x" * (64 * 1024 + 1), declare_length=False), "response_too_large"),
         (Reply(body=chat_body(done=False)), "chat_invalid_response"),
         (Reply(body=chat_body()[:30], headers={"Content-Length": "999"}, truncate=True), "chat_invalid_response"),
+        (Reply(body=chat_body(), headers={"Content-Length": str(len(chat_body()) + 1)}), "chat_invalid_response"),
         (Reply(body=json.dumps({"done": True}).encode()), "chat_invalid_response"),
         (Reply(body=json.dumps({"done": True, "message": {"content": 7}}).encode()), "chat_invalid_response"),
         (Reply(body=b"not json"), "chat_invalid_response"),
@@ -403,6 +447,7 @@ def test_chat_runtime_metadata_left_unknown_when_absent(clock):
         "oversize-undeclared",
         "not-done",
         "truncated",
+        "declared-body-eof",
         "missing-message",
         "non-string-content",
         "not-json",

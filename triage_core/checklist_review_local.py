@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import http.client
 import json
-import re
 import socket
 import threading
 import time
@@ -57,7 +56,7 @@ _RUNTIME_INTEGERS = (
     ("eval_count", "eval_count"),
     ("eval_duration", "eval_duration_ns"),
 )
-_DONE_REASON_RE = re.compile(r"[a-z_]{1,32}")
+_DONE_REASONS = ("stop", "length")
 
 _FAILURE_CODES = {
     "tags": {
@@ -201,12 +200,9 @@ class ReviewModel:
     # --- Transport ----------------------------------------------------------
 
     @staticmethod
-    def _bound(connection: Any, deadline: _Deadline, inactivity: float) -> None:
-        timeout = max(0.001, min(inactivity, deadline.remaining()))
-        connection.timeout = timeout
-        sock = getattr(connection, "sock", None)
+    def _bound(sock: Any, deadline: _Deadline, inactivity: float) -> None:
         if sock is not None:
-            sock.settimeout(timeout)
+            sock.settimeout(max(0.001, min(inactivity, deadline.remaining())))
 
     def _exchange(
         self,
@@ -221,41 +217,35 @@ class ReviewModel:
             raise ChecklistReviewError("transport_refused")
         codes = _FAILURE_CODES[endpoint]
         method, path = request
-        owned: dict[str, Any] = {}
+        connection = None
+        response = None
+        sock = None
 
         def abort() -> None:
-            connection = owned.get("connection")
-            if connection is None:
-                return
-            sock = getattr(connection, "sock", None)
             if sock is not None:
                 try:
                     sock.shutdown(socket.SHUT_RDWR)
                 except OSError:
                     pass
-            try:
-                connection.close()
-            except Exception:  # noqa: BLE001 - best-effort abort from the watchdog thread
-                pass
 
         deadline = _Deadline(self._clock, deadline_seconds, self._timer_factory, abort)
-        connection = None
         try:
             try:
                 connection = self._connection_factory(
                     LOOPBACK_HOST, LOOPBACK_PORT, max(0.001, min(inactivity, deadline.remaining()))
                 )
-                owned["connection"] = connection
                 deadline.check()
                 connection.connect()
+                # A connection-closing response can take ownership of this socket.
+                sock = getattr(connection, "sock", None)
                 deadline.check()
-                self._bound(connection, deadline, inactivity)
+                self._bound(sock, deadline, inactivity)
                 headers = {"Accept": "application/json", "Connection": "close"}
                 if body is not None:
                     headers["Content-Type"] = "application/json"
                 connection.request(method, path, body=body, headers=headers)
                 deadline.check()
-                self._bound(connection, deadline, inactivity)
+                self._bound(sock, deadline, inactivity)
                 response = connection.getresponse()
                 deadline.check()
             except _DeadlineExceeded:
@@ -270,11 +260,14 @@ class ReviewModel:
                 return _Outcome(codes["redirect"])
             if status != 200:
                 return _Outcome(codes["status"])
+            declared_length = None
             declared = response.getheader("Content-Length")
             if declared is not None:
                 try:
                     declared_length = int(declared)
                 except ValueError:
+                    return _Outcome(codes["truncated"])
+                if declared_length < 0:
                     return _Outcome(codes["truncated"])
                 if declared_length > cap:
                     return _Outcome(codes["too_large"])
@@ -284,7 +277,7 @@ class ReviewModel:
             try:
                 while True:
                     deadline.check()
-                    self._bound(connection, deadline, inactivity)
+                    self._bound(sock, deadline, inactivity)
                     chunk = response.read1(min(READ_CHUNK_BYTES, cap + 1 - total))
                     deadline.check()
                     if not chunk:
@@ -301,14 +294,17 @@ class ReviewModel:
                 return _Outcome(codes["timeout"] if deadline.expired else codes["truncated"])
             except (OSError, http.client.HTTPException, ValueError):
                 return _Outcome(codes["timeout"] if deadline.expired else codes["truncated"])
+            if declared_length is not None and total != declared_length:
+                return _Outcome(codes["truncated"])
             return _Outcome(None, b"".join(chunks))
         finally:
             deadline.cancel()
-            if connection is not None:
-                try:
-                    connection.close()
-                except Exception:  # noqa: BLE001 - closing an owned connection is best effort
-                    pass
+            for resource in (response, connection):
+                if resource is not None:
+                    try:
+                        resource.close()
+                    except Exception:  # noqa: BLE001 - closing an owned resource is best effort
+                        pass
 
 
 def _check_tags(body: bytes, tag: str, expected_digest: str) -> PreflightResult:
@@ -357,7 +353,7 @@ def _read_chat_envelope(body: bytes, expected_tag: Optional[str]) -> ChatResult:
         return invalid()
     runtime: dict[str, Any] = dict(UNKNOWN_RUNTIME)
     done_reason = payload.get("done_reason")
-    if isinstance(done_reason, str) and _DONE_REASON_RE.fullmatch(done_reason):
+    if isinstance(done_reason, str) and done_reason in _DONE_REASONS:
         runtime["done_reason"] = done_reason
     elif done_reason is not None:
         runtime["done_reason"] = "other"
