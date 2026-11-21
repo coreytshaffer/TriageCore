@@ -25,7 +25,7 @@ Both fresh live checks and informed reviews are complete on `697f8e1`.
 | Design acceptance | Accepted at `eb431f4`. [Decision record](#design-acceptance-record) |
 | Implementation authority | **Chat approval recorded after handback.** The original grant required this record before it became effective. No open Claude implementation grant. [Approval and sequence](#implementation-authority-record) |
 | Implementation acceptance | **Accepted at `efe28d7`, `cfdef2c`, and `64bb94c`.** [Original decision](#implementation-acceptance-record) · [Transport correction](#corrective-candidate-acceptance-record) · [Response-completion correction](#response-completion-correction-acceptance-record) |
-| Merge authority | Pending |
+| Merge authority | **Authorized for PR #203 into main.** [Decision record](#merge-authority-record) |
 | Release authority | Pending |
 | Closeout | Pending |
 
@@ -1018,4 +1018,24 @@ notes. The prior events matched their pre-review fingerprints.
 
 Elapsed times are measured from the start of each attempt.
 
-Merge authority, release authority, and closeout are pending.
+At live handback, merge authority, release authority, and closeout were pending.
+[Subsequent merge authorization](#merge-authority-record).
+
+## Merge authority record
+
+On 2026-11-21 (Pacific), Corey Shaffer wrote “I acknowledge both
+documented deviations and authorize merging PR #203 at `e860cf8` into
+`main`.” Corey acknowledged the late recording of the original
+implementation authority and the scratch fake-loopback test outside the
+original offline verification scope.
+[Operator approval and sequence](#operator-approval-and-sequence) ·
+[Handback observations](#handback-observations).
+
+The merge is authorized for the reviewed PR head
+`e860cf8b39e70da0841b694ff4e75a8dc10dca2d` and this CR-only decision record,
+targeting `main`. The merge will preserve the accepted implementation
+commits and the live evidence bound to `697f8e1`.
+[Reviewed draft PR #203](https://github.com/coreytshaffer/TriageCore/pull/203) ·
+[CI on e860cf8](https://github.com/coreytshaffer/TriageCore/actions/runs/44954440054).
+
+Release authority and closeout remain pending.
