@@ -70,6 +70,22 @@ This file provides a chronological, human-readable record of applied codebase an
 - Implemented CR-101 (Add Route/Worker Ledger Inspection CLI): Added `tc route-worker-ledger inspect --ledger <path>` to validate explicit CR-100 telemetry JSONL files and print read-only reviewer summaries by event type and worker status, failing closed on missing files, malformed JSON, invalid records, and unknown or prohibited fields without changing routing, execution, admission, approval, identity, or persistence defaults.
 - Implemented CR-100 (Record Route-Decision and Worker-Result Ledger Events): Added a standalone metadata-only route/worker ledger event contract with validated builders, bounded worker statuses, prohibited raw/secret-key rejection, and deterministic JSONL append behavior without changing routing, execution, admission, approval, or identity semantics.
 
+## [cr-138-checklist-review-first-delivery] - 2026-11-21
+
+- Closed out CR-138, the first delivery for CHE-87, CHE-88, and the initial
+  CHE-89 checks. `tc checklist-review` saves a versioned document-revision
+  workflow, runs it with a pinned local Ollama model, and lets the operator
+  inspect evidence and append a human assessment in a private store.
+  PR #203 merged into `main` as
+  `022b4a1227b68b899bf1df2aa83d154e9f4855f4`. All four post-merge CI jobs
+  passed. The GitHub source release is pinned to that commit, and both
+  archives matched all 800 exported files, including the 17 CR-138 paths.
+  [CR-138 closeout](requests/CR-138-checklist-review-first-delivery.md#closeout) ·
+  [Live verification](requests/CR-138-checklist-review-first-delivery.md#fresh-live-verification-record-for-697f8e1) ·
+  [PR #203](https://github.com/coreytshaffer/TriageCore/pull/203) ·
+  [Post-merge CI](https://github.com/coreytshaffer/TriageCore/actions/runs/44956558375) ·
+  [Verified source release](https://github.com/coreytshaffer/TriageCore/releases/tag/cr-138-checklist-review-first-delivery-2026-11-21).
+
 ## [cr-137-mobile-security-floor] - 2026-11-18
 
 - Closed out CR-137 for GHSA-f56c-v883-vx8r. The mobile API now requires
