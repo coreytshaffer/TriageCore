@@ -2,13 +2,14 @@
 
 ## Status
 
-**Proposal and design accepted at `eb431f4`. Implementation authority pending.**
+**Proposal and design accepted at `eb431f4`. Implementation approval recorded
+after candidate handback.**
 
 | Decision | State |
 | --- | --- |
 | Proposal acceptance | Accepted at `eb431f4`. [Decision record](#proposal-acceptance-record) |
 | Design acceptance | Accepted at `eb431f4`. [Decision record](#design-acceptance-record) |
-| Implementation authority | **Pending.** No grant is recorded for this CR. No code, test, fixture, or operator-documentation change may be made under it. |
+| Implementation authority | **Chat approval recorded after handback.** The original grant required this record before it became effective. No open Claude implementation grant. [Approval and sequence](#implementation-authority-record) |
 | Implementation acceptance | Pending |
 | Merge authority | Pending |
 | Release authority | Pending |
@@ -595,5 +596,82 @@ planned check. Any substantive design change requires its own acceptance.
 
 ## Implementation authority record
 
-*Pending. To be completed only by an explicit operator grant naming this CR,
-its file scope, its network scope, and the live verification action.*
+### Operator approval and sequence
+
+At 22:12 PST on 2026-11-20, Corey Shaffer referenced the named
+*CR-138 implementation grant for Claude* draft in the Claude conversation
+and wrote “Implementation granted.” The referenced draft has SHA-256
+`07da5ab4258aa14fd61fe7180d6c2b3303871d25fe679ab406ee2b4f124dfae3`.
+The referenced draft pins design `eb431f4b5a05e2db51104937da4a648d2cf57bf1`
+and code base `d634f5aa4923b451ca348e01feca2cfb2b0734fc`.
+
+The draft requires both explicit approval and recording in CR-138 before
+the grant takes effect, and limits Claude's scope to one candidate through
+handback. Claude created local candidate `efe28d75b8f0a5673636f7a2bc714b165ddfc22f`
+at 22:52 PST on 2026-11-20. PR #203 was still at `1e7753b` with authority
+pending at handback. This entry records the earlier chat approval after the
+fact. It preserves the missing pre-implementation record as a timing
+deviation. Implementation acceptance remains pending.
+
+### Scope of the approved draft
+
+Claude's bounded scope was one first-delivery candidate for CHE-87, CHE-88,
+and basic CHE-89, in an isolated checkout at the pinned base. It covered
+local edits and a local candidate commit for the exact files below, plus
+offline tests and package verification in disposable directories. Remote
+publication and later lifecycle stages require separate decisions.
+
+```text
+triage_core/checklist_review.py
+triage_core/checklist_review_store.py
+triage_core/checklist_review_local.py
+triage_core/checklist_review_cli.py
+triage_core/tc_cli.py
+tests/test_checklist_review.py
+tests/test_checklist_review_store.py
+tests/test_checklist_review_local.py
+tests/test_checklist_review_cli.py
+tests/fixtures/checklist_review/workflow_docrev_v1/system.txt
+tests/fixtures/checklist_review/workflow_docrev_v1/user_template.txt
+tests/fixtures/checklist_review/cases/DC-02.txt
+tests/fixtures/checklist_review/cases/DC-03.txt
+tests/fixtures/checklist_review/recorded/R01_DC-02_slm.txt
+tests/fixtures/checklist_review/PROVENANCE.md
+docs/operations/checklist-review-first-delivery.md
+```
+
+The `tc_cli.py` edit was limited to parser registration and dispatch for
+`checklist-review`. The private review store is the sole workflow history.
+
+The draft reserved the two planned live checks for Corey as operator, one
+attempt on DC-03 and one on DC-02 using the same saved definition. The
+operator verifies a cloud-disabled local Ollama runtime and an installed
+`qwen3.5:4b` matching digest
+`d8b0f5e9760cd1682034f292d7ef72ec46f432149be0df7574bf2d6e92e38c04`, then
+records that confirmation on each run. The store is private, local, and
+outside synced, shared, and version-controlled folders. Each attempt has
+at most one of each of these two requests:
+
+- `GET http://127.0.0.1:11434/api/tags` with a 5-second absolute deadline
+  and 256 KiB body cap.
+- `POST http://127.0.0.1:11434/api/chat` with a 240-second absolute deadline,
+  32 KiB request cap, and 64 KiB body cap. It requires a valid tag and digest
+  match and a verified private artifact for the prepared request.
+
+These are the only permitted endpoints. The draft excludes proxies,
+redirects, retries, fallback, model pulls, and separate load or unload
+requests.
+
+### Handback observations
+
+The candidate's diff and five fixture digests were checked against the
+approved scope and accepted design. The handback reports 156 focused tests
+passing, two remaining baseline failures in the broader run, and the mobile
+test excluded. The two live Ollama checks are pending.
+
+The reported scratch socket test used an injected connection factory. The
+adapter requested `127.0.0.1:11434`, but the factory connected to a fake
+server on an ephemeral loopback port. This is a separate deviation from the
+approved no-network test scope. It did not contact Ollama and counts as
+neither operator-run live check. This record documents the deviations for
+review and does not ratify them.
