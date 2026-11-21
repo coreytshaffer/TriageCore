@@ -2,13 +2,12 @@
 
 ## Status
 
-**Proposed. Ready for proposal and design review.** Nothing in this document is
-accepted or authorized.
+**Proposal and design accepted at `eb431f4`. Implementation authority pending.**
 
 | Decision | State |
 | --- | --- |
-| Proposal acceptance | Pending |
-| Design acceptance | Pending |
+| Proposal acceptance | Accepted at `eb431f4`. [Decision record](#proposal-acceptance-record) |
+| Design acceptance | Accepted at `eb431f4`. [Decision record](#design-acceptance-record) |
 | Implementation authority | **Pending.** No grant is recorded for this CR. No code, test, fixture, or operator-documentation change may be made under it. |
 | Implementation acceptance | Pending |
 | Merge authority | Pending |
@@ -54,9 +53,9 @@ initial census on 2026-11-20:
   `R-DOCREV`, `C-AGREE`, `CHE-87`, `CHE-88`, and `CHE-89` found no existing
   file or record.
 
-At design review, `main` still ended at CR-137 and draft PR #203 was the
-only matching pull request. Recheck the census before recording proposal
-acceptance.
+Rechecked for proposal acceptance on 2026-11-20. `main` at `d634f5a` still
+ended at CR-137. The GitHub searches found draft PR #203 and its branch as
+the only CR-138 matches, with no matching issue.
 
 ## Problem
 
@@ -538,8 +537,8 @@ Per the [control-plane invariant checklist](../../operations/control-plane-invar
 
 ## Decisions for design review
 
-These are the choices in this draft. The lifecycle decisions in the status
-table remain pending.
+These choices are part of the design accepted at `eb431f4`. See the
+[design acceptance record](#design-acceptance-record).
 
 - **D1 — transport seam.** Use the self-contained `http.client` adapter with
   the fixed loopback endpoint and two allowed calls. CR-135's
@@ -549,8 +548,7 @@ table remain pending.
   workflow history for this slice. The run, rule, model, policy, and human
   assessment records link within that store. The standard ledger is outside
   the write scope.
-- **D3 — identifier.** Keep numeric CR-138 and refresh the census at proposal
-  acceptance.
+- **D3 — identifier.** Keep numeric CR-138, as confirmed in the census recheck.
 
 ## Limitations
 
@@ -565,8 +563,9 @@ table remain pending.
   that choice in the live handback without including the private path. The
   client records the operator's runtime confirmation. Its HTTP boundary
   covers client requests to loopback.
-- Two synthetic cases show the workflow runs. They say nothing about model
-  quality or real documents.
+- The planned two-case synthetic trial will check whether the workflow runs
+  end to end. Model quality and performance on real documents are outside
+  that trial's scope.
 
 ## Evidence base
 
@@ -578,6 +577,21 @@ first-delivery handoff described a different inspection (local `main` at
 `a435b62`, an untracked `.serena/` directory, and a stale CR-DD-019 worktree);
 none of those was present in this checkout. The seams cited above were read at
 `eaa05d9`, whose `triage_core/` tree matches `origin/main`.
+
+## Proposal acceptance record
+
+On 2026-11-20 (Pacific), Corey Shaffer accepted CR-138's proposal at
+[`eb431f4b5a05e2db51104937da4a648d2cf57bf1`](https://github.com/coreytshaffer/TriageCore/blob/eb431f4b5a05e2db51104937da4a648d2cf57bf1/docs/change/requests/CR-138-checklist-review-first-delivery.md).
+This accepts the problem, objective, and bounded first delivery for CHE-87,
+CHE-88, and the first-delivery checks in CHE-89 as recorded at that revision.
+
+## Design acceptance record
+
+On 2026-11-20 (Pacific), Corey Shaffer separately accepted CR-138's design at
+[`eb431f4b5a05e2db51104937da4a648d2cf57bf1`](https://github.com/coreytshaffer/TriageCore/blob/eb431f4b5a05e2db51104937da4a648d2cf57bf1/docs/change/requests/CR-138-checklist-review-first-delivery.md).
+This accepts the design, D1–D3, and the planned acceptance checks at that
+revision. The trial wording in this record clarifies the timing of the
+planned check. Any substantive design change requires its own acceptance.
 
 ## Implementation authority record
 
