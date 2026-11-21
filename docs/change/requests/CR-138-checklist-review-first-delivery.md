@@ -2,15 +2,15 @@
 
 ## Status
 
-**Proposal and design accepted at `eb431f4`. Implementation approval recorded
-after candidate handback.**
+**Proposal and design accepted at `eb431f4`. Implementation accepted at
+`efe28d7`.**
 
 | Decision | State |
 | --- | --- |
 | Proposal acceptance | Accepted at `eb431f4`. [Decision record](#proposal-acceptance-record) |
 | Design acceptance | Accepted at `eb431f4`. [Decision record](#design-acceptance-record) |
 | Implementation authority | **Chat approval recorded after handback.** The original grant required this record before it became effective. No open Claude implementation grant. [Approval and sequence](#implementation-authority-record) |
-| Implementation acceptance | Pending |
+| Implementation acceptance | **Accepted at `efe28d7`.** [Decision record](#implementation-acceptance-record) |
 | Merge authority | Pending |
 | Release authority | Pending |
 | Closeout | Pending |
@@ -611,7 +611,8 @@ handback. Claude created local candidate `efe28d75b8f0a5673636f7a2bc714b165ddfc2
 at 22:52 PST on 2026-11-20. PR #203 was still at `1e7753b` with authority
 pending at handback. This entry records the earlier chat approval after the
 fact. It preserves the missing pre-implementation record as a timing
-deviation. Implementation acceptance remains pending.
+deviation. [Implementation acceptance](#implementation-acceptance-record)
+is recorded separately.
 
 ### Scope of the approved draft
 
@@ -675,3 +676,19 @@ server on an ephemeral loopback port. This is a separate deviation from the
 approved no-network test scope. It did not contact Ollama and counts as
 neither operator-run live check. This record documents the deviations for
 review and does not ratify them.
+
+## Implementation acceptance record
+
+On 2026-11-20 (Pacific), Corey Shaffer wrote “Implementation acceptance
+granted.” in response to the CR-138 handback. This accepts the local candidate
+`efe28d75b8f0a5673636f7a2bc714b165ddfc22f` on `claude/cr-138-first-delivery-impl`,
+based on `d634f5aa4923b451ca348e01feca2cfb2b0734fc` and the design accepted
+at `eb431f4b5a05e2db51104937da4a648d2cf57bf1`. Acceptance is pinned to that
+candidate commit.
+
+The two operator-run Ollama checks on DC-03 and DC-02 remain pending.
+The test results, limitations, and two deviations remain recorded in
+[Handback observations](#handback-observations) and
+[Operator approval and sequence](#operator-approval-and-sequence).
+Implementation acceptance is a separate decision. Merge authority, release
+authority, and closeout remain pending.
