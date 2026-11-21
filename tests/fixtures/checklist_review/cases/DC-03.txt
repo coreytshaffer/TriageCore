@@ -1,0 +1,31 @@
+BEGIN CASE DC-03
+---
+FILE: request.txt
+---
+RQ.L01  Review request, case DC-03
+RQ.L02  Work product: work_product.txt (groundwater well sampling checklist)
+RQ.L03  Question: Do the supplied records establish that the document and revision named in the work product's header were approved?
+RQ.L04  Controlling source: S1 (S1_decision_register.txt)
+RQ.L05  Context sources: none
+RQ.L06  Requested by: sampling technician, before the June well round
+---
+FILE: work_product.txt
+---
+WP.L01  GROUNDWATER WELL SAMPLING CHECKLIST
+WP.L02  Document ID: FC-233
+WP.L03  Revision: E
+WP.L04  Approval statement: Approved for use (DR-0618).
+WP.L05  Change note: Revision E lowers the purge-rate limit and adds a field blank every ten samples.
+WP.L06  1. Measure the static water level before purging.
+WP.L07  2. Purge at no more than 0.5 L/min until readings stabilise.
+WP.L08  3. Fill bottles in the order listed on the chain-of-custody form.
+WP.L09  4. Collect one field blank for every ten samples.
+---
+FILE: S1_decision_register.txt
+---
+S1.L01  DECISION REGISTER: document approvals (excerpt)
+S1.L02  Decision ID | Document ID | Revision | Decision | Decided on | Remarks
+S1.L03  DR-0611 | FC-233 | D | Approved | 2026-05-28 | —
+S1.L04  DR-0618 | FC-233 | E | Approved | 2026-06-09 | Supersedes DR-0611
+S1.L05  DR-0619 | EQ-INV-15 | 3 | Approved | 2026-06-09 | —
+END CASE DC-03

@@ -1,0 +1,1 @@
+{"case_id": "DC-02", "finding": "insufficient evidence", "cited_lines": ["WP.L02", "WP.L03", "S1.L02", "S1.L03", "S1.L04"], "reason": "The controlling source contains an entry for Document ID EQ-INV-07 but only for Revision 2, while the work product specifies Revision 4."}
