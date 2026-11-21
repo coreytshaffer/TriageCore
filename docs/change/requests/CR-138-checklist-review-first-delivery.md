@@ -2,8 +2,8 @@
 
 ## Status
 
-**Proposal and design accepted at `eb431f4`. Implementation accepted at
-`efe28d7`.**
+**Proposal and design accepted at `eb431f4`. Implementation accepted
+through `64bb94c`.**
 
 Both live checks are complete for `efe28d7`.
 [Live verification record](#live-verification-record).
@@ -11,13 +11,18 @@ Both live checks are complete for `efe28d7`.
 The corrective candidate `cfdef2c` is accepted for implementation.
 [Correction handback](#transport-correction-handback) ·
 [Corrective acceptance and draft publication](#corrective-candidate-acceptance-record).
+[Corrected build live-check authority](#corrected-build-live-check-authority).
+[Saved DC-03 stop](#corrected-build-dc-03-stop).
+[Response-completion correction handback](#response-completion-correction-handback) ·
+[Response-completion acceptance and draft publication](#response-completion-correction-acceptance-record).
+Fresh live checks are on hold.
 
 | Decision | State |
 | --- | --- |
 | Proposal acceptance | Accepted at `eb431f4`. [Decision record](#proposal-acceptance-record) |
 | Design acceptance | Accepted at `eb431f4`. [Decision record](#design-acceptance-record) |
 | Implementation authority | **Chat approval recorded after handback.** The original grant required this record before it became effective. No open Claude implementation grant. [Approval and sequence](#implementation-authority-record) |
-| Implementation acceptance | **Accepted at `efe28d7` and `cfdef2c`.** [Original decision](#implementation-acceptance-record) · [Corrective decision](#corrective-candidate-acceptance-record) |
+| Implementation acceptance | **Accepted at `efe28d7`, `cfdef2c`, and `64bb94c`.** [Original decision](#implementation-acceptance-record) · [Transport correction](#corrective-candidate-acceptance-record) · [Response-completion correction](#response-completion-correction-acceptance-record) |
 | Merge authority | Pending |
 | Release authority | Pending |
 | Closeout | Pending |
@@ -828,3 +833,110 @@ The same decision separately authorizes publishing the accepted implementation
 and this CR record to the existing branch of [draft PR #203](https://github.com/coreytshaffer/TriageCore/pull/203)
 for hosted CI. The publication preserves `efe28d7` and `cfdef2c` in the
 branch history. Merge authority, release authority, and closeout remain pending.
+
+## Corrected build live-check authority
+
+On 2026-11-21 (Pacific), Corey Shaffer wrote “I authorize one fresh live
+check each for DC-03 and DC-02 on `b1c4596`.” This authorizes Corey as
+operator to run synthetic DC-03 and then DC-02 once each on
+`b1c4596c3dec363f201b5f60477988a382b9be6b`, which contains the accepted
+transport correction `cfdef2c`.
+
+Reuse the existing operator-selected private store and its saved `docrev-v1`
+definition at digest
+`2253ccf998f3325cddf9e6e752a6010d40f5fbb02f3a6b1cb236e3d9e9b92811`.
+Both attempts use the pinned local `qwen3.5:4b` model at digest
+`d8b0f5e9760cd1682034f292d7ef72ec46f432149be0df7574bf2d6e92e38c04`,
+with the [saved workflow settings](#workflow-definition-frozen) and a fresh
+two-message context for each case.
+
+Before each attempt, Corey confirms that the installed model is local and
+that cloud features are disabled in the running Ollama instance. The
+attempt may make one `GET /api/tags` and, after the pinned identity
+matches, one `POST /api/chat` on `127.0.0.1:11434`. A saved stop consumes
+the attempt for that case and leaves the live review pending.
+
+Record the fresh run IDs and later informed reviews against `b1c4596`.
+The original live runs and reviews remain evidence for `efe28d7`.
+Merge authority, release authority, and closeout remain pending.
+
+## Corrected build DC-03 stop
+
+On 2026-11-21 at 01:00:29 PST, Corey Shaffer ran DC-03 on `b1c4596`.
+Run `a64e0a30-08ba-43e6-acc1-658575f309c9` saved the verified case,
+the local-runtime confirmation, and rule result `match` citing `WP.L02`,
+`WP.L03`, and `S1.L04`. Saved preflight event
+`fb285f67-2399-496c-8784-351a742292e5` stopped with
+`tags_invalid_response`. The Ollama log shows HTTP 200 for `GET /api/tags`
+at that time. The run ended at preflight, with chat, policy, and human
+review stages unreached.
+
+DC-03 consumed its authorized attempt. DC-02 is unused under the
+`b1c4596` authorization. Live verification of that build is incomplete.
+The earlier two completed live runs remain evidence for `efe28d7`.
+
+An offline comparison passed an identical, complete fixed-length reply
+through the Python HTTP response path on each build. `efe28d7` accepted
+the model pin. `b1c4596` returned `tags_invalid_response` after trying to
+set a timeout on the socket after the response stream had closed. This
+confirmed a response-completion defect. The saved live evidence records
+the HTTP status and stop reason. Exact live response framing is unknown.
+
+## Response-completion correction authority
+
+On 2026-11-21 (Pacific), Corey Shaffer selected “Record the stop and fix
+locally” in Codex. This authorizes one local corrective commit on
+`b1c4596c3dec363f201b5f60477988a382b9be6b` to finish reading a complete
+response before reapplying its socket timeout. The correction is limited
+to `triage_core/checklist_review_local.py` and
+`tests/test_checklist_review_local.py`, with offline verification.
+
+The scope ends with the local candidate and verification record.
+Implementation acceptance and draft publication for the new candidate
+are separate decisions. Merge authority, release authority, and closeout
+remain pending.
+
+## Response-completion correction handback
+
+The local corrective candidate is `64bb94c34450643c6d7b4e93e55519fa342ffaed`
+on `codex/cr-138-response-completion`, based on
+`b1c4596c3dec363f201b5f60477988a382b9be6b`. The local authority record
+`87301efd09eb38c66c22788a0034545568581c36` preceded the test and code edits.
+The commit contains the two authorized paths.
+
+The adapter checks whether Python's HTTP response stream has closed before
+setting another socket timeout. The time and response-size limits and the
+declared-length check continue to apply to body reads.
+
+Offline verification on Windows with CPython 3.12.16:
+
+- Two regression cases for a response that releases its socket after its
+  final bytes failed on `b1c4596`. The corrected checkout passed all
+  **164 checklist-review tests**, including both regression cases.
+- The same complete fixed-length reply that stopped preflight on `b1c4596`
+  passed the model digest check on the corrective candidate using Python's
+  HTTP client with an in-memory socket.
+- Selected Ruff checks and `git diff --check` passed. The unfiltered suite
+  stopped at collection because the offline environment lacked FastAPI
+  for `tests/test_mobile_web.py`.
+
+The correction grant ended at this local handback. At handback,
+implementation acceptance, publication to draft PR #203, hosted CI, and
+live checks on `64bb94c` were pending. The unused DC-02 attempt on
+`b1c4596` was held. Fresh operator authorization tied to the new candidate
+is required for DC-03 and DC-02.
+[Subsequent acceptance and draft publication decision](#response-completion-correction-acceptance-record).
+
+## Response-completion correction acceptance record
+
+On 2026-11-21 (Pacific), Corey Shaffer wrote “I accept `64bb94c`.”
+This records implementation acceptance for
+`64bb94c34450643c6d7b4e93e55519fa342ffaed`.
+
+Corey separately authorized publishing the accepted fix and this CR record
+to the existing draft branch for hosted CI.
+[Draft PR #203](https://github.com/coreytshaffer/TriageCore/pull/203).
+
+Fresh live checks are on hold. The unused DC-02 attempt on `b1c4596`
+remains on hold. Merge authority, release authority, and closeout are
+pending.
