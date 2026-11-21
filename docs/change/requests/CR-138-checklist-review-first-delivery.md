@@ -5,9 +5,11 @@
 **Proposal and design accepted at `eb431f4`. Implementation accepted at
 `efe28d7`.**
 
-Both live checks are complete for this candidate.
+Both live checks are complete for `efe28d7`.
 [Live verification record](#live-verification-record).
 [Local transport correction](#transport-correction-authority).
+The corrective candidate `cfdef2c` awaits implementation acceptance.
+[Correction handback](#transport-correction-handback).
 
 | Decision | State |
 | --- | --- |
@@ -764,7 +766,7 @@ first step in that review, a local corrective candidate based on
 findings on response deadlines, HTTP body completeness, and termination
 codes in persisted metadata.
 
-The corrective commit may change only these files:
+The corrective commit is limited to the following two files.
 
 - `triage_core/checklist_review_local.py`
 - `tests/test_checklist_review_local.py`
@@ -774,3 +776,43 @@ tests and disposable build and test directories. The scope covers one
 local corrective commit and the CR-138 authority and evidence records
 through handback. Acceptance of the corrective candidate, publication to
 the draft PR, merge, release, and closeout require separate decisions.
+
+## Transport correction handback
+
+The local corrective candidate is `cfdef2c90c31294dcf385845bf990b2cfe9944d4`
+on `codex/cr-138-transport-correction`. Its parent is the accepted candidate
+`efe28d75b8f0a5673636f7a2bc714b165ddfc22f`. The local authority record
+`c9a5a9479a61643ed2d95895d56ddfca9ed5f0ed` preceded the test and code edits.
+The two changed paths match the corrective scope.
+
+The watchdog retains the active socket through response-body reads. The
+adapter checks a declared body length before accepting JSON and records the
+existing endpoint-specific invalid-response status for incomplete bodies.
+Termination reasons in metadata use `stop` or `length`. Absent values remain
+`unknown`, and unrecognized values become `other`.
+
+Offline verification used Windows, CPython 3.12.16, and pytest 9.2.0.
+
+- Four regression cases failed on the parent and passed after the
+  correction. The four checklist-review test files passed **162 tests**.
+  Selected Ruff checks and `git diff --check` passed.
+- The installed-wheel smoke check matched the corrective adapter to its
+  commit and saved both pinned template digests in a disposable store.
+- The unfiltered suite stopped during collection because the offline
+  environment lacked FastAPI for `tests/test_mobile_web.py`. The initial
+  core run with that module excluded reported 2,724 passed, 27 skipped,
+  61 failed, and 13 setup errors. The setup errors occurred in
+  `tests/test_build_review_cli.py` during editable installation.
+- Matched reruns of the seven affected files with shorter temporary paths
+  reported **268 passed, 2 skipped, and the same 56 failing test IDs** on
+  `efe28d7` and `cfdef2c`. The legacy build-review CLI tests completed
+  with the shorter paths. The matched failures were in
+  `test_agent_identity.py`, `test_doctor_cli.py`,
+  `test_governed_consumption_parity.py`, `test_identity_cli.py`,
+  `test_mediated_executor.py`, and `test_tc_run_plan_artifact_cli.py`.
+
+The corrective grant ends at this handback. Implementation acceptance of
+`cfdef2c` and publication to draft PR #203 are pending. The prior DC-03 and
+DC-02 live checks and informed reviews remain evidence for `efe28d7`. The
+corrective candidate has offline verification. Merge and release authority
+remain pending.
