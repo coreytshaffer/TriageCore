@@ -40,8 +40,8 @@ and the solo acceptance trial) are outside this CR.
 
 ### Identifier census
 
-CR-138 is the next numeric identifier in the observed namespace. Observed on
-2026-11-20:
+CR-138 is the next numeric identifier in the observed namespace. At the
+initial census on 2026-11-20:
 
 - `docs/change/requests/` at local `HEAD` `eaa05d9` and at `origin/main`
   `d634f5a` both end the numeric series at CR-137. `git ls-remote origin
@@ -54,7 +54,9 @@ CR-138 is the next numeric identifier in the observed namespace. Observed on
   `R-DOCREV`, `C-AGREE`, `CHE-87`, `CHE-88`, and `CHE-89` found no existing
   file or record.
 
-Recheck the census before recording proposal acceptance.
+At design review, `main` still ended at CR-137 and draft PR #203 was the
+only matching pull request. Recheck the census before recording proposal
+acceptance.
 
 ## Problem
 
@@ -131,12 +133,21 @@ implementation grant.
   provider or destination requires a separate grant.
 - **Model:** the one tag and expected digest saved in the workflow definition.
   No automatic selection, no pull, no load or unload request.
-- **Writes:** only inside the operator-named `--store` directory. There is no
-  default store location. Tests use temporary directories only.
-- **Standard ledger:** not written by this slice (see Decision D2).
-- **Live verification:** two operator-run `run` commands against the local
-  Ollama runtime, after implementation authority is granted, as part of the
-  implementation evidence.
+- **Local execution:** the client enforces its loopback destination. The
+  Ollama local API can invoke cloud models, so before each live attempt the
+  operator verifies that the installed pinned model is local and confirms
+  that the running Ollama instance has cloud features disabled. Ollama's
+  startup log can witness the setting. Record the operator's confirmation
+  separately from the observed model tag and digest.
+  [Ollama Cloud](https://docs.ollama.com/cloud) ·
+  [Local-only configuration](https://docs.ollama.com/faq#how-do-i-disable-ollamas-cloud-features)
+- **Writes:** the operator names a private local `--store` outside shared,
+  synced, and version-controlled folders. The review store and its private
+  artifacts are the only write destination. Tests use temporary directories.
+- **Live verification:** two operator-run commands using the synthetic DC-03
+  and DC-02 cases, one saved workflow, and the installed pinned local model.
+  This evidence uses the cloud-disabled runtime and private store described
+  above, after explicit implementation authority for the live check.
 
 ### Out of scope
 
@@ -151,30 +162,42 @@ about real documents.
 ### Workflow definition (frozen)
 
 A definition is saved once under an opaque workflow reference, such as
-`docrev-v1`. It contains:
+`docrev-v1`. `save` takes the fixed system text and user template from
+`triage_core/checklist_review.py`, which is part of the installed package.
+It freezes both byte strings as private artifacts. The fixture files test
+their identity and are independent of the runtime lookup. The definition
+metadata contains:
 
-- the system text and user template from the R01 candidate pack, byte for
-  byte;
-- rule `R-DOCREV v0.1` and policy `C-AGREE v0.1` identifiers;
+- the artifact IDs and SHA-256 digests of the exact R01 system text and user
+  template from the run card;
+- rule `R-DOCREV v0.1`, R01 response parsing, and policy `C-AGREE v0.1`
+  identifiers;
 - the model profile: Ollama tag, expected digest, and request settings. The
-  default settings are R01's explicit options: `temperature 0`, `top_p 1`,
-  `seed 7`, `num_predict 256`, `num_ctx 4096`, `think false`, `stream false`;
-- bounds: maximum case bytes, maximum response bytes, connect and read
-  timeouts.
+  defaults use R01's `options` (`temperature 0`, `top_p 1`, `seed 7`,
+  `num_predict 256`, `num_ctx 4096`) and the top-level `think false` and
+  `stream false` fields;
+- a case limit of 8 KiB, a serialized chat request limit of 32 KiB, and the
+  endpoint limits specified under the local model boundary.
 
-The definition digest is the SHA-256 of its canonical JSON form. Saving a
-reference that already exists with different content fails with
-`definition_conflict`. A changed definition gets a new reference. Saved rows
-are never updated.
+The definition digest covers the canonical JSON metadata, including both
+template digests. Saving a reference that already exists with different
+content fails with `definition_conflict`. A changed definition gets a new
+reference. Reopening a definition verifies the referenced template bytes
+before rendering any model input. Missing or changed template bytes stop the
+attempt with an evidence gap.
 
 ### Case parsing
 
-`parse_case(raw: bytes) -> ReviewCase` accepts UTF-8 bytes up to the definition
-bound, the `BEGIN CASE` / `END CASE` envelope, `FILE:` sections, and lines of the
-form `<LABEL>  <text>`. It rejects duplicate labels, a missing or unnamed
-controlling source, unknown files, and oversize input with closed reason codes.
-The case object maps each unique visible label to its exact line and records
-the case digest. Each run binds the exact case bytes.
+`parse_case(raw: bytes) -> ReviewCase` accepts bounded UTF-8, a matching
+`BEGIN CASE` and `END CASE` envelope, labelled `FILE:` sections for the
+request and work product plus any supplied source excerpts, and lines of the
+form `<LABEL>  <text>`. Malformed framing, duplicate labels, unsupported file
+sections, invalid UTF-8, and oversize input stop with distinct input
+reason codes before inference. A structurally valid case can omit the
+controlling-source designation or the named excerpt. That produces an
+explicit evidence gap and the rule finding `insufficient evidence` without
+substituting a context source. The case object binds its exact bytes by digest
+and maps each unique label to the supplied line.
 
 ### Rule R-DOCREV v0.1
 
@@ -183,8 +206,9 @@ from the work-product header lines, and the controlling source only from the
 request. It keeps register rows whose Document ID cell matches exactly,
 character for character, then tests in order:
 
-1. a required header field or the controlling source is missing →
-   `insufficient evidence`;
+1. a required header field is missing → `insufficient evidence`, with
+   `R1_target_field_missing`; a missing source designation or excerpt yields
+   the same finding with `R2_controlling_source_absent`;
 2. no row counts → `insufficient evidence`, citing every entry row;
 3. an exact revision with Decision `Approved` → `match`;
 4. any counting row with an empty Revision or Decision → `insufficient
@@ -192,9 +216,10 @@ character for character, then tests in order:
 5. an exact revision with any other Decision → `insufficient evidence`;
 6. otherwise → `mismatch`.
 
-Blank cells and a lone em dash are empty. The rule cites the two header lines
-it read and the relevant register rows. The rule ignores Remarks by design, so
-an automatic result is always provisional and review stays available.
+Blank cells and a lone em dash are empty. The rule cites each supplied header
+line it read and the relevant register rows. It shows missing fields as gaps.
+The rule ignores Remarks by design, so an automatic result is always
+provisional and review stays available.
 
 Expected results: DC-03 → `match` citing S1.L04. DC-02 → `insufficient
 evidence` citing S1.L03, S1.L04, and S1.L05. A row with the same revision and
@@ -202,43 +227,63 @@ date but a different Document ID never counts.
 
 ### Model output and policy C-AGREE v0.1
 
-`parse_model_result(case, raw) -> ComponentResult` accepts exactly one JSON
-object with `case_id`, `finding`, `cited_lines`, and `reason`. It rejects extra
-text, a wrong `case_id`, a finding outside the three values, and a cited label
-that is absent from the case. Rejection yields a `returned_invalid` component
-with a closed reason code. The raw text is kept either way.
+`parse_model_result(case, raw) -> ComponentResult` uses the R01 run card's
+parsing rule. Trim surrounding whitespace, remove one outer Markdown fence
+with optional `json` designation, and parse one strict JSON object. Require the
+exact `case_id`, a string `finding` in the three allowed values after trimming
+and lowercasing, a list of strings in `cited_lines`, and a string `reason`.
+Ignore extra keys. Shape or syntax failure yields `returned_invalid` with a
+closed reason code. The raw text is preserved for every completed reply.
+
+Resolve single labels and same-source ranges such as `S1.L03-S1.L05` only
+against the recorded case. Record resolution separately as `all`,
+`some_unresolvable`, or `none_cited`. A parsed answer with an unresolved
+citation is still a completed, parsed answer. Expose the unresolved reference
+as an evidence gap. The operator assesses whether the source supports the
+explanation, even if all labels resolve. Changes to parsing or policy behavior
+require a new workflow version.
 
 `combine(rule, model) -> PolicyResult`: if both components are valid and their
 findings agree, the policy finding is that finding. A disagreement or an
 invalid model result yields `insufficient evidence` with `review_needed`. Both
 components and their reasons are retained. Agreement does not mark the
 evidence as assessed. The projection shows `agreed`, `evidence unassessed`
-until a human assessment exists.
+until a human assessment exists. A stopped or failed attempt exposes the
+stages reached and its reason code. A model call that never completed has no
+parsed finding or C-AGREE result.
 
 ### Store
 
 `ReviewStore(root)` owns a SQLite database and an `artifacts/` directory under
 the explicit root.
 
-- **Artifacts:** case bytes, raw model output, request bodies sent, and any
-  free-text note. Each is written once with exclusive creation, named by its
-  SHA-256, and referenced by an opaque artifact ID. A model-supplied citation
-  can select only a label in the recorded case, never a path.
+- **Artifacts:** frozen templates, case bytes, raw model output, exact
+  serialized chat request bodies, and optional notes. The store stages bytes
+  in a temporary file inside its artifact directory, flushes the complete
+  file to storage, verifies its digest, and publishes it atomically without
+  overwriting a digest path. Reuse an existing artifact only after verifying
+  its complete bytes against the expected digest. A partial or corrupt file
+  never qualifies as committed evidence. Metadata uses opaque artifact IDs.
+  Model citations resolve only against labels in the recorded case.
 - **Events:** append-only rows keyed by run ID and a per-run increasing
   sequence, with item ID (initially `revision-approval`), step (`attempt`,
   `rule`, `model`, `policy`, `human`), and an event ID. A human event also
   references the target result event and any earlier human event it revises.
-  The artifact is written before its event row. The event row and its artifact
-  references commit in one transaction. The command acknowledges a write only
-  after reading the complete record back. An unreferenced artifact left by a
-  failed transaction is inert.
+  Validate that the target is an earlier rule, model, or policy result of this
+  run and item and that `--supersedes`, if given, names an earlier human event
+  of the same run and item. Reject an invalid link before appending. The event
+  and its artifact references commit in one transaction after the complete
+  artifacts verify. Acknowledge after reading back the record. A complete
+  unreferenced file from an interrupted transaction is inert.
 - **Immutability:** schema triggers reject `UPDATE` and `DELETE` on
   definitions and events. The current result is a projection over ordered
   events.
-- **Metadata privacy:** every metadata row and summary passes
-  `privacy_invariants.assert_persistent_privacy_safe` before insertion. Summaries
-  carry identifiers, digests, closed codes, statuses, and measurements only.
-  Free text lives only in private artifacts.
+- **Metadata privacy:** use explicit fields for identifiers and artifact
+  references, digests, closed codes, statuses, and measurements. Check every
+  metadata record and summary with
+  `privacy_invariants.assert_persistent_privacy_safe`. Store free text and
+  template bytes in private artifacts. The standard ledger has no role in
+  this workflow.
 
 Separate recorded values: finding correctness (`correct`, `incorrect`,
 `unknown`), evidence support (`supported`, `unsupported`, `unknown`),
@@ -262,38 +307,60 @@ completed model result that the operator later revises stays completed.
 
 ### Local model boundary
 
-`ReviewModel` resolves the configured tag and expected digest through `GET
-/api/tags` before it accepts candidate messages. Outcomes:
+Record the attempt start before network I/O. For a live run,
+`--confirm-local-runtime` records that the operator verified the cloud-disabled
+runtime and installed model for that attempt. Without confirmation, record a
+stop before either request. Save the case and rule result before model
+preflight so the run can show the available evidence after a stop.
+`ReviewModel` resolves the exact configured tag and digest with a single
+`GET /api/tags`. Chat requires both a matching tag in a well-formed response
+and a verified private artifact for the prepared request.
 
-| Condition | Attempt status | Reason code |
+| Stage and condition | Attempt status | Reason code |
 | --- | --- | --- |
-| Connection refused or tags timeout | `stopped` | `runtime_unavailable` |
-| Tag absent | `stopped` | `model_not_installed` |
-| Tag present with a different digest | `stopped` | `model_digest_mismatch` |
-| Redirect, lost connection, non-200 status, or oversize response on chat | `failed` | `transport_refused`, `completion_failed`, or `response_too_large` |
-| Chat timeout | `failed` | `timeout` |
-| Completed, output rejected by the parser | `returned_invalid` | parser reason code |
-| Completed, output accepted | `returned_valid` | none |
+| Live runtime confirmation absent | `stopped` | `runtime_locality_unconfirmed` |
+| Tags connection fails before a response, or non-200 status other than redirect | `stopped` | `runtime_unavailable` |
+| Tags deadline exceeded | `stopped` | `tags_timeout` |
+| Tags redirect | `stopped` | `transport_refused` |
+| Tags response exceeds cap | `stopped` | `tags_response_too_large` |
+| Malformed or truncated tags envelope, missing required identity fields, or duplicate matching tag | `stopped` | `tags_invalid_response` |
+| Tag absent from a valid list | `stopped` | `model_not_installed` |
+| Matching tag reports a different digest | `stopped` | `model_digest_mismatch` |
+| Serialized chat request exceeds cap before sending | `stopped` | `request_too_large` |
+| Chat redirect | `failed` | `transport_refused` |
+| Chat connection fails before a response, or non-200 status other than redirect | `failed` | `completion_failed` |
+| Chat deadline exceeded or response exceeds cap | `failed` | `timeout` or `response_too_large` |
+| Chat reply is truncated or has an invalid or incomplete Ollama envelope | `failed` | `chat_invalid_response` |
+| Completed chat reply, model text rejected by the parser | `returned_invalid` | parser reason code |
+| Completed chat reply, model text accepted by the parser | `returned_valid` | none |
 
-A stop skips generation and is persisted as a durable record. The attempt
-start is persisted before any model call. Each request is a fresh two-message
-exchange: the definition's system text and the user template with one case.
-The evaluator key, the R01 recorded answer, and any correction never enter
-model input. Runtime metadata and the exact settings sent are recorded. A
-repeat run gets a new run ID and may reference the earlier run.
+Persist the stop or failure with its reason. A stopped preflight sends zero
+chat requests. Accept a bounded chat envelope with `done: true` and a string
+`message.content` as a completed model reply, with parser status and the
+runtime's termination reason recorded independently. Each chat request has
+exactly two messages, the frozen system text and the frozen user template
+rendered with one candidate case. Evaluator material, the recorded response,
+and later corrections are outside those inputs. Record the settings sent and
+runtime metadata observed, and leave unavailable metadata unknown. A repeat
+gets a new run ID and may refer to the earlier run.
 
-**Transport (Decision D1):** use standard-library `http.client` with the host
-`127.0.0.1` and port `11434` as module constants. `http.client` consults no
-proxy environment variables and never follows redirects. Any 3xx response is a
-refusal. Responses are read up to the configured byte bound and the time
-bound. The transport is injectable so tests use no network.
+**Transport (D1).** Use standard-library `http.client` with the constant
+destination `127.0.0.1:11434`, the two fixed method/path pairs, and no proxy,
+redirect, fallback or retry. Tags has a 5-second deadline and 256 KiB response
+body cap. Chat has a 240-second deadline and 64 KiB body cap. Each deadline is
+absolute and monotonic, from before connection through request send, status,
+headers, and body. A socket inactivity timeout is an additional bound. Abort
+the owned connection at the deadline even if bytes keep arriving. Enforce
+each size cap during reads rather than relying solely on declared length.
+Use an injected connection and clock to exercise this production control
+flow without network access in tests.
 
 ### Command group
 
 ```text
 tc checklist-review --store <dir> save --workflow docrev-v1 --model qwen3.5:4b --model-digest <sha256>
-tc checklist-review --store <dir> run  --workflow docrev-v1 --case <DC-03.txt>
-tc checklist-review --store <dir> run  --workflow docrev-v1 --case <DC-02.txt>
+tc checklist-review --store <dir> run  --workflow docrev-v1 --case <DC-03.txt> --confirm-local-runtime
+tc checklist-review --store <dir> run  --workflow docrev-v1 --case <DC-02.txt> --confirm-local-runtime
 tc checklist-review --store <dir> show --run <run-id>
 tc checklist-review --store <dir> show --run <run-id> --item revision-approval --evidence
 tc checklist-review --store <dir> review --run <run-id> --item revision-approval \
@@ -303,8 +370,8 @@ tc checklist-review --store <dir> review --run <run-id> --item revision-approval
     [--supersedes <human-event-id>] [--note-file <path>] [--active-seconds <n>]
 ```
 
-- `show` is read-only. It makes no model call, writes no event, and fails
-  closed on a missing store or unknown run. It walks from the overall decision
+- `show` opens the existing store read-only and fails closed on a missing
+  store or unknown run. It walks from the overall decision
   to the item, each component's finding and citations, then the cited lines
   resolved against the recorded case only. It includes both work-product header
   lines and the whole controlling register. A missing or altered artifact
@@ -326,8 +393,13 @@ the handback can show which missing behaviour each test catches.
   evidence` citing S1.L03–S1.L05.
 - [ ] A row with the same revision and date but a different Document ID does
   not count.
-- [ ] Duplicate labels, a missing controlling source, and malformed model JSON
-  each give a distinct closed reason code.
+- [ ] A well-formed case with a missing controlling source is saved and yields
+  `insufficient evidence` with a visible gap. A malformed envelope or duplicate
+  label stops input processing with a distinct closed reason code.
+- [ ] R01-compatible parsing accepts a single JSON fence, normalized findings,
+  extra keys, and a same-source citation range. Malformed model JSON stays
+  `returned_invalid`. A parsed answer with an unresolved citation keeps its
+  finding and shows the separate citation gap.
 - [ ] Agreement, disagreement, and an invalid model result give the C-AGREE
   results above, with both components retained.
 - [ ] `python -m pytest tests/test_checklist_review.py -q` passes without a
@@ -338,21 +410,31 @@ the handback can show which missing behaviour each test catches.
 - [ ] A new store instance reopens the same run with strict chronology,
   byte-identical original model output, an unchanged original definition, and
   a later linked human event.
-- [ ] A simulated failed event write reports failure to the operator and leaves
-  the earlier state readable.
+- [ ] Simulate interruption during artifact publication and a failed event
+  write. Prior records reopen intact. A partial or corrupt artifact is never
+  linked by a successful event, and a complete existing artifact is reused
+  only after digest verification.
+- [ ] A `review` using a target or superseded event from another run or item
+  fails before an event is appended. Valid corrections keep the original and
+  later events readable in order.
 - [ ] Sentinel source and model text never appear in summaries, error messages,
-  or SQLite metadata columns, and the standard ledger is not created or
-  modified.
+  or SQLite metadata columns. Frozen templates live in verified private
+  artifacts, with their references and digests in metadata. The standard
+  ledger is neither created nor modified.
 - [ ] Mixed measured and unknown values give correct known counts, coverage,
   and missing counts.
 - [ ] `python -m pytest tests/test_checklist_review_store.py -q` passes.
 
 **Local attempt (CHE-87 with CHE-88 records):**
 
-- [ ] With an injected transport, the tests verify the exact tag and digest
-  check, the fixed loopback host and paths, bounded time and size, two-message
-  isolation, and the seven outcomes in the boundary table.
-- [ ] A selected-model stop skips generation, persists, and reopens.
+- [ ] With an injected connection and clock, test the actual adapter's fixed
+  method/path pairs, exact tag and digest check, two-message payload, response
+  caps, and deadline and failure outcomes for both endpoints. Include a
+  response that keeps delivering bytes until the absolute deadline and a
+  redirect at each endpoint.
+- [ ] Missing operator confirmation makes no request. A malformed, oversized,
+  redirected, or timed-out tags reply stops before chat. Both types of stop
+  persist and reopen with the appropriate reason.
 - [ ] `python -m pytest tests/test_checklist_review_local.py -q` passes without
   a model service.
 
@@ -361,7 +443,9 @@ the handback can show which missing behaviour each test catches.
 - [ ] A new test run, labelled origin `recorded R01/DC-02` and linked to the
   historical attempt, is produced through the same runner and store with the
   recorded response injected. Rule, model, and policy all show `insufficient
-  evidence`. No human decision exists yet, and review remains available.
+  evidence`. No human decision exists yet, and review remains available. The
+  recorded run makes no network calls and the live runtime confirmation is
+  inapplicable.
 - [ ] `show --evidence` displays WP.L02, WP.L03, and S1.L01–S1.L05, showing the
   absent EQ-INV-07 entry and the unsupported model reason.
 - [ ] The `review` command records `insufficient evidence`,
@@ -372,9 +456,9 @@ the handback can show which missing behaviour each test catches.
   marked as a revision of the explanation and as a demonstration record, since
   the historical DC-02 had no human disposition.
 - [ ] A new process with the model unavailable shows the original results and
-  the later review in order, returns to the same item, makes no model call, and
-  writes no event. A removed or altered artifact shows a gap while keeping the
-  result IDs and decision.
+  the later review in order, returns to the same item, and opens the store
+  read-only with no model call, store initialization, or new event. A removed
+  or altered artifact shows a gap while keeping the result IDs and decision.
 - [ ] `python -m pytest tests/test_checklist_review_cli.py -q` passes without a
   model service.
 
@@ -386,12 +470,15 @@ the handback can show which missing behaviour each test catches.
   exact counts and any failures reported.
 - [ ] The scope diff against the base contains only the paths above.
   `git diff --check` is clean.
-- [ ] In the real CLI, two new runs of the same saved definition on DC-03 and
-  DC-02 have distinct case digests and explicit human decisions with
-  citations. The actual model output is recorded as observed, with its status,
-  and the runtime's observed model identity and settings are reported. If
-  Ollama is unavailable, the observed stop is reported and the live check stays
-  pending.
+- [ ] In an installed `tc` environment without the repo's test directory,
+  `save` freezes the packaged template bytes with the fixture digests below.
+  Reopen that definition and run it with separately supplied case files.
+- [ ] Two live runs on synthetic DC-03 and DC-02 use the same saved definition,
+  the selected local model, and the explicit private store. Each records the
+  operator's cloud-disabled runtime confirmation, observed model identity,
+  settings sent, distinct case digest, model outcome, and human decision with
+  citations. An unavailable runtime or unverified locality leaves live
+  acceptance pending and preserves the stop.
 - [ ] Two short CLI transcripts are returned: (1) reopening the recorded DC-02
   run and inspecting the unsupported reason before and after the correction;
   (2) two live reviews reusing the saved procedure, with model identity and any
@@ -399,26 +486,41 @@ the handback can show which missing behaviour each test catches.
 
 ## Fixture provenance
 
-The candidate-visible text (system text, user template, DC-02 and DC-03) and
-the recorded DC-02 response come from the R01 development run:
+The R01 v0.2-draft packet manifest identifies the complete source files.
+Their SHA-256 digests were checked in design review.
 
-- source packet `10_candidate_pack.md`, SHA-256
-  `7a8ce3c3bb9e185a18f743607ae8dddc410d71ff5be5594e045742a96a36cf60`;
-- sealed model text `slm_raw_R01_DC-02.txt`, SHA-256
-  `7fca096c058a6998ae18699a3ae271447a230403721092502141db76db76d6c8`;
-- R01 settings: `qwen3.5:4b`, digest
-  `d8b0f5e9760cd1682034f292d7ef72ec46f432149be0df7574bf2d6e92e38c04`, Ollama
-  0.40.16, with the options listed under the workflow definition. The installed
-  model also supplied `top_k 20` and `presence_penalty 1.5`. Repeat penalty was
-  unreported.
+| Complete source | SHA-256 |
+| --- | --- |
+| `30_run_card.md` (prompt wrapper and parsing rule) | `4acb630d54271dc28f44331d935c9b630764f1986eb0d1af788f479aa88de4a2` |
+| `10_candidate_pack.md` (case blocks) | `7a8ce3c3bb9e185a18f743607ae8dddc410d71ff5be5594e045742a96a36cf60` |
 
-If the sealed originals are available to the implementer, copy their exact
-bytes and verify these digests in a test. Otherwise, label each fixture
-*transcribed from the first-delivery handoff, not seal-verified* and make no
-seal claim. R01's aggregate scores (rule 5/6 evidence-credited, model 4/6
-correct and 3/6 evidence-credited, policy 6/6 correct, human review time
-unknown) are development evidence over six synthetic cases. They are not
-acceptance evidence for this CR.
+For each text excerpt, normalize line endings to LF, encode UTF-8 without
+a BOM, and exclude the newline after the last extracted line. Treat those
+as the canonical fixture bytes on every platform. Copy the raw DC-02 reply
+byte for byte and verify its original seal without newline normalization.
+
+| Fixture under `tests/fixtures/checklist_review/` | Extraction or source | SHA-256 |
+| --- | --- | --- |
+| `workflow_docrev_v1/system.txt` | Run card's exact system-text fenced block, excluding fences | `69d17c5d1de85bddf0ddd321af7d1471ece6abb9ca60f04dbeb7dd03676df316` |
+| `workflow_docrev_v1/user_template.txt` | Run card's exact user-text fenced block with placeholders intact | `4038f3e9de8bb33f58f1da1803951b510176b9f3caa8e3d6dd99f8ee30475176` |
+| `cases/DC-02.txt` | Candidate pack from `BEGIN CASE DC-02` through `END CASE DC-02` inclusive | `bd28ba046465e68390a13200de61f3e46168d232ea51834cda0f7f74bb96ed79` |
+| `cases/DC-03.txt` | Candidate pack from `BEGIN CASE DC-03` through `END CASE DC-03` inclusive | `ff0d555e3ce5845c20ee746aea44f1922dec4c883375373ad379e7a9772a861f` |
+| `recorded/R01_DC-02_slm.txt` | Sealed R01 file `slm_raw_R01_DC-02.txt` | `7fca096c058a6998ae18699a3ae271447a230403721092502141db76db76d6c8` |
+
+Substituting each case and its ID into the template reproduces both messages
+in the corresponding sealed R01 request. Verify the installed template and
+each fixture against its individual digest in tests. A handoff transcription
+can qualify by matching the pinned bytes. Label a divergent copy as
+transcribed and leave the exact recorded-fixture check pending.
+
+R01 used `qwen3.5:4b` at digest
+`d8b0f5e9760cd1682034f292d7ef72ec46f432149be0df7574bf2d6e92e38c04` with
+Ollama 0.40.16 and the request settings under the workflow definition. The
+installed model supplied `top_k 20` and `presence_penalty 1.5`. Repeat
+penalty was unreported. The rule earned evidence credit on 5/6 cases. Qwen
+was correct on 4/6 and earned evidence credit on 3/6. The policy was correct
+on 6/6. Human review time was unknown. These are development results for six
+synthetic cases. This CR has separate recorded and live acceptance checks.
 
 ## Control-plane invariants
 
@@ -436,20 +538,19 @@ Per the [control-plane invariant checklist](../../operations/control-plane-invar
 
 ## Decisions for design review
 
-- **D1 — transport seam.** Recommended: a self-contained `http.client`
-  transport with constant loopback host and port, as described above.
-  Alternative: reuse `destination_policy.GuardedTransport` and its
-  `device_local_loopback.v1` profile. That transport already enforces
-  `trust_env=False`, zero redirects, and an exact Ollama call allowlist, but
-  its module docstring and the architecture page state that nothing imports
-  it. Using it would make this the first consumer of CR-135's slice-1 module
-  and would need those records updated, which is outside this file scope.
-- **D2 — standard ledger.** Recommended: no standard-ledger writes in this
-  slice. The tests check that it is untouched. Alternative: append one
-  screened metadata event per run through `TaskLedger.append_event`, adding a
-  new event kind to the ledger's consumers.
-- **D3 — identifier.** CR-138 in the numeric series, as censused above. A
-  separate lane prefix, as used for CR-DD and CR-BW, is the operator's choice.
+These are the choices in this draft. The lifecycle decisions in the status
+table remain pending.
+
+- **D1 — transport seam.** Use the self-contained `http.client` adapter with
+  the fixed loopback endpoint and two allowed calls. CR-135's
+  `GuardedTransport` is deliberately disconnected at the pinned base. Its
+  first runtime integration would be a separate scope decision.
+- **D2 — standard ledger.** Use the explicit private review store as the sole
+  workflow history for this slice. The run, rule, model, policy, and human
+  assessment records link within that store. The standard ledger is outside
+  the write scope.
+- **D3 — identifier.** Keep numeric CR-138 and refresh the census at proposal
+  acceptance.
 
 ## Limitations
 
@@ -459,10 +560,11 @@ Per the [control-plane invariant checklist](../../operations/control-plane-invar
   `::1` reports `runtime_unavailable`.
 - A tag and digest check confirms which model the runtime reports. It does not
   prove the weights served or the sampling actually applied.
-- The private store has ordinary file permissions. It is not encrypted, and
-  this CR does not stop an operator from choosing a store inside a synced or
-  shared folder. The operator guide recommends a path outside version
-  control, such as the ignored `.triagecore/` directory.
+- The store relies on ordinary local file permissions and the operator's
+  choice of an unsynced, unshared directory outside the checkout. Record
+  that choice in the live handback without including the private path. The
+  client records the operator's runtime confirmation. Its HTTP boundary
+  covers client requests to loopback.
 - Two synthetic cases show the workflow runs. They say nothing about model
   quality or real documents.
 
