@@ -15,7 +15,9 @@ The corrective candidate `cfdef2c` is accepted for implementation.
 [Saved DC-03 stop](#corrected-build-dc-03-stop).
 [Response-completion correction handback](#response-completion-correction-handback) ·
 [Response-completion acceptance and draft publication](#response-completion-correction-acceptance-record).
-Fresh live checks are on hold.
+Both fresh live checks and informed reviews are complete on `697f8e1`.
+[Fresh live-check authority](#fresh-live-check-authority-for-697f8e1) ·
+[Fresh live verification record](#fresh-live-verification-record-for-697f8e1).
 
 | Decision | State |
 | --- | --- |
@@ -937,6 +939,83 @@ Corey separately authorized publishing the accepted fix and this CR record
 to the existing draft branch for hosted CI.
 [Draft PR #203](https://github.com/coreytshaffer/TriageCore/pull/203).
 
-Fresh live checks are on hold. The unused DC-02 attempt on `b1c4596`
-remains on hold. Merge authority, release authority, and closeout are
-pending.
+At acceptance, fresh live checks were on hold. The unused DC-02 attempt on
+`b1c4596` remains on hold.
+[Subsequent live-check authorization](#fresh-live-check-authority-for-697f8e1).
+
+## Fresh live-check authority for 697f8e1
+
+On 2026-11-21 (Pacific), Corey Shaffer wrote “I authorize one fresh live
+check each for DC-03 and DC-02 on `697f8e1`.” This authorizes Corey as
+operator to start synthetic DC-03 and DC-02 separately on
+`697f8e14892ee3061f632b4984fdd11d4816a2ad`, the draft PR #203 head
+that contains the accepted response-completion fix `64bb94c`.
+
+Each case has one attempt, including any saved stop. Start with DC-03.
+The recorded DC-03 stop and unused DC-02 attempt on `b1c4596` remain
+scoped to that build. Retain the earlier runs and informed reviews in
+the existing private store.
+
+Use the saved `docrev-v1` definition at digest
+`2253ccf998f3325cddf9e6e752a6010d40f5fbb02f3a6b1cb236e3d9e9b92811`
+and the pinned local `qwen3.5:4b` digest
+`d8b0f5e9760cd1682034f292d7ef72ec46f432149be0df7574bf2d6e92e38c04`.
+Use the sealed DC-03 and DC-02 inputs and a fresh two-message context
+for each case.
+
+Before each attempt, Corey confirms the current Ollama instance is
+cloud-disabled and listening on `127.0.0.1:11434`. Each attempt may
+make one `GET /api/tags` and, after the exact model identity matches,
+one `POST /api/chat` to that loopback instance.
+
+Record the run ID, outcome, and later informed review for each attempt
+against `697f8e1`. Merge authority, release authority, and closeout
+remain pending.
+
+## Fresh live verification record for 697f8e1
+
+On 2026-11-21 (Pacific), Corey Shaffer ran DC-03 and then DC-02 on
+`697f8e14892ee3061f632b4984fdd11d4816a2ad`. Each case used its one authorized
+attempt. The launcher verified the staged build, both case seals, and
+the saved `docrev-v1` definition before starting the checks.
+[Fresh live-check authority](#fresh-live-check-authority-for-697f8e1).
+
+Corey confirmed cloud-disabled Ollama on `127.0.0.1:11434` for each
+attempt. The launcher checked the startup log for the running instance.
+Both `GET /api/tags` preflights returned the authorized `qwen3.5:4b`
+digest. Each `POST /api/chat` used a fresh two-message context built
+from the frozen workflow and that case's sealed input. Both attempts
+reached policy with status `returned_valid`.
+
+| Case | Run ID | Model result event | Human review event |
+| --- | --- | --- | --- |
+| DC-03 | `4d16a147-b49b-4ce4-b3ff-fd2f620f8618` | `23300b38-e6ff-4a65-8cc7-27f0108dbdff` | `b2df3a92-32f6-4f77-afdd-871aaa9f16b8` |
+| DC-02 | `62866263-2842-4e85-acd2-2e681fadb0fa` | `9f6d72ff-c281-40ee-9e33-2e5e4dcf3a79` | `59430e1f-50e2-4c8f-8d5f-54c9088d73ff` |
+
+Corey selected “Record both reviews” in Codex. Each informed review
+was appended as an operational assessment linked to its original
+model result. Both findings were assessed as `correct`.
+
+- **DC-03.** Rule, model, and policy agreed on `match`. Corey accepted
+  the finding and marked the explanation `supported`. `WP.L02` and
+  `WP.L03` identify FC-233 revision E. `S1.L04` approves that revision
+  and supersedes the prior approval.
+- **DC-02.** Rule, model, and policy agreed on `insufficient evidence`.
+  Corey kept the finding, marked the model explanation `unsupported`,
+  and revised the explanation using `WP.L02`, `WP.L03`, and
+  `S1.L03`–`S1.L05`. The register contains no EQ-INV-07 entry. Its
+  revision-2 row belongs to FC-214 and its revision-4 row belongs to
+  EQ-INV-12.
+
+Read-only verification reopened the reviews and verified the sealed
+case inputs, two-message requests, model replies, and private rationale
+notes. The prior events matched their pre-review fingerprints.
+
+| Case | Model generation (s) | Model load (s) | Elapsed to policy (s) | Elapsed to saved decision (s) | Active operator time |
+| --- | ---: | ---: | ---: | ---: | --- |
+| DC-03 | 0.513357 | 10.158423 | 11.141 | 343.524738 | `unknown` |
+| DC-02 | 0.671519 | 0.005807 | 1.219 | 296.606439 | `unknown` |
+
+Elapsed times are measured from the start of each attempt.
+
+Merge authority, release authority, and closeout are pending.
