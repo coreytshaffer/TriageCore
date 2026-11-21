@@ -8,15 +8,16 @@
 Both live checks are complete for `efe28d7`.
 [Live verification record](#live-verification-record).
 [Local transport correction](#transport-correction-authority).
-The corrective candidate `cfdef2c` awaits implementation acceptance.
-[Correction handback](#transport-correction-handback).
+The corrective candidate `cfdef2c` is accepted for implementation.
+[Correction handback](#transport-correction-handback) ·
+[Corrective acceptance and draft publication](#corrective-candidate-acceptance-record).
 
 | Decision | State |
 | --- | --- |
 | Proposal acceptance | Accepted at `eb431f4`. [Decision record](#proposal-acceptance-record) |
 | Design acceptance | Accepted at `eb431f4`. [Decision record](#design-acceptance-record) |
 | Implementation authority | **Chat approval recorded after handback.** The original grant required this record before it became effective. No open Claude implementation grant. [Approval and sequence](#implementation-authority-record) |
-| Implementation acceptance | **Accepted at `efe28d7`.** [Decision record](#implementation-acceptance-record) |
+| Implementation acceptance | **Accepted at `efe28d7` and `cfdef2c`.** [Original decision](#implementation-acceptance-record) · [Corrective decision](#corrective-candidate-acceptance-record) |
 | Merge authority | Pending |
 | Release authority | Pending |
 | Closeout | Pending |
@@ -811,8 +812,19 @@ Offline verification used Windows, CPython 3.12.16, and pytest 9.2.0.
   `test_governed_consumption_parity.py`, `test_identity_cli.py`,
   `test_mediated_executor.py`, and `test_tc_run_plan_artifact_cli.py`.
 
-The corrective grant ends at this handback. Implementation acceptance of
-`cfdef2c` and publication to draft PR #203 are pending. The prior DC-03 and
-DC-02 live checks and informed reviews remain evidence for `efe28d7`. The
-corrective candidate has offline verification. Merge and release authority
-remain pending.
+The corrective grant ended at this handback. The prior DC-03 and DC-02 live
+checks and informed reviews remain evidence for `efe28d7`. The corrective
+candidate has offline verification.
+[Subsequent acceptance and draft publication decisions](#corrective-candidate-acceptance-record).
+
+## Corrective candidate acceptance record
+
+On 2026-11-21 (Pacific), Corey Shaffer selected “Accept and authorize draft
+update” in Codex after reviewing the offline results for the corrective
+candidate. This records implementation acceptance for
+`cfdef2c90c31294dcf385845bf990b2cfe9944d4`.
+
+The same decision separately authorizes publishing the accepted implementation
+and this CR record to the existing branch of [draft PR #203](https://github.com/coreytshaffer/TriageCore/pull/203)
+for hosted CI. The publication preserves `efe28d7` and `cfdef2c` in the
+branch history. Merge authority, release authority, and closeout remain pending.
