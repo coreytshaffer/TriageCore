@@ -5,6 +5,9 @@
 **Proposal and design accepted at `eb431f4`. Implementation accepted at
 `efe28d7`.**
 
+Both live checks are complete for this candidate.
+[Live verification record](#live-verification-record).
+
 | Decision | State |
 | --- | --- |
 | Proposal acceptance | Accepted at `eb431f4`. [Decision record](#proposal-acceptance-record) |
@@ -473,16 +476,18 @@ the handback can show which missing behaviour each test catches.
 - [ ] In an installed `tc` environment without the repo's test directory,
   `save` freezes the packaged template bytes with the fixture digests below.
   Reopen that definition and run it with separately supplied case files.
-- [ ] Two live runs on synthetic DC-03 and DC-02 use the same saved definition,
+- [x] Two live runs on synthetic DC-03 and DC-02 use the same saved definition,
   the selected local model, and the explicit private store. Each records the
   operator's cloud-disabled runtime confirmation, observed model identity,
   settings sent, distinct case digest, model outcome, and human decision with
   citations. An unavailable runtime or unverified locality leaves live
   acceptance pending and preserves the stop.
+  [Live verification record](#live-verification-record).
 - [ ] Two short CLI transcripts are returned: (1) reopening the recorded DC-02
   run and inspecting the unsupported reason before and after the correction;
   (2) two live reviews reusing the saved procedure, with model identity and any
   stops. Unmeasured human time is labelled `unknown`.
+  [Live CLI summary](#live-cli-summary).
 
 ## Fixture provenance
 
@@ -564,9 +569,8 @@ These choices are part of the design accepted at `eb431f4`. See the
   that choice in the live handback without including the private path. The
   client records the operator's runtime confirmation. Its HTTP boundary
   covers client requests to loopback.
-- The planned two-case synthetic trial will check whether the workflow runs
-  end to end. Model quality and performance on real documents are outside
-  that trial's scope.
+- The two-case synthetic trial exercised the workflow end to end. Model
+  quality and performance on real documents are outside that trial's scope.
 
 ## Evidence base
 
@@ -668,7 +672,7 @@ requests.
 The candidate's diff and five fixture digests were checked against the
 approved scope and accepted design. The handback reports 156 focused tests
 passing, two remaining baseline failures in the broader run, and the mobile
-test excluded. The two live Ollama checks are pending.
+test excluded. The two live Ollama checks were pending at handback.
 
 The reported scratch socket test used an injected connection factory. The
 adapter requested `127.0.0.1:11434`, but the factory connected to a fake
@@ -686,9 +690,66 @@ based on `d634f5aa4923b451ca348e01feca2cfb2b0734fc` and the design accepted
 at `eb431f4b5a05e2db51104937da4a648d2cf57bf1`. Acceptance is pinned to that
 candidate commit.
 
-The two operator-run Ollama checks on DC-03 and DC-02 remain pending.
+The two operator-run Ollama checks were pending at implementation acceptance.
+The subsequent checks and informed decisions are in the
+[live verification record](#live-verification-record).
 The test results, limitations, and two deviations remain recorded in
 [Handback observations](#handback-observations) and
 [Operator approval and sequence](#operator-approval-and-sequence).
 Implementation acceptance is a separate decision. Merge authority, release
 authority, and closeout remain pending.
+
+## Live verification record
+
+On 2026-11-20 (Pacific), Corey Shaffer ran DC-03 and then DC-02 using the
+installed CLI built from the accepted candidate
+`efe28d75b8f0a5673636f7a2bc714b165ddfc22f`. Both attempts used the private
+local store Corey selected and reused `docrev-v1` at definition digest
+`2253ccf998f3325cddf9e6e752a6010d40f5fbb02f3a6b1cb236e3d9e9b92811`.
+
+Each attempt recorded Corey's cloud-disabled runtime confirmation. The
+Ollama startup log corroborated that setting. Ollama reported `qwen3.5:4b`
+with the pinned digest
+`d8b0f5e9760cd1682034f292d7ef72ec46f432149be0df7574bf2d6e92e38c04`
+on both attempts. The server log shows one `GET /api/tags` and one
+`POST /api/chat` for each case on `127.0.0.1:11434`.
+
+Each stored request contained the frozen system message and one user message
+rendered for that case. Both requests set `num_ctx=4096`, `num_predict=256`,
+`seed=7`, `temperature=0`, `top_p=1.0`, `think=false`, and `stream=false`.
+The saved case digests matched the pins in [Fixture provenance](#fixture-provenance).
+The launcher initially paused on lowercase `run` before issuing a request
+or creating a run. The corrected prompt recorded one attempt per case, both
+`returned_valid`.
+
+### Live CLI summary
+
+| Case | Run ID | Model result event | Human review event |
+| --- | --- | --- | --- |
+| DC-03 | `cfd2836c-31e6-4032-9cce-28224c2a8198` | `65ba02dd-ef6a-4057-b1bc-e75bbe314c83` | `f9abb594-a457-46e4-b69d-33fa6a7581ec` |
+| DC-02 | `852e8e58-476d-4070-ba8a-53e9c44a550a` | `2749848a-9631-47e8-ac81-cc15885d745d` | `373680fc-76a3-4a3e-82cc-5e92a4dbce12` |
+
+Corey confirmed both informed reviews in Codex by selecting “Record both
+reviews.” Each decision was appended to the live run and linked to its
+original model result. Both reviews recorded the finding as `correct`.
+
+- **DC-03.** Rule, model, and policy agreed on `match`. Corey accepted the
+  finding and marked the explanation `supported`. `WP.L02` and `WP.L03`
+  identify FC-233 revision E, and `S1.L04` records approval for that revision.
+- **DC-02.** Rule, model, and policy agreed on `insufficient evidence`.
+  Corey kept the finding, marked the model's explanation `unsupported`, and
+  revised the explanation using `WP.L02`, `WP.L03`, and `S1.L03`–`S1.L05`.
+  The register contains no EQ-INV-07 entry. The revision-2 row belongs to
+  FC-214, and the revision-4 row belongs to EQ-INV-12. The live response's
+  SHA-256 matches the sealed R01 DC-02 response in Fixture provenance.
+
+The CLI reopened both decisions read-only. The original event IDs matched
+those recorded before review. The stored cases, requests, model replies, and
+review notes passed digest checks.
+
+| Case | Model generation (s) | Elapsed to policy (s) | Elapsed to saved decision (s) | Active operator time |
+| --- | ---: | ---: | ---: | --- |
+| DC-03 | 0.523802 | 6.343 | 241.808 | `unknown` |
+| DC-02 | 0.711365 | 1.234 | 223.453 | `unknown` |
+
+Elapsed times are measured from the start of each attempt.
