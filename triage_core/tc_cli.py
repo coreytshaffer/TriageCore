@@ -3033,6 +3033,14 @@ def main():
     from triage_core.build_review_cli import configure_parser as configure_build_review
     configure_build_review(build_review_parser)
 
+    # checklist-review
+    checklist_review_parser = subparsers.add_parser(
+        "checklist-review",
+        help="Run a saved document-revision review and record human assessments",
+    )
+    from triage_core.checklist_review_cli import configure_parser as configure_checklist_review
+    configure_checklist_review(checklist_review_parser)
+
     # packet
     packet_parser = subparsers.add_parser("packet", help="Manage bounded handoff packets")
     packet_subparsers = packet_parser.add_subparsers(dest="packet_command")
@@ -3374,6 +3382,11 @@ def main():
     elif args.command == "build-review":
         from triage_core.build_review_cli import run as run_build_review
         exit_code = run_build_review(args)
+        if exit_code:
+            sys.exit(exit_code)
+    elif args.command == "checklist-review":
+        from triage_core.checklist_review_cli import run as run_checklist_review
+        exit_code = run_checklist_review(args)
         if exit_code:
             sys.exit(exit_code)
     elif args.command == "packet":
