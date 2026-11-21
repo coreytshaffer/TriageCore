@@ -7,6 +7,7 @@
 
 Both live checks are complete for this candidate.
 [Live verification record](#live-verification-record).
+[Local transport correction](#transport-correction-authority).
 
 | Decision | State |
 | --- | --- |
@@ -753,3 +754,23 @@ review notes passed digest checks.
 | DC-02 | 0.711365 | 1.234 | 223.453 | `unknown` |
 
 Elapsed times are measured from the start of each attempt.
+
+## Transport correction authority
+
+On 2026-11-21 (Pacific), Corey Shaffer directed “Continue along the landing
+path” in response to the CR-138 merge-readiness review. This authorizes the
+first step in that review, a local corrective candidate based on
+`efe28d75b8f0a5673636f7a2bc714b165ddfc22f`. The scope covers the three
+findings on response deadlines, HTTP body completeness, and termination
+codes in persisted metadata.
+
+The corrective commit may change only these files:
+
+- `triage_core/checklist_review_local.py`
+- `tests/test_checklist_review_local.py`
+
+Verification uses the injected transport, clock, and timer in offline
+tests and disposable build and test directories. The scope covers one
+local corrective commit and the CR-138 authority and evidence records
+through handback. Acceptance of the corrective candidate, publication to
+the draft PR, merge, release, and closeout require separate decisions.
