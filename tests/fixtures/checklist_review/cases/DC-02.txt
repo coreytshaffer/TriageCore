@@ -1,0 +1,31 @@
+BEGIN CASE DC-02
+---
+FILE: request.txt
+---
+RQ.L01  Review request, case DC-02
+RQ.L02  Work product: work_product.txt (survey vehicle kit inventory)
+RQ.L03  Question: Do the supplied records establish that the document and revision named in the work product's header were approved?
+RQ.L04  Controlling source: S1 (S1_decision_register.txt)
+RQ.L05  Context sources: none
+RQ.L06  Requested by: fleet coordinator, before the vehicle is loaded for the season
+---
+FILE: work_product.txt
+---
+WP.L01  EQUIPMENT INVENTORY: SURVEY VEHICLE 3 KIT
+WP.L02  Document ID: EQ-INV-07
+WP.L03  Revision: 4
+WP.L04  Approval statement: Revision 4 approved at the 12 May document review.
+WP.L05  Change note: Revision 4 replaces the paper tide tables with a tablet and adds a second first-aid kit.
+WP.L06  Item 1. GNSS receiver and pole, qty 1
+WP.L07  Item 2. Field tablet with charger, qty 1
+WP.L08  Item 3. First-aid kit, qty 2
+WP.L09  Item 4. High-visibility vest, qty 4
+---
+FILE: S1_decision_register.txt
+---
+S1.L01  DECISION REGISTER: document approvals (excerpt)
+S1.L02  Decision ID | Document ID | Revision | Decision | Decided on | Remarks
+S1.L03  DR-0530 | FC-214 | 2 | Approved | 2026-05-12 | —
+S1.L04  DR-0531 | EQ-INV-12 | 4 | Approved | 2026-05-12 | —
+S1.L05  DR-0532 | SP-341 | 1 | Approved | 2026-05-12 | —
+END CASE DC-02
