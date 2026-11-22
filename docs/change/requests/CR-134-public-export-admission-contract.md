@@ -59,8 +59,8 @@ Backlog and change-log linkage for this CR, if wanted, requires its own grant.
 
 ## Human Approval Requirement
 
-No implementation, test, fixture-file, or CLI work may proceed on the strength of this
-document. Proposal acceptance, design acceptance, implementation authority,
+The original design acceptance authorized proposal documentation only. The separate
+Grant A decision below authorizes its six paths. Proposal acceptance, design acceptance, implementation authority,
 implementation acceptance, merge, release, and closeout are separate human decisions under
 [change management](../change_management.md). The two owner decisions recorded below
 settle design questions only; neither carries any later stage.
@@ -927,3 +927,72 @@ Every labelled hard stop must refuse. Repeated inputs must return identical IDs.
 Individual changes to bound inputs must change the ID or refuse. Evaluation must
 make zero prompts, network calls and effect writes. Prompts per completed export
 is unmeasured in Grant A because this evaluator completes zero exports.
+
+### Offline verification
+
+The corpus, labels, policy bytes and acceptance thresholds were frozen in
+`5ade84e7281436e435cc5c1d1b70ed15892e9c9e` before the first evaluation. The
+implementation under test was `f6c5a065b0f068728047ff57047f8f62c95b0cd4` on
+`codex/cr-134-grant-a`, based on `9622ce9f1462b439f2cd45376cf08422f2ac9088`.
+The latter revision is also the synthetic caller-supplied commit in each frozen decision.
+The first run and corrected implementation used the same fixture and expected labels.
+
+| Check | Final result |
+|---|---|
+| False hard refusals | 0/12 benign tasks |
+| Ordinary eligibility | 9/9 eligible, zero unexpected reviews |
+| Labelled reviews | 3/3 exact trigger sets, two steward matches and one elevated task |
+| Benign review rate | 3/12 (25%) |
+| Refusal containment | 41/41 ineligible, zero positive outcomes |
+| Separate recipient-policy control | 1/1 review with exactly `recipient_review_always` |
+| Determinism | 54/54 identical IDs and bodies on repeat |
+| Effects | Zero attempted real prompts, network calls or effect writes in the guarded evaluator calls |
+
+| Refusal family | Ineligible / labelled |
+|---|---:|
+| Schema | 8/8 |
+| Parent authority | 6/6 |
+| Privacy | 5/5 |
+| Task risk | 5/5 |
+| Attestation | 5/5 |
+| Requested work | 4/4 |
+| Recipient | 3/3 |
+| Payload | 2/2 |
+| Policy | 1/1 |
+| Source | 1/1 |
+| Request expiry | 1/1 |
+
+All prelabelled refusal reasons were present. On C01 both `credential_pattern` and
+`nonpublic_content` applied. The case-level record includes the complete reason sets.
+The original evaluator suite passed 138 tests including the frozen cases. Additional
+regressions exposed gaps involving credential and privileged-program requests, security
+testing phrasing, DMS coordinates, a false deployment match inside “bylaws”, inconsistent
+or unfamiliar scanner results, and diagnostics for a model name containing punctuation.
+The final evaluator and policy suite passed 197 tests on CPython 3.12.16.
+
+The verifier measured calls to the evaluator after Python imports. It supplied
+synthetic in-memory buffers, account attestations, project-relative locators and a UTC
+clock. The caller supplies the association between each locator and its bytes. Scanner
+and risk findings use configured patterns. No live recipient, operator interaction or
+release-time behavior was exercised. Prompts per completed export is N/A.
+
+The full local Windows suite at the implementation commit ran in 115.77 seconds:
+3,147 passed, six skipped, 46 warnings, zero failures and zero errors. One skip
+required POSIX permissions, three required symlink privileges, and two live local
+model canaries were disabled. The full-suite JUnit contains the same 54 case records
+as the focused run. Ruff passed on all four Grant A Python files.
+
+Local verification evidence is retained in the review workspace under
+`outputs/cr134-grant-a/`. The two test commands were `python -m pytest -q -p
+no:cacheprovider -o junit_family=xunit1 tests/test_public_export.py
+tests/test_public_export_policy.py` and the same pytest invocation with the full
+default test selection. Both used JUnit output, and the full run used an isolated
+temporary directory.
+
+| Evidence | SHA-256 |
+|---|---|
+| Frozen fixture file | `4c6f7abdb96137eb7cd36fed5d1fbf7a1fb29af687a1027839029ec89b6af3af` |
+| Baseline policy bytes | `fa17bbf7ea149fa23f8ea41c6cd274ff3e97d06c03d7252ad31bed68e7063dbe` |
+| Final case results, `corpus-results.json` | `6121f55eee95c2bbb8a4c75ad8df75bfa004522e41bac6fe3cd2a72413d3118c` |
+| Focused JUnit, `focused.xml` | `027b4956b56be8f179551dd861bace88af45e6e6bfdb8b39690824129d3d093f` |
+| Full JUnit, `full.xml` | `11ede3d37eb4e05b7efa68fcb3f5da34155d5cb65d4cffc70b7539d8721ff06b` |
