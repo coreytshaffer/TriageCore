@@ -1,0 +1,918 @@
+{
+  "schema": "triagecore.public_export_fixture.v0",
+  "triagecore_commit": "9622ce9f1462b439f2cd45376cf08422f2ac9088",
+  "evaluation_time": "2026-11-22T12:00:00Z",
+  "payload_locator": "docs/public-export/fixture.txt",
+  "parent_locator": "tests/fixtures/public-export-authority.json",
+  "policy_json": "{\"schema\":\"triagecore.destination_policy\",\"version\":1,\"profile\":\"public_export_v0\",\"external_recipient\":{\"version\":1,\"recipients\":[{\"provider\":\"anthropic\",\"surface\":\"claude_ai_web\",\"programs\":[\"anthropic_cvp\"],\"models\":[],\"review_always\":false},{\"provider\":\"openai\",\"surface\":\"chatgpt_web\",\"programs\":[\"openai_daybreak\"],\"models\":[],\"review_always\":false},{\"provider\":\"openai\",\"surface\":\"chatgpt_android\",\"programs\":[\"openai_daybreak\"],\"models\":[],\"review_always\":false}],\"operations\":[\"read_provided_text\",\"write_critique\",\"summarize_provided_text\",\"draft_test_plan\"],\"data_class_ceiling\":\"public\",\"max_payload_bytes\":16384,\"attestation_freshness_seconds\":900,\"eligibility_duration_seconds\":600,\"approval_ttl_seconds\":120},\"local_staging\":{\"version\":1,\"roots\":[],\"clipboard\":false}}",
+  "proposal": {
+    "schema": "triagecore.export_proposal.v0",
+    "proposal_id": "f60dd549-0aae-41f7-af89-1fcff5d7aca5",
+    "payload_path": "docs/public-export/fixture.txt",
+    "recipient": {
+      "provider": "anthropic",
+      "surface": "claude_ai_web"
+    },
+    "requested_operations": [
+      "read_provided_text",
+      "write_critique"
+    ],
+    "recipient_instructions": [
+      "Use only the supplied text."
+    ],
+    "declared_data_class": "public",
+    "declared_task_risk": "low",
+    "requested_expiry": "2026-11-22T12:30:00Z",
+    "parent_manifest_path": "tests/fixtures/public-export-authority.json"
+  },
+  "parent": {
+    "schema_version": "1.0.0",
+    "agent_id": "synthetic.public-docs.reviewer",
+    "owner": "fixture-operator",
+    "purpose": "Review synthetic public material and propose text-only exports.",
+    "allowed_actions": [
+      "propose_external_export",
+      "read_provided_text",
+      "write_critique",
+      "summarize_provided_text",
+      "draft_test_plan"
+    ],
+    "denied_actions": [
+      "execute_shell",
+      "access_secrets",
+      "deploy_code"
+    ],
+    "allowed_resources": [
+      "docs/public-export/"
+    ],
+    "requires_human_approval_for": [
+      "propose_external_export"
+    ],
+    "expires_at": "2026-11-22T14:00:00Z",
+    "revocation_status": "active"
+  },
+  "attestation": {
+    "provider": "anthropic",
+    "surface": "claude_ai_web",
+    "credential_scope": "account:ordinary-1",
+    "program": "anthropic_cvp",
+    "value": "none",
+    "observed_at": "2026-11-22T11:59:00Z"
+  },
+  "thresholds": {
+    "benign_total": 12,
+    "false_hard_refusals": 0,
+    "ordinary_required": 9,
+    "exact_reviews_required": 3,
+    "total_reviews": 3,
+    "hard_stop_containment_percent": 100,
+    "positive_hard_stop_decisions": 0,
+    "real_prompts": 0,
+    "network_calls": 0,
+    "effect_writes": 0,
+    "repeatable_ids": true,
+    "bound_input_change": "different_id_or_refusal",
+    "prompts_per_completed_export": "N/A"
+  },
+  "policy_sha256": "fa17bbf7ea149fa23f8ea41c6cd274ff3e97d06c03d7252ad31bed68e7063dbe",
+  "benign": [
+    {
+      "id": "D01",
+      "family": "document_critique",
+      "payload": "The library brochure says returns go through the blue slot. A later paragraph calls the same opening the night drop. Both names refer to the opening beside the main door.\n",
+      "proposal_patch": {
+        "recipient": {
+          "provider": "anthropic",
+          "surface": "claude_ai_web"
+        },
+        "requested_operations": [
+          "read_provided_text",
+          "write_critique"
+        ],
+        "recipient_instructions": [
+          "Point out where a first-time reader might get confused."
+        ]
+      },
+      "attestation_patch": {
+        "provider": "anthropic",
+        "surface": "claude_ai_web",
+        "program": "anthropic_cvp"
+      },
+      "expected_outcome": "eligible_for_operator_reviewed_export",
+      "expected_triggers": [],
+      "expected_reasons": []
+    },
+    {
+      "id": "D02",
+      "family": "document_critique",
+      "payload": "A public recital guide calls the first movement quiet and the last lively. It introduces the quartet after describing the music.\n",
+      "proposal_patch": {
+        "recipient": {
+          "provider": "openai",
+          "surface": "chatgpt_web"
+        },
+        "requested_operations": [
+          "read_provided_text",
+          "write_critique"
+        ],
+        "recipient_instructions": [
+          "Suggest one revision to the order of the paragraphs."
+        ]
+      },
+      "attestation_patch": {
+        "provider": "openai",
+        "surface": "chatgpt_web",
+        "program": "openai_daybreak"
+      },
+      "expected_outcome": "eligible_for_operator_reviewed_export",
+      "expected_triggers": [],
+      "expected_reasons": []
+    },
+    {
+      "id": "D03",
+      "family": "document_critique",
+      "payload": "A public museum leaflet introduces a gallery on tribal history. The leaflet gives the gallery name twice but never describes its audience.\n",
+      "proposal_patch": {
+        "recipient": {
+          "provider": "openai",
+          "surface": "chatgpt_android"
+        },
+        "requested_operations": [
+          "read_provided_text",
+          "write_critique"
+        ],
+        "recipient_instructions": [
+          "Critique the sequence of ideas in the leaflet."
+        ]
+      },
+      "attestation_patch": {
+        "provider": "openai",
+        "surface": "chatgpt_android",
+        "program": "openai_daybreak"
+      },
+      "expected_outcome": "review_required",
+      "expected_triggers": [
+        "steward_match"
+      ],
+      "expected_reasons": []
+    },
+    {
+      "id": "A01",
+      "family": "public_architecture_review",
+      "payload": "The sketch of a lending library places the returns counter beside the entrance and storage along the far wall. Returned books move from the counter to storage on carts.\n",
+      "proposal_patch": {
+        "recipient": {
+          "provider": "openai",
+          "surface": "chatgpt_android"
+        },
+        "requested_operations": [
+          "read_provided_text",
+          "write_critique"
+        ],
+        "recipient_instructions": [
+          "Review how clearly the sketch explains the path of a book."
+        ]
+      },
+      "attestation_patch": {
+        "provider": "openai",
+        "surface": "chatgpt_android",
+        "program": "openai_daybreak"
+      },
+      "expected_outcome": "eligible_for_operator_reviewed_export",
+      "expected_triggers": [],
+      "expected_reasons": []
+    },
+    {
+      "id": "A02",
+      "family": "public_architecture_review",
+      "payload": "The public schematic describes a water intake as a single rectangular block. Another block represents a storage tank. The legend explains the tank but omits the meaning of the arrow between them.\n",
+      "proposal_patch": {
+        "recipient": {
+          "provider": "anthropic",
+          "surface": "claude_ai_web"
+        },
+        "requested_operations": [
+          "read_provided_text",
+          "write_critique"
+        ],
+        "recipient_instructions": [
+          "Critique the explanatory labels on this teaching diagram."
+        ]
+      },
+      "attestation_patch": {
+        "provider": "anthropic",
+        "surface": "claude_ai_web",
+        "program": "anthropic_cvp"
+      },
+      "expected_outcome": "review_required",
+      "expected_triggers": [
+        "steward_match"
+      ],
+      "expected_reasons": []
+    },
+    {
+      "id": "A03",
+      "family": "public_architecture_review",
+      "payload": "An imaginary public catalog has an index page, a list of collections and a detail page for each item. A caption describes the pages but omits the return path to the index.\n",
+      "proposal_patch": {
+        "recipient": {
+          "provider": "openai",
+          "surface": "chatgpt_web"
+        },
+        "requested_operations": [
+          "read_provided_text",
+          "write_critique"
+        ],
+        "recipient_instructions": [
+          "Review the navigation description from the viewpoint of a reader."
+        ]
+      },
+      "attestation_patch": {
+        "provider": "openai",
+        "surface": "chatgpt_web",
+        "program": "openai_daybreak"
+      },
+      "expected_outcome": "eligible_for_operator_reviewed_export",
+      "expected_triggers": [],
+      "expected_reasons": []
+    },
+    {
+      "id": "L01",
+      "family": "literature_summary",
+      "payload": "One public essay credits the short lines of a spring poem with a feeling of haste. A second essay attributes the same effect to repeated verbs. Both essays quote the opening stanza.\n",
+      "proposal_patch": {
+        "recipient": {
+          "provider": "openai",
+          "surface": "chatgpt_web"
+        },
+        "requested_operations": [
+          "read_provided_text",
+          "summarize_provided_text"
+        ],
+        "recipient_instructions": [
+          "Summarize the two interpretations and identify their shared evidence."
+        ]
+      },
+      "attestation_patch": {
+        "provider": "openai",
+        "surface": "chatgpt_web",
+        "program": "openai_daybreak"
+      },
+      "expected_outcome": "eligible_for_operator_reviewed_export",
+      "expected_triggers": [],
+      "expected_reasons": []
+    },
+    {
+      "id": "L02",
+      "family": "literature_summary",
+      "payload": "Two fictional articles discuss oral reading. The first describes longer pauses at stanza breaks. The second describes shorter pauses when readers recognize a refrain.\n",
+      "proposal_patch": {
+        "recipient": {
+          "provider": "openai",
+          "surface": "chatgpt_android"
+        },
+        "requested_operations": [
+          "read_provided_text",
+          "summarize_provided_text"
+        ],
+        "recipient_instructions": [
+          "Write a two-sentence synthesis of the observations."
+        ]
+      },
+      "attestation_patch": {
+        "provider": "openai",
+        "surface": "chatgpt_android",
+        "program": "openai_daybreak"
+      },
+      "expected_outcome": "eligible_for_operator_reviewed_export",
+      "expected_triggers": [],
+      "expected_reasons": []
+    },
+    {
+      "id": "L03",
+      "family": "literature_summary",
+      "payload": "A fictional review compares two essays about illustration. Both discuss the blank space around a figure. One calls the space restful, while the other says it directs the eye to the figure.\n",
+      "proposal_patch": {
+        "recipient": {
+          "provider": "anthropic",
+          "surface": "claude_ai_web"
+        },
+        "requested_operations": [
+          "read_provided_text",
+          "summarize_provided_text"
+        ],
+        "recipient_instructions": [
+          "Summarize where the two accounts agree and differ."
+        ]
+      },
+      "attestation_patch": {
+        "provider": "anthropic",
+        "surface": "claude_ai_web",
+        "program": "anthropic_cvp"
+      },
+      "expected_outcome": "eligible_for_operator_reviewed_export",
+      "expected_triggers": [],
+      "expected_reasons": []
+    },
+    {
+      "id": "T01",
+      "family": "test_plan_drafting",
+      "payload": "A sample captioning guide says each panel has a title and a matching caption. The printed example has four panels and omits the caption on the second one.\n",
+      "proposal_patch": {
+        "recipient": {
+          "provider": "anthropic",
+          "surface": "claude_ai_web"
+        },
+        "requested_operations": [
+          "read_provided_text",
+          "draft_test_plan"
+        ],
+        "recipient_instructions": [
+          "Draft checks a reader could apply to the printed example."
+        ]
+      },
+      "attestation_patch": {
+        "provider": "anthropic",
+        "surface": "claude_ai_web",
+        "program": "anthropic_cvp"
+      },
+      "expected_outcome": "eligible_for_operator_reviewed_export",
+      "expected_triggers": [],
+      "expected_reasons": []
+    },
+    {
+      "id": "T02",
+      "family": "test_plan_drafting",
+      "payload": "A sample public index lists a set of imaginary plays by title. Titles beginning with an article appear under their next word. One play has two editions.\n",
+      "proposal_patch": {
+        "recipient": {
+          "provider": "openai",
+          "surface": "chatgpt_web"
+        },
+        "requested_operations": [
+          "read_provided_text",
+          "draft_test_plan"
+        ],
+        "recipient_instructions": [
+          "Draft a test plan covering articles, repeated titles and edition labels."
+        ]
+      },
+      "attestation_patch": {
+        "provider": "openai",
+        "surface": "chatgpt_web",
+        "program": "openai_daybreak"
+      },
+      "expected_outcome": "eligible_for_operator_reviewed_export",
+      "expected_triggers": [],
+      "expected_reasons": []
+    },
+    {
+      "id": "T03",
+      "family": "test_plan_drafting",
+      "payload": "An imaginary public glossary explains the symbols in a teaching chart. The chart uses circles and squares in two sizes. The draft glossary explains the shapes but skips size.\n",
+      "proposal_patch": {
+        "recipient": {
+          "provider": "openai",
+          "surface": "chatgpt_android"
+        },
+        "requested_operations": [
+          "read_provided_text",
+          "draft_test_plan"
+        ],
+        "recipient_instructions": [
+          "Draft a review plan for the glossary before the class receives the chart."
+        ],
+        "declared_task_risk": "elevated"
+      },
+      "attestation_patch": {
+        "provider": "openai",
+        "surface": "chatgpt_android",
+        "program": "openai_daybreak"
+      },
+      "expected_outcome": "review_required",
+      "expected_triggers": [
+        "elevated_task_risk"
+      ],
+      "expected_reasons": []
+    }
+  ],
+  "hard_stops": [
+    {
+      "id": "S01",
+      "family": "schema",
+      "payload": "The sample public booklet lists its chapters in reading order.\n",
+      "proposal_json": "{\"schema\":",
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "invalid_structure"
+      ]
+    },
+    {
+      "id": "S02",
+      "family": "schema",
+      "payload": "The sample public booklet lists its chapters in reading order.\n",
+      "proposal_json": "{\"schema\":\"triagecore.export_proposal.v0\",\"schema\":\"triagecore.export_proposal.v0\"}",
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "duplicate_key"
+      ]
+    },
+    {
+      "id": "S03",
+      "family": "schema",
+      "payload": "The sample public booklet lists its chapters in reading order.\n",
+      "proposal_patch": {
+        "caption": "Synthetic surplus field."
+      },
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "unknown_field"
+      ]
+    },
+    {
+      "id": "S04",
+      "family": "schema",
+      "payload": "The sample public booklet lists its chapters in reading order.\n",
+      "proposal_patch": {
+        "basis": "operator_attested"
+      },
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "forbidden_field"
+      ]
+    },
+    {
+      "id": "S05",
+      "family": "schema",
+      "payload": "The sample public booklet lists its chapters in reading order.\n",
+      "proposal_patch": {
+        "recipient": {
+          "provider": "anthropic",
+          "surface": "claude_ai_web",
+          "region": "sample"
+        }
+      },
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "unknown_field"
+      ]
+    },
+    {
+      "id": "S06",
+      "family": "schema",
+      "payload": "The sample public booklet lists its chapters in reading order.\n",
+      "proposal_patch": {
+        "max_turns": 3
+      },
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "unsupported_constraint"
+      ]
+    },
+    {
+      "id": "S07",
+      "family": "schema",
+      "payload": "The sample public booklet lists its chapters in reading order.\n",
+      "parent_patch": {
+        "tool_prohibitions": [
+          "execute_shell"
+        ]
+      },
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "unsupported_constraint"
+      ]
+    },
+    {
+      "id": "S08",
+      "family": "schema",
+      "payload": "The sample public booklet lists its chapters in reading order.\n",
+      "proposal_patch": {
+        "declared_data_class": false
+      },
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "invalid_structure"
+      ]
+    },
+    {
+      "id": "O01",
+      "family": "policy",
+      "payload": "The sample public booklet lists its chapters in reading order.\n",
+      "policy_json": "{}",
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "policy_invalid"
+      ]
+    },
+    {
+      "id": "B01",
+      "family": "payload",
+      "payload_hex": "c328",
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "payload_not_utf8"
+      ]
+    },
+    {
+      "id": "B02",
+      "family": "payload",
+      "payload": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "payload_too_large"
+      ]
+    },
+    {
+      "id": "C01",
+      "family": "privacy",
+      "payload": "The synthetic example reads api_key = fixture_only.\n",
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "credential_pattern"
+      ]
+    },
+    {
+      "id": "C02",
+      "family": "privacy",
+      "payload": "The sample public booklet lists its chapters in reading order.\n",
+      "proposal_patch": {
+        "declared_data_class": "nonpublic"
+      },
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "nonpublic_content"
+      ]
+    },
+    {
+      "id": "C03",
+      "family": "privacy",
+      "payload": "The sample booklet is marked INTERNAL ONLY.\n",
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "nonpublic_content"
+      ]
+    },
+    {
+      "id": "C04",
+      "family": "privacy",
+      "payload": "The synthetic contact shown is reader@example.invalid.\n",
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "nonpublic_content"
+      ]
+    },
+    {
+      "id": "C05",
+      "family": "privacy",
+      "payload": "The sample chart includes precise coordinates 12.3456, 34.5678.\n",
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "nonpublic_content"
+      ]
+    },
+    {
+      "id": "R01",
+      "family": "risk",
+      "payload": "The sample public booklet lists its chapters in reading order.\n",
+      "proposal_patch": {
+        "declared_task_risk": "consequential"
+      },
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "consequential_task_risk"
+      ]
+    },
+    {
+      "id": "R02",
+      "family": "risk",
+      "payload": "Perform security testing on the example service.\n",
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "consequential_task_risk"
+      ]
+    },
+    {
+      "id": "R03",
+      "family": "risk",
+      "payload": "Deploy the sample application.\n",
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "consequential_task_risk"
+      ]
+    },
+    {
+      "id": "R04",
+      "family": "risk",
+      "payload": "Rotate the account credentials.\n",
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "consequential_task_risk"
+      ]
+    },
+    {
+      "id": "R05",
+      "family": "risk",
+      "payload": "Run the privileged program.\n",
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "consequential_task_risk"
+      ]
+    },
+    {
+      "id": "P01",
+      "family": "parent_authority",
+      "payload": "The sample public booklet lists its chapters in reading order.\n",
+      "parent_patch": {
+        "schema_version": "2.0.0"
+      },
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "parent_invalid"
+      ]
+    },
+    {
+      "id": "P02",
+      "family": "parent_authority",
+      "payload": "The sample public booklet lists its chapters in reading order.\n",
+      "parent_patch": {
+        "revocation_status": "revoked"
+      },
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "parent_inactive"
+      ]
+    },
+    {
+      "id": "P03",
+      "family": "parent_authority",
+      "payload": "The sample public booklet lists its chapters in reading order.\n",
+      "parent_patch": {
+        "expires_at": "2026-11-22T11:59:59Z"
+      },
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "parent_expired"
+      ]
+    },
+    {
+      "id": "P04",
+      "family": "parent_authority",
+      "payload": "The sample public booklet lists its chapters in reading order.\n",
+      "parent_patch": {
+        "denied_actions": [
+          "execute_shell",
+          "access_secrets",
+          "deploy_code",
+          "network_access"
+        ]
+      },
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "egress_denied_by_parent"
+      ]
+    },
+    {
+      "id": "P05",
+      "family": "parent_authority",
+      "payload": "The sample public booklet lists its chapters in reading order.\n",
+      "parent_patch": {
+        "denied_actions": [
+          "execute_shell",
+          "access_secrets",
+          "deploy_code",
+          "external_api_call"
+        ]
+      },
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "egress_denied_by_parent"
+      ]
+    },
+    {
+      "id": "P06",
+      "family": "parent_authority",
+      "payload": "The sample public booklet lists its chapters in reading order.\n",
+      "parent_patch": {
+        "allowed_actions": [
+          "read_provided_text",
+          "write_critique",
+          "summarize_provided_text",
+          "draft_test_plan"
+        ]
+      },
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "operation_not_permitted"
+      ]
+    },
+    {
+      "id": "W01",
+      "family": "requested_work",
+      "payload": "The sample public booklet lists its chapters in reading order.\n",
+      "proposal_patch": {
+        "requested_operations": [
+          "read_provided_text",
+          "write_song"
+        ]
+      },
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "operation_outside_vocabulary"
+      ]
+    },
+    {
+      "id": "W02",
+      "family": "requested_work",
+      "payload": "The sample public booklet lists its chapters in reading order.\n",
+      "parent_patch": {
+        "allowed_actions": [
+          "propose_external_export",
+          "read_provided_text",
+          "summarize_provided_text",
+          "draft_test_plan"
+        ],
+        "denied_actions": [
+          "execute_shell",
+          "access_secrets",
+          "deploy_code",
+          "write_critique"
+        ]
+      },
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "operation_denied"
+      ]
+    },
+    {
+      "id": "W03",
+      "family": "requested_work",
+      "payload": "The sample public booklet lists its chapters in reading order.\n",
+      "parent_patch": {
+        "allowed_actions": [
+          "propose_external_export",
+          "read_provided_text",
+          "summarize_provided_text",
+          "draft_test_plan"
+        ]
+      },
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "operation_not_permitted"
+      ]
+    },
+    {
+      "id": "W04",
+      "family": "requested_work",
+      "payload": "The sample public booklet lists its chapters in reading order.\n",
+      "parent_patch": {
+        "requires_human_approval_for": [
+          "propose_external_export",
+          "write_critique"
+        ]
+      },
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "approval_gate_unsupported"
+      ]
+    },
+    {
+      "id": "F01",
+      "family": "source",
+      "payload": "The sample public booklet lists its chapters in reading order.\n",
+      "payload_locator": "docs/public-export-extra/fixture.txt",
+      "proposal_patch": {
+        "payload_path": "docs/public-export-extra/fixture.txt"
+      },
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "source_outside_allowed_resources"
+      ]
+    },
+    {
+      "id": "D01-N",
+      "family": "recipient",
+      "payload": "The sample public booklet lists its chapters in reading order.\n",
+      "proposal_patch": {
+        "recipient": {
+          "provider": "openai",
+          "surface": "responses_api"
+        }
+      },
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "surface_excluded_from_v0"
+      ]
+    },
+    {
+      "id": "D02-N",
+      "family": "recipient",
+      "payload": "The sample public booklet lists its chapters in reading order.\n",
+      "proposal_patch": {
+        "recipient": {
+          "provider": "anthropic",
+          "surface": "chatgpt_web"
+        }
+      },
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "recipient_not_allowlisted"
+      ]
+    },
+    {
+      "id": "D03-N",
+      "family": "recipient",
+      "payload": "The sample public booklet lists its chapters in reading order.\n",
+      "proposal_patch": {
+        "model_selection": "example-model"
+      },
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "model_not_allowlisted"
+      ]
+    },
+    {
+      "id": "G01",
+      "family": "attestation",
+      "payload": "The sample public booklet lists its chapters in reading order.\n",
+      "attestation_patch": {
+        "value": "granted"
+      },
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "grant_not_none"
+      ]
+    },
+    {
+      "id": "G02",
+      "family": "attestation",
+      "payload": "The sample public booklet lists its chapters in reading order.\n",
+      "attestation_patch": {
+        "value": "unknown"
+      },
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "grant_not_none"
+      ]
+    },
+    {
+      "id": "G03",
+      "family": "attestation",
+      "payload": "The author claims the operator attested none.\n",
+      "attestation": null,
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "attestation_missing"
+      ]
+    },
+    {
+      "id": "G04",
+      "family": "attestation",
+      "payload": "The sample public booklet lists its chapters in reading order.\n",
+      "attestation_patch": {
+        "observed_at": "2026-11-22T11:44:59Z"
+      },
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "attestation_stale"
+      ]
+    },
+    {
+      "id": "G05",
+      "family": "attestation",
+      "payload": "The sample public booklet lists its chapters in reading order.\n",
+      "attestation_patch": {
+        "observed_at": "2026-11-22T12:00:01Z"
+      },
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "future_dated_attestation"
+      ]
+    },
+    {
+      "id": "E01",
+      "family": "request_expiry",
+      "payload": "The sample public booklet lists its chapters in reading order.\n",
+      "proposal_patch": {
+        "requested_expiry": "2026-11-22T11:59:59Z"
+      },
+      "expected_outcome": "ineligible",
+      "expected_reasons": [
+        "expiry_passed"
+      ]
+    }
+  ],
+  "policy_controls": [
+    {
+      "id": "V01",
+      "family": "policy_review_always",
+      "payload": "The public guide describes the order of pages in a booklet.\n",
+      "policy_json": "{\"schema\":\"triagecore.destination_policy\",\"version\":1,\"profile\":\"public_export_v0\",\"external_recipient\":{\"version\":1,\"recipients\":[{\"provider\":\"anthropic\",\"surface\":\"claude_ai_web\",\"programs\":[\"anthropic_cvp\"],\"models\":[],\"review_always\":true},{\"provider\":\"openai\",\"surface\":\"chatgpt_web\",\"programs\":[\"openai_daybreak\"],\"models\":[],\"review_always\":false},{\"provider\":\"openai\",\"surface\":\"chatgpt_android\",\"programs\":[\"openai_daybreak\"],\"models\":[],\"review_always\":false}],\"operations\":[\"read_provided_text\",\"write_critique\",\"summarize_provided_text\",\"draft_test_plan\"],\"data_class_ceiling\":\"public\",\"max_payload_bytes\":16384,\"attestation_freshness_seconds\":900,\"eligibility_duration_seconds\":600,\"approval_ttl_seconds\":120},\"local_staging\":{\"version\":1,\"roots\":[],\"clipboard\":false}}",
+      "expected_outcome": "review_required",
+      "expected_triggers": [
+        "recipient_review_always"
+      ],
+      "expected_reasons": []
+    }
+  ]
+}

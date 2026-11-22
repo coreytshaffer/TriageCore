@@ -3,8 +3,7 @@
 ## Status
 
 - **Status:** Proposal and design accepted by the human operator on 2026-10-18.
-  Implementation not authorized. (First recorded as: Proposed. Proposal-only
-  documentation.)
+  The operator authorized implementation and offline verification of Grant A on 2026-11-22.
 - **Type:** Governance kernel — privacy and provenance; identity and authority;
   capability and effect bounds; review and human control. Classified under the
   [Backlog Scope Taxonomy](../../current_backlog.md) by the invariant it strengthens:
@@ -27,7 +26,7 @@
 - **Design acceptance:** Granted by the human operator on 2026-10-18 for the design as
   recorded in this document at `cd9a6c9`. Recorded verbatim under Acceptance and merge
   record. It was pending when this document was first merged.
-- **Implementation authority:** Not granted. Design acceptance does not carry it.
+- **Implementation authority:** Grant A only, under the separate six-file authorization below.
 - **Merge:** [PR #184](https://github.com/coreytshaffer/TriageCore/pull/184) was merged
   manually by the operator as `8f463a5`. At that time this document recorded merge
   authority as not granted; that state is preserved in the lifecycle table below.
@@ -44,7 +43,7 @@
 | owner decisions | two recorded (see Owner Decisions) |
 | proposal acceptance | granted 2026-10-18 (pending when first merged; see Acceptance and merge record) |
 | design acceptance | granted 2026-10-18 for the design at `cd9a6c9` (pending when first merged; see Acceptance and merge record) |
-| implementation authority | not granted |
+| implementation authority | Grant A only, 2026-11-22 |
 | implementation acceptance | not granted |
 | merge authority | not granted by this document when PR #184 merged; the operator merged it manually as `8f463a5` (see Acceptance and merge record) |
 | release authority | not granted |
@@ -52,9 +51,9 @@
 
 ## Scope
 
-Exactly one file: this document.
+The original proposal drafting grant covered exactly one file, this document.
 
-No backlog entry, change-log entry, architecture page, code, test, fixture file, schema,
+Under that original grant, no backlog entry, change-log entry, architecture page, code, test, fixture file, schema,
 CLI surface, configuration, ledger, credential, or workflow change is made or authorized.
 Backlog and change-log linkage for this CR, if wanted, requires its own grant.
 
@@ -720,8 +719,8 @@ fixtures retain complete inputs, expected outcomes, and policy versions.
 
 ## Evaluation Plan
 
-This section specifies fixtures. **No fixture file, test, or harness is created or
-authorized by this CR.** The operator channel in any future test is a test double; such
+This section specifies design fixtures. The subsequent Grant A authorization covers the
+offline evaluator subset. The operator channel in these tests is a test double; such
 fixtures evidence the logic, not any human's behaviour.
 
 ### Priority fixtures
@@ -892,10 +891,23 @@ baseline v1.0, pinned to `ede8ef1`) is preserved unchanged by this CR.
   that records acceptance; release, deployment, and closeout. (The operator's own merge of
   PR #184 is recorded under Acceptance and merge record.)
 
-## Stop Point
+## Original design stop point
 
 This document is the stop point. It proposes a contract and records two owner decisions.
 The operator accepted its proposal and design on 2026-10-18 (Acceptance and merge record).
 No implementation, test, fixture, CLI, credential, ledger, release, or deployment action is
 authorized by it, and it grants no publication beyond what is recorded under Authority
 Record. Implementation requires a separate grant that names a bounded file allowlist.
+
+## Grant A implementation authority, 2026-11-22
+
+> I approve CR-134 Grant A only, including the six-file scope, export-specific M05 mapping, policy defaults, error codes, and usefulness thresholds. Go ahead and implement the offline evaluator, run the frozen corpus, and report the results.
+
+This decision selects Grant A as the next bounded M09a increment. The export-specific
+M05 projection binds the stricter declared and computed classification for both data
+and task risk. The six paths are `triage_core/public_export_policy.py`,
+`triage_core/public_export.py`, `tests/test_public_export_policy.py`,
+`tests/test_public_export.py`, `tests/fixtures/public_export_v0.json` and this CR.
+The stop point is a locally reviewable evaluator and synthetic offline evidence.
+Implementation acceptance, publication, staging, release, deployment and closeout
+require separate decisions.
