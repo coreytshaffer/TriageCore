@@ -3,8 +3,8 @@
 ## Status
 
 - **Status:** Proposal and design accepted by the human operator on 2026-10-18.
-  Implementation not authorized. (First recorded as: Proposed. Proposal-only
-  documentation.)
+  On 2026-11-22 the operator accepted the Grant A offline evaluator at `f6c5a06`
+  and authorized publication of the six-file branch as a draft PR.
 - **Type:** Governance kernel — privacy and provenance; identity and authority;
   capability and effect bounds; review and human control. Classified under the
   [Backlog Scope Taxonomy](../../current_backlog.md) by the invariant it strengthens:
@@ -15,9 +15,9 @@
   repository fact below was observed at that commit. Re-verify when the pin changes.
 - **Proposal drafting authority:** Granted by the human operator on 2026-10-18 for this
   single document. Recorded verbatim in Authority Record below.
-- **Publication:** Granted by the human operator on 2026-10-18 for the designated feature
+- **Design publication:** Granted by the human operator on 2026-10-18 for the designated feature
   branch only, and exercised. Recorded verbatim under Publication grant.
-- **Draft pull request:** Directed by the human operator on 2026-10-18 and opened as draft
+- **Design pull request:** Directed by the human operator on 2026-10-18 and opened as draft
   [PR #184](https://github.com/coreytshaffer/TriageCore/pull/184). Review exposure only.
   Recorded verbatim under Draft pull request direction.
 - **Owner decisions:** Two recorded on 2026-10-18; see Owner Decisions. They settle two
@@ -27,11 +27,13 @@
 - **Design acceptance:** Granted by the human operator on 2026-10-18 for the design as
   recorded in this document at `cd9a6c9`. Recorded verbatim under Acceptance and merge
   record. It was pending when this document was first merged.
-- **Implementation authority:** Not granted. Design acceptance does not carry it.
+- **Implementation authority:** Grant A only, under the separate six-file authorization below.
 - **Merge:** [PR #184](https://github.com/coreytshaffer/TriageCore/pull/184) was merged
   manually by the operator as `8f463a5`. At that time this document recorded merge
   authority as not granted; that state is preserved in the lifecycle table below.
-- **Implementation acceptance / release / closeout:** Not granted.
+- **Grant A implementation acceptance:** Granted for `f6c5a06`. The operator's
+  acceptance and draft publication direction are recorded below. Merge, staging,
+  release, deployment and CR closeout remain separate decisions.
 
 ### Lifecycle state
 
@@ -39,29 +41,29 @@
 |---|---|
 | identifier allocation | CR-134, allocated by the operator after a census of `docs/change/requests/` at `ede8ef1` (highest numeric CR-133; no existing delegation or export CR) |
 | proposal drafting | granted, single document |
-| publication | granted for the designated feature branch only; exercised (see Publication grant) |
-| draft pull request | directed by the operator; opened as draft [PR #184](https://github.com/coreytshaffer/TriageCore/pull/184) (see Draft pull request direction); later marked ready for review and merged by the operator |
+| publication | original design branch published October 18. Grant A six-file branch and verification results authorized for publication November 22 |
+| draft pull request | design [PR #184](https://github.com/coreytshaffer/TriageCore/pull/184) merged. Separate Grant A draft PR directed November 22 |
 | owner decisions | two recorded (see Owner Decisions) |
 | proposal acceptance | granted 2026-10-18 (pending when first merged; see Acceptance and merge record) |
 | design acceptance | granted 2026-10-18 for the design at `cd9a6c9` (pending when first merged; see Acceptance and merge record) |
-| implementation authority | not granted |
-| implementation acceptance | not granted |
+| implementation authority | Grant A only, 2026-11-22 |
+| implementation acceptance | Grant A offline evaluator accepted at `f6c5a06` on 2026-11-22 |
 | merge authority | not granted by this document when PR #184 merged; the operator merged it manually as `8f463a5` (see Acceptance and merge record) |
 | release authority | not granted |
 | closeout | not granted |
 
 ## Scope
 
-Exactly one file: this document.
+The original proposal drafting grant covered exactly one file, this document.
 
-No backlog entry, change-log entry, architecture page, code, test, fixture file, schema,
+Under that original grant, no backlog entry, change-log entry, architecture page, code, test, fixture file, schema,
 CLI surface, configuration, ledger, credential, or workflow change is made or authorized.
 Backlog and change-log linkage for this CR, if wanted, requires its own grant.
 
 ## Human Approval Requirement
 
-No implementation, test, fixture-file, or CLI work may proceed on the strength of this
-document. Proposal acceptance, design acceptance, implementation authority,
+The original design acceptance authorized proposal documentation only. The separate
+Grant A decision below authorizes its six paths. Proposal acceptance, design acceptance, implementation authority,
 implementation acceptance, merge, release, and closeout are separate human decisions under
 [change management](../change_management.md). The two owner decisions recorded below
 settle design questions only; neither carries any later stage.
@@ -720,8 +722,8 @@ fixtures retain complete inputs, expected outcomes, and policy versions.
 
 ## Evaluation Plan
 
-This section specifies fixtures. **No fixture file, test, or harness is created or
-authorized by this CR.** The operator channel in any future test is a test double; such
+This section specifies design fixtures. The subsequent Grant A authorization covers the
+offline evaluator subset. The operator channel in these tests is a test double; such
 fixtures evidence the logic, not any human's behaviour.
 
 ### Priority fixtures
@@ -877,7 +879,7 @@ baseline v1.0, pinned to `ede8ef1`) is preserved unchanged by this CR.
 - **PR #179:** the separate *authorization-record reconciliation required* finding stands.
   It is not addressed by this CR and belongs to M03.
 
-## Explicit Exclusions
+## Original proposal drafting exclusions
 
 - Any code, test, fixture file, schema file, CLI surface, configuration, or ledger change.
 - Any network call, provider API use, MCP server, browser automation, session cookie,
@@ -892,10 +894,119 @@ baseline v1.0, pinned to `ede8ef1`) is preserved unchanged by this CR.
   that records acceptance; release, deployment, and closeout. (The operator's own merge of
   PR #184 is recorded under Acceptance and merge record.)
 
-## Stop Point
+## Original design stop point
 
 This document is the stop point. It proposes a contract and records two owner decisions.
 The operator accepted its proposal and design on 2026-10-18 (Acceptance and merge record).
 No implementation, test, fixture, CLI, credential, ledger, release, or deployment action is
 authorized by it, and it grants no publication beyond what is recorded under Authority
 Record. Implementation requires a separate grant that names a bounded file allowlist.
+
+## Grant A implementation authority, 2026-11-22
+
+> I approve CR-134 Grant A only, including the six-file scope, export-specific M05 mapping, policy defaults, error codes, and usefulness thresholds. Go ahead and implement the offline evaluator, run the frozen corpus, and report the results.
+
+This decision selects Grant A as the next bounded M09a increment. The export-specific
+M05 projection binds the stricter declared and computed classification for both data
+and task risk. The six paths are `triage_core/public_export_policy.py`,
+`triage_core/public_export.py`, `tests/test_public_export_policy.py`,
+`tests/test_public_export.py`, `tests/fixtures/public_export_v0.json` and this CR.
+This implementation grant ended at a locally reviewable evaluator and synthetic
+offline evidence. The subsequent acceptance and draft publication decision follows
+the verification record.
+
+The frozen baseline policy is revision 1 of `public_export_v0`. It permits the
+Anthropic Claude web and OpenAI ChatGPT web/Android recipient pairs, using simulated
+scope `account:ordinary-1` with fresh `none` answers for Anthropic CVP or OpenAI
+Daybreak respectively. Its operation vocabulary is `read_provided_text`,
+`write_critique`, `summarize_provided_text` and `draft_test_plan`. Its model
+allowlist and staging roots are empty. Clipboard is off. Raw UTF-8 payloads have
+a 16,384-byte ceiling. The freshness ceiling is 900 seconds inclusive, eligibility
+is capped at 600 seconds, and a 120-second approval TTL is reserved for future staging.
+
+The predeclared usefulness gate requires zero benign refusals in 12 tasks, nine
+ordinary eligibilities and exactly three reviews with the labelled triggers.
+Every labelled hard stop must refuse. Repeated inputs must return identical IDs.
+Individual changes to bound inputs must change the ID or refuse. Evaluation must
+make zero prompts, network calls and effect writes. Prompts per completed export
+is unmeasured in Grant A because this evaluator completes zero exports.
+
+### Offline verification
+
+The corpus, labels, policy bytes and acceptance thresholds were frozen in
+`5ade84e7281436e435cc5c1d1b70ed15892e9c9e` before the first evaluation. The
+implementation under test was `f6c5a065b0f068728047ff57047f8f62c95b0cd4` on
+`codex/cr-134-grant-a`, based on `9622ce9f1462b439f2cd45376cf08422f2ac9088`.
+The latter revision is also the synthetic caller-supplied commit in each frozen decision.
+The first run and corrected implementation used the same fixture and expected labels.
+
+| Check | Final result |
+|---|---|
+| False hard refusals | 0/12 benign tasks |
+| Ordinary eligibility | 9/9 eligible, zero unexpected reviews |
+| Labelled reviews | 3/3 exact trigger sets, two steward matches and one elevated task |
+| Benign review rate | 3/12 (25%) |
+| Refusal containment | 41/41 ineligible, zero positive outcomes |
+| Separate recipient-policy control | 1/1 review with exactly `recipient_review_always` |
+| Determinism | 54/54 identical IDs and bodies on repeat |
+| Effects | Zero attempted real prompts, network calls or effect writes in the guarded evaluator calls |
+
+| Refusal family | Ineligible / labelled |
+|---|---:|
+| Schema | 8/8 |
+| Parent authority | 6/6 |
+| Privacy | 5/5 |
+| Task risk | 5/5 |
+| Attestation | 5/5 |
+| Requested work | 4/4 |
+| Recipient | 3/3 |
+| Payload | 2/2 |
+| Policy | 1/1 |
+| Source | 1/1 |
+| Request expiry | 1/1 |
+
+All prelabelled refusal reasons were present. On C01 both `credential_pattern` and
+`nonpublic_content` applied. The case-level record includes the complete reason sets.
+The original evaluator suite passed 138 tests including the frozen cases. Additional
+regressions exposed gaps involving credential and privileged-program requests, security
+testing phrasing, DMS coordinates, a false deployment match inside “bylaws”, inconsistent
+or unfamiliar scanner results, and diagnostics for a model name containing punctuation.
+The final evaluator and policy suite passed 197 tests on CPython 3.12.16.
+
+The verifier measured calls to the evaluator after Python imports. It supplied
+synthetic in-memory buffers, account attestations, project-relative locators and a UTC
+clock. The caller supplies the association between each locator and its bytes. Scanner
+and risk findings use configured patterns. No live recipient, operator interaction or
+release-time behavior was exercised. Prompts per completed export is N/A.
+
+The full local Windows suite at the implementation commit ran in 115.77 seconds:
+3,147 passed, six skipped, 46 warnings, zero failures and zero errors. One skip
+required POSIX permissions, three required symlink privileges, and two live local
+model canaries were disabled. The full-suite JUnit contains the same 54 case records
+as the focused run. Ruff passed on all four Grant A Python files.
+
+Local verification evidence is retained in the review workspace under
+`outputs/cr134-grant-a/`. The two test commands were `python -m pytest -q -p
+no:cacheprovider -o junit_family=xunit1 tests/test_public_export.py
+tests/test_public_export_policy.py` and the same pytest invocation with the full
+default test selection. Both used JUnit output, and the full run used an isolated
+temporary directory.
+
+| Evidence | SHA-256 |
+|---|---|
+| Frozen fixture file | `4c6f7abdb96137eb7cd36fed5d1fbf7a1fb29af687a1027839029ec89b6af3af` |
+| Baseline policy bytes | `fa17bbf7ea149fa23f8ea41c6cd274ff3e97d06c03d7252ad31bed68e7063dbe` |
+| Final case results, `corpus-results.json` | `6121f55eee95c2bbb8a4c75ad8df75bfa004522e41bac6fe3cd2a72413d3118c` |
+| Focused JUnit, `focused.xml` | `027b4956b56be8f179551dd861bace88af45e6e6bfdb8b39690824129d3d093f` |
+| Full JUnit, `full.xml` | `11ede3d37eb4e05b7efa68fcb3f5da34155d5cb65d4cffc70b7539d8721ff06b` |
+
+### Grant A implementation acceptance and draft publication, 2026-11-22
+
+> I accept CR-134 Grant A at f6c5a06. Go ahead and record my acceptance in the CR, push the six-file branch, and open a draft PR with the frozen corpus and verification results.
+
+The operator accepted the offline evaluator at `f6c5a065b0f068728047ff57047f8f62c95b0cd4`.
+The frozen corpus is recorded at `5ade84e7281436e435cc5c1d1b70ed15892e9c9e`,
+and `93864bb94bf91eefe191e7ecd8afd437e0c25042` records its verification results.
+The publication grant covers the six approved paths on `codex/cr-134-grant-a`
+and a draft pull request into `main` with that evidence. Grant B, merge, release,
+deployment and formal CR closeout each require a separate decision.
