@@ -3,7 +3,8 @@
 ## Status
 
 - **Status:** Proposal and design accepted by the human operator on 2026-10-18.
-  The operator authorized implementation and offline verification of Grant A on 2026-11-22.
+  On 2026-11-22 the operator accepted the Grant A offline evaluator at `f6c5a06`
+  and authorized publication of the six-file branch as a draft PR.
 - **Type:** Governance kernel — privacy and provenance; identity and authority;
   capability and effect bounds; review and human control. Classified under the
   [Backlog Scope Taxonomy](../../current_backlog.md) by the invariant it strengthens:
@@ -14,9 +15,9 @@
   repository fact below was observed at that commit. Re-verify when the pin changes.
 - **Proposal drafting authority:** Granted by the human operator on 2026-10-18 for this
   single document. Recorded verbatim in Authority Record below.
-- **Publication:** Granted by the human operator on 2026-10-18 for the designated feature
+- **Design publication:** Granted by the human operator on 2026-10-18 for the designated feature
   branch only, and exercised. Recorded verbatim under Publication grant.
-- **Draft pull request:** Directed by the human operator on 2026-10-18 and opened as draft
+- **Design pull request:** Directed by the human operator on 2026-10-18 and opened as draft
   [PR #184](https://github.com/coreytshaffer/TriageCore/pull/184). Review exposure only.
   Recorded verbatim under Draft pull request direction.
 - **Owner decisions:** Two recorded on 2026-10-18; see Owner Decisions. They settle two
@@ -30,7 +31,9 @@
 - **Merge:** [PR #184](https://github.com/coreytshaffer/TriageCore/pull/184) was merged
   manually by the operator as `8f463a5`. At that time this document recorded merge
   authority as not granted; that state is preserved in the lifecycle table below.
-- **Implementation acceptance / release / closeout:** Not granted.
+- **Grant A implementation acceptance:** Granted for `f6c5a06`. The operator's
+  acceptance and draft publication direction are recorded below. Merge, staging,
+  release, deployment and CR closeout remain separate decisions.
 
 ### Lifecycle state
 
@@ -38,13 +41,13 @@
 |---|---|
 | identifier allocation | CR-134, allocated by the operator after a census of `docs/change/requests/` at `ede8ef1` (highest numeric CR-133; no existing delegation or export CR) |
 | proposal drafting | granted, single document |
-| publication | granted for the designated feature branch only; exercised (see Publication grant) |
-| draft pull request | directed by the operator; opened as draft [PR #184](https://github.com/coreytshaffer/TriageCore/pull/184) (see Draft pull request direction); later marked ready for review and merged by the operator |
+| publication | original design branch published October 18. Grant A six-file branch and verification results authorized for publication November 22 |
+| draft pull request | design [PR #184](https://github.com/coreytshaffer/TriageCore/pull/184) merged. Separate Grant A draft PR directed November 22 |
 | owner decisions | two recorded (see Owner Decisions) |
 | proposal acceptance | granted 2026-10-18 (pending when first merged; see Acceptance and merge record) |
 | design acceptance | granted 2026-10-18 for the design at `cd9a6c9` (pending when first merged; see Acceptance and merge record) |
 | implementation authority | Grant A only, 2026-11-22 |
-| implementation acceptance | not granted |
+| implementation acceptance | Grant A offline evaluator accepted at `f6c5a06` on 2026-11-22 |
 | merge authority | not granted by this document when PR #184 merged; the operator merged it manually as `8f463a5` (see Acceptance and merge record) |
 | release authority | not granted |
 | closeout | not granted |
@@ -908,9 +911,9 @@ M05 projection binds the stricter declared and computed classification for both 
 and task risk. The six paths are `triage_core/public_export_policy.py`,
 `triage_core/public_export.py`, `tests/test_public_export_policy.py`,
 `tests/test_public_export.py`, `tests/fixtures/public_export_v0.json` and this CR.
-The stop point is a locally reviewable evaluator and synthetic offline evidence.
-Implementation acceptance, publication, staging, release, deployment and closeout
-require separate decisions.
+This implementation grant ended at a locally reviewable evaluator and synthetic
+offline evidence. The subsequent acceptance and draft publication decision follows
+the verification record.
 
 The frozen baseline policy is revision 1 of `public_export_v0`. It permits the
 Anthropic Claude web and OpenAI ChatGPT web/Android recipient pairs, using simulated
@@ -996,3 +999,14 @@ temporary directory.
 | Final case results, `corpus-results.json` | `6121f55eee95c2bbb8a4c75ad8df75bfa004522e41bac6fe3cd2a72413d3118c` |
 | Focused JUnit, `focused.xml` | `027b4956b56be8f179551dd861bace88af45e6e6bfdb8b39690824129d3d093f` |
 | Full JUnit, `full.xml` | `11ede3d37eb4e05b7efa68fcb3f5da34155d5cb65d4cffc70b7539d8721ff06b` |
+
+### Grant A implementation acceptance and draft publication, 2026-11-22
+
+> I accept CR-134 Grant A at f6c5a06. Go ahead and record my acceptance in the CR, push the six-file branch, and open a draft PR with the frozen corpus and verification results.
+
+The operator accepted the offline evaluator at `f6c5a065b0f068728047ff57047f8f62c95b0cd4`.
+The frozen corpus is recorded at `5ade84e7281436e435cc5c1d1b70ed15892e9c9e`,
+and `93864bb94bf91eefe191e7ecd8afd437e0c25042` records its verification results.
+The publication grant covers the six approved paths on `codex/cr-134-grant-a`
+and a draft pull request into `main` with that evidence. Grant B, merge, release,
+deployment and formal CR closeout each require a separate decision.
