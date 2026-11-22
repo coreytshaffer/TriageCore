@@ -8,7 +8,8 @@
 | --- | --- |
 | Proposal acceptance | Accepted at `62e328d`. [Decision record](#proposal-acceptance-record) |
 | Design acceptance | Accepted at `62e328d`. [Decision record](#design-acceptance-record) |
-| Implementation authority | **Approved for Claude.** One local candidate through handback, effective when this record is published to draft PR #205. [Grant record](#implementation-authority-record) |
+| Operator guide and timeline design amendment | Accepted on 2026-11-22. [Design amendment](#design-amendment-for-the-operator-guide-and-timeline) |
+| Implementation authority | **Approved for Claude.** One local candidate on `49e3ad4` and two local launcher files. [Current grant](#implementation-grant-for-the-operator-guide-and-timeline) · [Preceding corrective grant](#corrective-grant-for-malformed-and-interrupted-runs) · [First corrective grant](#local-corrective-implementation-grant) · [Original grant](#implementation-authority-record) |
 | Implementation acceptance | Pending |
 | Merge authority | Pending |
 | Release authority | Pending |
@@ -145,6 +146,10 @@ fields:
 | `human`/`assessment` | `finding`, `disposition`, `revision_of`, `label_assessment`, `evidence_assessment`, `cited_labels`, `reason_code`, `record_kind`, `target_step`, `target_finding`, `note.stored`, `measurements` |
 
 ### Exact file scope
+
+The following scope applies to the original timeline candidate. The
+[operator guide and timeline grant](#implementation-grant-for-the-operator-guide-and-timeline)
+defines the writable paths for the candidate based on `49e3ad4`.
 
 The base is `origin/main` at `10af245c18095346d7d60b55b2e105bb819f4828`. The
 first-delivery release `022b4a1227b68b899bf1df2aa83d154e9f4855f4` is the
@@ -587,6 +592,203 @@ editing implementation files.
   release, and closeout require separate decisions. Replay and linked
   resume (CHE-90), rollback and file restoration (CHE-91), and the solo
   trial (CHE-92) are out of scope.
+
+## Local corrective implementation grant
+
+On 2026-11-21 (Pacific), Corey Shaffer authorized Claude to address all four
+review findings in **one local corrective commit**. The original grant at
+`8a0ab44` ended when Claude handed back `36a6a4c`. The corrective commit
+must have `36a6a4c0fff9da6a0577288e2729e4c29dce5b7f` as its sole parent
+on `claude/cr-139-che-89-action-timeline-impl`. The accepted design is `62e328d`.
+
+**Files Claude may change in the corrective commit**
+
+- `triage_core/checklist_review_timeline.py`
+- `triage_core/checklist_review_timeline_tk.py`
+- `tests/test_checklist_review_timeline.py`
+- `tests/test_checklist_review_timeline_tk.py`
+- `docs/operations/checklist-review-timeline.md`
+
+**Required corrections and offline checks**
+
+1. **Missing policy assessment.** In a seven-event schema-1 fixture, omit
+   `evidence_status` from the effective policy result. Verify that the run
+   opens, all seven events and their links can be inspected, and the missing
+   assessment reads `unknown`.
+2. **Missing stage history.** In a four-event preflight stop, omit
+   `stages_reached`. Show `unknown` for the missing history and preserve the
+   saved rule and preflight rows. Verify that an explicit stage list still
+   supports `not reached` for later stages in the intact stop fixture.
+3. **Clipboard isolation.** Use an isolated, test-owned clipboard for setup,
+   gestures, assertions, and teardown. Verify that an ordinary Tk text widget
+   copies fixture text and that the viewer's copy and cut gestures preserve
+   the sentinel. Keep the operator's system clipboard outside the test and
+   update the runbook to describe the isolated check.
+4. **Tk callback errors.** Use only the seven [approved reason codes](#read-only-and-offline-boundary).
+   Verify that a recognized error keeps its code and an unexpected `ValueError`
+   emits a single diagnostic with an approved code. Exception class names,
+   messages, paths, and tracebacks are outside the diagnostic.
+
+Claude may verify the correction with disposable offline fixtures. At local
+handback, report the commit and parent, the changed paths, `git diff --check`
+against `36a6a4c`, and the test results for the four corrections, including
+any failures or skips. This grant ends at that handback.
+
+Corey alone runs the read-only saved DC-02 correction check
+(`62866263-2842-4e85-acd2-2e681fadb0fa`) and DC-03 preflight-stop check
+(`a64e0a30-08ba-43e6-acc1-658575f309c9`) on the corrected candidate.
+Both checks are planned. Corey retains the private store. D5 requires a
+Windows touch-device result or Corey's separately recorded waiver.
+[Saved-run procedure](#operator-checks-on-the-saved-runs)
+
+Implementation acceptance, remote publication, merge, release, and closeout
+each require a separate decision from Corey. The [scope exclusions](#out-of-scope)
+include replay, linked resume, rollback, and file restoration.
+
+## Corrective grant for malformed and interrupted runs
+
+On 2026-11-21 (Pacific), Corey Shaffer authorized Claude to address the two
+findings below in **one local corrective commit** on
+`claude/cr-139-che-89-action-timeline-impl`. Its sole parent must be
+`89b0c79ca00b9a06940bb2c0c02077e525bb29d7`. The [first corrective grant](#local-corrective-implementation-grant)
+ended when Claude handed back that parent. At that handback the local CR-139
+file containing the first corrective grant had SHA-256
+`00be452b89bccc5599188688125a23f8209d7844f375eb427a6891e1e15e816e`.
+
+**Files Claude may change in this commit**
+
+- `triage_core/checklist_review_timeline.py`
+- `tests/test_checklist_review_timeline.py`
+- `tests/test_checklist_review_timeline_tk.py`
+- `docs/operations/checklist-review-timeline.md`
+
+**Required corrections and offline checks**
+
+1. **Malformed run.** Use a disposable schema-1 store containing one run
+   whose first event is `rule/result` and one intact run. Translate the
+   internal `run_incomplete` error to `store_unreadable` in the timeline
+   model. The window's run list and `timeline --list` must identify only
+   the affected run as unreadable. The list command exits `0` and the intact
+   run can still be opened. `timeline --run <bad-id> --list` exits `1`
+   with empty stdout and one stderr line,
+   `tc: error: checklist-review timeline: store_unreadable`. The window's
+   **Open run** action stays on the list and shows `Cannot open: store_unreadable`.
+2. **Interrupted run.** Save attempt start, rule result, and model preflight
+   in a disposable store, then close it before an `attempt/finished` event.
+   The run view and `--list` must show the attempt as `incomplete` and
+   `Stages reached: unknown`. Verify that all three saved events keep their
+   IDs and order and can be inspected. Use the intact four-event preflight
+   stop as a control. Its explicit stage history reads `attempt rule preflight`,
+   and its attempt-end details mark model request, model result, and policy
+   as `not reached`.
+
+Update the runbook to describe the inline **Open run** error, the one-line
+CLI diagnostic, and the interrupted-run summary. Use the existing offline
+fixtures and store-integrity checks. At handback, report the commit and its
+parent, the changed paths, `git diff --check 89b0c79 HEAD`, and results for
+both cases and the timeline, Tk, and CR-138 tests, including failures or skips.
+This grant ends at that local handback.
+
+Corey alone runs the [saved-run checks](#operator-checks-on-the-saved-runs)
+on the corrected candidate with Ollama stopped. The DC-02 correction
+(`62866263-2842-4e85-acd2-2e681fadb0fa`) and DC-03 preflight stop
+(`a64e0a30-08ba-43e6-acc1-658575f309c9`) are both planned. Corey retains
+the private store. D5 requires a Windows touch-device result or Corey's
+separate waiver. Implementation acceptance, remote publication, merge,
+release, and closeout each require a separate decision from Corey.
+Replay and rollback remain [outside the scope of CR-139](#out-of-scope).
+
+## Design amendment for the operator guide and timeline
+
+On 2026-11-22 (Pacific), Corey Shaffer accepted the design amendment in
+`CR-139-accessible-operator-ui-grant-draft.md` as drafted. It extends the
+design accepted at `62e328d1f0f9546c409643f9df203efd86b91166`. Corey chose
+**Larger** and confirmed the mockup's timeline buttons were easy to select.
+The reviewed mockup has SHA-256
+`e9ae074a0ff451cd7695127d0345e977c8601ce70c9945a6c73d15705ba8361b`.
+[Original design decision](#design-acceptance-record)
+
+- **Entry and navigation.** Double-click **Open TriageCore Review** to start
+  the pinned Windows GUI and choose a review folder. Ordinary use has one Tk
+  root, event loop, visible window, and size control. **Back to guide** restores
+  the case, instruction, observations, and initiating control. Preserve the
+  standalone timeline, docked details, and Tk-free `timeline --list`.
+- **Text and targets.** Start each independent guide or timeline session at
+  **Larger**. **Large / Larger / Largest** correspond to 22 / 26 / 30 logical
+  pixels at 100% display scale. Share the setting in memory across both views.
+  Full actionable rows and primary buttons have a minimum logical height of
+  `max(56, 2.7 × body size)`, allowing native rounding. Use DPI-aware sizing,
+  visible focus and full-word controls. At 900 × 560, evidence and controls
+  remain reachable at Largest.
+- **Inspection.** Guide steps, the chooser, rows, evidence links, and Close
+  are keyboard-operable. A stationary pointer does not override a keyboard
+  preview after scrolling, resizing, or changing text size. Other previews
+  leave opened evidence pinned. Close or Escape restores the opening row and
+  scroll position. **Based on** and **Back** preserve the evidence trail.
+- **Restart and observations.** Only **Reopen in a fresh process** performs
+  the restart check. It opens a fresh viewer process, carries the guided
+  session's size, keeps one workflow window visible, then returns to the
+  pending step. Retain the seven DC-02 and five DC-03 observations in
+  memory. A failed launch stays unverified. **Verified absent** requires
+  opening the separate run list. Case outcomes are explicit operator choices.
+
+D5 touch and D6 operator ownership carry forward. Corey alone performs the
+saved-run checks. The separate implementation decision follows.
+
+## Implementation grant for the operator guide and timeline
+
+On 2026-11-22 (Pacific), Corey Shaffer separately approved Claude's single-use
+implementation grant in `CR-139-accessible-operator-ui-grant-draft.md` as
+drafted, SHA-256
+`5c7703386fb53958f12febec17dae6350fcb0a1ef765603c04ac1e9445dd05f4`.
+This grant takes effect with this local record. Claude may make **one local
+candidate commit**, with sole parent
+`49e3ad4d414561434713a762e488cbcc6e2cf5b1`, on
+`claude/cr-139-che-89-action-timeline-impl`, and prepare the two named
+local launcher files. The preceding corrective grant ended at handback of
+`49e3ad4`. [Preceding grant](#corrective-grant-for-malformed-and-interrupted-runs)
+
+| Repository path | Authorized change |
+| --- | --- |
+| `triage_core/checklist_review_guide_tk.py` | New native guide and shared window host. |
+| `triage_core/checklist_review_timeline_tk.py` | Mount the existing views in the host and preserve standalone `launch(snapshot, navigator)`. |
+| `triage_core/checklist_review_ui_scale.py` | New shared text sizes, DPI-aware targets, and focus styling. |
+| `tests/test_checklist_review_guide_tk.py` | New disposable-fixture checks for guide startup, transitions, observations, sizing, and process restart. |
+| `tests/test_checklist_review_timeline_tk.py` | Extend native keyboard, pointer, layout, and focus tests. |
+| `docs/operations/checklist-review-timeline.md` | Update startup, controls, sizing, restart, and handback instructions. |
+
+**Outside Git.** In the single operator staging directory specified in the
+approved grant, Claude may update `CR-139-read-only-checks.py` (input SHA-256
+`03f4724c916b6d442aeb58fb83f0f70a610639783d9a1233a0e9e428bd83b0a2`) and create
+`Open TriageCore Review.lnk`. After creating the commit, pin the guide to the
+new full candidate SHA. The shortcut targets the staging directory's
+`CR-138-merge-review/venv/Scripts/pythonw.exe` by absolute path with
+`-E -s -B` and the quoted absolute guide path. Its **Start in** directory is
+the implementation worktree. Keep the store path, run IDs, and credentials
+out of the shortcut. Installation, Desktop or Start menu changes, and
+PowerShell policy changes are outside the grant.
+
+**Verification and end of authority.** Claude uses disposable offline fixtures
+only. Verify the candidate pin, clean tree, and passive port-11434 check
+before each case and new viewer or run-list opening. Keep the read-only
+loader, fixed error codes, isolated clipboard test, and per-case before/after
+file and SHA-256 comparison, including on pause or close. Test navigation in both directions,
+all three text sizes, keyboard and
+pointer operation, a fresh viewer PID, intact fixture stores, and startup
+failures. Exercise the final shortcut only through its first screen and
+Cancel. Report Windows display settings, commands, results, failures, skips,
+parent and candidate SHAs, changed paths, launcher hash, and shortcut
+target, arguments, and local launch link. This grant ends at local handback.
+
+The **saved DC-02 correction** (`62866263-2842-4e85-acd2-2e681fadb0fa`)
+and **saved DC-03 preflight stop** (`a64e0a30-08ba-43e6-acc1-658575f309c9`)
+are **planned for Corey alone** on the new candidate with Ollama stopped.
+Corey retains the private store, supplies the observations, and verifies
+integrity. D5 requires Corey's device check or explicit waiver.
+Implementation acceptance, remote publication, merge, release, and closeout
+require separate decisions. Replay, linked resume, rollback, file
+restoration, and new model runs are outside this grant.
+[Saved-run procedure](#operator-checks-on-the-saved-runs)
 
 ## Limitations
 
