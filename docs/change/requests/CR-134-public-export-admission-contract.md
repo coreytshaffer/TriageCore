@@ -4,7 +4,8 @@
 
 - **Status:** Proposal and design accepted by the human operator on 2026-10-18.
   On 2026-11-22 the operator accepted the Grant A offline evaluator at `f6c5a06`
-  and authorized publication of the six-file branch as a draft PR.
+  and authorized publication of the six-file branch. [PR #209](https://github.com/coreytshaffer/TriageCore/pull/209)
+  merged into `main` at `c22a3d5`. Post-merge CI passed. Grant B awaits a separate decision.
 - **Type:** Governance kernel — privacy and provenance; identity and authority;
   capability and effect bounds; review and human control. Classified under the
   [Backlog Scope Taxonomy](../../current_backlog.md) by the invariant it strengthens:
@@ -32,8 +33,8 @@
   manually by the operator as `8f463a5`. At that time this document recorded merge
   authority as not granted; that state is preserved in the lifecycle table below.
 - **Grant A implementation acceptance:** Granted for `f6c5a06`. The operator's
-  acceptance and draft publication direction are recorded below. Merge, staging,
-  release, deployment and CR closeout remain separate decisions.
+  acceptance, publication direction and subsequent merge decision are recorded below.
+  Grant B staging, software release, deployment and CR closeout remain open.
 
 ### Lifecycle state
 
@@ -41,14 +42,14 @@
 |---|---|
 | identifier allocation | CR-134, allocated by the operator after a census of `docs/change/requests/` at `ede8ef1` (highest numeric CR-133; no existing delegation or export CR) |
 | proposal drafting | granted, single document |
-| publication | original design branch published October 18. Grant A six-file branch and verification results authorized for publication November 22 |
-| draft pull request | design [PR #184](https://github.com/coreytshaffer/TriageCore/pull/184) merged. Separate Grant A draft PR directed November 22 |
+| publication | original design branch published October 18. Grant A six-file branch and verification results published November 22 |
+| draft pull request | design [PR #184](https://github.com/coreytshaffer/TriageCore/pull/184) merged. Grant A [PR #209](https://github.com/coreytshaffer/TriageCore/pull/209) opened as draft, marked ready and merged November 22 |
 | owner decisions | two recorded (see Owner Decisions) |
 | proposal acceptance | granted 2026-10-18 (pending when first merged; see Acceptance and merge record) |
 | design acceptance | granted 2026-10-18 for the design at `cd9a6c9` (pending when first merged; see Acceptance and merge record) |
 | implementation authority | Grant A only, 2026-11-22 |
 | implementation acceptance | Grant A offline evaluator accepted at `f6c5a06` on 2026-11-22 |
-| merge authority | not granted by this document when PR #184 merged; the operator merged it manually as `8f463a5` (see Acceptance and merge record) |
+| merge authority | operator manually merged design PR #184 as `8f463a5`. The operator separately authorized the conditional merge of Grant A PR #209, exercised at `c22a3d5` |
 | release authority | not granted |
 | closeout | not granted |
 
@@ -832,7 +833,9 @@ This CR, and any future implementation of it, does not claim that:
 
 ### Readiness gates for any later live integration
 
-None of these is satisfied, and none is authorized by this CR:
+The design recorded four gates for later live integration. Grant A supplied the
+offline eligibility measurements for the fourth gate. End-to-end staging and prompt
+burden still require measurement. Live integration requires separate authorization.
 
 1. A supported standard-access context, documented for the chosen surface.
 2. Written provider answers to the applicable questions above.
@@ -1010,3 +1013,63 @@ and `93864bb94bf91eefe191e7ecd8afd437e0c25042` records its verification results.
 The publication grant covers the six approved paths on `codex/cr-134-grant-a`
 and a draft pull request into `main` with that evidence. Grant B, merge, release,
 deployment and formal CR closeout each require a separate decision.
+
+### Grant A merge and post-merge verification, 2026-11-22
+
+> Go ahead and review draft PR #209 against my Grant A acceptance at f6c5a06. If the six-file scope and frozen-corpus results match and CI is green, mark it ready for review, merge it into main, and confirm the merge commit.
+
+[PR #209](https://github.com/coreytshaffer/TriageCore/pull/209) merged into `main` at
+[`c22a3d5bdd77e928568728967f8f29edfa52be37`](https://github.com/coreytshaffer/TriageCore/commit/c22a3d5bdd77e928568728967f8f29edfa52be37).
+Its parents are the preceding `main` at `9622ce9` and the reviewed PR head at
+`51251e5`. The merge and PR head have the identical Git tree
+`591c5c88ba8d50b80f5e67847281cde7d84f7fbf`. Only this CR differs from the
+accepted implementation at `f6c5a06`.
+
+GitHub Actions completed the [post-merge tests run #571](https://github.com/coreytshaffer/TriageCore/actions/runs/45076051212)
+on attempt 1 for the `push` to `main` at that exact merge commit. All four jobs passed.
+
+| Hosted job | Result from the job log |
+|---|---|
+| [Ubuntu, Python 3.10](https://github.com/coreytshaffer/TriageCore/actions/runs/45076051212/job/137373395431) | 3,057 passed, 77 skipped. The job verified that the unsupported mobile runtime was rejected. |
+| [Ubuntu, Python 3.11](https://github.com/coreytshaffer/TriageCore/actions/runs/45076051212/job/137373395139) | 3,076 passed, 77 skipped. All 19 mobile tests passed. |
+| [Ubuntu, Python 3.12](https://github.com/coreytshaffer/TriageCore/actions/runs/45076051212/job/137373395437) | 3,076 passed, 77 skipped. All 19 mobile tests passed. |
+| [Windows executor](https://github.com/coreytshaffer/TriageCore/actions/runs/45076051212/job/137373395509) | 261 mandatory tests passed with zero skips. The supplemental symlink probe passed. |
+
+A fresh local run of the two Grant A test modules on `c22a3d5` passed all 197 tests.
+All 54 case records matched the accepted focused and full JUnit reports, including
+the decision IDs, reasons, triggers and effect counts. Nine ordinary tasks qualified,
+three required the expected reviews, all 41 hard stops refused, and the separate policy
+control required review. There were zero guarded effect attempts. The corpus and policy
+hashes matched the offline verification table. The local review workspace retains
+`outputs/cr134-grant-a/postmerge-c22a3d5.xml` with SHA-256
+`9462b99f0043b5e8ea9a26e116c0c0293fdca3aca1c6e4728928feae6bdffb58`.
+
+### Decisions before Grant B
+
+- **Writable scope and trust boundary.** The proposed file-staging increment covers
+  the release, staging, evidence and CLI modules, their four test modules, CLI
+  registration in `triage_core/tc_cli.py`, and this CR. Reconcile that list with
+  Grant A: the revision-1 parser requires empty staging roots and disabled clipboard,
+  and the evaluator binds attestations to the synthetic `account:ordinary-1`.
+  Specify how an operator-controlled policy will authorize a test root while
+  binding the entire policy file. Decide whether the simulated account suffices for
+  B. Name any required changes to Grant A files and tests, platform helpers or CI.
+  Preserve the frozen Grant A policy and corpus as a regression baseline.
+- **Supported platforms and destinations.** Select POSIX file staging, Windows
+  file staging, or both. Specify trusted policy ownership, explicit staging and
+  evidence directories, and known sync-root exclusions plus the operator's per-use
+  attestation. The destination checks exclude working trees, links and group- or
+  world-writable roots. Windows support requires evidence for owner-only NTFS ACLs, junctions and
+  redirected or synchronized folders such as OneDrive. Confirm whether clipboard
+  remains deferred as proposed.
+- **Acceptance and stop point.** Set a budget for prompts per successfully staged
+  export before the first measured run. Grant A completed zero exports. The proposed
+  B verification uses a simulated operator and isolated directories to exercise
+  lossless display, exact review acknowledgements, one-use confirmation, release-time
+  file and clock checks, and read-back against the displayed bytes. It must show zero
+  payload writes on hard refusal, durable metadata-only intent before staging, and
+  accurate outcomes for partial writes or a missing release record.
+
+The provider-access and written-answer gates above apply to a later live
+integration. Grant B implementation, software release, deployment and formal
+CR closeout each require their own authority.
