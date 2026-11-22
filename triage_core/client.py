@@ -1,7 +1,20 @@
-from typing import Callable, Dict, Any, Optional
+from collections.abc import Mapping
+from dataclasses import dataclass
+from functools import wraps
+from threading import RLock
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional
 from .engine import TriageEngine
 from .routers import TriageRouter
-from .backends import LocalBackend, create_backend
+from .backends import (
+    LocalBackend, OllamaBackend, OpenAICompatibleBackend, QwenCloudBackend,
+    create_backend, create_bound_backend,
+)
+from .destination_policy import (
+    NON_NETWORK_ROUTES, DestinationPolicyError, GuardedTransport, RouteBinding, SendRecord,
+    bind_route_endpoints,
+)
+from .runtime_observation import GovernedBindingError
 from .routing import (
     ResilienceRouteDecision,
     ResilienceRouteInput,
@@ -16,6 +29,9 @@ from .task_ledger import TaskLedger
 from .privacy_scanner import scan_task_packet, PrivacyViolationError
 from .config import default_config
 from .routing.route_events import GovernedEvidencePayloadError
+
+if TYPE_CHECKING:
+    from .run_plan import GovernedRunContext
 
 # CR-DD-012B: the two execution *parameters* the governed path still needs from
 # specialist routing, expressed as pure functions of the classification the
@@ -59,6 +75,124 @@ def _governed_execution_parameters(classification: str):
     )
 
 
+class GovernedDestinationRefusal(GovernedBindingError):
+    """Bounded evidence for the permitted sends preceding a terminal refusal."""
+
+    def __init__(
+        self,
+        refusal: DestinationPolicyError,
+        sends: tuple[SendRecord, ...] = (),
+        identity_sha256: str | None = None,
+    ):
+        self.code = refusal.code
+        self.sends = sends
+        self.identity_sha256 = identity_sha256
+        details = " ".join(
+            f"{send.route}/{send.safe_label} {send.method} {send.suffix}" for send in sends
+        )
+        identity = f" identity_sha256={identity_sha256}" if identity_sha256 is not None else ""
+        super().__init__(f"{refusal}{identity} send_count={len(sends)} {details}".rstrip())
+
+
+_PROTOCOL_CLASSES = {
+    "ollama": OllamaBackend,
+    "openai_compatible": OpenAICompatibleBackend,
+    "qwen": QwenCloudBackend,
+}
+
+
+@dataclass(frozen=True)
+class VerifiedDestination:
+    binding: RouteBinding
+    backend: LocalBackend
+    transport: GuardedTransport
+    initial_send_count: int
+
+    def check_before_invoke(self, backend: LocalBackend) -> None:
+        if (
+            backend is not self.backend
+            or type(backend) is not _PROTOCOL_CLASSES[self.binding.protocol]
+        ):
+            raise DestinationPolicyError("destination_binding_mismatch", self.binding.safe_label)
+        if (
+            getattr(backend, "transport", None) is not self.transport
+            or self.transport.owner is not backend
+        ):
+            raise DestinationPolicyError("transport_not_guarded", self.binding.safe_label)
+        # Only the provider backend may attach a configured bearer credential.
+        if self.binding.protocol == "openai_compatible" and backend.api_key not in (
+            None, "", "not-needed"
+        ):
+            raise DestinationPolicyError("destination_binding_mismatch", self.binding.safe_label)
+        self.transport.verify_integrity()
+
+    def execute_task(self, **kwargs):
+        """Keep the engine, the checked owner and its transport local to this call."""
+        engine = TriageEngine(backend=self.backend, timeout_seconds=kwargs["timeout"])
+        try:
+            self.check_before_invoke(engine.backend)
+            return engine.execute_task(verified_transport=self.transport, **kwargs)
+        except DestinationPolicyError as exc:
+            sends = self.transport.sends[self.initial_send_count:]
+            raise GovernedDestinationRefusal(exc, sends, self.binding.identity_sha256) from None
+
+
+def verify_destination_binding(
+    context: "GovernedRunContext", backends: Mapping[str, LocalBackend]
+) -> Mapping[str, VerifiedDestination]:
+    """Verify all network members before observing which one can run."""
+    from .run_plan import configuration_digest
+
+    config = context.effective_config
+    policy = context.decision.policy
+    routes = (policy.preferred_logical_route, *policy.permitted_fallback_envelope)
+    try:
+        expected = bind_route_endpoints(routes, config)
+        digest = configuration_digest(
+            cloud_backend_enabled=config.cloud_enabled.value,
+            cloud_model_binding=config.cloud_model.value if config.cloud_enabled.value else "not_enabled",
+            local_backend_type=config.backend_type.value,
+            endpoint_bindings=expected,
+            transport_policy=context.transport_policy,
+        )
+        if expected != context.endpoint_bindings or digest != policy.configuration_sha256:
+            raise DestinationPolicyError("destination_binding_mismatch")
+        if set(backends) != {binding.route for binding in expected}:
+            raise DestinationPolicyError("transport_not_guarded")
+
+        verified = {}
+        for binding in expected:
+            backend = backends[binding.route]
+            guard = getattr(backend, "transport", None)
+            if type(guard) is not GuardedTransport:
+                raise DestinationPolicyError("transport_not_guarded", binding.safe_label)
+            if guard.route != binding.route or guard.bound_identity_sha256 != binding.identity_sha256:
+                raise DestinationPolicyError("destination_binding_mismatch", binding.safe_label)
+            if guard.transport_policy_sha256 != context.transport_policy.sha256:
+                raise DestinationPolicyError("transport_settings_changed", binding.safe_label)
+            member = VerifiedDestination(binding, backend, guard, len(guard.sends))
+            member.check_before_invoke(backend)
+            if binding.protocol == "qwen" and backend.api_key != (context.qwen_api_key or ""):
+                raise DestinationPolicyError("destination_binding_mismatch", binding.safe_label)
+            verified[binding.route] = member
+        return MappingProxyType(verified)
+    except DestinationPolicyError as exc:
+        raise GovernedDestinationRefusal(exc) from None
+
+
+def _serialize_governed_attempt(method):
+    @wraps(method)
+    def run(self, *args, **kwargs):
+        # The CLI builds a fresh client per invocation. If another caller reuses
+        # one, isolate its model selection and per-attempt send counters.
+        if self._governed_lock is None:
+            return method(self, *args, **kwargs)
+        with self._governed_lock:
+            return method(self, *args, **kwargs)
+
+    return run
+
+
 class TriageClient:
     def __init__(
         self,
@@ -66,7 +200,9 @@ class TriageClient:
         model: str = "local-model",
         base_url: Optional[str] = None,
         backend: Optional[LocalBackend] = None,
-        timeout_seconds: int = 45
+        timeout_seconds: int = 45,
+        *,
+        governed_context=None,
     ):
         """
         Initializes the TriageClient which manages local execution and handoff routing.
@@ -78,12 +214,34 @@ class TriageClient:
             backend: Explicit LocalBackend instance (overrides preset factory).
             timeout_seconds: The strict temporal budget for local generation.
         """
-        if backend is None:
+        self._governed_context = governed_context
+        self._governed_lock = RLock() if governed_context is not None else None
+        backends = {}
+        if governed_context is not None:
+            config = governed_context.effective_config
+            for binding in governed_context.endpoint_bindings:
+                backends[binding.route] = create_bound_backend(
+                    binding,
+                    config,
+                    api_key=governed_context.qwen_api_key if binding.protocol == "qwen" else None,
+                    transport_policy=governed_context.transport_policy,
+                )
+            # A terminal decision can have no network member.
+            backend = next(iter(backends.values()), None)
+            timeout_seconds = config.timeout_seconds.value
+        elif backend is None:
             backend = create_backend(backend_type=backend_type, model=model, base_url=base_url)
             
+        self._governed_backends = MappingProxyType(backends)
         self.engine = TriageEngine(backend=backend, timeout_seconds=timeout_seconds)
         self.router = TriageRouter()
 
+    @classmethod
+    def from_governed_context(cls, context):
+        """Build a fresh client for one attempt, with independent guarded transports."""
+        return cls(governed_context=context)
+
+    @_serialize_governed_attempt
     def run_task(
         self,
         prompt: Optional[str] = None,
@@ -97,6 +255,7 @@ class TriageClient:
         capability: Optional[Any] = None,
         snapshot: Optional[Any] = None,
         decision: Optional[Any] = None,
+        governed_context: "GovernedRunContext | None" = None,
     ) -> Dict[str, Any]:
         """
         Runs a given prompt and data through the execution engine.
@@ -180,19 +339,28 @@ class TriageClient:
         prompt = verified_packet.prompt
         data = verified_packet.data
 
-        governed = decision is not None or snapshot is not None
+        if governed_context is None:
+            governed_context = self._governed_context
+        # The credential is deliberately absent from decision IDs. An equal ID
+        # cannot authorize consumption with another attempt's captured key.
+        if self._governed_context is not None and governed_context is not self._governed_context:
+            raise GovernedDestinationRefusal(DestinationPolicyError("destination_binding_mismatch"))
+        governed = decision is not None or snapshot is not None or governed_context is not None
         decision_id = None
         if governed:
             # Fail closed before any backend construction or invocation. A stale
             # or inconsistent decision terminates the attempt; it is never
             # transparently rebuilt. Termination is not repair.
-            self._verify_governed_inputs(
+            verified_destinations = self._verify_governed_inputs(
                 snapshot=snapshot,
                 decision=decision,
                 verified_packet=verified_packet,
                 is_local_only=is_local_only,
+                context=governed_context,
+                backends=self._governed_backends,
             )
             decision_id = decision.decision_id
+            config = governed_context.effective_config
 
         # Step 1: Routing logic
         if governed:
@@ -218,7 +386,8 @@ class TriageClient:
             use_timeout = route_decision.get("timeout", self.engine.timeout)
             post_processor_override = None
         resilience_input = self._build_resilience_route_input(
-            category=category, validator=validator, capability=capability
+            category=category, validator=validator, capability=capability,
+            cloud_enabled=config.cloud_enabled.value if governed else None,
         )
 
         if is_local_only:
@@ -232,9 +401,9 @@ class TriageClient:
             observation = observe_route_binding(
                 decision=decision,
                 capability=capability,
-                cloud_enabled=default_config.get_qwen_enabled(),
-                local_backend_type=self._selected_backend_name("local_fast"),
-                cloud_model=default_config.get_qwen_model(),
+                cloud_enabled=config.cloud_enabled.value,
+                local_backend_type=config.backend_type.value,
+                cloud_model=config.cloud_model.value,
             )
             validate_envelope_compliance(observation, decision)
             if observation.binding_outcome == "closed":
@@ -251,6 +420,8 @@ class TriageClient:
             )
             selected_route = observation.selected_route
             selected_model = observation.model_binding
+            destination = None if selected_route in NON_NETWORK_ROUTES else verified_destinations[selected_route]
+            selected_backend_name = destination.backend.name if destination else observation.backend_binding
             governed_evidence = {
                 "governed_risk_posture": decision.policy.risk_posture,
                 "binding_outcome": observation.binding_outcome,
@@ -261,8 +432,10 @@ class TriageClient:
             if decision.policy.risk_posture == "high":
                 resilience_input.sensitivity = "high"
         else:
+            destination = None
             resilience_decision = choose_resilience_route(resilience_input)
             selected_route = resilience_decision.selected_route
+            selected_backend_name = self._selected_backend_name(selected_route)
             if selected_route in {"cloud_primary", "cloud_secondary"}:
                 selected_model = default_config.get_qwen_model()
             elif selected_route in {"local_fast", "local_heavy"}:
@@ -273,7 +446,6 @@ class TriageClient:
                 ) or ""
             else:
                 selected_model = ""
-        selected_backend_name = self._selected_backend_name(selected_route)
 
         # A governed decision whose *preferred* route is ``human_handoff``
         # because the ethical firewall triggered is a terminal governed outcome,
@@ -388,8 +560,8 @@ class TriageClient:
                 "source": "steward",
                 "reason": steward_eval["reason"],
                 "handoff_reason": steward_eval["reason"],
-                "backend_name": getattr(self.engine.backend, "name", None),
-                "model": getattr(self.engine.backend, "model", None),
+                "backend_name": selected_backend_name if governed else getattr(self.engine.backend, "name", None),
+                "model": selected_model if governed else getattr(self.engine.backend, "model", None),
                 "timeout_seconds": use_timeout,
                 "firewall_triggered": steward_eval.get("firewall_triggered", False),
                 "firewall_reason": steward_eval.get("firewall_reason", ""),
@@ -425,8 +597,8 @@ class TriageClient:
                 "source": "router",
                 "reason": reason,
                 "handoff_reason": reason,
-                "backend_name": getattr(self.engine.backend, "name", None),
-                "model": getattr(self.engine.backend, "model", None),
+                "backend_name": selected_backend_name if governed else getattr(self.engine.backend, "name", None),
+                "model": selected_model if governed else getattr(self.engine.backend, "model", None),
                 "timeout_seconds": use_timeout,
                 "worker_result_status": "not_attempted",
                 "failure_type": "safety_handoff",
@@ -469,25 +641,19 @@ class TriageClient:
                 raw_data=data,
                 validator=validator,
                 timeout=use_timeout,
+                verified_destination=destination,
                 post_processor=(
                     post_processor_override
                     if governed
                     else route_decision.get("post_processor")
                 ),
             )
-            self._append_optional_event(
-                ledger=ledger,
-                task_id=task_id,
-                event_type="worker_result",
-                payload=build_worker_result_payload(route_payload, result),
-            )
-            return self._merge_route_fields(result, route_payload)
+            return self._record_backend_result(ledger, task_id, route_payload, result, destination)
             
         # Step 2: Local execution
         post_processor = (
             post_processor_override if governed else route_decision.get("post_processor")
         )
-        original_model = self.engine.backend.model
         requested_model = selected_model
 
         if capability is not None and not requested_model:
@@ -508,27 +674,39 @@ class TriageClient:
             )
             return self._merge_route_fields(result, route_payload)
         
-        # Swapping model dynamically for real backends, but preserving mock backend names in tests
-        if getattr(self.engine.backend, "name", "") != "fake" and requested_model and requested_model != original_model:
-            self.engine.backend.model = requested_model
+        executor = destination if governed else self.engine
+        backend = executor.backend
+        original_model = backend.model
+        if getattr(backend, "name", "") != "fake" and requested_model and requested_model != original_model:
+            backend.model = requested_model
             
         try:
-            result = self.engine.execute_task(
+            result = executor.execute_task(
                 task_prompt=prompt,
                 raw_data=data,
                 validator=validator,
                 timeout=use_timeout,
                 post_processor=post_processor
             )
-            self._append_optional_event(
-                ledger=ledger,
-                task_id=task_id,
-                event_type="worker_result",
-                payload=build_worker_result_payload(route_payload, result),
-            )
-            return self._merge_route_fields(result, route_payload)
+            return self._record_backend_result(ledger, task_id, route_payload, result, destination)
         finally:
-            self.engine.backend.model = original_model
+            backend.model = original_model
+
+    def _record_backend_result(
+        self, ledger: Optional[TaskLedger], task_id: Optional[str],
+        route_payload: Dict[str, Any], result: Dict[str, Any],
+        destination: VerifiedDestination | None,
+    ) -> Dict[str, Any]:
+        payload = build_worker_result_payload(route_payload, result)
+        if destination is not None and len(destination.transport.sends) > destination.initial_send_count:
+            evidence = {
+                "destination_safe_label": destination.binding.safe_label,
+                "destination_identity_sha256": destination.binding.identity_sha256,
+            }
+            payload.update(evidence)
+            result.update(evidence)
+        self._append_optional_event(ledger, task_id, "worker_result", payload)
+        return self._merge_route_fields(result, route_payload)
 
     @staticmethod
     def _binding_primitive(value: Any) -> Any:
@@ -559,7 +737,9 @@ class TriageClient:
         decision: Any,
         verified_packet: Any,
         is_local_only: bool,
-    ) -> None:
+        context,
+        backends,
+    ) -> Mapping[str, VerifiedDestination]:
         """Fail closed on any governed-consumption inconsistency.
 
         Every condition here terminates the attempt before backend construction
@@ -579,7 +759,6 @@ class TriageClient:
             verify_governed_decision_id,
         )
         from .governed_run_snapshot import GovernedRunInputSnapshot, sha256_digest
-        from .run_plan import configuration_digest
         from .runtime_observation import GovernedBindingError
 
         if type(snapshot) is not GovernedRunInputSnapshot:
@@ -634,19 +813,6 @@ class TriageClient:
             raise GovernedBindingError("packet task data is not the snapshot's")
 
         policy = decision.policy
-        if configuration_digest(
-            cloud_backend_enabled=default_config.get_qwen_enabled(),
-            cloud_model_binding=(
-                default_config.get_qwen_model()
-                if default_config.get_qwen_enabled()
-                else "not_enabled"
-            ),
-            local_backend_type=default_config.get_backend_type(),
-        ) != policy.configuration_sha256:
-            raise GovernedBindingError(
-                "decision-relevant configuration changed after decision formation"
-            )
-
         egress_eligible = (
             policy.privacy_preflight == "passed"
             and binding.declared_privacy != "local_only"
@@ -676,6 +842,10 @@ class TriageClient:
         )
         if review_required and policy.human_review != "required":
             raise GovernedBindingError("human-review posture is inconsistent")
+
+        if context is None or context.decision.decision_id != decision.decision_id:
+            raise GovernedDestinationRefusal(DestinationPolicyError("destination_binding_mismatch"))
+        return verify_destination_binding(context, backends)
 
     @staticmethod
     def _append_optional_event(
@@ -732,6 +902,7 @@ class TriageClient:
         validator: Optional[Callable[[str], bool]],
         timeout: int,
         post_processor: Optional[Callable[[str], str]],
+        verified_destination: VerifiedDestination | None = None,
     ) -> Dict[str, Any]:
         from .engine import TriageEngine
         from .safe_task_packet import ExternalSafeTaskPacket
@@ -747,7 +918,7 @@ class TriageClient:
                 "failure_stage": "router",
             }
 
-        if not default_config.get_qwen_enabled():
+        if verified_destination is None and not default_config.get_qwen_enabled():
             return {
                 "status": "handoff_required",
                 "source": "router",
@@ -759,12 +930,17 @@ class TriageClient:
             }
 
         try:
-            cloud_backend = create_backend(
-                backend_type="qwen",
-                model=default_config.get_qwen_model(),
-                base_url=default_config.get_qwen_base_url(),
-                api_key=default_config.get_qwen_api_key(),
-            )
+            if verified_destination is not None:
+                cloud_backend = verified_destination.backend
+                if not cloud_backend.api_key:
+                    raise ValueError("qwen backend requires api_key")
+            else:
+                cloud_backend = create_backend(
+                    backend_type="qwen",
+                    model=default_config.get_qwen_model(),
+                    base_url=default_config.get_qwen_base_url(),
+                    api_key=default_config.get_qwen_api_key(),
+                )
         except ValueError as exc:
             return {
                 "status": "handoff_required",
@@ -776,8 +952,8 @@ class TriageClient:
                 "failure_stage": "router",
             }
 
-        cloud_engine = TriageEngine(backend=cloud_backend, timeout_seconds=timeout)
-        result = cloud_engine.execute_task(
+        executor = verified_destination or TriageEngine(backend=cloud_backend, timeout_seconds=timeout)
+        result = executor.execute_task(
             task_prompt=task_prompt,
             raw_data=raw_data,
             validator=validator,
@@ -793,6 +969,7 @@ class TriageClient:
         category: str,
         validator: Optional[Callable[[str], bool]],
         capability: Optional[Any] = None,
+        cloud_enabled: bool | None = None,
     ) -> ResilienceRouteInput:
         task_class_map = {
             "docs_update": "docs_update",
@@ -838,15 +1015,17 @@ class TriageClient:
             local_heavy_available = capability.local_heavy_available
             local_fast_available = capability.local_fast_available
 
+        if cloud_enabled is None:
+            cloud_enabled = default_config.get_qwen_enabled()
         return ResilienceRouteInput(
             task_class=task_class_map.get(category, "general"),
             complexity=complexity_map.get(category, "medium"),
             sensitivity=sensitivity_map.get(category, "low"),
             privacy_level="local_ok",
-            internet_ok=default_config.get_qwen_enabled(),
-            cloud_primary_available=default_config.get_qwen_enabled(),
+            internet_ok=cloud_enabled,
+            cloud_primary_available=cloud_enabled,
             cloud_secondary_available=False,
-            cloud_credit_state="ok" if default_config.get_qwen_enabled() else "none",
+            cloud_credit_state="ok" if cloud_enabled else "none",
             lm_studio_ok=lm_studio_ok,
             local_heavy_available=local_heavy_available,
             local_fast_available=local_fast_available,

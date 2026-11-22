@@ -1,6 +1,12 @@
 from argparse import Namespace
 import builtins
+from dataclasses import replace
+import json
+import os
+from pathlib import Path
 import subprocess
+import sys
+from unittest.mock import patch
 
 import pytest
 
@@ -220,14 +226,13 @@ def test_plan_reports_specialist_risk_conditions_and_model_binding(capsys):
     assert "large_context_route_depends_on_unobserved_internet_state" in large_out
 
 
-def test_plan_output_escapes_unicode_path_task_id_and_configured_model(
+def test_plan_output_escapes_unicode_path_and_task_id(
     tmp_path, monkeypatch, capsys
 ):
     source = tmp_path / "caf\u00e9-\u2603.txt"
     source.write_text("bounded", encoding="utf-8")
-    monkeypatch.setattr(
-        tc_cli.default_config, "get_backend_type", lambda: "l\u00f6cal-\u2603"
-    )
+    monkeypatch.setenv("TRIAGE_BACKEND_TYPE", "lmstudio")
+    monkeypatch.setenv("TRIAGE_BASE_URL", "http://127.0.0.1:1234/v1")
 
     tc_cli.tc_run(
         _args(
@@ -245,7 +250,219 @@ def test_plan_output_escapes_unicode_path_task_id_and_configured_model(
     out.encode("ascii")
     assert "t\\xe2sk-1" in out
     assert "caf\\xe9-\\u2603.txt" in out
-    assert "l\\xf6cal-\\u2603:" in out
+    assert "configured_backend_binding: lmstudio:" in out
+
+
+def test_local_preview_refuses_an_unsupported_configured_protocol(monkeypatch, capsys):
+    monkeypatch.setenv("TRIAGE_BACKEND_TYPE", "l\u00f6cal-\u2603")
+    monkeypatch.setenv("TRIAGE_BASE_URL", "http://127.0.0.1:1234/v1")
+
+    with pytest.raises(SystemExit) as exc:
+        tc_cli.tc_run(_args(prompt="Refactor this"))
+
+    assert exc.value.code == 2
+    output = capsys.readouterr().out
+    assert "backend_protocol_unsupported" in output
+    assert "send_count=0" in output
+    assert "127.0.0.1" not in output
+
+
+@pytest.fixture
+def isolated_backend_configuration(tmp_path, monkeypatch):
+    for name in tuple(os.environ):
+        if name.startswith("TRIAGE_"):
+            monkeypatch.delenv(name)
+    monkeypatch.chdir(tmp_path)
+    return tmp_path / "triagecore.toml"
+
+
+@pytest.mark.parametrize("problem", ["malformed", "unreadable", "parser_missing"])
+def test_governed_preview_refuses_unreadable_configuration(
+    problem, isolated_backend_configuration, monkeypatch, capsys
+):
+    from triage_core import config
+    from triage_core.client import TriageClient
+
+    path = isolated_backend_configuration
+    path.write_text("[broken PRIVATE_VALUE" if problem == "malformed" else "[backend]",
+                    encoding="utf-8")
+    if problem == "unreadable":
+        real_open = builtins.open
+
+        def refuse_config(file, *args, **kwargs):
+            if Path(file).resolve() == path:
+                raise PermissionError("PRIVATE_VALUE")
+            return real_open(file, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "open", refuse_config)
+    if problem == "parser_missing":
+        monkeypatch.setattr(config, "tomllib", None)
+    monkeypatch.setattr(TriageClient, "__init__", lambda *a, **kw: pytest.fail("built a client"))
+
+    with pytest.raises(SystemExit) as exc:
+        tc_cli.tc_run(_args())
+
+    assert exc.value.code == 2
+    output = capsys.readouterr().out
+    assert "configuration_unreadable send_count=0" in output
+    assert "PRIVATE_VALUE" not in output
+
+
+def test_fresh_cli_never_echoes_private_toml_parser_details(isolated_backend_configuration):
+    isolated_backend_configuration.write_text("[PRIVATE_SECTION]\n[PRIVATE_SECTION]", encoding="utf-8")
+    environment = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[1]))
+    result = subprocess.run(
+        [sys.executable, "-B", "-m", "triage_core.tc_cli", "run", "Summarize this",
+         "--plan", "--model", "generic-8k"],
+        env=environment, cwd=isolated_backend_configuration.parent, capture_output=True,
+        text=True, timeout=30,
+    )
+    assert result.returncode == 2
+    assert "configuration_unreadable send_count=0" in result.stdout
+    assert "PRIVATE_SECTION" not in result.stdout + result.stderr
+
+
+def _destination_context(**kwargs):
+    from triage_core.run_plan import build_governed_run_context
+
+    return build_governed_run_context(
+        prompt="Refactor this", sources=(), inline_data=None, privacy="local_only",
+        allow_cloud=False, model_profile="generic-8k", task_id=None, **kwargs,
+    )
+
+
+def test_missing_configuration_uses_literal_preset_and_protects_key(
+    isolated_backend_configuration, monkeypatch
+):
+    from triage_core.governed_decision import serialize_governed_decision
+
+    monkeypatch.setenv("TRIAGE_QWEN_API_KEY", "synthetic-credential-a")
+    first = _destination_context()
+    assert first.effective_config.local_base_url.source == "preset"
+    assert first.effective_config.local_base_url.value == "http://127.0.0.1:1234/v1"
+    assert first.effective_config.cloud_api_key_present
+    assert first.qwen_api_key is None
+    assert "synthetic-credential-a" not in repr(first)
+    assert b"synthetic-credential-a" not in serialize_governed_decision(first.decision)
+
+    monkeypatch.setenv("TRIAGE_QWEN_API_KEY", "synthetic-credential-b")
+    second = _destination_context()
+    assert first.decision == second.decision
+
+
+def test_v2_decision_binds_port_policy_and_route_order(
+    isolated_backend_configuration, monkeypatch
+):
+    from triage_core import run_plan
+    from triage_core.client import TriageClient, verify_destination_binding
+    from triage_core.destination_policy import TransportPolicy
+
+    original = _destination_context()
+    assert original.decision.policy.configuration_version == "governed_decision_configuration.v2"
+    assert [binding.route for binding in original.endpoint_bindings] == ["local_heavy", "local_fast"]
+    with monkeypatch.context() as change:
+        change.setenv("TRIAGE_BASE_URL", "http://127.0.0.1:4321/v1")
+        different_port = _destination_context()
+    different_policy = _destination_context(transport_policy=TransportPolicy(calls=()))
+    restricted_client = TriageClient.from_governed_context(different_policy)
+    restricted_routes = verify_destination_binding(different_policy, restricted_client._governed_backends)
+    assert all(member.transport.transport_policy_sha256 == different_policy.transport_policy.sha256
+               for member in restricted_routes.values())
+    old_envelope = run_plan._route_envelope
+
+    def exchange_local_routes(route_input):
+        preferred, reason, depth, review, fallback = old_envelope(route_input)
+        assert (preferred, *fallback[:1]) == ("local_heavy", "local_fast")
+        return fallback[0], reason, depth, review, (preferred, *fallback[1:])
+
+    monkeypatch.setattr(run_plan, "_route_envelope", exchange_local_routes)
+    reordered = _destination_context()
+    for changed in (different_port, different_policy, reordered):
+        assert changed.decision.policy.configuration_sha256 != original.decision.policy.configuration_sha256
+        assert changed.decision.decision_id != original.decision.decision_id
+
+
+def _configured_client_digests():
+    from requests.adapters import HTTPAdapter
+    from triage_core.client import TriageClient, verify_destination_binding
+    from triage_core.destination_policy import GuardedTransport
+
+    class NoSendAdapter(HTTPAdapter):
+        def send(self, *args, **kwargs):
+            raise AssertionError("construction and verification may not send")
+
+    def guard_with_adapter(*args, **kwargs):
+        return GuardedTransport(*args, **kwargs, adapters={"http://": NoSendAdapter()})
+
+    first = _destination_context()
+    plain = TriageClient.from_governed_context(first)
+    second = _destination_context()
+    with patch("triage_core.backends.GuardedTransport", side_effect=guard_with_adapter):
+        mounted = TriageClient.from_governed_context(second)
+    first_set = verify_destination_binding(first, plain._governed_backends)
+    second_set = verify_destination_binding(second, mounted._governed_backends)
+    for route, member in first_set.items():
+        peer = second_set[route]
+        assert member.transport._seal != peer.transport._seal
+        assert member.transport.transport_policy_sha256 == peer.transport.transport_policy_sha256
+    assert first.decision == second.decision
+    return [first.transport_policy.sha256, first.decision.policy.configuration_sha256,
+            first.decision.decision_id]
+
+
+def test_v2_client_digests_are_identical_across_processes(isolated_backend_configuration):
+    expected = _configured_client_digests()
+    test_dir = Path(__file__).resolve().parent
+    environment = dict(os.environ, PYTHONPATH=os.pathsep.join(map(str, (test_dir, test_dir.parent))))
+    script = ("import json\nfrom test_tc_run_plan_cli import _configured_client_digests\n"
+              "print(json.dumps(_configured_client_digests()))")
+    outputs = [subprocess.run(
+        [sys.executable, "-B", "-c", script], check=True, capture_output=True, text=True,
+        cwd=isolated_backend_configuration.parent, env=environment, timeout=30,
+    ).stdout for _ in range(2)]
+    assert json.loads(outputs[0]) == json.loads(outputs[1]) == expected
+
+
+@pytest.mark.parametrize("claim_current_version", [False, True], ids=["historical", "v2-with-v1-digest"])
+def test_old_digest_decision_is_refused_before_any_send(
+    claim_current_version, isolated_backend_configuration, monkeypatch
+):
+    from triage_core import governed_decision as gd
+    from triage_core.client import TriageClient
+    from triage_core.governed_run_snapshot import sha256_digest
+    from triage_core.runtime_observation import GovernedBindingError
+
+    current = _destination_context()
+    version = "governed_decision_configuration.v1"
+    historical = (
+        version, "cloud_backend_enabled=False", "cloud_model_binding=not_enabled",
+        "local_backend_type=lmstudio", f"policy_version={gd.POLICY_VERSION}",
+        f"classification_policy_version={gd.CLASSIFICATION_POLICY_VERSION}",
+        f"route_policy_version={gd.ROUTE_POLICY_VERSION}",
+        f"verification_policy_version={gd.VERIFICATION_POLICY_VERSION}",
+    )
+    with monkeypatch.context() as previous:
+        if not claim_current_version:
+            previous.setattr(gd, "CONFIGURATION_VERSION", version)
+        old_policy = replace(
+            current.decision.policy,
+            configuration_version=gd.CONFIGURATION_VERSION,
+            configuration_sha256=sha256_digest("\n".join(historical).encode()),
+        )
+        old_decision = gd.build_governed_decision(current.snapshot, old_policy)
+        assert gd.verify_governed_decision_id(old_decision)
+
+    stale = replace(current, decision=old_decision)
+    client = TriageClient.from_governed_context(stale)
+    monkeypatch.setattr("requests.adapters.HTTPAdapter.send",
+                        lambda *a, **kw: pytest.fail("obsolete decision attempted a send"))
+    with pytest.raises(GovernedBindingError) as refused:
+        client.run_task(task_packet=stale.packet, snapshot=stale.snapshot,
+                        decision=old_decision, governed_context=stale,
+                        capability=stale.presentation.capability)
+    if claim_current_version:
+        assert "destination_binding_mismatch" in str(refused.value)
+    assert all(not backend.transport.sends for backend in client._governed_backends.values())
 
 
 def test_plan_traps_network_subprocess_backend_ledger_and_writes(

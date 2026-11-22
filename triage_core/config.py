@@ -16,8 +16,9 @@ def load_toml(path: str) -> dict:
     try:
         with open(path, "rb") as f:
             return tomllib.load(f)
-    except Exception as e:
-        print(f"Warning: Failed to parse TOML file {path}: {e}")
+    except Exception:
+        # Parser diagnostics can quote arbitrary keys or values before CLI dispatch.
+        print(f"Warning: Failed to parse TOML file {path}.")
         return {}
 
 
@@ -47,6 +48,37 @@ class Config:
 
         self.global_config = load_toml(self.global_config_path)
         self.work_rules = load_toml(self.work_rules_path)
+
+    def read_governed_backend_configuration(self):
+        """Read the attempt's endpoint inputs once, failing closed on an unreadable file.
+
+        The credential is handed privately to backend construction. Only its presence
+        belongs to the immutable effective configuration.
+        """
+        from .destination_policy import DestinationPolicyError, resolve_effective_configuration
+
+        environment = dict(os.environ)
+        try:
+            with open(self.global_config_path, "rb") as stream:
+                if tomllib is None:
+                    raise DestinationPolicyError("configuration_unreadable")
+                settings = tomllib.load(stream)
+        except FileNotFoundError:
+            settings = None
+        except (OSError, ValueError):
+            raise DestinationPolicyError("configuration_unreadable") from None
+
+        try:
+            configuration = resolve_effective_configuration(environment, settings)
+        except OverflowError:
+            raise DestinationPolicyError("configuration_unreadable") from None
+        text_values = (configuration.backend_type, configuration.model, configuration.cloud_model)
+        urls = (configuration.local_base_url, configuration.cloud_base_url)
+        if not all(isinstance(item.value, str) for item in text_values):
+            raise DestinationPolicyError("configuration_unreadable")
+        if any(item.value is not None and not isinstance(item.value, str) for item in urls):
+            raise DestinationPolicyError("configuration_unreadable")
+        return configuration, environment.get("TRIAGE_QWEN_API_KEY")
 
     def get_global(self, section: str, key: str, default=None):
         env_name = _BACKEND_ENV_OVERRIDES.get((section, key))

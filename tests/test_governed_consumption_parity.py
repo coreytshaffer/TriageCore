@@ -9,8 +9,8 @@ carried -- which are about ``governed_decision.py`` staying free of ambient and
 runtime dependencies, an invariant integration does not retire -- are carried
 over verbatim at the end of this file.
 
-Every test here is deterministic and fully offline: no network, socket,
-subprocess, model call, or real runtime is involved.
+These tests use recording adapters and, for proxy isolation, in-process loopback
+servers. They need no external network or model runtime.
 """
 
 from __future__ import annotations
@@ -23,8 +23,6 @@ from types import SimpleNamespace
 import pytest
 
 from triage_core import capability_evidence, run_plan, tc_cli
-from triage_core.backends import BackendResponse
-from triage_core.client import TriageClient
 from triage_core.governed_decision import (
     GovernedDecision,
     serialize_governed_decision,
@@ -59,24 +57,49 @@ def declared_local_capability(monkeypatch):
     return resolution
 
 
-class RecordingBackend:
-    name = "fake"
-    base_url = "http://localhost"
-    model = "fake-model"
+class RecordedHTTP:
+    def __init__(self, monkeypatch):
+        import requests
 
-    def __init__(self) -> None:
-        self.messages = None
-        self.timeout = None
+        self.calls = []
+        self.adapters = []
+        self.error = None
 
-    def generate(self, messages, temperature=0.1, timeout=45, **kwargs):
-        self.messages = messages
-        self.timeout = timeout
-        return BackendResponse(
-            text="LOCAL_RAN",
-            raw={},
-            usage={"prompt_tokens": 3, "completion_tokens": 2, "total_tokens": 5},
-            backend_name=self.name,
-        )
+        def send(adapter, request, **settings):
+            self.calls.append((request, settings))
+            self.adapters.append(adapter)
+            if self.error:
+                raise self.error
+            response = requests.Response()
+            response.status_code = 200
+            response.url = request.url
+            response.request = request
+            response._content_consumed = True
+            response._content = json.dumps({
+                "models": [{"name": "observed-local"}],
+                "data": [{"id": "observed-local"}],
+                "message": {"content": "LOCAL_RAN"},
+                "choices": [{"message": {"content": "LOCAL_RAN"}}],
+                "usage": {"total_tokens": 5}
+            }).encode()
+            return response
+
+        monkeypatch.setattr(requests.adapters.HTTPAdapter, "send", send)
+
+    @property
+    def messages(self):
+        if not self.calls:
+            return None
+        return json.loads(self.calls[-1][0].body)["messages"]
+
+    @property
+    def timeout(self):
+        return self.calls[-1][1]["timeout"]
+
+
+@pytest.fixture
+def recorded_http(monkeypatch):
+    return RecordedHTTP(monkeypatch)
 
 
 class ConsumingClient:
@@ -95,10 +118,12 @@ class ConsumingClient:
         capability=None,
         snapshot=None,
         decision=None,
+        governed_context=None,
     ):
         self.packet = task_packet
         self.snapshot = snapshot
         self.decision = decision
+        self.governed_context = governed_context
         self.capability = capability
         return {"status": "success", "output": "", "selected_route": "local_heavy"}
 
@@ -197,6 +222,7 @@ def test_execution_receives_the_seam_snapshot_and_decision(monkeypatch):
 
     assert len(built) == 1
     context = built[0]
+    assert client.governed_context is context
     assert client.snapshot is context.snapshot
     assert client.decision is context.decision
     assert type(client.snapshot) is GovernedRunInputSnapshot
@@ -358,7 +384,7 @@ def test_projection_invokes_no_classifier_router_or_context_planner(
     assert plan["route"] == context.decision.policy.preferred_logical_route
 
 
-def test_execution_invokes_no_second_classifier_or_router(monkeypatch):
+def test_execution_invokes_no_second_classifier_or_router(recorded_http, monkeypatch):
     import triage_core.classifier as classifier_module
     import triage_core.client as client_module
 
@@ -368,17 +394,15 @@ def test_execution_invokes_no_second_classifier_or_router(monkeypatch):
     monkeypatch.setattr(client_module, "choose_resilience_route", _forbidden)
     monkeypatch.setattr(classifier_module.TaskClassifier, "classify", _forbidden)
 
-    backend = RecordingBackend()
-    tc_cli.tc_run(_args(), client=TriageClient(backend=backend))
-    assert backend.messages is not None
+    tc_cli.tc_run(_args())
+    assert recorded_http.messages is not None
 
 
-def test_execution_constructs_no_second_snapshot_or_decision(monkeypatch):
+def test_execution_constructs_no_second_snapshot_or_decision(recorded_http, monkeypatch):
     snapshots = _spy(monkeypatch, "build_governed_run_input_snapshot")
     decisions = _spy(monkeypatch, "build_governed_decision")
-    backend = RecordingBackend()
 
-    tc_cli.tc_run(_args(), client=TriageClient(backend=backend))
+    tc_cli.tc_run(_args())
 
     assert len(snapshots) == 1
     assert len(decisions) == 1
@@ -389,21 +413,19 @@ def test_execution_constructs_no_second_snapshot_or_decision(monkeypatch):
 # --------------------------------------------------------------------------
 
 
-def test_worker_receives_the_snapshot_assembly_verbatim(tmp_path, monkeypatch):
+def test_worker_receives_the_snapshot_assembly_verbatim(recorded_http, tmp_path, monkeypatch):
     source = tmp_path / "context.txt"
     source.write_text("CONTEXT_BODY\n", encoding="utf-8")
     built = _capture_contexts(monkeypatch)
-    backend = RecordingBackend()
 
     tc_cli.tc_run(
         _args(files=[str(source)], data="INLINE_BODY"),
-        client=TriageClient(backend=backend),
     )
 
     snapshot = built[0].snapshot
     user_message = next(
         message["content"]
-        for message in backend.messages
+        for message in recorded_http.messages
         if message["role"] == "user"
     )
     assert user_message == snapshot.assembled_execution_bytes.decode("utf-8")
@@ -467,7 +489,7 @@ def test_changed_source_content_changes_the_decision_id(tmp_path, monkeypatch):
 
 
 def test_execution_does_not_reopen_a_source_changed_after_the_seam(
-    tmp_path, monkeypatch
+    recorded_http, tmp_path, monkeypatch
 ):
     source = tmp_path / "context.txt"
     source.write_text("ORIGINAL_CONTEXT", encoding="utf-8")
@@ -485,12 +507,11 @@ def test_execution_does_not_reopen_a_source_changed_after_the_seam(
 
     monkeypatch.setattr(run_plan, "build_governed_run_context", rewrite_after_seam)
 
-    backend = RecordingBackend()
-    tc_cli.tc_run(_args(files=[str(source)]), client=TriageClient(backend=backend))
+    tc_cli.tc_run(_args(files=[str(source)]))
 
     user_message = next(
         message["content"]
-        for message in backend.messages
+        for message in recorded_http.messages
         if message["role"] == "user"
     )
     assert "ORIGINAL_CONTEXT" in user_message
@@ -503,11 +524,10 @@ def test_execution_does_not_reopen_a_source_changed_after_the_seam(
 # --------------------------------------------------------------------------
 
 
-def test_bounded_decision_id_linkage_reaches_both_payloads(tmp_path, monkeypatch):
+def test_bounded_decision_id_linkage_reaches_both_payloads(recorded_http, tmp_path, monkeypatch):
     built = _capture_contexts(monkeypatch)
     tc_cli.tc_run(
         _args(ledger_dir=str(tmp_path), no_ledger=False),
-        client=TriageClient(backend=RecordingBackend()),
     )
 
     decision_id = built[0].decision.decision_id
@@ -519,7 +539,7 @@ def test_bounded_decision_id_linkage_reaches_both_payloads(tmp_path, monkeypatch
     assert worker_result["payload"]["decision_id"] == decision_id
 
 
-def test_linkage_carries_no_prompt_data_path_or_output(tmp_path, monkeypatch):
+def test_linkage_carries_no_prompt_data_path_or_output(recorded_http, tmp_path, monkeypatch):
     source = tmp_path / "SOURCE_PATH_SENTINEL.txt"
     source.write_text("SOURCE_CONTENT_SENTINEL", encoding="utf-8")
 
@@ -531,7 +551,6 @@ def test_linkage_carries_no_prompt_data_path_or_output(tmp_path, monkeypatch):
             ledger_dir=str(tmp_path),
             no_ledger=False,
         ),
-        client=TriageClient(backend=RecordingBackend()),
     )
 
     ledger_path = tmp_path / "ledger.jsonl"
@@ -719,7 +738,7 @@ def _replace_after_seam(monkeypatch, target, attribute, replacement):
     monkeypatch.setattr(run_plan, "build_governed_run_context", wrapper)
 
 
-def test_execution_does_not_re_evaluate_the_ethical_firewall(monkeypatch):
+def test_execution_does_not_re_evaluate_the_ethical_firewall(recorded_http, monkeypatch):
     import triage_core.project_steward as steward_module
 
     def _forbidden(*args, **kwargs):
@@ -729,12 +748,11 @@ def test_execution_does_not_re_evaluate_the_ethical_firewall(monkeypatch):
 
     _replace_after_seam(monkeypatch, steward_module.ProjectSteward, "evaluate", _forbidden)
 
-    backend = RecordingBackend()
-    tc_cli.tc_run(_args(), client=TriageClient(backend=backend))
-    assert backend.messages is not None
+    tc_cli.tc_run(_args())
+    assert recorded_http.messages is not None
 
 
-def test_execution_does_not_invoke_the_specialist_policy_selector(monkeypatch):
+def test_execution_does_not_invoke_the_specialist_policy_selector(recorded_http, monkeypatch):
     import triage_core.routers as routers_module
 
     def _forbidden(*args, **kwargs):
@@ -751,12 +769,11 @@ def test_execution_does_not_invoke_the_specialist_policy_selector(monkeypatch):
         ),
     )
 
-    backend = RecordingBackend()
-    tc_cli.tc_run(_args(), client=TriageClient(backend=backend))
-    assert backend.messages is not None
+    tc_cli.tc_run(_args())
+    assert recorded_http.messages is not None
 
 
-def test_firewall_verdict_is_consumed_from_the_decision(monkeypatch):
+def test_firewall_verdict_is_consumed_from_the_decision(recorded_http, monkeypatch):
     """A steward that would say 'clear' cannot un-stop a decision that stopped."""
 
     import triage_core.project_steward as steward_module
@@ -776,7 +793,6 @@ def test_firewall_verdict_is_consumed_from_the_decision(monkeypatch):
     with pytest.raises(SystemExit) as exc:
         tc_cli.tc_run(
             _args(prompt="Review the sacred burial site survey"),
-            client=TriageClient(backend=RecordingBackend()),
         )
     assert exc.value.code == 3
 
@@ -816,16 +832,15 @@ def test_governed_execution_parameters_match_the_specialist_router(
     assert post_processor is reference["post_processor"]
 
 
-def test_executed_timeout_is_the_timeout_the_preview_published(monkeypatch, capsys):
+def test_executed_timeout_is_the_timeout_the_preview_published(recorded_http, monkeypatch, capsys):
     built = _capture_contexts(monkeypatch)
     tc_cli.tc_run(_args(plan=True))
     plan_output = capsys.readouterr().out
     forecast = built[0].presentation.specialist_timeout
     assert f"specialist_timeout_forecast_seconds: {forecast}" in plan_output
 
-    backend = RecordingBackend()
-    tc_cli.tc_run(_args(), client=TriageClient(backend=backend))
-    assert backend.timeout == forecast
+    tc_cli.tc_run(_args())
+    assert recorded_http.timeout == forecast
 
 
 # --------------------------------------------------------------------------
@@ -835,8 +850,7 @@ def test_executed_timeout_is_the_timeout_the_preview_published(monkeypatch, caps
 # --------------------------------------------------------------------------
 
 
-def test_ethical_firewall_is_a_governed_handoff_not_a_fail_closed_error(tmp_path):
-    backend = RecordingBackend()
+def test_ethical_firewall_is_a_governed_handoff_not_a_fail_closed_error(recorded_http, tmp_path):
 
     with pytest.raises(SystemExit) as exc:
         tc_cli.tc_run(
@@ -845,11 +859,10 @@ def test_ethical_firewall_is_a_governed_handoff_not_a_fail_closed_error(tmp_path
                 ledger_dir=str(tmp_path),
                 no_ledger=False,
             ),
-            client=TriageClient(backend=backend),
         )
 
     assert exc.value.code == 3
-    assert backend.messages is None
+    assert recorded_http.messages is None
 
     events = _ledger_events(tmp_path / "ledger.jsonl")
     route_decision = next(e for e in events if e["event_type"] == "route_decision")
@@ -874,7 +887,7 @@ def test_a_firewall_handoff_binds_as_primary_not_as_a_fallback(monkeypatch, caps
     assert policy.human_review == "required"
 
 
-def test_an_unbindable_local_route_is_still_fail_closed(tmp_path, monkeypatch):
+def test_an_unbindable_local_route_is_still_fail_closed(recorded_http, tmp_path, monkeypatch):
     """The capability-driven handoff keeps its exit-2 fail-closed semantics."""
 
     monkeypatch.setattr(
@@ -882,39 +895,35 @@ def test_an_unbindable_local_route_is_still_fail_closed(tmp_path, monkeypatch):
         "resolve_from_config",
         lambda *a, **k: capability_evidence.unknown_resolution(),
     )
-    backend = RecordingBackend()
 
     with pytest.raises(SystemExit) as exc:
         tc_cli.tc_run(
             _args(ledger_dir=str(tmp_path), no_ledger=False),
-            client=TriageClient(backend=backend),
         )
 
     assert exc.value.code == 2
-    assert backend.messages is None
+    assert recorded_http.messages is None
 
 
 @pytest.fixture
 def cr019_stubbed_client(monkeypatch):
     """Keep routing/evidence real and stop at the external execution boundary."""
-    backend = RecordingBackend()
-    client = TriageClient(backend=backend)
     attempts = []
 
     def forbidden(*args, **kwargs):
         pytest.fail("CR-DD-019 must not create or invoke a model backend")
 
-    def execute(**kwargs):
+    def execute(engine, **kwargs):
         attempts.append(kwargs)
         return {"status": "success", "source": "local", "output": "STUB_OUTPUT",
                 "worker_result_status": "completed", "validation_status": "not_run"}
 
-    monkeypatch.setattr(backend, "generate", forbidden)
-    monkeypatch.setattr(client.engine, "execute_task", execute)
+    monkeypatch.setattr("requests.adapters.HTTPAdapter.send", forbidden)
+    monkeypatch.setattr("triage_core.engine.TriageEngine.execute_task", execute)
     monkeypatch.setattr("triage_core.client.create_backend", forbidden)
     monkeypatch.setattr("triage_core.backends.create_backend", forbidden)
     monkeypatch.setattr(tc_cli.default_config, "get_qwen_enabled", lambda: False)
-    return client, attempts
+    return attempts
 
 
 @pytest.mark.parametrize("prompt,risk,sensitivity,route,exit_code", [
@@ -926,13 +935,13 @@ def test_cr019_governed_risk_and_sensitivity_reach_actual_events(
     tmp_path, monkeypatch, cr019_stubbed_client, prompt, risk, sensitivity, route, exit_code
 ):
     built = _capture_contexts(monkeypatch)
-    client, attempts = cr019_stubbed_client
+    attempts = cr019_stubbed_client
     args = _args(prompt=prompt, task_id="cr019-task", no_ledger=False, ledger_dir=str(tmp_path))
     if exit_code is None:
-        tc_cli.tc_run(args, client=client)
+        tc_cli.tc_run(args)
     else:
         with pytest.raises(SystemExit) as caught:
-            tc_cli.tc_run(args, client=client)
+            tc_cli.tc_run(args)
         assert caught.value.code == exit_code
     events = _ledger_events(tmp_path / "ledger.jsonl")
     route_event = next(e["payload"] for e in events if e["event_type"] == "route_decision")
@@ -976,9 +985,9 @@ def test_cr019_fallback_explains_binding_without_changing_decision(
     )
     monkeypatch.setattr(capability_evidence, "resolve_from_config", lambda *a, **k: fast_only)
     built = _capture_contexts(monkeypatch)
-    client, attempts = cr019_stubbed_client
+    attempts = cr019_stubbed_client
     tc_cli.tc_run(_args(prompt="Fix the bug", task_id="cr019-fallback", no_ledger=False,
-                        ledger_dir=str(tmp_path)), client=client)
+                        ledger_dir=str(tmp_path)))
     assert serialize_governed_decision(built[0].decision) == serialize_governed_decision(expected.decision)
     assert len(attempts) == 1
     events = _ledger_events(tmp_path / "ledger.jsonl")
@@ -998,9 +1007,9 @@ def test_cr019_unknown_routes_keep_duplicate_causes_and_block_before_execution(
 ):
     monkeypatch.setattr(capability_evidence, "resolve_from_config",
                         lambda *a, **k: capability_evidence.unknown_resolution())
-    client, attempts = cr019_stubbed_client
+    attempts = cr019_stubbed_client
     with pytest.raises(SystemExit) as caught:
-        tc_cli.tc_run(_args(no_ledger=False, ledger_dir=str(tmp_path)), client=client)
+        tc_cli.tc_run(_args(no_ledger=False, ledger_dir=str(tmp_path)))
     assert caught.value.code == 2
     assert attempts == []
     events = _ledger_events(tmp_path / "ledger.jsonl")
@@ -1011,3 +1020,336 @@ def test_cr019_unknown_routes_keep_duplicate_causes_and_block_before_execution(
     assert route["binding_reason_codes"] == [
         "local_capability_unknown", "local_capability_unknown", "terminal_human_handoff"
     ]
+
+
+# CR-135. Observe prepared HTTP requests at the last boundary before I/O.
+def declare_auto_model(monkeypatch):
+    capability = capability_evidence.resolve_capability(
+        record=None, declare_local_fast=True, declare_local_heavy=True,
+        local_fast_model="auto", local_heavy_model="auto",
+        config_reference="test:auto", freshness_seconds=300,
+    )
+    monkeypatch.setattr(capability_evidence, "resolve_from_config", lambda *a, **k: capability)
+
+
+@pytest.mark.parametrize(("protocol", "base_url", "discovery", "generation"), [
+    ("ollama", "http://127.0.0.1:11434", "/api/tags", "/api/chat"),
+    ("lmstudio", "http://[::1]:1234/v1", "/models", "/chat/completions"),
+])
+def test_local_only_discovery_and_generation_stay_on_device(
+    monkeypatch, recorded_http, protocol, base_url, discovery, generation
+):
+    monkeypatch.setenv("TRIAGE_BACKEND_TYPE", protocol)
+    monkeypatch.setenv("TRIAGE_BASE_URL", base_url)
+    monkeypatch.setenv("TRIAGE_MODEL", "auto")
+    monkeypatch.setenv("TRIAGE_QWEN_API_KEY", "synthetic-qwen-test-key")
+    monkeypatch.setenv("TRIAGE_QWEN_ENABLED", "1")
+    declare_auto_model(monkeypatch)
+    contexts = _capture_contexts(monkeypatch)
+    tc_cli.tc_run(_args(data="SYNTHETIC_LOCAL_MARKER"))
+    assert contexts[0].qwen_api_key is None
+    requests = [request for request, _ in recorded_http.calls]
+    assert [(r.method, r.url) for r in requests] == [
+        ("GET", base_url + discovery), ("POST", base_url + generation)
+    ]
+    assert all("Authorization" not in r.headers for r in requests)
+    assert b"SYNTHETIC_LOCAL_MARKER" in requests[1].body
+
+
+@pytest.mark.parametrize("preview", [False, True])
+def test_nonlocal_backend_refused_before_any_send(monkeypatch, recorded_http, preview, capsys):
+    monkeypatch.setenv("TRIAGE_BACKEND_TYPE", "ollama")
+    monkeypatch.setenv("TRIAGE_BASE_URL", "http://203.0.113.5:11434")
+    with pytest.raises(SystemExit) as refused:
+        tc_cli.tc_run(_args(plan=preview))
+    assert refused.value.code == 2
+    assert "endpoint_not_device_local" in capsys.readouterr().out
+    assert recorded_http.calls == []
+
+
+@pytest.mark.parametrize("url", [
+    "https://example.invalid/compatible-mode/v1",
+    "http://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+    "https://dashscope-intl.aliyuncs.com:444/compatible-mode/v1",
+    "https://dashscope-intl.aliyuncs.com/v1",
+])
+def test_unapproved_qwen_destination_stops_whole_attempt(monkeypatch, recorded_http, url, capsys):
+    monkeypatch.setenv("TRIAGE_QWEN_ENABLED", "1")
+    monkeypatch.setenv("TRIAGE_QWEN_API_KEY", "synthetic-qwen-test-key")
+    monkeypatch.setenv("TRIAGE_QWEN_BASE_URL", url)
+    with pytest.raises(SystemExit) as refused:
+        tc_cli.tc_run(_args(privacy="public", allow_cloud=True))
+    assert refused.value.code == 2
+    assert recorded_http.calls == []
+    diagnostic = capsys.readouterr().out
+    assert "send_count=0" in diagnostic
+    assert "synthetic-qwen-test-key" not in diagnostic and url not in diagnostic
+
+
+def test_qwen_key_reaches_only_approved_provider(monkeypatch, recorded_http, tmp_path, capsys):
+    key = "synthetic-qwen-test-key"
+    monkeypatch.setenv("TRIAGE_QWEN_ENABLED", "1")
+    monkeypatch.setenv("TRIAGE_QWEN_API_KEY", key)
+    monkeypatch.setenv("TRIAGE_QWEN_MODEL", "qwen-max")
+    monkeypatch.setenv("TRIAGE_QWEN_BASE_URL", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1")
+    monkeypatch.setattr(capability_evidence, "resolve_from_config",
+                        lambda *a, **k: capability_evidence.unknown_resolution())
+    contexts = _capture_contexts(monkeypatch)
+    tc_cli.tc_run(_args(privacy="public", allow_cloud=True, no_ledger=False,
+                        ledger_dir=str(tmp_path)))
+    assert len(recorded_http.calls) == 1
+    request, settings = recorded_http.calls[0]
+    assert (request.method, request.url) == (
+        "POST", "https://dashscope-intl.aliyuncs.com:443/compatible-mode/v1/chat/completions"
+    )
+    assert request.headers["Authorization"] == "Bearer " + key
+    assert settings["proxies"] == {}
+    output = capsys.readouterr().out
+    assert key not in output
+    assert "ran locally" not in output
+    bound = next(b for b in contexts[0].endpoint_bindings if b.route == "cloud_primary")
+    assert f"Destination: {bound.safe_label} ({bound.identity_sha256})" in output
+    assert key not in (tmp_path / "ledger.jsonl").read_text(encoding="utf-8")
+    assert key not in repr(contexts[0])
+    assert key.encode() not in serialize_governed_decision(contexts[0].decision)
+
+def test_governed_loopback_ignores_proxy_netrc_and_ca_environment(monkeypatch, tmp_path):
+    from test_endpoint_transport_guard import assert_loopback_environment_isolation
+
+    def run(base_url):
+        monkeypatch.setenv("TRIAGE_BACKEND_TYPE", "lmstudio")
+        monkeypatch.setenv("TRIAGE_BASE_URL", base_url)
+        tc_cli.tc_run(_args())
+
+    assert_loopback_environment_isolation(monkeypatch, tmp_path, invoke=run)
+
+
+def test_capability_observation_cannot_change_execution_endpoint(monkeypatch, recorded_http):
+    from datetime import datetime, timezone
+    from triage_core.local_backend_probe import LocalBackendProbeRecord
+
+    monkeypatch.setenv("TRIAGE_BACKEND_TYPE", "ollama")
+    monkeypatch.setenv("TRIAGE_BASE_URL", "http://127.0.0.1:11434")
+    probe = LocalBackendProbeRecord(
+        source_type="lm_studio", base_url="http://127.0.0.1:1234", reachable=True,
+        evidence_tier="operator_recorded", observed_at=datetime.now(timezone.utc).isoformat(),
+        observed_models=[LOCAL_FAST_MODEL, LOCAL_HEAVY_MODEL],
+    )
+    capability = capability_evidence.resolve_capability(
+        record=probe, declare_local_fast=True, declare_local_heavy=True,
+        local_fast_model=LOCAL_FAST_MODEL, local_heavy_model=LOCAL_HEAVY_MODEL,
+        config_reference="test:capability", freshness_seconds=300,
+    )
+    monkeypatch.setattr(capability_evidence, "resolve_from_config", lambda *a, **k: capability)
+    tc_cli.tc_run(_args())
+    assert [r.url for r, _ in recorded_http.calls] == ["http://127.0.0.1:11434/api/chat"]
+
+
+@pytest.mark.parametrize(("stage", "change", "code"), [
+    ("before_s2", "base_url", "destination_binding_mismatch"),
+    ("after_s2", "transport", "transport_not_guarded"),
+    ("after_s2", "base_url", "destination_binding_mismatch"),
+])
+def test_changed_governed_backend_fails_closed_before_io(
+    monkeypatch, recorded_http, capsys, stage, change, code
+):
+    from triage_core import client
+
+    original = client.verify_destination_binding
+
+    def verify(context, backends):
+        backend = backends[context.decision.policy.preferred_logical_route]
+        if stage == "after_s2":
+            verified = original(context, backends)
+        if change == "base_url":
+            backend.base_url = "http://127.0.0.1:20000"
+        else:
+            backend.transport = None
+        return verified if stage == "after_s2" else original(context, backends)
+
+    monkeypatch.setattr(client, "verify_destination_binding", verify)
+    with pytest.raises(SystemExit) as refused:
+        tc_cli.tc_run(_args())
+    assert refused.value.code == 2
+    assert code in capsys.readouterr().out
+    assert recorded_http.calls == []
+
+
+@pytest.mark.parametrize("stage", ["before_s2", "before_discovery", "before_generation"])
+@pytest.mark.parametrize("change", [
+    "trust_env", "proxy", "verify", "adapter", "hook", "auth", "call_proxies", "call_redirects",
+])
+def test_changed_transport_settings_report_only_earlier_sends(
+    monkeypatch, recorded_http, capsys, stage, change,
+):
+    """F7(e1–e3): exercise S2 and both S3 boundaries through the governed command."""
+    import requests
+    from triage_core import client
+    from triage_core.destination_policy import DestinationPolicyError, GuardedTransport
+    from test_endpoint_transport_guard import transport_tripwires
+
+    transport_tripwires(monkeypatch)
+    base = "http://127.0.0.1:1234/v1"
+    monkeypatch.setenv("TRIAGE_BACKEND_TYPE", "lmstudio")
+    monkeypatch.setenv("TRIAGE_BASE_URL", base)
+    declare_auto_model(monkeypatch)
+    overrides = {"call_proxies": {"proxies": {}}, "call_redirects": {"allow_redirects": True}}
+
+    def change_session(session):
+        if change == "trust_env":
+            session.trust_env = True
+        elif change == "proxy":
+            session.proxies["http"] = "http://127.0.0.1:3128"
+        elif change == "verify":
+            session.verify = False
+        elif change == "adapter":
+            session.mount("http://", requests.adapters.HTTPAdapter())
+        elif change == "hook":
+            session.hooks["response"].append(lambda response, **kw: response)
+        else:
+            assert change == "auth"
+            session.auth = ("fixture", "synthetic")
+
+    if stage == "before_s2":
+        verify = client.verify_destination_binding
+
+        def change_before_verification(context, backends):
+            guard = backends[context.decision.policy.preferred_logical_route].transport
+            if change in overrides:
+                # A rejected pre-S2 call must remain latched when verification starts.
+                with pytest.raises(DestinationPolicyError, match="transport_settings_changed"):
+                    guard.get(base + "/models", **overrides[change])
+            else:
+                change_session(guard._session)
+            return verify(context, backends)
+
+        monkeypatch.setattr(client, "verify_destination_binding", change_before_verification)
+    else:
+        guarded_send = GuardedTransport._send
+        target_method = "GET" if stage == "before_discovery" else "POST"
+
+        def change_before_send(guard, method, url, kwargs):
+            if method == target_method:
+                if change in overrides:
+                    kwargs = {**kwargs, **overrides[change]}
+                else:
+                    change_session(guard._session)
+            return guarded_send(guard, method, url, kwargs)
+
+        monkeypatch.setattr(GuardedTransport, "_send", change_before_send)
+
+    with pytest.raises(SystemExit) as refused:
+        tc_cli.tc_run(_args())
+    assert refused.value.code == 2
+    output = capsys.readouterr().out
+    expected = [("GET", base + "/models")] if stage == "before_generation" else []
+    assert "transport_settings_changed" in output
+    assert f"send_count={len(expected)}" in output
+    if expected:
+        assert "GET models" in output
+    assert [(r.method, r.url) for r, _ in recorded_http.calls] == expected
+
+
+@pytest.mark.parametrize("swap", ["persistent_backend", "persistent_engine", "cloud_registration"])
+def test_execution_uses_verified_instance_and_adapter_after_swap(monkeypatch, recorded_http, swap):
+    """F7(c,d): the registered replacement cannot take the verified instance's place."""
+    from types import MappingProxyType
+    from triage_core import client
+    from test_endpoint_transport_guard import transport_tripwires
+
+    transport_tripwires(monkeypatch)
+    use_cloud = swap == "cloud_registration"
+    route = "cloud_primary" if use_cloud else "local_heavy"
+    provider = "https://dashscope-intl.aliyuncs.com:443/compatible-mode/v1"
+    monkeypatch.setenv("TRIAGE_BACKEND_TYPE", "ollama")
+    monkeypatch.setenv("TRIAGE_BASE_URL", "http://127.0.0.1:11434")
+    monkeypatch.setenv("TRIAGE_QWEN_BASE_URL", provider)
+    monkeypatch.setenv("TRIAGE_QWEN_MODEL", "qwen-max")
+
+    monkeypatch.setenv("TRIAGE_QWEN_ENABLED", "1")
+    monkeypatch.setenv("TRIAGE_QWEN_API_KEY", "synthetic-swap-test-key")
+    if use_cloud:
+        monkeypatch.setattr(capability_evidence, "resolve_from_config",
+                            lambda *a, **k: capability_evidence.unknown_resolution())
+    else:
+        declare_auto_model(monkeypatch)
+    original_constructor = client.TriageClient.from_governed_context
+    original_verify = client.verify_destination_binding
+    invoked = []
+    instances = {}
+
+    def construct(context):
+        instances["client"] = original_constructor(context)
+        return instances["client"]
+
+    def verify(context, backends):
+        verified = original_verify(context, backends)
+        active = instances["client"]
+        owner = verified[route].backend
+        other_client = original_constructor(context)
+        replacement = other_client._governed_backends[route]
+        instances.update(owner=owner, replacement=replacement)
+        for backend in (owner, replacement):
+            def record(*args, owner=backend, call=backend.generate, **kwargs):
+                invoked.append(owner)
+                return call(*args, **kwargs)
+
+            monkeypatch.setattr(backend, "generate", record)
+        if swap == "persistent_engine":
+            active.engine = other_client.engine
+        elif swap == "persistent_backend":
+            active.engine.backend = replacement
+        else:
+            active._governed_backends = MappingProxyType({**backends, route: replacement})
+        return verified
+
+    monkeypatch.setattr(client.TriageClient, "from_governed_context", staticmethod(construct))
+    monkeypatch.setattr(client, "verify_destination_binding", verify)
+    tc_cli.tc_run(_args(privacy="public" if use_cloud else "local_only", allow_cloud=use_cloud))
+    owner = instances["owner"]
+    replacement = instances["replacement"]
+    assert owner is not replacement
+    assert len(invoked) == 1 and invoked[0] is owner
+    expected = ([("POST", provider + "/chat/completions")] if use_cloud else [
+        ("GET", "http://127.0.0.1:11434/api/tags"), ("POST", "http://127.0.0.1:11434/api/chat"),
+    ])
+    assert [(r.method, r.url) for r, _ in recorded_http.calls] == expected
+    for adapter, (request, _) in zip(recorded_http.adapters, recorded_http.calls, strict=True):
+        assert adapter is owner.transport._session.get_adapter(request.url)
+        assert adapter is not replacement.transport._session.get_adapter(request.url)
+        assert request.headers.get("Authorization") == ("Bearer synthetic-swap-test-key" if use_cloud else None)
+    assert len(owner.transport.sends) == len(expected) and replacement.transport.sends == ()
+
+
+def test_qwen_redirect_reports_one_approved_send_and_stops(monkeypatch, capsys):
+    import requests
+    calls = []
+
+    def redirect(adapter, request, **settings):
+        calls.append(request)
+        response = requests.Response()
+        response.status_code = 307
+        response.headers["Location"] = "https://redirect.invalid/unused"
+        response._content = b""
+        response._content_consumed = True
+        return response
+
+    monkeypatch.setenv("TRIAGE_QWEN_ENABLED", "1")
+    monkeypatch.setenv("TRIAGE_QWEN_API_KEY", "synthetic-redirect-key")
+    monkeypatch.setenv("TRIAGE_QWEN_BASE_URL", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1")
+    monkeypatch.setattr(capability_evidence, "resolve_from_config",
+                        lambda *a, **k: capability_evidence.unknown_resolution())
+    monkeypatch.setattr(requests.adapters.HTTPAdapter, "send", redirect)
+    with pytest.raises(SystemExit) as refused:
+        tc_cli.tc_run(_args(privacy="public", allow_cloud=True))
+    assert refused.value.code == 2
+    assert [(r.url, r.headers["Authorization"]) for r in calls] == [(
+        "https://dashscope-intl.aliyuncs.com:443/compatible-mode/v1/chat/completions",
+        "Bearer synthetic-redirect-key"
+    )]
+    diagnostic = capsys.readouterr().out
+    assert "endpoint_redirect_refused" in diagnostic and "send_count=1" in diagnostic
+    assert "cloud_primary" in diagnostic and "POST chat/completions" in diagnostic
+    assert "identity_sha256=" in diagnostic
+    assert "synthetic-redirect-key" not in diagnostic
+    assert "https://" not in diagnostic

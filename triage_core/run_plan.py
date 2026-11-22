@@ -22,7 +22,7 @@ execution *binding* only.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Any, Mapping, Optional, Sequence
 
 from triage_core.classifier import DangerDetector, TaskClassifier
@@ -30,6 +30,14 @@ from triage_core import capability_evidence
 from triage_core.client import TriageClient
 from triage_core.config import default_config
 from triage_core.context_planner import plan_context_for_text
+from triage_core.destination_policy import (
+    DEFAULT_TRANSPORT_POLICY,
+    EffectiveBackendConfiguration,
+    RouteBinding,
+    TransportPolicy,
+    bind_route_endpoints,
+    binding_digest_lines,
+)
 from triage_core.governed_decision import (
     CLASSIFICATION_POLICY_VERSION,
     CONFIGURATION_VERSION,
@@ -166,6 +174,10 @@ class GovernedRunContext:
     decision: GovernedDecision
     presentation: GovernedRunPresentation
     packet: TaskPacket
+    effective_config: EffectiveBackendConfiguration
+    endpoint_bindings: tuple[RouteBinding, ...]
+    transport_policy: TransportPolicy
+    qwen_api_key: Optional[str] = field(repr=False, compare=False)
 
 
 def context_model_profiles() -> Mapping[str, ContextModelProfile]:
@@ -187,6 +199,8 @@ def configuration_digest(
     cloud_backend_enabled: bool,
     cloud_model_binding: str,
     local_backend_type: str,
+    endpoint_bindings: Sequence[RouteBinding] = (),
+    transport_policy: TransportPolicy = DEFAULT_TRANSPORT_POLICY,
 ) -> str:
     """Digest the decision-relevant configuration. Never volatile observations."""
 
@@ -199,6 +213,7 @@ def configuration_digest(
         f"classification_policy_version={CLASSIFICATION_POLICY_VERSION}",
         f"route_policy_version={ROUTE_POLICY_VERSION}",
         f"verification_policy_version={VERIFICATION_POLICY_VERSION}",
+        *binding_digest_lines(endpoint_bindings, transport_policy),
     )
     return sha256_digest("\n".join(lines).encode("utf-8"))
 
@@ -302,6 +317,7 @@ def build_governed_run_context(
     model_profile: Optional[str],
     task_id: Optional[str],
     capability: Any = None,
+    transport_policy: TransportPolicy = DEFAULT_TRANSPORT_POLICY,
 ) -> GovernedRunContext:
     """The single construction seam: one snapshot, one governed decision.
 
@@ -309,7 +325,8 @@ def build_governed_run_context(
     mapping and before the preview/execution branch. Both consumers descend from
     the value returned here; neither constructs a snapshot or decision of its own.
 
-    ``sources`` carries bytes the caller already read. Nothing here opens a file.
+    ``sources`` carries bytes the caller already read. The backend settings are
+    frozen once here for both consumers.
     """
 
     requested = model_profile or DEFAULT_RUN_MODEL_PROFILE
@@ -366,17 +383,18 @@ def build_governed_run_context(
     )
     firewall = firewall_triggered or steward_insufficient
 
-    cloud_backend_enabled = default_config.get_qwen_enabled()
+    effective_config, qwen_api_key = default_config.read_governed_backend_configuration()
+    cloud_backend_enabled = effective_config.cloud_enabled.value
     cloud_model_binding = (
-        default_config.get_qwen_model() if cloud_backend_enabled else "not_enabled"
+        effective_config.cloud_model.value if cloud_backend_enabled else "not_enabled"
     )
-    local_backend_type = default_config.get_backend_type()
+    local_backend_type = effective_config.backend_type.value
 
     # Route policy is a function of governed inputs alone. No capability
     # resolution reaches this input, so a model server that briefly disappears
     # cannot change the decision ID (CR-DD-012B Resolved Question 1).
     route_input = TriageClient._build_resilience_route_input(
-        category=category, validator=None, capability=None
+        category=category, validator=None, capability=None, cloud_enabled=cloud_backend_enabled
     )
     route_input.privacy_level = (
         "local_only" if privacy == "local_only" else "external_safe"
@@ -400,6 +418,8 @@ def build_governed_run_context(
         fallback_depth = 0
         router_review = True
         envelope = ()
+
+    endpoint_bindings = bind_route_endpoints((preferred, *envelope), effective_config)
 
     context = plan_context_for_text("assembled tc run input", assembled_text, budget)
 
@@ -454,6 +474,8 @@ def build_governed_run_context(
             cloud_backend_enabled=cloud_backend_enabled,
             cloud_model_binding=cloud_model_binding,
             local_backend_type=local_backend_type,
+            endpoint_bindings=endpoint_bindings,
+            transport_policy=transport_policy,
         ),
         policy_version=POLICY_VERSION,
         classification_policy_version=CLASSIFICATION_POLICY_VERSION,
@@ -551,6 +573,10 @@ def build_governed_run_context(
         decision=decision,
         presentation=presentation,
         packet=packet,
+        effective_config=effective_config,
+        endpoint_bindings=endpoint_bindings,
+        transport_policy=transport_policy,
+        qwen_api_key=qwen_api_key if any(b.protocol == "qwen" for b in endpoint_bindings) else None,
     )
 
 

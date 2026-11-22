@@ -1,10 +1,21 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Protocol, Callable
+from typing import Any, Dict, List, Optional, Protocol, Callable, NoReturn
 import json
 import os
 import urllib.parse
 
 import requests
+
+from .destination_policy import (
+    DEFAULT_TRANSPORT_POLICY,
+    DestinationPolicyError,
+    EffectiveBackendConfiguration,
+    GOVERNED_LOCAL_PRESETS,
+    GuardedTransport,
+    RouteBinding,
+    TransportPolicy,
+    backend_protocol_key,
+)
 
 
 _AUTO_MODEL_SENTINELS = {"", "auto", "loaded-model", "local-model"}
@@ -67,13 +78,13 @@ def _model_id_from_openai_models(data: Dict[str, Any]) -> Optional[str]:
 
 
 def _lmstudio_base_url() -> str:
-    return os.getenv("TRIAGE_SUPERVISOR_BASE_URL", "http://localhost:1234/v1")
+    return os.getenv("TRIAGE_SUPERVISOR_BASE_URL", "http://127.0.0.1:1234/v1")
 
 
-def _lmstudio_is_online(timeout: float = 0.5) -> bool:
-    url = f"{_lmstudio_base_url().rstrip('/')}/models"
+def _lmstudio_is_online(base_url: str, transport: Any, timeout: float) -> bool:
+    url = f"{base_url.rstrip('/')}/models"
     try:
-        response = requests.get(url, timeout=timeout)
+        response = transport.get(url, timeout=timeout)
         return response.status_code == 200
     except requests.exceptions.RequestException:
         return False
@@ -83,9 +94,28 @@ def _prefer_lmstudio_supervisor() -> bool:
     return _env_flag("TRIAGE_PREFER_LMSTUDIO_SUPERVISOR", True)
 
 
-def _backend_error_summary(response: requests.Response) -> str:
+def _backend_error_summary(response: requests.Response, transport: Any) -> str:
+    if isinstance(transport, GuardedTransport):
+        return f"status_code={response.status_code}"
     reason = response.reason or "HTTP error"
     return f"status_code={response.status_code} reason={reason}"
+
+
+def _raise_backend_unavailable(
+    kind: str, transport: Any, url: str, error: requests.RequestException,
+) -> NoReturn:
+    if isinstance(transport, GuardedTransport):
+        # HTTP exceptions can contain the full URL and a peer-supplied reason.
+        raise BackendUnavailableError(f"{kind} backend unavailable on {transport.route}") from None
+    raise BackendUnavailableError(f"{kind} backend unavailable at {url}: {error}") from error
+
+
+def _generation_model(backend: Any, transport: Any, timeout: int) -> str:
+    discovery_timeout = min(float(timeout), 2.0)
+    if isinstance(transport, GuardedTransport):
+        return backend._resolve_model(transport, discovery_timeout)
+    # Direct backends may override the public resolver.
+    return backend.resolve_model(timeout=discovery_timeout)
 
 
 @dataclass
@@ -93,25 +123,32 @@ class OpenAICompatibleBackend:
     name: str
     base_url: str
     model: str = "auto"
-    api_key: str = "not-needed"
+    api_key: str = field(default="not-needed", repr=False)
+    transport: Any = field(default=requests, repr=False, compare=False)
 
     def get_sanitized_uri(self) -> str:
         parsed = urllib.parse.urlparse(self.base_url)
         return f"{parsed.scheme}://{parsed.hostname}" + (f":{parsed.port}" if parsed.port else "") + parsed.path
 
-    def _request_headers(self) -> Dict[str, str]:
+    def _request_headers(self, transport: Any) -> Dict[str, str]:
         headers = {"Content-Type": "application/json"}
+        if isinstance(transport, GuardedTransport) and type(self) is not QwenCloudBackend:
+            # The S1 configuration has no credential for a governed local backend.
+            return headers
         if self.api_key and self.api_key != "not-needed":
             headers["Authorization"] = f"Bearer {self.api_key}"
         return headers
 
     def resolve_model(self, timeout: float = 1.0) -> str:
+        return self._resolve_model(self.transport, timeout)
+
+    def _resolve_model(self, transport: Any, timeout: float) -> str:
         if self.model and self.model not in _AUTO_MODEL_SENTINELS:
             return self.model
 
         url = f"{self.base_url.rstrip('/')}/models"
         try:
-            response = requests.get(url, timeout=timeout, headers=self._request_headers())
+            response = transport.get(url, timeout=timeout, headers=self._request_headers(transport))
             response.raise_for_status()
             resolved = _model_id_from_openai_models(response.json())
             if resolved:
@@ -131,11 +168,14 @@ class OpenAICompatibleBackend:
         temperature: float = 0.1,
         timeout: int = 45,
         stream_callback: Optional[Callable[[str], None]] = None,
+        *,
+        _verified_transport: Optional[GuardedTransport] = None,
         **kwargs: Any,
     ) -> BackendResponse:
+        transport = self.transport if _verified_transport is None else _verified_transport
         url = f"{self.base_url.rstrip('/')}/chat/completions"
         payload = {
-            "model": self.resolve_model(timeout=min(float(timeout), 2.0)),
+            "model": _generation_model(self, transport, timeout),
             "messages": messages,
             "temperature": temperature,
             **kwargs,
@@ -144,16 +184,16 @@ class OpenAICompatibleBackend:
         if stream_callback:
             payload["stream"] = True
             try:
-                response = requests.post(
+                response = transport.post(
                     url,
                     json=payload,
                     timeout=timeout,
                     stream=True,
-                    headers=self._request_headers(),
+                    headers=self._request_headers(transport),
                 )
                 response.raise_for_status()
             except requests.exceptions.RequestException as e:
-                raise BackendUnavailableError(f"OpenAI compatible backend unavailable at {url}: {e}")
+                _raise_backend_unavailable("OpenAI compatible", transport, url, e)
 
             text_parts = []
             final_usage = {}
@@ -177,6 +217,8 @@ class OpenAICompatibleBackend:
                                 if content:
                                     text_parts.append(content)
                                     stream_callback(content)
+                        except DestinationPolicyError:
+                            raise
                         except Exception:
                             pass
 
@@ -190,20 +232,20 @@ class OpenAICompatibleBackend:
             )
 
         try:
-            response = requests.post(
+            response = transport.post(
                 url,
                 json=payload,
                 timeout=timeout,
-                headers=self._request_headers(),
+                headers=self._request_headers(transport),
             )
             if not response.ok:
                 print(
                     "Backend Error: "
-                    f"backend={self.name} {_backend_error_summary(response)}"
+                    f"backend={self.name} {_backend_error_summary(response, transport)}"
                 )
             response.raise_for_status()
         except requests.exceptions.RequestException as e:
-            raise BackendUnavailableError(f"OpenAI compatible backend unavailable at {url}: {e}")
+            _raise_backend_unavailable("OpenAI compatible", transport, url, e)
 
         data = response.json()
         choices = data.get("choices", [])
@@ -225,8 +267,9 @@ class OpenAICompatibleBackend:
 
     def ping(self, timeout: float = 1.0) -> bool:
         url = f"{self.base_url.rstrip('/')}/models"
+        transport = self.transport
         try:
-            response = requests.get(url, timeout=timeout, headers=self._request_headers())
+            response = transport.get(url, timeout=timeout, headers=self._request_headers(transport))
             if response.status_code == 200 and self.model in _AUTO_MODEL_SENTINELS:
                 try:
                     resolved = _model_id_from_openai_models(response.json())
@@ -244,26 +287,30 @@ class QwenCloudBackend(OpenAICompatibleBackend):
     name: str = "qwen"
     base_url: str = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
     model: str = "qwen-max"
-    api_key: str = ""
+    api_key: str = field(default="", repr=False)
 
 
 @dataclass
 class OllamaBackend:
     name: str = "ollama"
-    base_url: str = "http://localhost:11434"
+    base_url: str = "http://127.0.0.1:11434"
     model: str = "auto"
+    transport: Any = field(default=requests, repr=False, compare=False)
 
     def get_sanitized_uri(self) -> str:
         parsed = urllib.parse.urlparse(self.base_url)
         return f"{parsed.scheme}://{parsed.hostname}" + (f":{parsed.port}" if parsed.port else "") + parsed.path
 
     def resolve_model(self, timeout: float = 1.0) -> str:
+        return self._resolve_model(self.transport, timeout)
+
+    def _resolve_model(self, transport: Any, timeout: float) -> str:
         if self.model and self.model not in _AUTO_MODEL_SENTINELS:
             return self.model
 
         url = f"{self.base_url.rstrip('/')}/api/tags"
         try:
-            response = requests.get(url, timeout=timeout)
+            response = transport.get(url, timeout=timeout)
             response.raise_for_status()
             models = response.json().get("models") or []
             if models:
@@ -289,11 +336,14 @@ class OllamaBackend:
         temperature: float = 0.1,
         timeout: int = 45,
         stream_callback: Optional[Callable[[str], None]] = None,
+        *,
+        _verified_transport: Optional[GuardedTransport] = None,
         **kwargs: Any,
     ) -> BackendResponse:
+        transport = self.transport if _verified_transport is None else _verified_transport
         url = f"{self.base_url.rstrip('/')}/api/chat"
         payload = {
-            "model": self.resolve_model(timeout=min(float(timeout), 2.0)),
+            "model": _generation_model(self, transport, timeout),
             "messages": messages,
             "stream": bool(stream_callback),
             "options": {"temperature": temperature},
@@ -302,10 +352,10 @@ class OllamaBackend:
 
         if stream_callback:
             try:
-                response = requests.post(url, json=payload, timeout=timeout, stream=True)
+                response = transport.post(url, json=payload, timeout=timeout, stream=True)
                 response.raise_for_status()
             except requests.exceptions.RequestException as e:
-                raise BackendUnavailableError(f"Ollama backend unavailable at {url}: {e}")
+                _raise_backend_unavailable("Ollama", transport, url, e)
             text_parts: List[str] = []
             final_raw: Dict[str, Any] = {}
             for line in response.iter_lines():
@@ -333,15 +383,15 @@ class OllamaBackend:
             )
 
         try:
-            response = requests.post(url, json=payload, timeout=timeout)
+            response = transport.post(url, json=payload, timeout=timeout)
             if not response.ok:
                 print(
                     "Backend Error: "
-                    f"backend={self.name} {_backend_error_summary(response)}"
+                    f"backend={self.name} {_backend_error_summary(response, transport)}"
                 )
             response.raise_for_status()
         except requests.exceptions.RequestException as e:
-            raise BackendUnavailableError(f"Ollama backend unavailable at {url}: {e}")
+            _raise_backend_unavailable("Ollama", transport, url, e)
         data = response.json()
         message = data.get("message") or {}
         text = message.get("content")
@@ -359,12 +409,19 @@ class OllamaBackend:
     def ping(self, timeout: float = 1.0) -> bool:
         # When LM Studio is online, make the existing TriageDesk probe order pick
         # LM Studio as the control-plane/supervisor instead of Ollama.
-        if _prefer_lmstudio_supervisor() and _lmstudio_is_online(timeout=min(timeout, 0.5)):
+        transport = self.transport
+        if isinstance(transport, GuardedTransport):
+            # The supervisor probe is outside the bound Ollama protocol. Submit
+            # it to the same guard without resolving any post-S1 environment.
+            supervisor_url = GOVERNED_LOCAL_PRESETS["lmstudio"]
+        else:
+            supervisor_url = _lmstudio_base_url() if _prefer_lmstudio_supervisor() else None
+        if supervisor_url and _lmstudio_is_online(supervisor_url, transport, min(timeout, 0.5)):
             return False
 
         url = f"{self.base_url.rstrip('/')}/api/tags"
         try:
-            response = requests.get(url, timeout=timeout)
+            response = transport.get(url, timeout=timeout)
             if response.status_code == 200 and self.model in _AUTO_MODEL_SENTINELS:
                 try:
                     models = response.json().get("models") or []
@@ -390,6 +447,43 @@ def _ollama_usage(data: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _openai_backend_name(kind: str, base_url: str) -> str:
+    if kind == "custom" and "1234" in base_url:
+        return "lmstudio"
+    return {"lm_studio": "lmstudio", "llamacpp": "llama.cpp"}.get(kind, kind)
+
+
+def create_bound_backend(
+    binding: RouteBinding,
+    configuration: EffectiveBackendConfiguration,
+    *,
+    api_key: Optional[str] = None,
+    transport_policy: TransportPolicy = DEFAULT_TRANSPORT_POLICY,
+) -> LocalBackend:
+    """Construct one concrete backend from the frozen S1 inputs, without discovery."""
+    guard = GuardedTransport(binding, policy=transport_policy)
+    base_url = binding.endpoint.canonical
+    if binding.protocol == "qwen":
+        backend = QwenCloudBackend(
+            base_url=base_url, model=configuration.cloud_model.value,
+            api_key=api_key or "", transport=guard,
+        )
+    elif binding.protocol == "ollama":
+        backend = OllamaBackend(
+            base_url=base_url, model=configuration.model.value, transport=guard,
+        )
+    elif binding.protocol == "openai_compatible":
+        kind = backend_protocol_key(configuration.backend_type.value)
+        backend = OpenAICompatibleBackend(
+            name=_openai_backend_name(kind, base_url), base_url=base_url,
+            model=configuration.model.value, transport=guard,
+        )
+    else:
+        raise DestinationPolicyError("backend_protocol_unsupported", binding.route)
+    guard.bind_owner(backend)
+    return backend
+
+
 def create_backend(
     backend_type: str = "ollama",
     model: str = "auto",
@@ -400,7 +494,7 @@ def create_backend(
 
     if normalized_type == "ollama":
         return OllamaBackend(
-            base_url=base_url or os.getenv("TRIAGE_OLLAMA_BASE_URL", "http://localhost:11434"),
+            base_url=base_url or os.getenv("TRIAGE_OLLAMA_BASE_URL", "http://127.0.0.1:11434"),
             model=model,
         )
 
@@ -417,23 +511,23 @@ def create_backend(
     presets = {
         "lmstudio": {
             "name": "lmstudio",
-            "base_url": os.getenv("TRIAGE_SUPERVISOR_BASE_URL", "http://localhost:1234/v1"),
+            "base_url": os.getenv("TRIAGE_SUPERVISOR_BASE_URL", "http://127.0.0.1:1234/v1"),
         },
         "lm_studio": {
             "name": "lmstudio",
-            "base_url": os.getenv("TRIAGE_SUPERVISOR_BASE_URL", "http://localhost:1234/v1"),
+            "base_url": os.getenv("TRIAGE_SUPERVISOR_BASE_URL", "http://127.0.0.1:1234/v1"),
         },
         "vllm": {
             "name": "vllm",
-            "base_url": "http://localhost:8000/v1",
+            "base_url": "http://127.0.0.1:8000/v1",
         },
         "llama.cpp": {
             "name": "llama.cpp",
-            "base_url": "http://localhost:8080/v1",
+            "base_url": "http://127.0.0.1:8080/v1",
         },
         "llamacpp": {
             "name": "llama.cpp",
-            "base_url": "http://localhost:8080/v1",
+            "base_url": "http://127.0.0.1:8080/v1",
         },
         "custom": {
             "name": "custom",
@@ -450,9 +544,7 @@ def create_backend(
     if not resolved_base_url:
         raise ValueError("custom backend requires base_url")
 
-    name = selected["name"]
-    if name == "custom" and "1234" in resolved_base_url:
-        name = "lmstudio"
+    name = _openai_backend_name(selected["name"], resolved_base_url)
 
     return OpenAICompatibleBackend(
         name=name,

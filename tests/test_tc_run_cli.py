@@ -1,6 +1,6 @@
 """Offline tests for the governed ``tc run`` CLI surface (CR-DD-009).
 
-All tests run fully offline with an injected mock backend and a temporary
+All tests run fully offline with a recording HTTP adapter and a temporary
 ledger directory, so no real backend is contacted and the real ledger is never
 written. They assert the governed loop behavior and the CR-DD-009 exit-code
 contract:
@@ -21,8 +21,7 @@ import pytest
 import requests
 
 from triage_core import capability_evidence, tc_cli
-from triage_core.backends import BackendResponse
-from triage_core.client import TriageClient
+from test_governed_consumption_parity import recorded_http  # noqa: F401 (pytest fixture)
 from triage_core.local_backend_probe import LocalBackendProbeRecord
 from triage_core.routing.resilience_router import ResilienceRouteDecision
 from triage_core.task_packet import PrivacyMetadata
@@ -50,40 +49,6 @@ def declared_local_capability(monkeypatch):
         capability_evidence, "resolve_from_config", lambda *a, **k: resolution
     )
     return resolution
-
-
-class RecordingBackend:
-    name = "fake"
-    base_url = "http://localhost"
-    model = "fake-model"
-
-    def __init__(self) -> None:
-        self.called = False
-
-    def generate(self, messages, temperature=0.1, timeout=45, **kwargs):
-        self.called = True
-        return BackendResponse(
-            text="LOCAL_RAN",
-            raw={},
-            usage={"prompt_tokens": 3, "completion_tokens": 2, "total_tokens": 5},
-            backend_name=self.name,
-        )
-
-
-class FailingBackend(RecordingBackend):
-    """Fails the test if the backend is ever invoked (proves fail-closed)."""
-
-    def generate(self, messages, temperature=0.1, timeout=45, **kwargs):
-        self.called = True
-        raise AssertionError("Backend must not run for a fail-closed task.")
-
-
-class ErrorBackend(RecordingBackend):
-    """Local backend raises; engine should convert this into a handoff."""
-
-    def generate(self, messages, temperature=0.1, timeout=45, **kwargs):
-        self.called = True
-        raise requests.exceptions.Timeout("Timed out")
 
 
 def _args(prompt, **overrides):
@@ -131,6 +96,7 @@ class RecordingClient:
         capability=None,
         snapshot=None,
         decision=None,
+        governed_context=None,
     ):
         self.packet = task_packet
         self.capability = capability
@@ -143,14 +109,12 @@ class RecordingClient:
         }
 
 
-def test_local_success_exits_zero_and_records_governed_evidence(tmp_path, capsys):
-    backend = RecordingBackend()
-    client = TriageClient(backend=backend)
+def test_local_success_exits_zero_and_records_governed_evidence(recorded_http, tmp_path, capsys):
     args = _args("Summarize this text", ledger_dir=str(tmp_path))
 
-    tc_cli.tc_run(args, client=client)  # returns normally == exit 0
+    tc_cli.tc_run(args)  # returns normally == exit 0
 
-    assert backend.called is True
+    assert len(recorded_http.calls) == 1
     ledger_file = tmp_path / "ledger.jsonl"
     assert ledger_file.exists()
     types = _event_types(ledger_file)
@@ -162,14 +126,13 @@ def test_local_success_exits_zero_and_records_governed_evidence(tmp_path, capsys
     assert "Success: task ran locally" in capsys.readouterr().out
 
 
-def test_route_and_worker_evidence_share_cli_reported_task_id(tmp_path, capsys):
-    client = TriageClient(backend=RecordingBackend())
+def test_route_and_worker_evidence_share_cli_reported_task_id(recorded_http, tmp_path, capsys):
     # No --task-id, so the identifier is the one tc run generated for itself.
     # Reading it back out of the success line is what proves the persisted
     # evidence belongs to the run the operator was told about.
     args = _args("Summarize this text", ledger_dir=str(tmp_path))
 
-    tc_cli.tc_run(args, client=client)
+    tc_cli.tc_run(args)
 
     reported = re.search(r"task_id=([^)]+)\)", capsys.readouterr().out)
     assert reported, "tc run must report the task_id it ran under."
@@ -184,14 +147,12 @@ def test_route_and_worker_evidence_share_cli_reported_task_id(tmp_path, capsys):
     assert worker_result["task_id"] == reported_task_id
 
 
-def test_tc_run_persists_metadata_without_prompt_or_data_content(tmp_path):
+def test_tc_run_persists_metadata_without_prompt_or_data_content(recorded_http, tmp_path):
     prompt = "PROMPT_SENTINEL_ONLY_FOR_PRIVACY_TEST"
     data = "DATA_SENTINEL_ONLY_FOR_PRIVACY_TEST"
-    backend = RecordingBackend()
-    client = TriageClient(backend=backend)
     args = _args(prompt, data=data, ledger_dir=str(tmp_path))
 
-    tc_cli.tc_run(args, client=client)
+    tc_cli.tc_run(args)
 
     ledger_file = tmp_path / "ledger.jsonl"
     ledger_text = ledger_file.read_text(encoding="utf-8")
@@ -212,21 +173,19 @@ def test_tc_run_persists_metadata_without_prompt_or_data_content(tmp_path):
     }
 
 
-def test_tc_run_privacy_block_leaves_no_ledger_event(tmp_path):
-    backend = FailingBackend()
-    client = TriageClient(backend=backend)
+def test_tc_run_privacy_block_leaves_no_ledger_event(recorded_http, tmp_path):
     args = _args("Process this record", data="123-45-6789", ledger_dir=str(tmp_path))
 
     with pytest.raises(SystemExit) as exc:
-        tc_cli.tc_run(args, client=client)
+        tc_cli.tc_run(args)
 
     assert exc.value.code == 2
-    assert backend.called is False
+    assert recorded_http.calls == []
     assert not (tmp_path / "ledger.jsonl").exists()
 
 
 def test_early_local_block_records_binding_issue_on_runner_selected(
-    tmp_path, monkeypatch
+    recorded_http, tmp_path, monkeypatch
 ):
     record = LocalBackendProbeRecord(
         source_type="lm_studio",
@@ -247,16 +206,14 @@ def test_early_local_block_records_binding_issue_on_runner_selected(
     monkeypatch.setattr(
         capability_evidence, "resolve_from_config", lambda *a, **k: resolution
     )
-    backend = RecordingBackend()
 
     with pytest.raises(SystemExit) as exc:
         tc_cli.tc_run(
             _args("Update the docs", ledger_dir=str(tmp_path)),
-            client=TriageClient(backend=backend),
         )
 
     assert exc.value.code == 2
-    assert backend.called is False
+    assert recorded_http.calls == []
     events = _ledger_events(tmp_path / "ledger.jsonl")
     runner = next(event for event in events if event["event_type"] == "runner_selected")
     assert runner["payload"]["capability_declared_route_classes"] == ["local_heavy"]
@@ -266,14 +223,78 @@ def test_early_local_block_records_binding_issue_on_runner_selected(
     assert any(event["event_type"] == "route_decision" for event in events)
 
 
-def test_handoff_required_exits_3(tmp_path):
-    client = TriageClient(backend=ErrorBackend())
-    args = _args("Summarize this text", ledger_dir=str(tmp_path))
+@pytest.mark.parametrize("handoff", [False, True], ids=["success", "timeout"])
+@pytest.mark.parametrize("cloud", [False, True], ids=["ollama", "qwen"])
+def test_attempted_destination_in_output_and_worker_result(
+    recorded_http, monkeypatch, tmp_path, capsys, cloud, handoff
+):
+    from triage_core.destination_policy import normalize_endpoint
 
+    secret = "synthetic-test-key"
+    local_url = "http://127.0.0.1:11434"
+    cloud_url = "https://dashscope-intl.aliyuncs.com:443/compatible-mode/v1"
+    monkeypatch.setenv("TRIAGE_BACKEND_TYPE", "ollama")
+    monkeypatch.setenv("TRIAGE_BASE_URL", local_url)
+    monkeypatch.setenv("TRIAGE_QWEN_ENABLED", "1")
+    monkeypatch.setenv("TRIAGE_QWEN_BASE_URL", cloud_url)
+    monkeypatch.setenv("TRIAGE_QWEN_MODEL", "qwen-max")
+    monkeypatch.setenv("TRIAGE_QWEN_API_KEY", secret)
+    if cloud:
+        monkeypatch.setattr(
+            capability_evidence, "resolve_from_config",
+            lambda *a, **kw: capability_evidence.unknown_resolution(),
+        )
+    args = _args(
+        "Summarize this text", privacy="public" if cloud else "local_only",
+        allow_cloud=cloud, ledger_dir=str(tmp_path),
+    )
+
+    if handoff:
+        recorded_http.error = requests.Timeout("Timed out")
+        with pytest.raises(SystemExit) as exc:
+            tc_cli.tc_run(args)
+        assert exc.value.code == 3
+    else:
+        tc_cli.tc_run(args)
+
+    assert len(recorded_http.calls) == 1
+    expected = normalize_endpoint(
+        cloud_url if cloud else local_url, "cloud_primary" if cloud else "local_heavy"
+    )
+    out = capsys.readouterr().out
+    assert f"Destination: {expected.safe_label} ({expected.identity_sha256})" in out
+    worker = next(
+        e["payload"] for e in _ledger_events(tmp_path / "ledger.jsonl")
+        if e["event_type"] == "worker_result"
+    )
+    assert worker["destination_safe_label"] == expected.safe_label
+    assert worker["destination_identity_sha256"] == expected.identity_sha256
+    for text in (out, json.dumps(worker)):
+        assert secret not in text
+        assert local_url not in text
+        assert cloud_url not in text
+
+
+def test_unconfigured_qwen_handoff_omits_destination_evidence(
+    recorded_http, monkeypatch, tmp_path, capsys
+):
+    monkeypatch.setenv("TRIAGE_QWEN_ENABLED", "1")
+    monkeypatch.delenv("TRIAGE_QWEN_API_KEY", raising=False)
+    monkeypatch.setattr(
+        capability_evidence, "resolve_from_config",
+        lambda *a, **kw: capability_evidence.unknown_resolution(),
+    )
+    args = _args("Summarize this text", privacy="public", allow_cloud=True, ledger_dir=str(tmp_path))
     with pytest.raises(SystemExit) as exc:
-        tc_cli.tc_run(args, client=client)
-
-    assert exc.value.code == 3
+        tc_cli.tc_run(args)
+    assert exc.value.code == 3 and recorded_http.calls == []
+    worker = next(
+        e["payload"] for e in _ledger_events(tmp_path / "ledger.jsonl")
+        if e["event_type"] == "worker_result"
+    )
+    assert worker["selected_route"] == "cloud_primary"
+    assert "destination_safe_label" not in worker and "destination_identity_sha256" not in worker
+    assert "Destination:" not in capsys.readouterr().out
 
 
 @pytest.mark.parametrize(
@@ -291,10 +312,8 @@ def test_handoff_required_exits_3(tmp_path):
     ],
 )
 def test_terminal_routes_exit_3_without_backend_execution(
-    tmp_path, preferred_route, reason, bound_route
+    recorded_http, tmp_path, preferred_route, reason, bound_route, capsys
 ):
-    backend = FailingBackend()
-    client = TriageClient(backend=backend)
     args = _args(
         "Summarize public text",
         privacy="public",
@@ -324,16 +343,11 @@ def test_terminal_routes_exit_3_without_backend_execution(
         return ordering[0] if len(ordering) == 1 else ordering.pop(0)
 
     with patch("triage_core.run_plan.choose_resilience_route", _staged_route):
-        with patch.object(
-            client.router.specialist,
-            "route_task",
-            return_value={"offload_recommended": False},
-        ):
-            with pytest.raises(SystemExit) as exc:
-                tc_cli.tc_run(args, client=client)
+        with pytest.raises(SystemExit) as exc:
+            tc_cli.tc_run(args)
 
     assert exc.value.code == 3
-    assert backend.called is False
+    assert recorded_http.calls == []
 
     events = [
         json.loads(line)
@@ -341,14 +355,15 @@ def test_terminal_routes_exit_3_without_backend_execution(
         if line.strip()
     ]
     worker_result = next(event for event in events if event["event_type"] == "worker_result")
+    assert "Destination:" not in capsys.readouterr().out
+    assert "destination_safe_label" not in worker_result["payload"]
+    assert "destination_identity_sha256" not in worker_result["payload"]
     assert worker_result["payload"]["selected_route"] == bound_route
     assert worker_result["payload"]["worker_result_status"] == "not_attempted"
     assert worker_result["payload"]["failure_type"] == "safety_handoff"
 
 
-def test_high_risk_local_only_fails_closed_exit_2(tmp_path):
-    backend = FailingBackend()
-    client = TriageClient(backend=backend)
+def test_high_risk_local_only_fails_closed_exit_2(recorded_http, tmp_path):
     args = _args(
         "delete all files and wipe secrets",
         data="small data",
@@ -356,28 +371,25 @@ def test_high_risk_local_only_fails_closed_exit_2(tmp_path):
     )
 
     with pytest.raises(SystemExit) as exc:
-        tc_cli.tc_run(args, client=client)
+        tc_cli.tc_run(args)
 
     assert exc.value.code == 2
     # Fail-closed: the backend must never have been invoked.
-    assert backend.called is False
+    assert recorded_http.calls == []
 
 
-def test_no_ledger_warns_and_writes_nothing(tmp_path, capsys):
-    backend = RecordingBackend()
-    client = TriageClient(backend=backend)
+def test_no_ledger_warns_and_writes_nothing(recorded_http, tmp_path, capsys):
     args = _args("Summarize this text", ledger_dir=str(tmp_path), no_ledger=True)
 
-    tc_cli.tc_run(args, client=client)
+    tc_cli.tc_run(args)
 
     out = capsys.readouterr().out
     assert "Warning: --no-ledger" in out
     assert not (tmp_path / "ledger.jsonl").exists()
-    assert backend.called is True
+    assert len(recorded_http.calls) == 1
 
 
-def test_missing_input_file_exits_1(tmp_path):
-    client = TriageClient(backend=RecordingBackend())
+def test_missing_input_file_exits_1(recorded_http, tmp_path):
     args = _args(
         "do it",
         files=[str(tmp_path / "does_not_exist.txt")],
@@ -385,13 +397,12 @@ def test_missing_input_file_exits_1(tmp_path):
     )
 
     with pytest.raises(SystemExit) as exc:
-        tc_cli.tc_run(args, client=client)
+        tc_cli.tc_run(args)
 
     assert exc.value.code == 1
 
 
-def test_output_written_and_printed(tmp_path, capsys):
-    client = TriageClient(backend=RecordingBackend())
+def test_output_written_and_printed(recorded_http, tmp_path, capsys):
     out_file = tmp_path / "out.txt"
     args = _args(
         "Summarize this text",
@@ -400,7 +411,7 @@ def test_output_written_and_printed(tmp_path, capsys):
         print_output=True,
     )
 
-    tc_cli.tc_run(args, client=client)
+    tc_cli.tc_run(args)
 
     assert out_file.read_text(encoding="utf-8") == "LOCAL_RAN"
     assert "LOCAL_RAN" in capsys.readouterr().out
@@ -453,3 +464,26 @@ def test_local_only_with_allow_cloud_exits_1_before_run(tmp_path, capsys):
     assert exc.value.code == 1
     assert client.packet is None
     assert "--allow-cloud cannot be used with --privacy local_only" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(("configured_type", "name", "base_url", "suffix"), [
+    ("", "ollama", "http://127.0.0.1:11434", "/api/chat"),
+    ("lm_studio", "lmstudio", "http://127.0.0.1:1234/v1", "/chat/completions"),
+    ("llamacpp", "llama.cpp", "http://127.0.0.1:8080/v1", "/chat/completions"),
+])
+def test_audit_records_the_dispatched_backend(
+    recorded_http, tmp_path, monkeypatch, configured_type, name, base_url, suffix
+):
+    monkeypatch.setenv("TRIAGE_BACKEND_TYPE", configured_type)
+    monkeypatch.setenv("TRIAGE_BASE_URL", base_url)
+
+    tc_cli.tc_run(_args("Summarize this text", ledger_dir=str(tmp_path)))
+
+    assert [(r.method, r.url) for r, _ in recorded_http.calls] == [("POST", base_url + suffix)]
+    event_types = {"route_audit", "route_decision", "worker_result"}
+    selections = [
+        (event["event_type"], event["payload"]["selected_backend"])
+        for event in _ledger_events(tmp_path / "ledger.jsonl")
+        if event["event_type"] in event_types
+    ]
+    assert selections == [("route_audit", name), ("route_decision", name), ("worker_result", name)]
