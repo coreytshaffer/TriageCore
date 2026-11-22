@@ -2,6 +2,8 @@
 
 ## Status
 
+**Closed out on 2026-11-21 (Pacific).** [Closeout record](#closeout).
+
 **Proposal and design accepted at `eb431f4`. Implementation accepted
 through `64bb94c`.**
 
@@ -18,6 +20,8 @@ The corrective candidate `cfdef2c` is accepted for implementation.
 Both fresh live checks and informed reviews are complete on `697f8e1`.
 [Fresh live-check authority](#fresh-live-check-authority-for-697f8e1) ·
 [Fresh live verification record](#fresh-live-verification-record-for-697f8e1).
+The CR-138 GitHub source release is published from `022b4a1`.
+[Source release verification](#source-release-verification).
 
 | Decision | State |
 | --- | --- |
@@ -25,9 +29,9 @@ Both fresh live checks and informed reviews are complete on `697f8e1`.
 | Design acceptance | Accepted at `eb431f4`. [Decision record](#design-acceptance-record) |
 | Implementation authority | **Chat approval recorded after handback.** The original grant required this record before it became effective. No open Claude implementation grant. [Approval and sequence](#implementation-authority-record) |
 | Implementation acceptance | **Accepted at `efe28d7`, `cfdef2c`, and `64bb94c`.** [Original decision](#implementation-acceptance-record) · [Transport correction](#corrective-candidate-acceptance-record) · [Response-completion correction](#response-completion-correction-acceptance-record) |
-| Merge authority | **Authorized for PR #203 into main.** [Decision record](#merge-authority-record) |
-| Release authority | Pending |
-| Closeout | Pending |
+| Merge authority | **Authorized for PR #203.** Merged to `main` as `022b4a1`. [Decision record](#merge-authority-record) · [Merge verification](#merge-verification) |
+| Release authority | **Authorized for the CR-138 GitHub source release.** [Decision record](#release-authority-record) · [Source release verification](#source-release-verification) |
+| Closeout | **Authorized and closed out on 2026-11-21.** [Closeout record](#closeout) |
 
 Human approval requirement: each stage above needs its own explicit operator
 decision, recorded in this document, scoped to the named change and the exact
@@ -1038,4 +1042,69 @@ commits and the live evidence bound to `697f8e1`.
 [Reviewed draft PR #203](https://github.com/coreytshaffer/TriageCore/pull/203) ·
 [CI on e860cf8](https://github.com/coreytshaffer/TriageCore/actions/runs/44954440054).
 
-Release authority and closeout remain pending.
+At merge, release authority and closeout were pending.
+[Subsequent release authority](#release-authority-record).
+
+## Merge verification
+
+On 2026-11-21 at 14:24:04 PST, GitHub merged PR #203 into `main`
+as `022b4a1227b68b899bf1df2aa83d154e9f4855f4`. The merge preserved the
+accepted implementation commits and included `ba19739`, the CR-138
+merge authorization recorded on top of the reviewed `e860cf8`.
+[Merged PR #203](https://github.com/coreytshaffer/TriageCore/pull/203) ·
+[Merge commit](https://github.com/coreytshaffer/TriageCore/commit/022b4a1227b68b899bf1df2aa83d154e9f4855f4).
+
+All four jobs passed in post-merge CI run `44956558375` on `main`
+at that commit. The implementation matches the build used for both
+fresh live checks and informed reviews.
+[Post-merge CI](https://github.com/coreytshaffer/TriageCore/actions/runs/44956558375) ·
+[Fresh live verification](#fresh-live-verification-record-for-697f8e1).
+
+## Release authority record
+
+On 2026-11-21 (Pacific), Corey Shaffer authorized the CR-138 GitHub
+source release from `022b4a1227b68b899bf1df2aa83d154e9f4855f4`
+under `cr-138-checklist-review-first-delivery-2026-11-21`. The
+authorized source is the `main` merge commit for PR #203.
+[Merged PR #203](https://github.com/coreytshaffer/TriageCore/pull/203) ·
+[Post-merge CI](https://github.com/coreytshaffer/TriageCore/actions/runs/44956558375).
+
+The authorization covers publishing the named GitHub source release
+and verifying its tag and GitHub-generated ZIP and tar.gz archives
+against the pinned source. At release authorization, closeout authority
+was pending.
+
+## Source release verification
+
+GitHub published the CR-138 source release on 2026-11-21 at 15:32:09 PST.
+The tag `cr-138-checklist-review-first-delivery-2026-11-21` resolves to
+`022b4a1227b68b899bf1df2aa83d154e9f4855f4`.
+[Published release](https://github.com/coreytshaffer/TriageCore/releases/tag/cr-138-checklist-review-first-delivery-2026-11-21).
+
+Both GitHub-generated downloads declared the pinned commit. The file paths
+and contents in each matched the exported Git tree for all 800 files,
+including the 17 CR-138 changed paths. The closeout review downloaded
+both archives again and matched their recorded SHA-256 checksums.
+
+| Archive | Files verified | SHA-256 of download |
+| --- | ---: | --- |
+| ZIP | 800 | `2cdccafb73a3a0feed56b61d3033696995a19b0c68f4ee3bf6c8a471238e51a7` |
+| tar.gz | 800 | `f7b2cae2dcab7759ae596f130a924cc0054d722e1719788f5ca24b306f01d00e` |
+
+[Verified ZIP download](https://api.github.com/repos/coreytshaffer/TriageCore/zipball/cr-138-checklist-review-first-delivery-2026-11-21) ·
+[Verified tar.gz download](https://api.github.com/repos/coreytshaffer/TriageCore/tarball/cr-138-checklist-review-first-delivery-2026-11-21).
+
+[Subsequent closeout decision](#closeout).
+
+## Closeout
+
+On 2026-11-21 (Pacific), Corey Shaffer authorized CR-138 closeout.
+The grant covers recording the merge, source release verification, and
+closeout decision in this CR, updating the change log, and landing
+the two documentation changes on `main`.
+[Change log](../change_log.md#cr-138-checklist-review-first-delivery---2026-11-21).
+
+The release tag `cr-138-checklist-review-first-delivery-2026-11-21` is pinned to
+`022b4a1227b68b899bf1df2aa83d154e9f4855f4`.
+[Merge verification](#merge-verification) ·
+[Source release verification](#source-release-verification).
