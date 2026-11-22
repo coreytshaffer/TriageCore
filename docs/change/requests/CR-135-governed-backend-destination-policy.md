@@ -2,7 +2,9 @@
 
 ## Status
 
-- **Status:** Proposal and design accepted by the human operator on 2026-10-18, pinned
+- **Status:** Closed for the accepted scope on 2026-11-22 by the human operator.
+  See [Formal closeout](#formal-closeout).
+- **Acceptance history:** Proposal and design accepted by the human operator on 2026-10-18, pinned
   to `a0bbd93fd4b82167c07e901dbdc7feac22847975`. Design amendment 1
   (`backend_protocol_unsupported`) approved separately on 2026-10-18. Slice 1 (contract
   module, not integrated) implemented and accepted at
@@ -73,7 +75,7 @@
 - **Slice 1 merge:** Performed by the operator: PR #187 squash-merged into `main` as
   `1ef3f5d49f2e39e97bfa556787573e42cd0aa175` on 2026-10-18. No merge authority was issued
   to the agent. See Slice 1 merge (PR #187).
-- **Slice 1 release / closeout:** Not granted. (First recorded as: "Slice 1 merge /
+- **At the slice 1 merge:** Release and closeout were ungranted. (First recorded as: "Slice 1 merge /
   release / closeout: Not granted.")
 
 ### Lifecycle state
@@ -101,13 +103,13 @@
 | U-3 test-only grant | granted 2026-10-18; exercised at `c2dc932`; exhausted |
 | acceptance of `c2dc932` | no separate explicit operator acceptance found; implementation acceptance stays pinned to `149aa8e` (see Slice 1 merge) |
 | slice 1 merge | performed by the operator 2026-10-18: PR #187 squash-merged as `1ef3f5d`; standalone at that merge |
-| slice 1 release / closeout | not granted |
+| slice 1 release / closeout at the PR #187 merge | neither was granted at that stage |
 | slice 2 implementation and corrections | operator-approved 15-file scope, exercised in PR #206 |
 | slice 2 merge and verification | operator authorized ready-for-review and merge; PR #206 merged into `main` at `58f2aec`; post-merge evidence below |
 | slice 2 implementation acceptance | **granted** by the operator on 2026-11-22 at the verified merge commit `58f2aec` |
 | slice 2 release / deployment | no grant recorded |
 | slice 3 implementation authority | separate CR-134 consumer; no implementation grant recorded |
-| CR-135 closeout | not granted |
+| CR-135 closeout | **closed for the accepted scope** by the operator on 2026-11-22. [Formal closeout](#formal-closeout) |
 
 Rows above "documentation merge" are as recorded at `e127d7e`, except that the last five
 rows recorded there (implementation authority, implementation acceptance, merge
@@ -714,10 +716,22 @@ implementation at commit `58f2aecb3301199c9e756d6e3dfaa9a701353f32`.
 
 > I accept CR-135 slice 2 at 58f2aec.
 
+### Formal closeout
+
+On 2026-11-22 the operator closed CR-135 for the accepted scope of the destination
+policy and its integration into governed `tc run`.
+
+> I authorize formal closeout of CR-135 for the accepted scope.
+
+The operator accepted slice 1 at `149aa8e` and slice 2 at
+`58f2aecb3301199c9e756d6e3dfaa9a701353f32`. The acceptance
+and verification record reached `main` in [PR #207](https://github.com/coreytshaffer/TriageCore/pull/207)
+at `1cc2d34958f34452c7fd48de6139bd6107ae6312`. All four jobs passed in the
+[post-merge CI run](https://github.com/coreytshaffer/TriageCore/actions/runs/45071896583).
+
 ### Remaining decisions and scope
 
-- **Release and closeout.** Release or deployment requires a separate operator decision.
-  CR-135 remains open for formal closeout.
+- **Release and deployment.** Each requires separate operator authorization.
 - **Slice 3.** The public-export consumer requires its own implementation grant under
   [CR-134](CR-134-public-export-admission-contract.md).
 - **Deferred work.** Trusted LAN, additional remote origins and legacy/direct entry
@@ -1614,9 +1628,11 @@ This document is the stop point. It records:
   of PR #187 as `1ef3f5d` (Post-Acceptance Record);
 - the slice 2 grant, review corrections, operator-authorized merge of PR #206 as
   `58f2aec`, verification on merged `main`, and the operator's acceptance of slice 2
-  at that commit (Slice 2 implementation acceptance).
+  at that commit (Slice 2 implementation acceptance);
+- the operator's formal closeout of CR-135 for the accepted scope on 2026-11-22.
 
-Release and CR-135 closeout remain open. Slice 3 requires its own grant under CR-134.
+Release and deployment remain separate decisions. Slice 3 is tracked under CR-134
+and requires its own implementation grant.
 (First recorded as: "It grants no acceptance and no implementation,
 publication, merge, release, or closeout authority." Then, at `e127d7e`: "It grants no
 implementation, implementation-acceptance, merge, release, or closeout authority." Then,
