@@ -8,8 +8,10 @@
   module, not integrated) implemented and accepted at
   `149aa8e4d01e19f5c9e4f791822613f9402b978c`. Slice 1 merged to `main` by the operator
   on 2026-10-18 as `1ef3f5d49f2e39e97bfa556787573e42cd0aa175`, from head `c2dc932`, whose
-  runtime module is byte-identical to `149aa8e`; still not integrated. Slice 2 not
-  authorized. (First recorded as: Proposed. Proposal-only documentation. Then, at
+  runtime module is byte-identical to `149aa8e`. On 2026-11-22, slice 2 integrated
+  that module into governed `tc run`, merged in [PR #206](https://github.com/coreytshaffer/TriageCore/pull/206)
+  at `58f2aecb3301199c9e756d6e3dfaa9a701353f32`. See [Slice 2 merge and verification](#slice-2-merge-and-verification).
+  (First recorded as: Proposed. Proposal-only documentation. Then, at
   `e127d7e`: Proposal and design accepted; implementation not authorized. Then, at
   `df23d62`: as above, without the slice 1 merge.)
 - **Type:** Governance kernel: privacy and provenance, capability and effect bounds.
@@ -57,10 +59,10 @@
   (First recorded as: Not granted.)
 - **Documentation merge:** PR #186 squash-merged into `main` by the operator as
   `ed9e1651461188696ffdc704f4beeab3883994d9`. See Post-Acceptance Record.
-- **Implementation authority:** Slice 1 only: one implementation grant, four corrective
-  grants and one test-only grant (U-3), all exercised and exhausted. Slice 2 and slice
-  3: not granted. (First recorded as: Not granted. Then, at `df23d62`: the implementation
-  grant and four corrective grants only.)
+- **Implementation authority:** The operator granted slice 1 under one implementation
+  grant, four corrective grants and one test-only grant (U-3). The operator subsequently
+  approved the 15-file slice 2 implementation and the corrections in PR #206. Those
+  grants were exercised. Slice 3 requires a separate CR-134 grant.
 - **Implementation acceptance:** Slice 1 only, pinned to `149aa8e`, recorded in
   [PR #187](https://github.com/coreytshaffer/TriageCore/pull/187). No separate operator
   acceptance of the merged head `c2dc932` was found; see Slice 1 merge (PR #187). (First
@@ -92,12 +94,16 @@
 | design amendment 1 (`backend_protocol_unsupported`) | **approved** 2026-10-18, separately from the `a0bbd93` design acceptance |
 | slice 1 review-condition reconciliation | checklist recorded; U-1 and U-2 resolved 2026-10-18; U-3 technically resolved at `c2dc932` (see Slice 1 Review-Condition Checklist) |
 | accepted-design preservation | annotated tag `cr-135-design-accepted-a0bbd93` authorized (see Post-Acceptance Record) |
-| reconciliation documentation (draft PR #188) | accepted by the operator 2026-10-18 at `df23d62`; not merged |
+| reconciliation documentation (PR #188) | accepted by the operator 2026-10-18 at `df23d62`; [PR #188](https://github.com/coreytshaffer/TriageCore/pull/188) later merged as `610c13f` |
 | U-3 test-only grant | granted 2026-10-18; exercised at `c2dc932`; exhausted |
 | acceptance of `c2dc932` | no separate explicit operator acceptance found; implementation acceptance stays pinned to `149aa8e` (see Slice 1 merge) |
-| slice 1 merge | performed by the operator 2026-10-18: PR #187 squash-merged as `1ef3f5d`; not integrated |
+| slice 1 merge | performed by the operator 2026-10-18: PR #187 squash-merged as `1ef3f5d`; standalone at that merge |
 | slice 1 release / closeout | not granted |
-| slice 2 and slice 3 implementation authority | not granted |
+| slice 2 implementation and corrections | operator-approved 15-file scope, exercised in PR #206 |
+| slice 2 merge and verification | operator authorized ready-for-review and merge; PR #206 merged into `main` at `58f2aec`; post-merge evidence below |
+| slice 2 implementation acceptance | a separate operator decision on the verified implementation is still open |
+| slice 2 release / deployment | no grant recorded |
+| slice 3 implementation authority | separate CR-134 consumer; no implementation grant recorded |
 | CR-135 closeout | not granted |
 
 Rows above "documentation merge" are as recorded at `e127d7e`, except that the last five
@@ -134,15 +140,16 @@ results when such an allowlist is inferred instead of granted.
 **Not granted.** The Proposed Implementation Slices section is a proposal for review, not
 an allowlist anyone may act on. (As first recorded.)
 
-**Slice 1 only, now exhausted.** The operator later granted one slice 1 implementation
+**Slice 1 grant history (2026-10-18).** The operator granted one slice 1 implementation
 grant and four corrective grants, each naming the same two-file allowlist. All five were
-exercised and are exhausted (see Post-Acceptance Record). No implementation authority is
-currently open for this CR. Slice 2 and slice 3 each need their own grant naming an exact
-file allowlist.
+exercised and exhausted (see Post-Acceptance Record). At that point, slice 2 and
+slice 3 each still needed a grant naming an exact file allowlist.
 
 Later status (after the PR #187 merge, 2026-10-18): a sixth, test-only grant (U-3), naming
-only `tests/test_destination_policy.py`, was exercised at `c2dc932` and is exhausted. No
-implementation authority is currently open for this CR.
+only `tests/test_destination_policy.py`, was exercised at `c2dc932` and exhausted.
+
+On 2026-11-22 the operator's 15-file slice 2 grant and follow-up review corrections
+were exercised in PR #206. See [Slice 2 merge and verification](#slice-2-merge-and-verification).
 
 ## Authority Record
 
@@ -634,6 +641,80 @@ module. Governed-path integration, real-transport F8/F9 proof, the Windows-requi
 integration cases, and the other slice 2 obligations remain future work. No containment,
 deployment, G1, assessment-score, release or closeout claim follows from the merge or
 from this record.
+
+## Slice 2 merge and verification
+
+On 2026-11-22 the operator approved the 15 files for slice 2, directed the three
+review fixes and missing F7 regressions, and authorized marking PR #206 ready and
+merging it into `main`. GitHub records the merge at 21:10:02 UTC. The merge commit
+is `58f2aecb3301199c9e756d6e3dfaa9a701353f32`, with parents
+`10af245c18095346d7d60b55b2e105bb819f4828` (previous `main`) and
+`9fc41e0d0baaba342719e45773844b7d0d82a65a` (reviewed head). The merge and reviewed
+head share Git tree `9f77edc44f18801dc47a6778c72e1de87f739eb3`.
+[Merged PR](https://github.com/coreytshaffer/TriageCore/pull/206) · [Merge commit](https://github.com/coreytshaffer/TriageCore/commit/58f2aecb3301199c9e756d6e3dfaa9a701353f32)
+
+### Verification on the merge commit
+
+A clean checkout of `58f2aec` with repository line endings was used for local
+verification on Windows 11 build 26300, Python 3.12.16, Requests 2.34.2 and pytest
+9.2.0. The focused run covered the seven changed test modules plus
+`tests/test_qwen_cloud_routing.py`. The full run used `python -m pytest -q` over
+the repository suite. Each run wrote a separate JUnit XML report.
+
+| Check | Result | Retained local report |
+|---|---|---|
+| Focused routing and CLI tests | 722 passed, zero skips or failures | `cr135-merged-native-focus.xml` |
+| Full Windows suite, repeat | 2,950 passed, six skipped, zero failures (48 warnings) | `cr135-merged-repeat.xml` |
+| Supplemental F3/F4/F6/F11 governed CLI cases | 76 passed, zero skips or failures | `cr135-merged-criteria.xml` |
+| Supplemental F13 conflicting probe with automatic discovery | 1 passed | `cr135-merged-f13.xml` |
+| GitHub Actions, push to `main` at `58f2aec` | Python 3.10, 3.11, 3.12 and Windows executor all passed | [Post-merge run](https://github.com/coreytshaffer/TriageCore/actions/runs/45070551457) |
+
+The first sandboxed focused run had one Windows access denial when publishing a
+test plan file. The first native full run had 2,949 passes, six skips and one
+failure when Windows Application Control blocked the first launch of the temporary
+`tc.exe` in `test_cli_creates_complete_review_packet` (WinError 4551).
+The native focused run and full-suite repeat passed with the host policy in place. The six skips covered POSIX permissions, Windows symlink
+support and opt-in live local-model canaries. The two supplemental runners and their
+JUnit reports are retained with the local verification evidence, outside the tracked
+regression suite.
+
+The governed CLI tests observed local discovery and generation only on the bound
+loopback endpoint. Changing TOML or environment after the decision produced zero
+connections to the alternate listener. For Qwen, only the approved DashScope HTTPS
+endpoint received the synthetic bearer key. Backend replacement, transport changes
+and redirects were exercised, along with canonical backend names and destination
+evidence on a post-send handoff. The supplemental cases recorded zero sends for 68
+rejected endpoint inputs, discovery and generation for five accepted paths, and safe
+failure for three configuration-read errors while the legacy reader used defaults.
+A capability record for port 1234 left discovery and generation on the configured
+port 11434.
+
+The offline evidence covers prepared HTTP requests and real Requests behavior with
+in-process loopback servers. Live providers, the local service's own forwarding and
+device-wide egress are outside this verification.
+
+| Fingerprint | SHA-256 |
+|---|---|
+| Built-in destination profiles | `3310c5202f4de493440ce5621c364e0dd8a29a3d1816ef8798510eefe2a8367d` |
+| Seven changed test files | `0e43fb9c52cddc5c23750ffa862f084291dbf383555ca39f01c8cff710233d77` |
+| Full-suite repeat JUnit XML | `ba6ba5fbd720961d533aac50798341847608b1601d3eb6cf7b638bb091da80c2` |
+| Supplemental F3/F4/F6/F11 runner | `88705078ac07c93848f57a9251c4e4d1f26803b8daf21046945203d894acfa84` |
+| Supplemental F13 runner | `08a92babb5c58f333aa5b28822f574cae3f29da6a25e410666cfb19bc3d52f14` |
+
+The seven-file digest uses sorted repository-relative UTF-8 paths, each followed
+by a NUL byte and the binary SHA-256 of that file's Git blob contents.
+
+### Remaining decisions and scope
+
+- **Slice 2 implementation acceptance.** The operator authorized the merge. A
+  separate acceptance decision for the implementation verified at `58f2aec` remains open.
+- **Release and closeout.** Release or deployment requires a separate operator decision.
+  CR-135 remains open for formal closeout.
+- **Slice 3.** The public-export consumer requires its own implementation grant under
+  [CR-134](CR-134-public-export-admission-contract.md).
+- **Deferred work.** Trusted LAN, additional remote origins and legacy/direct entry
+  points are outside slice 2. A G1 or device-wide no-egress claim requires OS-level
+  network evidence and verification of the local service's forwarding configuration.
 
 ## Slice 1 Review-Condition Checklist (reconciliation, 2026-10-18)
 
@@ -1329,7 +1410,10 @@ For design acceptance, the fixture **specification** must cover each of the foll
 A successful configuration check is not evidence of controlled egress unless every
 relevant request goes through the enforced transport.
 
-### Fixture specification: planned tests, not evidence; nothing is created or executed by this CR
+### Fixture specification in the accepted design
+
+The following table preserves the planned assertions at `a0bbd93`. For the executed
+results at `58f2aec`, see [Slice 2 merge and verification](#slice-2-merge-and-verification).
 
 **Common setup.**
 - Synthetic protected marker bytes, `M04-PROTECTED-<uuid>`.
@@ -1374,7 +1458,7 @@ relevant request goes through the enforced transport.
 | F13 | Capability probe record for `127.0.0.1:1234` while executing against `127.0.0.1:11434` | Binding uses the configured identity; capability changes availability only; no destination authority derived from the probe | — | per F1 |
 | F14 | **Usefulness controls:** existing suite; default `triagecore.toml` migrated to `127.0.0.1` | Unchanged pass; benign tasks complete | — | — |
 
-**Retained results (future run):**
+**Results specified for retention in the accepted design**
 - machine-readable test output;
 - fixture-corpus digest and destination-profile digests;
 - commit;
@@ -1443,14 +1527,16 @@ left loopback, plus evidence of the local service's own forwarding configuration
   instead, `.github/workflows/tests.yml` must be named in a separate implementation
   grant.
 
-## Proposed Implementation Slices (not authorized)
+## Proposed Implementation Slices (accepted design)
 
 For review only. Each slice needs its own grant naming its exact file allowlist.
 
 Later status (reconciliation, 2026-10-18): slice 1 was granted, implemented and accepted
-at `149aa8e` (see Post-Acceptance Record). Slices 2 and 3 remain not authorized. The
+at `149aa8e` (see Post-Acceptance Record). Slices 2 and 3 were ungranted at that point. The
 slice descriptions below are kept as accepted at `a0bbd93`. Slice 1 was then merged to
 `main` as `1ef3f5d`, still not integrated (see Slice 1 merge).
+
+On 2026-11-22, slice 2 merged into `main` at `58f2aec`. Slice 3 remains under CR-134.
 
 1. **Contract module** (about 2–3 hours).
    - Files: new `triage_core/destination_policy.py` (profiles, normalization, effective-config
@@ -1517,11 +1603,13 @@ This document is the stop point. It records:
   `149aa8e`, design amendment 1, the preservation tag, and the slice 1 review-condition
   checklist (Post-Acceptance Record and checklist);
 - the U-3 test-only cycle at `c2dc932`, its independent review, and the operator's merge
-  of PR #187 as `1ef3f5d` (Post-Acceptance Record).
+  of PR #187 as `1ef3f5d` (Post-Acceptance Record);
+- the slice 2 grant, review corrections, operator-authorized merge of PR #206 as
+  `58f2aec`, and verification on merged `main` (Slice 2 merge and verification).
 
-It grants no slice 1 release or closeout authority, no slice 2 or slice 3 implementation
-authority, and no CR-135 closeout. It records the slice 1 merge; it does not grant or
-repeat it. (First recorded as: "It grants no acceptance and no implementation,
+The slice 2 record leaves implementation acceptance, release and CR-135 closeout with
+the operator. Slice 3 requires its own grant under CR-134.
+(First recorded as: "It grants no acceptance and no implementation,
 publication, merge, release, or closeout authority." Then, at `e127d7e`: "It grants no
 implementation, implementation-acceptance, merge, release, or closeout authority." Then,
 at `df23d62`: "It grants no slice 1 merge, release or closeout authority, no slice 2 or
