@@ -876,7 +876,7 @@ baseline v1.0, pinned to `ede8ef1`) is preserved unchanged by this CR.
 - **PR #179:** the separate *authorization-record reconciliation required* finding stands.
   It is not addressed by this CR and belongs to M03.
 
-## Explicit Exclusions
+## Original proposal drafting exclusions
 
 - Any code, test, fixture file, schema file, CLI surface, configuration, or ledger change.
 - Any network call, provider API use, MCP server, browser automation, session cookie,
@@ -911,3 +911,19 @@ and task risk. The six paths are `triage_core/public_export_policy.py`,
 The stop point is a locally reviewable evaluator and synthetic offline evidence.
 Implementation acceptance, publication, staging, release, deployment and closeout
 require separate decisions.
+
+The frozen baseline policy is revision 1 of `public_export_v0`. It permits the
+Anthropic Claude web and OpenAI ChatGPT web/Android recipient pairs, using simulated
+scope `account:ordinary-1` with fresh `none` answers for Anthropic CVP or OpenAI
+Daybreak respectively. Its operation vocabulary is `read_provided_text`,
+`write_critique`, `summarize_provided_text` and `draft_test_plan`. Its model
+allowlist and staging roots are empty. Clipboard is off. Raw UTF-8 payloads have
+a 16,384-byte ceiling. The freshness ceiling is 900 seconds inclusive, eligibility
+is capped at 600 seconds, and a 120-second approval TTL is reserved for future staging.
+
+The predeclared usefulness gate requires zero benign refusals in 12 tasks, nine
+ordinary eligibilities and exactly three reviews with the labelled triggers.
+Every labelled hard stop must refuse. Repeated inputs must return identical IDs.
+Individual changes to bound inputs must change the ID or refuse. Evaluation must
+make zero prompts, network calls and effect writes. Prompts per completed export
+is unmeasured in Grant A because this evaluator completes zero exports.
