@@ -2,7 +2,7 @@ import time
 import requests
 from typing import Callable, Dict, Any, Optional
 from .backends import LocalBackend
-from .destination_policy import DestinationPolicyError
+from .destination_policy import DestinationPolicyError, GuardedTransport
 
 class TriageEngine:
     def __init__(self, backend: LocalBackend, timeout_seconds: int = 45):
@@ -16,7 +16,9 @@ class TriageEngine:
         validator: Optional[Callable[[str], bool]] = None,
         stream_callback: Optional[Callable[[str], None]] = None,
         timeout: Optional[int] = None,
-        post_processor: Optional[Callable[[str], str]] = None
+        post_processor: Optional[Callable[[str], str]] = None,
+        *,
+        verified_transport: Optional[GuardedTransport] = None,
     ) -> Dict[str, Any]:
         """
         Attempts to execute a parsing or generation task on the local worker.
@@ -30,11 +32,16 @@ class TriageEngine:
                 {"role": "user", "content": f"{task_prompt}\n\nDATA:\n{raw_data}"}
             ]
             
+            # Direct library backends may accept only the public generation arguments.
+            transport_arg = (
+                {"_verified_transport": verified_transport} if verified_transport is not None else {}
+            )
             backend_response = self.backend.generate(
                 messages=messages,
                 temperature=0.1,
                 timeout=use_timeout,
-                stream_callback=stream_callback
+                stream_callback=stream_callback,
+                **transport_arg,
             )
             
             elapsed = time.time() - start_time

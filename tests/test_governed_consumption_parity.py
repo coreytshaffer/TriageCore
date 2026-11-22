@@ -9,8 +9,8 @@ carried -- which are about ``governed_decision.py`` staying free of ambient and
 runtime dependencies, an invariant integration does not retire -- are carried
 over verbatim at the end of this file.
 
-Every test here is deterministic and fully offline: no network, socket,
-subprocess, model call, or real runtime is involved.
+These tests use recording adapters and, for proxy isolation, in-process loopback
+servers. They need no external network or model runtime.
 """
 
 from __future__ import annotations
@@ -62,10 +62,12 @@ class RecordedHTTP:
         import requests
 
         self.calls = []
+        self.adapters = []
         self.error = None
 
         def send(adapter, request, **settings):
             self.calls.append((request, settings))
+            self.adapters.append(adapter)
             if self.error:
                 raise self.error
             response = requests.Response()
@@ -1021,6 +1023,15 @@ def test_cr019_unknown_routes_keep_duplicate_causes_and_block_before_execution(
 
 
 # CR-135. Observe prepared HTTP requests at the last boundary before I/O.
+def declare_auto_model(monkeypatch):
+    capability = capability_evidence.resolve_capability(
+        record=None, declare_local_fast=True, declare_local_heavy=True,
+        local_fast_model="auto", local_heavy_model="auto",
+        config_reference="test:auto", freshness_seconds=300,
+    )
+    monkeypatch.setattr(capability_evidence, "resolve_from_config", lambda *a, **k: capability)
+
+
 @pytest.mark.parametrize(("protocol", "base_url", "discovery", "generation"), [
     ("ollama", "http://127.0.0.1:11434", "/api/tags", "/api/chat"),
     ("lmstudio", "http://[::1]:1234/v1", "/models", "/chat/completions"),
@@ -1033,12 +1044,7 @@ def test_local_only_discovery_and_generation_stay_on_device(
     monkeypatch.setenv("TRIAGE_MODEL", "auto")
     monkeypatch.setenv("TRIAGE_QWEN_API_KEY", "synthetic-qwen-test-key")
     monkeypatch.setenv("TRIAGE_QWEN_ENABLED", "1")
-    capability = capability_evidence.resolve_capability(
-        record=None, declare_local_fast=True, declare_local_heavy=True,
-        local_fast_model="auto", local_heavy_model="auto",
-        config_reference="test:auto", freshness_seconds=300,
-    )
-    monkeypatch.setattr(capability_evidence, "resolve_from_config", lambda *a, **k: capability)
+    declare_auto_model(monkeypatch)
     contexts = _capture_contexts(monkeypatch)
     tc_cli.tc_run(_args(data="SYNTHETIC_LOCAL_MARKER"))
     assert contexts[0].qwen_api_key is None
@@ -1140,7 +1146,6 @@ def test_capability_observation_cannot_change_execution_endpoint(monkeypatch, re
 
 
 @pytest.mark.parametrize(("stage", "change", "code"), [
-    ("before_s2", "session", "transport_settings_changed"),
     ("before_s2", "base_url", "destination_binding_mismatch"),
     ("after_s2", "transport", "transport_not_guarded"),
     ("after_s2", "base_url", "destination_binding_mismatch"),
@@ -1158,8 +1163,6 @@ def test_changed_governed_backend_fails_closed_before_io(
             verified = original(context, backends)
         if change == "base_url":
             backend.base_url = "http://127.0.0.1:20000"
-        elif change == "session":
-            backend.transport._session.trust_env = True
         else:
             backend.transport = None
         return verified if stage == "after_s2" else original(context, backends)
@@ -1172,49 +1175,150 @@ def test_changed_governed_backend_fails_closed_before_io(
     assert recorded_http.calls == []
 
 
-@pytest.mark.parametrize("use_cloud", [False, True])
-def test_execution_uses_verified_instance_after_persistent_engine_swap(monkeypatch, recorded_http, use_cloud):
-    from unittest.mock import Mock
+@pytest.mark.parametrize("stage", ["before_s2", "before_discovery", "before_generation"])
+@pytest.mark.parametrize("change", [
+    "trust_env", "proxy", "verify", "adapter", "hook", "auth", "call_proxies", "call_redirects",
+])
+def test_changed_transport_settings_report_only_earlier_sends(
+    monkeypatch, recorded_http, capsys, stage, change,
+):
+    """F7(e1–e3): exercise S2 and both S3 boundaries through the governed command."""
+    import requests
     from triage_core import client
+    from triage_core.destination_policy import DestinationPolicyError, GuardedTransport
+    from test_endpoint_transport_guard import transport_tripwires
+
+    transport_tripwires(monkeypatch)
+    base = "http://127.0.0.1:1234/v1"
+    monkeypatch.setenv("TRIAGE_BACKEND_TYPE", "lmstudio")
+    monkeypatch.setenv("TRIAGE_BASE_URL", base)
+    declare_auto_model(monkeypatch)
+    overrides = {"call_proxies": {"proxies": {}}, "call_redirects": {"allow_redirects": True}}
+
+    def change_session(session):
+        if change == "trust_env":
+            session.trust_env = True
+        elif change == "proxy":
+            session.proxies["http"] = "http://127.0.0.1:3128"
+        elif change == "verify":
+            session.verify = False
+        elif change == "adapter":
+            session.mount("http://", requests.adapters.HTTPAdapter())
+        elif change == "hook":
+            session.hooks["response"].append(lambda response, **kw: response)
+        else:
+            assert change == "auth"
+            session.auth = ("fixture", "synthetic")
+
+    if stage == "before_s2":
+        verify = client.verify_destination_binding
+
+        def change_before_verification(context, backends):
+            guard = backends[context.decision.policy.preferred_logical_route].transport
+            if change in overrides:
+                # A rejected pre-S2 call must remain latched when verification starts.
+                with pytest.raises(DestinationPolicyError, match="transport_settings_changed"):
+                    guard.get(base + "/models", **overrides[change])
+            else:
+                change_session(guard._session)
+            return verify(context, backends)
+
+        monkeypatch.setattr(client, "verify_destination_binding", change_before_verification)
+    else:
+        guarded_send = GuardedTransport._send
+        target_method = "GET" if stage == "before_discovery" else "POST"
+
+        def change_before_send(guard, method, url, kwargs):
+            if method == target_method:
+                if change in overrides:
+                    kwargs = {**kwargs, **overrides[change]}
+                else:
+                    change_session(guard._session)
+            return guarded_send(guard, method, url, kwargs)
+
+        monkeypatch.setattr(GuardedTransport, "_send", change_before_send)
+
+    with pytest.raises(SystemExit) as refused:
+        tc_cli.tc_run(_args())
+    assert refused.value.code == 2
+    output = capsys.readouterr().out
+    expected = [("GET", base + "/models")] if stage == "before_generation" else []
+    assert "transport_settings_changed" in output
+    assert f"send_count={len(expected)}" in output
+    if expected:
+        assert "GET models" in output
+    assert [(r.method, r.url) for r, _ in recorded_http.calls] == expected
+
+
+@pytest.mark.parametrize("swap", ["persistent_backend", "persistent_engine", "cloud_registration"])
+def test_execution_uses_verified_instance_and_adapter_after_swap(monkeypatch, recorded_http, swap):
+    """F7(c,d): the registered replacement cannot take the verified instance's place."""
+    from types import MappingProxyType
+    from triage_core import client
+    from test_endpoint_transport_guard import transport_tripwires
+
+    transport_tripwires(monkeypatch)
+    use_cloud = swap == "cloud_registration"
+    route = "cloud_primary" if use_cloud else "local_heavy"
+    provider = "https://dashscope-intl.aliyuncs.com:443/compatible-mode/v1"
+    monkeypatch.setenv("TRIAGE_BACKEND_TYPE", "ollama")
+    monkeypatch.setenv("TRIAGE_BASE_URL", "http://127.0.0.1:11434")
+    monkeypatch.setenv("TRIAGE_QWEN_BASE_URL", provider)
+    monkeypatch.setenv("TRIAGE_QWEN_MODEL", "qwen-max")
 
     monkeypatch.setenv("TRIAGE_QWEN_ENABLED", "1")
     monkeypatch.setenv("TRIAGE_QWEN_API_KEY", "synthetic-swap-test-key")
     if use_cloud:
         monkeypatch.setattr(capability_evidence, "resolve_from_config",
                             lambda *a, **k: capability_evidence.unknown_resolution())
-    constructed = []
+    else:
+        declare_auto_model(monkeypatch)
     original_constructor = client.TriageClient.from_governed_context
     original_verify = client.verify_destination_binding
-    replacement = Mock()
     invoked = []
+    instances = {}
 
     def construct(context):
-        result = original_constructor(context)
-        constructed.append(result)
-        return result
+        instances["client"] = original_constructor(context)
+        return instances["client"]
 
     def verify(context, backends):
         verified = original_verify(context, backends)
-        constructed[0].engine.backend = replacement
-        constructed[0].engine = replacement
-        for member in verified.values():
-            generate = member.backend.generate
-
-            def record(*args, owner=member.backend, call=generate, **kwargs):
+        active = instances["client"]
+        owner = verified[route].backend
+        other_client = original_constructor(context)
+        replacement = other_client._governed_backends[route]
+        instances.update(owner=owner, replacement=replacement)
+        for backend in (owner, replacement):
+            def record(*args, owner=backend, call=backend.generate, **kwargs):
                 invoked.append(owner)
                 return call(*args, **kwargs)
 
-            monkeypatch.setattr(member.backend, "generate", record)
+            monkeypatch.setattr(backend, "generate", record)
+        if swap == "persistent_engine":
+            active.engine = other_client.engine
+        elif swap == "persistent_backend":
+            active.engine.backend = replacement
+        else:
+            active._governed_backends = MappingProxyType({**backends, route: replacement})
         return verified
 
     monkeypatch.setattr(client.TriageClient, "from_governed_context", staticmethod(construct))
     monkeypatch.setattr(client, "verify_destination_binding", verify)
     tc_cli.tc_run(_args(privacy="public" if use_cloud else "local_only", allow_cloud=use_cloud))
-    assert len(invoked) == 1
-    assert invoked[0].transport.owner is invoked[0]
-    assert len(invoked[0].transport.sends) == 1
-    assert len(recorded_http.calls) == 1
-    assert replacement.mock_calls == []
+    owner = instances["owner"]
+    replacement = instances["replacement"]
+    assert owner is not replacement
+    assert len(invoked) == 1 and invoked[0] is owner
+    expected = ([("POST", provider + "/chat/completions")] if use_cloud else [
+        ("GET", "http://127.0.0.1:11434/api/tags"), ("POST", "http://127.0.0.1:11434/api/chat"),
+    ])
+    assert [(r.method, r.url) for r, _ in recorded_http.calls] == expected
+    for adapter, (request, _) in zip(recorded_http.adapters, recorded_http.calls, strict=True):
+        assert adapter is owner.transport._session.get_adapter(request.url)
+        assert adapter is not replacement.transport._session.get_adapter(request.url)
+        assert request.headers.get("Authorization") == ("Bearer synthetic-swap-test-key" if use_cloud else None)
+    assert len(owner.transport.sends) == len(expected) and replacement.transport.sends == ()
 
 
 def test_qwen_redirect_reports_one_approved_send_and_stops(monkeypatch, capsys):

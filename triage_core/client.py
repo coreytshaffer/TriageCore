@@ -11,7 +11,7 @@ from .backends import (
     create_backend, create_bound_backend,
 )
 from .destination_policy import (
-    DestinationPolicyError, GuardedTransport, RouteBinding, SendRecord,
+    NON_NETWORK_ROUTES, DestinationPolicyError, GuardedTransport, RouteBinding, SendRecord,
     bind_route_endpoints,
 )
 from .runtime_observation import GovernedBindingError
@@ -131,14 +131,10 @@ class VerifiedDestination:
         engine = TriageEngine(backend=self.backend, timeout_seconds=kwargs["timeout"])
         try:
             self.check_before_invoke(engine.backend)
-            result = engine.execute_task(**kwargs)
+            return engine.execute_task(verified_transport=self.transport, **kwargs)
         except DestinationPolicyError as exc:
             sends = self.transport.sends[self.initial_send_count:]
             raise GovernedDestinationRefusal(exc, sends, self.binding.identity_sha256) from None
-        if len(self.transport.sends) > self.initial_send_count:
-            result["destination_safe_label"] = self.binding.safe_label
-            result["destination_identity_sha256"] = self.binding.identity_sha256
-        return result
 
 
 def verify_destination_binding(
@@ -424,6 +420,8 @@ class TriageClient:
             )
             selected_route = observation.selected_route
             selected_model = observation.model_binding
+            destination = None if selected_route in NON_NETWORK_ROUTES else verified_destinations[selected_route]
+            selected_backend_name = destination.backend.name if destination else observation.backend_binding
             governed_evidence = {
                 "governed_risk_posture": decision.policy.risk_posture,
                 "binding_outcome": observation.binding_outcome,
@@ -434,8 +432,10 @@ class TriageClient:
             if decision.policy.risk_posture == "high":
                 resilience_input.sensitivity = "high"
         else:
+            destination = None
             resilience_decision = choose_resilience_route(resilience_input)
             selected_route = resilience_decision.selected_route
+            selected_backend_name = self._selected_backend_name(selected_route)
             if selected_route in {"cloud_primary", "cloud_secondary"}:
                 selected_model = default_config.get_qwen_model()
             elif selected_route in {"local_fast", "local_heavy"}:
@@ -446,7 +446,6 @@ class TriageClient:
                 ) or ""
             else:
                 selected_model = ""
-        selected_backend_name = observation.backend_binding if governed else self._selected_backend_name(selected_route)
 
         # A governed decision whose *preferred* route is ``human_handoff``
         # because the ethical firewall triggered is a terminal governed outcome,
@@ -642,20 +641,14 @@ class TriageClient:
                 raw_data=data,
                 validator=validator,
                 timeout=use_timeout,
-                verified_destination=verified_destinations[selected_route] if governed else None,
+                verified_destination=destination,
                 post_processor=(
                     post_processor_override
                     if governed
                     else route_decision.get("post_processor")
                 ),
             )
-            self._append_optional_event(
-                ledger=ledger,
-                task_id=task_id,
-                event_type="worker_result",
-                payload=build_worker_result_payload(route_payload, result),
-            )
-            return self._merge_route_fields(result, route_payload)
+            return self._record_backend_result(ledger, task_id, route_payload, result, destination)
             
         # Step 2: Local execution
         post_processor = (
@@ -681,7 +674,7 @@ class TriageClient:
             )
             return self._merge_route_fields(result, route_payload)
         
-        executor = verified_destinations[selected_route] if governed else self.engine
+        executor = destination if governed else self.engine
         backend = executor.backend
         original_model = backend.model
         if getattr(backend, "name", "") != "fake" and requested_model and requested_model != original_model:
@@ -695,15 +688,25 @@ class TriageClient:
                 timeout=use_timeout,
                 post_processor=post_processor
             )
-            self._append_optional_event(
-                ledger=ledger,
-                task_id=task_id,
-                event_type="worker_result",
-                payload=build_worker_result_payload(route_payload, result),
-            )
-            return self._merge_route_fields(result, route_payload)
+            return self._record_backend_result(ledger, task_id, route_payload, result, destination)
         finally:
             backend.model = original_model
+
+    def _record_backend_result(
+        self, ledger: Optional[TaskLedger], task_id: Optional[str],
+        route_payload: Dict[str, Any], result: Dict[str, Any],
+        destination: VerifiedDestination | None,
+    ) -> Dict[str, Any]:
+        payload = build_worker_result_payload(route_payload, result)
+        if destination is not None and len(destination.transport.sends) > destination.initial_send_count:
+            evidence = {
+                "destination_safe_label": destination.binding.safe_label,
+                "destination_identity_sha256": destination.binding.identity_sha256,
+            }
+            payload.update(evidence)
+            result.update(evidence)
+        self._append_optional_event(ledger, task_id, "worker_result", payload)
+        return self._merge_route_fields(result, route_payload)
 
     @staticmethod
     def _binding_primitive(value: Any) -> Any:

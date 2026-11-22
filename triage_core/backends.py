@@ -168,9 +168,11 @@ class OpenAICompatibleBackend:
         temperature: float = 0.1,
         timeout: int = 45,
         stream_callback: Optional[Callable[[str], None]] = None,
+        *,
+        _verified_transport: Optional[GuardedTransport] = None,
         **kwargs: Any,
     ) -> BackendResponse:
-        transport = self.transport
+        transport = self.transport if _verified_transport is None else _verified_transport
         url = f"{self.base_url.rstrip('/')}/chat/completions"
         payload = {
             "model": _generation_model(self, transport, timeout),
@@ -334,9 +336,11 @@ class OllamaBackend:
         temperature: float = 0.1,
         timeout: int = 45,
         stream_callback: Optional[Callable[[str], None]] = None,
+        *,
+        _verified_transport: Optional[GuardedTransport] = None,
         **kwargs: Any,
     ) -> BackendResponse:
-        transport = self.transport
+        transport = self.transport if _verified_transport is None else _verified_transport
         url = f"{self.base_url.rstrip('/')}/api/chat"
         payload = {
             "model": _generation_model(self, transport, timeout),

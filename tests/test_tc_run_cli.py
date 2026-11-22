@@ -223,14 +223,78 @@ def test_early_local_block_records_binding_issue_on_runner_selected(
     assert any(event["event_type"] == "route_decision" for event in events)
 
 
-def test_handoff_required_exits_3(recorded_http, tmp_path):
-    recorded_http.error = requests.Timeout("Timed out")
-    args = _args("Summarize this text", ledger_dir=str(tmp_path))
+@pytest.mark.parametrize("handoff", [False, True], ids=["success", "timeout"])
+@pytest.mark.parametrize("cloud", [False, True], ids=["ollama", "qwen"])
+def test_attempted_destination_in_output_and_worker_result(
+    recorded_http, monkeypatch, tmp_path, capsys, cloud, handoff
+):
+    from triage_core.destination_policy import normalize_endpoint
 
-    with pytest.raises(SystemExit) as exc:
+    secret = "synthetic-test-key"
+    local_url = "http://127.0.0.1:11434"
+    cloud_url = "https://dashscope-intl.aliyuncs.com:443/compatible-mode/v1"
+    monkeypatch.setenv("TRIAGE_BACKEND_TYPE", "ollama")
+    monkeypatch.setenv("TRIAGE_BASE_URL", local_url)
+    monkeypatch.setenv("TRIAGE_QWEN_ENABLED", "1")
+    monkeypatch.setenv("TRIAGE_QWEN_BASE_URL", cloud_url)
+    monkeypatch.setenv("TRIAGE_QWEN_MODEL", "qwen-max")
+    monkeypatch.setenv("TRIAGE_QWEN_API_KEY", secret)
+    if cloud:
+        monkeypatch.setattr(
+            capability_evidence, "resolve_from_config",
+            lambda *a, **kw: capability_evidence.unknown_resolution(),
+        )
+    args = _args(
+        "Summarize this text", privacy="public" if cloud else "local_only",
+        allow_cloud=cloud, ledger_dir=str(tmp_path),
+    )
+
+    if handoff:
+        recorded_http.error = requests.Timeout("Timed out")
+        with pytest.raises(SystemExit) as exc:
+            tc_cli.tc_run(args)
+        assert exc.value.code == 3
+    else:
         tc_cli.tc_run(args)
 
-    assert exc.value.code == 3
+    assert len(recorded_http.calls) == 1
+    expected = normalize_endpoint(
+        cloud_url if cloud else local_url, "cloud_primary" if cloud else "local_heavy"
+    )
+    out = capsys.readouterr().out
+    assert f"Destination: {expected.safe_label} ({expected.identity_sha256})" in out
+    worker = next(
+        e["payload"] for e in _ledger_events(tmp_path / "ledger.jsonl")
+        if e["event_type"] == "worker_result"
+    )
+    assert worker["destination_safe_label"] == expected.safe_label
+    assert worker["destination_identity_sha256"] == expected.identity_sha256
+    for text in (out, json.dumps(worker)):
+        assert secret not in text
+        assert local_url not in text
+        assert cloud_url not in text
+
+
+def test_unconfigured_qwen_handoff_omits_destination_evidence(
+    recorded_http, monkeypatch, tmp_path, capsys
+):
+    monkeypatch.setenv("TRIAGE_QWEN_ENABLED", "1")
+    monkeypatch.delenv("TRIAGE_QWEN_API_KEY", raising=False)
+    monkeypatch.setattr(
+        capability_evidence, "resolve_from_config",
+        lambda *a, **kw: capability_evidence.unknown_resolution(),
+    )
+    args = _args("Summarize this text", privacy="public", allow_cloud=True, ledger_dir=str(tmp_path))
+    with pytest.raises(SystemExit) as exc:
+        tc_cli.tc_run(args)
+    assert exc.value.code == 3 and recorded_http.calls == []
+    worker = next(
+        e["payload"] for e in _ledger_events(tmp_path / "ledger.jsonl")
+        if e["event_type"] == "worker_result"
+    )
+    assert worker["selected_route"] == "cloud_primary"
+    assert "destination_safe_label" not in worker and "destination_identity_sha256" not in worker
+    assert "Destination:" not in capsys.readouterr().out
 
 
 @pytest.mark.parametrize(
@@ -248,7 +312,7 @@ def test_handoff_required_exits_3(recorded_http, tmp_path):
     ],
 )
 def test_terminal_routes_exit_3_without_backend_execution(
-    recorded_http, tmp_path, preferred_route, reason, bound_route
+    recorded_http, tmp_path, preferred_route, reason, bound_route, capsys
 ):
     args = _args(
         "Summarize public text",
@@ -291,6 +355,9 @@ def test_terminal_routes_exit_3_without_backend_execution(
         if line.strip()
     ]
     worker_result = next(event for event in events if event["event_type"] == "worker_result")
+    assert "Destination:" not in capsys.readouterr().out
+    assert "destination_safe_label" not in worker_result["payload"]
+    assert "destination_identity_sha256" not in worker_result["payload"]
     assert worker_result["payload"]["selected_route"] == bound_route
     assert worker_result["payload"]["worker_result_status"] == "not_attempted"
     assert worker_result["payload"]["failure_type"] == "safety_handoff"
@@ -397,3 +464,26 @@ def test_local_only_with_allow_cloud_exits_1_before_run(tmp_path, capsys):
     assert exc.value.code == 1
     assert client.packet is None
     assert "--allow-cloud cannot be used with --privacy local_only" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(("configured_type", "name", "base_url", "suffix"), [
+    ("", "ollama", "http://127.0.0.1:11434", "/api/chat"),
+    ("lm_studio", "lmstudio", "http://127.0.0.1:1234/v1", "/chat/completions"),
+    ("llamacpp", "llama.cpp", "http://127.0.0.1:8080/v1", "/chat/completions"),
+])
+def test_audit_records_the_dispatched_backend(
+    recorded_http, tmp_path, monkeypatch, configured_type, name, base_url, suffix
+):
+    monkeypatch.setenv("TRIAGE_BACKEND_TYPE", configured_type)
+    monkeypatch.setenv("TRIAGE_BASE_URL", base_url)
+
+    tc_cli.tc_run(_args("Summarize this text", ledger_dir=str(tmp_path)))
+
+    assert [(r.method, r.url) for r, _ in recorded_http.calls] == [("POST", base_url + suffix)]
+    event_types = {"route_audit", "route_decision", "worker_result"}
+    selections = [
+        (event["event_type"], event["payload"]["selected_backend"])
+        for event in _ledger_events(tmp_path / "ledger.jsonl")
+        if event["event_type"] in event_types
+    ]
+    assert selections == [("route_audit", name), ("route_decision", name), ("worker_result", name)]

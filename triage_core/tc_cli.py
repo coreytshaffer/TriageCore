@@ -1331,7 +1331,8 @@ def tc_run(args, client=None) -> None:
 
     # 8. Interpret outcome.
     route = result.get("selected_route")
-    if result.get("status") == "success":
+    succeeded = result.get("status") == "success"
+    if succeeded:
         output = result.get("output", "")
         if args.output:
             out_dir = os.path.dirname(args.output)
@@ -1345,19 +1346,17 @@ def tc_run(args, client=None) -> None:
                 sys.exit(1)
         destination = "on the cloud backend" if route in CLOUD_ROUTES else "locally"
         print(f"Success: task ran {destination} (route={route}, task_id={task_id}).")
-        if "destination_identity_sha256" in result:
-            print(f"Destination: {result['destination_safe_label']} ({result['destination_identity_sha256']})")
-        if ledger is not None:
-            print(f"Evidence written to {ledger.ledger_path}.")
-        if args.print_output:
-            print(output)
-        return  # exit 0
-
-    reason = result.get("handoff_reason") or result.get("reason") or "handoff required"
-    print(f"Handoff required (route={route}, task_id={task_id}): {reason}")
+    else:
+        reason = result.get("handoff_reason") or result.get("reason") or "handoff required"
+        print(f"Handoff required (route={route}, task_id={task_id}): {reason}")
+    if "destination_identity_sha256" in result:
+        print(f"Destination: {result['destination_safe_label']} ({result['destination_identity_sha256']})")
     if ledger is not None:
         print(f"Evidence written to {ledger.ledger_path}.")
-    sys.exit(3)
+    if not succeeded:
+        sys.exit(3)
+    if args.print_output:
+        print(output)
 
 
 def tc_probe(args) -> None:

@@ -23,7 +23,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from test_governed_consumption_parity import recorded_http  # noqa: F401 (pytest fixture)
+from test_governed_consumption_parity import declare_auto_model, recorded_http  # noqa: F401 (pytest fixture)
 
 from triage_core import capability_evidence, run_plan, tc_cli
 from triage_core.client import TriageClient
@@ -217,12 +217,77 @@ def test_a_packet_that_is_not_the_snapshot_task_data_terminates():
 # --------------------------------------------------------------------------
 
 
-def test_configuration_changed_after_decision_formation_uses_frozen_endpoint(monkeypatch, recorded_http):
+@pytest.mark.parametrize("source", ["env", "toml"])
+@pytest.mark.parametrize("substitute", ["other_loopback", "remote"])
+def test_configuration_changed_after_decision_formation_uses_frozen_endpoint(
+    monkeypatch, tmp_path, source, substitute,
+):
+    """F7(a): change the winning source after S1, before backend construction."""
+    import requests
+    from urllib.parse import urlsplit
+    from test_endpoint_transport_guard import loopback_server, transport_tripwires
+
+    transport_tripwires(monkeypatch)
+    config_path = tmp_path / "triagecore.toml"
+    monkeypatch.setattr(default_config, "global_config_path", str(config_path))
+    monkeypatch.setenv("TRIAGE_BACKEND_TYPE", "lmstudio")
+    monkeypatch.setenv("TRIAGE_MODEL", "auto")
+    monkeypatch.delenv("TRIAGE_BASE_URL", raising=False)
+    declare_auto_model(monkeypatch)
+
+    def set_url(value):
+        if source == "env":
+            monkeypatch.setenv("TRIAGE_BASE_URL", value)
+        else:
+            config_path.write_text(f'[backend]\nbase_url = "{value}"\n', encoding="utf-8")
+
+    with loopback_server() as origin, loopback_server() as alternate:
+        permitted = {urlsplit(server.url).netloc for server in (origin, alternate)}
+        real_send = requests.adapters.HTTPAdapter.send
+
+        def loopback_only(adapter, request, **kwargs):
+            assert urlsplit(request.url).netloc in permitted, "attempted external HTTP"
+            return real_send(adapter, request, **kwargs)
+
+        monkeypatch.setattr(requests.adapters.HTTPAdapter, "send", loopback_only)
+        set_url(origin.url + "/v1")
+        context = _context(inline_data="local-F7a-marker")
+        frozen = context.effective_config.local_base_url
+        assert frozen.source == ("env:TRIAGE_BASE_URL" if source == "env" else "toml:triagecore.toml")
+        assert frozen.value == origin.url + "/v1"
+        set_url(alternate.url + "/v1" if substitute == "other_loopback" else "https://later.invalid/v1")
+        result = _run(context)
+
+        assert result["status"] == "success"
+        assert [(method, path) for method, path, _, _ in origin.requests_seen] == [
+            ("GET", "/v1/models"), ("POST", "/v1/chat/completions"),
+        ]
+        assert b"local-F7a-marker" in origin.requests_seen[1][3]
+        assert alternate.connections == 0
+
+
+def test_backend_built_from_a_different_destination_snapshot_is_refused(monkeypatch, recorded_http):
+    """F7(f): the actual instance supplied at S2 must match the authorized destination."""
+    from triage_core import client
+    from test_endpoint_transport_guard import transport_tripwires
+
+    transport_tripwires(monkeypatch)
+    monkeypatch.setenv("TRIAGE_BASE_URL", "http://127.0.0.1:1234/v1")
     context = _context()
-    monkeypatch.setenv("TRIAGE_BASE_URL", "https://later.invalid")
-    result = _run(context)
-    assert result["status"] == "success"
-    assert [r.url for r, _ in recorded_http.calls] == ["http://127.0.0.1:11434/api/chat"]
+    monkeypatch.setenv("TRIAGE_BASE_URL", "http://127.0.0.1:4321/v1")
+    foreign_context = _context()
+    assert foreign_context.decision.decision_id != context.decision.decision_id
+    foreign = TriageClient.from_governed_context(foreign_context)
+    verify = client.verify_destination_binding
+
+    def substitute(governed, backends):
+        route = governed.decision.policy.preferred_logical_route
+        return verify(governed, {**backends, route: foreign._governed_backends[route]})
+
+    monkeypatch.setattr(client, "verify_destination_binding", substitute)
+    with pytest.raises(GovernedBindingError, match="destination_binding_mismatch"):
+        _run(context)
+    assert recorded_http.calls == []
 
 
 # --------------------------------------------------------------------------

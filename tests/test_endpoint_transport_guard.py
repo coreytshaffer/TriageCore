@@ -227,6 +227,52 @@ def test_governed_generation_reads_one_transport_for_discovery_and_generation(mo
     assert len(reads) == 1 and reads[0] is backend
 
 
+@pytest.mark.parametrize("kind,base_url,suffixes", [
+    ("ollama", "http://127.0.0.1:11434", ["/api/tags", "/api/chat"]),
+    ("lmstudio", "http://127.0.0.1:1234/v1", ["/models", "/chat/completions"]),
+    ("qwen", "https://dashscope-intl.aliyuncs.com:443/compatible-mode/v1", ["/chat/completions"]),
+])
+def test_governed_engine_keeps_verified_transport_at_generation_entry(monkeypatch, kind, base_url, suffixes):
+    from triage_core import capability_evidence, tc_cli
+
+    transport_tripwires(monkeypatch)
+    calls = record_adapter(monkeypatch)
+    cloud = kind == "qwen"
+    # Public cloud intent still has local members in its envelope.
+    monkeypatch.setenv("TRIAGE_BACKEND_TYPE", "ollama" if cloud else kind)
+    monkeypatch.setenv("TRIAGE_BASE_URL", "http://127.0.0.1:11434" if cloud else base_url)
+    monkeypatch.setenv("TRIAGE_QWEN_ENABLED", "true")
+    monkeypatch.setenv("TRIAGE_QWEN_MODEL", "fixture")
+    monkeypatch.setenv("TRIAGE_QWEN_API_KEY", "fixture-key")
+    if cloud:
+        monkeypatch.setenv("TRIAGE_QWEN_BASE_URL", base_url)
+    capability = capability_evidence.resolve_capability(
+        record=None, declare_local_fast=not cloud, declare_local_heavy=not cloud,
+        local_fast_model="auto", local_heavy_model="auto",
+        config_reference="fixture", freshness_seconds=60,
+    )
+    monkeypatch.setattr(capability_evidence, "resolve_from_config", lambda config: capability)
+    # execute_task is entered immediately after the pre-invocation identity check.
+    checked = []
+    execute = TriageEngine.execute_task
+
+    def lose_backend_reference(engine, *args, **kwargs):
+        checked.append(engine.backend.transport)
+        engine.backend.transport = None
+        return execute(engine, *args, **kwargs)
+
+    monkeypatch.setattr(TriageEngine, "execute_task", lose_backend_reference)
+    flags = ["--privacy", "public", "--allow-cloud"] if cloud else ["--privacy", "local_only"]
+    monkeypatch.setattr(sys, "argv", ["tc", "run", "Summarize this text", "--no-ledger", *flags])
+    tc_cli.main()
+
+    assert len(checked) == 1
+    assert [request.url for request, _ in calls] == [base_url + suffix for suffix in suffixes]
+    assert [send.method for send in checked[0].sends] == (["POST"] if cloud else ["GET", "POST"])
+    for request, _ in calls:
+        assert request.headers.get("Authorization") == ("Bearer fixture-key" if cloud else None)
+
+
 @pytest.mark.parametrize("path", [
     "/v1evil/chat/completions", "/v1/../chat/completions",
     "/v1//chat/completions", "/V1/chat/completions",
