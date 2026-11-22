@@ -1,6 +1,6 @@
 """Offline tests for the governed ``tc run`` CLI surface (CR-DD-009).
 
-All tests run fully offline with an injected mock backend and a temporary
+All tests run fully offline with a recording HTTP adapter and a temporary
 ledger directory, so no real backend is contacted and the real ledger is never
 written. They assert the governed loop behavior and the CR-DD-009 exit-code
 contract:
@@ -21,8 +21,7 @@ import pytest
 import requests
 
 from triage_core import capability_evidence, tc_cli
-from triage_core.backends import BackendResponse
-from triage_core.client import TriageClient
+from test_governed_consumption_parity import recorded_http  # noqa: F401 (pytest fixture)
 from triage_core.local_backend_probe import LocalBackendProbeRecord
 from triage_core.routing.resilience_router import ResilienceRouteDecision
 from triage_core.task_packet import PrivacyMetadata
@@ -50,40 +49,6 @@ def declared_local_capability(monkeypatch):
         capability_evidence, "resolve_from_config", lambda *a, **k: resolution
     )
     return resolution
-
-
-class RecordingBackend:
-    name = "fake"
-    base_url = "http://localhost"
-    model = "fake-model"
-
-    def __init__(self) -> None:
-        self.called = False
-
-    def generate(self, messages, temperature=0.1, timeout=45, **kwargs):
-        self.called = True
-        return BackendResponse(
-            text="LOCAL_RAN",
-            raw={},
-            usage={"prompt_tokens": 3, "completion_tokens": 2, "total_tokens": 5},
-            backend_name=self.name,
-        )
-
-
-class FailingBackend(RecordingBackend):
-    """Fails the test if the backend is ever invoked (proves fail-closed)."""
-
-    def generate(self, messages, temperature=0.1, timeout=45, **kwargs):
-        self.called = True
-        raise AssertionError("Backend must not run for a fail-closed task.")
-
-
-class ErrorBackend(RecordingBackend):
-    """Local backend raises; engine should convert this into a handoff."""
-
-    def generate(self, messages, temperature=0.1, timeout=45, **kwargs):
-        self.called = True
-        raise requests.exceptions.Timeout("Timed out")
 
 
 def _args(prompt, **overrides):
@@ -131,6 +96,7 @@ class RecordingClient:
         capability=None,
         snapshot=None,
         decision=None,
+        governed_context=None,
     ):
         self.packet = task_packet
         self.capability = capability
@@ -143,14 +109,12 @@ class RecordingClient:
         }
 
 
-def test_local_success_exits_zero_and_records_governed_evidence(tmp_path, capsys):
-    backend = RecordingBackend()
-    client = TriageClient(backend=backend)
+def test_local_success_exits_zero_and_records_governed_evidence(recorded_http, tmp_path, capsys):
     args = _args("Summarize this text", ledger_dir=str(tmp_path))
 
-    tc_cli.tc_run(args, client=client)  # returns normally == exit 0
+    tc_cli.tc_run(args)  # returns normally == exit 0
 
-    assert backend.called is True
+    assert len(recorded_http.calls) == 1
     ledger_file = tmp_path / "ledger.jsonl"
     assert ledger_file.exists()
     types = _event_types(ledger_file)
@@ -162,14 +126,13 @@ def test_local_success_exits_zero_and_records_governed_evidence(tmp_path, capsys
     assert "Success: task ran locally" in capsys.readouterr().out
 
 
-def test_route_and_worker_evidence_share_cli_reported_task_id(tmp_path, capsys):
-    client = TriageClient(backend=RecordingBackend())
+def test_route_and_worker_evidence_share_cli_reported_task_id(recorded_http, tmp_path, capsys):
     # No --task-id, so the identifier is the one tc run generated for itself.
     # Reading it back out of the success line is what proves the persisted
     # evidence belongs to the run the operator was told about.
     args = _args("Summarize this text", ledger_dir=str(tmp_path))
 
-    tc_cli.tc_run(args, client=client)
+    tc_cli.tc_run(args)
 
     reported = re.search(r"task_id=([^)]+)\)", capsys.readouterr().out)
     assert reported, "tc run must report the task_id it ran under."
@@ -184,14 +147,12 @@ def test_route_and_worker_evidence_share_cli_reported_task_id(tmp_path, capsys):
     assert worker_result["task_id"] == reported_task_id
 
 
-def test_tc_run_persists_metadata_without_prompt_or_data_content(tmp_path):
+def test_tc_run_persists_metadata_without_prompt_or_data_content(recorded_http, tmp_path):
     prompt = "PROMPT_SENTINEL_ONLY_FOR_PRIVACY_TEST"
     data = "DATA_SENTINEL_ONLY_FOR_PRIVACY_TEST"
-    backend = RecordingBackend()
-    client = TriageClient(backend=backend)
     args = _args(prompt, data=data, ledger_dir=str(tmp_path))
 
-    tc_cli.tc_run(args, client=client)
+    tc_cli.tc_run(args)
 
     ledger_file = tmp_path / "ledger.jsonl"
     ledger_text = ledger_file.read_text(encoding="utf-8")
@@ -212,21 +173,19 @@ def test_tc_run_persists_metadata_without_prompt_or_data_content(tmp_path):
     }
 
 
-def test_tc_run_privacy_block_leaves_no_ledger_event(tmp_path):
-    backend = FailingBackend()
-    client = TriageClient(backend=backend)
+def test_tc_run_privacy_block_leaves_no_ledger_event(recorded_http, tmp_path):
     args = _args("Process this record", data="123-45-6789", ledger_dir=str(tmp_path))
 
     with pytest.raises(SystemExit) as exc:
-        tc_cli.tc_run(args, client=client)
+        tc_cli.tc_run(args)
 
     assert exc.value.code == 2
-    assert backend.called is False
+    assert recorded_http.calls == []
     assert not (tmp_path / "ledger.jsonl").exists()
 
 
 def test_early_local_block_records_binding_issue_on_runner_selected(
-    tmp_path, monkeypatch
+    recorded_http, tmp_path, monkeypatch
 ):
     record = LocalBackendProbeRecord(
         source_type="lm_studio",
@@ -247,16 +206,14 @@ def test_early_local_block_records_binding_issue_on_runner_selected(
     monkeypatch.setattr(
         capability_evidence, "resolve_from_config", lambda *a, **k: resolution
     )
-    backend = RecordingBackend()
 
     with pytest.raises(SystemExit) as exc:
         tc_cli.tc_run(
             _args("Update the docs", ledger_dir=str(tmp_path)),
-            client=TriageClient(backend=backend),
         )
 
     assert exc.value.code == 2
-    assert backend.called is False
+    assert recorded_http.calls == []
     events = _ledger_events(tmp_path / "ledger.jsonl")
     runner = next(event for event in events if event["event_type"] == "runner_selected")
     assert runner["payload"]["capability_declared_route_classes"] == ["local_heavy"]
@@ -266,12 +223,12 @@ def test_early_local_block_records_binding_issue_on_runner_selected(
     assert any(event["event_type"] == "route_decision" for event in events)
 
 
-def test_handoff_required_exits_3(tmp_path):
-    client = TriageClient(backend=ErrorBackend())
+def test_handoff_required_exits_3(recorded_http, tmp_path):
+    recorded_http.error = requests.Timeout("Timed out")
     args = _args("Summarize this text", ledger_dir=str(tmp_path))
 
     with pytest.raises(SystemExit) as exc:
-        tc_cli.tc_run(args, client=client)
+        tc_cli.tc_run(args)
 
     assert exc.value.code == 3
 
@@ -291,10 +248,8 @@ def test_handoff_required_exits_3(tmp_path):
     ],
 )
 def test_terminal_routes_exit_3_without_backend_execution(
-    tmp_path, preferred_route, reason, bound_route
+    recorded_http, tmp_path, preferred_route, reason, bound_route
 ):
-    backend = FailingBackend()
-    client = TriageClient(backend=backend)
     args = _args(
         "Summarize public text",
         privacy="public",
@@ -324,16 +279,11 @@ def test_terminal_routes_exit_3_without_backend_execution(
         return ordering[0] if len(ordering) == 1 else ordering.pop(0)
 
     with patch("triage_core.run_plan.choose_resilience_route", _staged_route):
-        with patch.object(
-            client.router.specialist,
-            "route_task",
-            return_value={"offload_recommended": False},
-        ):
-            with pytest.raises(SystemExit) as exc:
-                tc_cli.tc_run(args, client=client)
+        with pytest.raises(SystemExit) as exc:
+            tc_cli.tc_run(args)
 
     assert exc.value.code == 3
-    assert backend.called is False
+    assert recorded_http.calls == []
 
     events = [
         json.loads(line)
@@ -346,9 +296,7 @@ def test_terminal_routes_exit_3_without_backend_execution(
     assert worker_result["payload"]["failure_type"] == "safety_handoff"
 
 
-def test_high_risk_local_only_fails_closed_exit_2(tmp_path):
-    backend = FailingBackend()
-    client = TriageClient(backend=backend)
+def test_high_risk_local_only_fails_closed_exit_2(recorded_http, tmp_path):
     args = _args(
         "delete all files and wipe secrets",
         data="small data",
@@ -356,28 +304,25 @@ def test_high_risk_local_only_fails_closed_exit_2(tmp_path):
     )
 
     with pytest.raises(SystemExit) as exc:
-        tc_cli.tc_run(args, client=client)
+        tc_cli.tc_run(args)
 
     assert exc.value.code == 2
     # Fail-closed: the backend must never have been invoked.
-    assert backend.called is False
+    assert recorded_http.calls == []
 
 
-def test_no_ledger_warns_and_writes_nothing(tmp_path, capsys):
-    backend = RecordingBackend()
-    client = TriageClient(backend=backend)
+def test_no_ledger_warns_and_writes_nothing(recorded_http, tmp_path, capsys):
     args = _args("Summarize this text", ledger_dir=str(tmp_path), no_ledger=True)
 
-    tc_cli.tc_run(args, client=client)
+    tc_cli.tc_run(args)
 
     out = capsys.readouterr().out
     assert "Warning: --no-ledger" in out
     assert not (tmp_path / "ledger.jsonl").exists()
-    assert backend.called is True
+    assert len(recorded_http.calls) == 1
 
 
-def test_missing_input_file_exits_1(tmp_path):
-    client = TriageClient(backend=RecordingBackend())
+def test_missing_input_file_exits_1(recorded_http, tmp_path):
     args = _args(
         "do it",
         files=[str(tmp_path / "does_not_exist.txt")],
@@ -385,13 +330,12 @@ def test_missing_input_file_exits_1(tmp_path):
     )
 
     with pytest.raises(SystemExit) as exc:
-        tc_cli.tc_run(args, client=client)
+        tc_cli.tc_run(args)
 
     assert exc.value.code == 1
 
 
-def test_output_written_and_printed(tmp_path, capsys):
-    client = TriageClient(backend=RecordingBackend())
+def test_output_written_and_printed(recorded_http, tmp_path, capsys):
     out_file = tmp_path / "out.txt"
     args = _args(
         "Summarize this text",
@@ -400,7 +344,7 @@ def test_output_written_and_printed(tmp_path, capsys):
         print_output=True,
     )
 
-    tc_cli.tc_run(args, client=client)
+    tc_cli.tc_run(args)
 
     assert out_file.read_text(encoding="utf-8") == "LOCAL_RAN"
     assert "LOCAL_RAN" in capsys.readouterr().out

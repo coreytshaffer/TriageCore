@@ -1066,6 +1066,7 @@ def tc_run(args, client=None) -> None:
         verify_packet,
     )
 
+    from triage_core.destination_policy import CLOUD_ROUTES, DestinationPolicyError
     from triage_core.governed_decision import GovernedDecisionError
     from triage_core.governed_run_snapshot import SnapshotError, SourceBytesInput
     from triage_core.run_plan import (
@@ -1152,6 +1153,9 @@ def tc_run(args, client=None) -> None:
     except KeyError:
         print(f"Error: Unknown model profile: {getattr(args, 'model', None)}")
         sys.exit(1)
+    except DestinationPolicyError as exc:
+        print(f"Blocked (destination policy, failing closed): {exc.code} send_count=0")
+        sys.exit(2)
     except RunPlanPrivacyError as exc:
         print("Blocked (privacy fail-closed).")
         print(f"finding_codes={','.join(exc.finding_codes)}")
@@ -1276,18 +1280,20 @@ def tc_run(args, client=None) -> None:
         runner_payload.update(capability.to_evidence_payload())
         ledger.append_event(task_id, "runner_selected", runner_payload)
 
-    # 6. Build the client from config unless one was injected (tests inject).
+    # 6. Construct execution backends only after S1, using its frozen settings.
     if client is None:
         from triage_core.client import TriageClient
 
         try:
-            client = TriageClient(
-                backend_type=default_config.get_backend_type(),
-                model=default_config.get_backend_model(),
-                base_url=default_config.get_backend_base_url(),
-            )
-        except Exception as exc:
-            print(f"Error: could not initialize backend: {exc}")
+            client = TriageClient.from_governed_context(governed)
+        except DestinationPolicyError as exc:
+            print(f"Blocked (destination policy, failing closed): {exc.code} send_count=0")
+            sys.exit(2)
+        except GovernedBindingError as exc:
+            print(f"Blocked (governed decision not consumable, failing closed): {exc}")
+            sys.exit(2)
+        except Exception:
+            print("Error: could not initialize backend.")
             sys.exit(1)
 
     # 6b. Resolve local capability (CR-DD-013). This reads an already-recorded
@@ -1308,6 +1314,7 @@ def tc_run(args, client=None) -> None:
             capability=capability,
             snapshot=snapshot,
             decision=decision,
+            governed_context=governed,
         )
     except PrivacyViolationError as exc:
         print(f"Blocked (privacy fail-closed): {exc}")
@@ -1336,7 +1343,10 @@ def tc_run(args, client=None) -> None:
             except OSError as exc:
                 print(f"Error writing output to {args.output}: {exc}")
                 sys.exit(1)
-        print(f"Success: task ran locally (route={route}, task_id={task_id}).")
+        destination = "on the cloud backend" if route in CLOUD_ROUTES else "locally"
+        print(f"Success: task ran {destination} (route={route}, task_id={task_id}).")
+        if "destination_identity_sha256" in result:
+            print(f"Destination: {result['destination_safe_label']} ({result['destination_identity_sha256']})")
         if ledger is not None:
             print(f"Evidence written to {ledger.ledger_path}.")
         if args.print_output:

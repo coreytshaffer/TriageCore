@@ -2,6 +2,7 @@ import time
 import requests
 from typing import Callable, Dict, Any, Optional
 from .backends import LocalBackend
+from .destination_policy import DestinationPolicyError
 
 class TriageEngine:
     def __init__(self, backend: LocalBackend, timeout_seconds: int = 45):
@@ -51,6 +52,8 @@ class TriageEngine:
                 try:
                     passed = validator(response_text)
                     validation_status = "passed" if passed else "failed"
+                except DestinationPolicyError:
+                    raise
                 except Exception as e:
                     passed = False
                     validation_status = "inconclusive"
@@ -95,6 +98,8 @@ class TriageEngine:
                 **token_metrics,
             }
 
+        except DestinationPolicyError:
+            raise
         except requests.exceptions.Timeout:
             # Handle the temporal budget exhaustion
             handoff = self._trigger_handoff(task_prompt, raw_data, f"Local worker exceeded temporal budget of {use_timeout}s.")

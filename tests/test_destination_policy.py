@@ -1385,12 +1385,6 @@ def test_guard_construction_requires_contract_types():
 # behaviour governed ``tc run`` has at the baseline. They are verification only; the
 # module under test still imports neither.
 
-LEGACY_LOCAL_PRESETS = {
-    "ollama": "http://localhost:11434",
-    "lmstudio": "http://localhost:1234/v1",
-    "vllm": "http://localhost:8000/v1",
-    "custom": None,
-}
 _ABSENT = object()
 
 
@@ -1464,8 +1458,7 @@ def test_local_url_resolution_matches_config_and_create_backend(
     resolved = _resolve(env, sections).local_base_url
 
     if resolved.source == "preset":
-        assert actual == LEGACY_LOCAL_PRESETS[backend_type]
-        assert resolved.value == dp.GOVERNED_LOCAL_PRESETS[backend_type]
+        assert actual == resolved.value == dp.GOVERNED_LOCAL_PRESETS[backend_type]
     elif resolved.source == "absent":
         assert actual is None
     elif resolved.value == "":

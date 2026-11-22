@@ -8,17 +8,17 @@ from triage_core.backends import BackendUnavailableError, create_backend, Ollama
 def test_preset_urls():
     ollama = create_backend("ollama")
     assert isinstance(ollama, OllamaBackend)
-    assert ollama.base_url == "http://localhost:11434"
+    assert ollama.base_url == "http://127.0.0.1:11434"
 
     lmstudio = create_backend("lmstudio")
-    assert lmstudio.base_url == "http://localhost:1234/v1"
+    assert lmstudio.base_url == "http://127.0.0.1:1234/v1"
     assert lmstudio.name == "lmstudio"
 
     vllm = create_backend("vllm")
-    assert vllm.base_url == "http://localhost:8000/v1"
+    assert vllm.base_url == "http://127.0.0.1:8000/v1"
 
     llamacpp = create_backend("llama.cpp")
-    assert llamacpp.base_url == "http://localhost:8080/v1"
+    assert llamacpp.base_url == "http://127.0.0.1:8080/v1"
 
 
 def test_custom_backend_missing_url():
@@ -49,7 +49,7 @@ def test_openai_backend_generate_success(mock_post):
     assert result.backend_name == "lmstudio"
 
     args, kwargs = mock_post.call_args
-    assert args[0] == "http://localhost:1234/v1/chat/completions"
+    assert args[0] == "http://127.0.0.1:1234/v1/chat/completions"
     assert kwargs["json"]["model"] == "test-model"
 
 
@@ -74,7 +74,7 @@ def test_ollama_backend_generate_uses_native_api(mock_post):
         "total_tokens": 7,
     }
     args, kwargs = mock_post.call_args
-    assert args[0] == "http://localhost:11434/api/chat"
+    assert args[0] == "http://127.0.0.1:11434/api/chat"
     assert kwargs["json"]["model"] == "qwen2.5-coder:7b"
     assert kwargs["json"]["stream"] is False
 
@@ -101,7 +101,7 @@ def test_lmstudio_auto_model_resolution(mock_post, mock_get):
 
     assert result.text == "auto ok"
     args, kwargs = mock_post.call_args
-    assert args[0] == "http://localhost:1234/v1/chat/completions"
+    assert args[0] == "http://127.0.0.1:1234/v1/chat/completions"
     assert kwargs["json"]["model"] == "currently-loaded-lm-studio-model"
 
 
@@ -116,7 +116,7 @@ def test_backend_generate_streaming_omits_stream_options(mock_post):
     mock_post.return_value = mock_resp
 
     chunks = []
-    backend = create_backend("custom", base_url="http://localhost:1234/v1")
+    backend = create_backend("custom", model="fixed", base_url="http://localhost:1234/v1")
     result = backend.generate(
         [{"role": "user", "content": "hi"}],
         stream_callback=chunks.append,

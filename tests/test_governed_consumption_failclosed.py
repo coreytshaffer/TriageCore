@@ -23,6 +23,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from test_governed_consumption_parity import recorded_http  # noqa: F401 (pytest fixture)
+
 from triage_core import capability_evidence, run_plan, tc_cli
 from triage_core.client import TriageClient
 from triage_core.config import default_config
@@ -64,17 +66,6 @@ def declared_local_capability(monkeypatch):
     return resolution
 
 
-class FailClosedBackend:
-    """Fails the test if execution ever reaches a backend."""
-
-    name = "fake"
-    base_url = "http://localhost"
-    model = "fake-model"
-
-    def generate(self, messages, temperature=0.1, timeout=45, **kwargs):
-        raise AssertionError("a fail-closed attempt must never reach a backend")
-
-
 def _context(prompt="Summarize this text", **overrides):
     kwargs = dict(
         prompt=prompt,
@@ -107,7 +98,7 @@ def _packet(context, *, task_id="failclosed-task-1", prompt=None, data=None):
 
 
 def _run(context, *, snapshot=None, decision=None, packet=None, ledger=None):
-    client = TriageClient(backend=FailClosedBackend())
+    client = TriageClient.from_governed_context(context)
     return client.run_task(
         task_packet=packet if packet is not None else _packet(context),
         ledger=ledger,
@@ -141,7 +132,7 @@ def _assert_no_governed_evidence(ledger_dir):
 
 def test_decision_supplied_without_snapshot_terminates():
     context = _context()
-    client = TriageClient(backend=FailClosedBackend())
+    client = TriageClient.from_governed_context(context)
     with pytest.raises(GovernedBindingError):
         client.run_task(
             task_packet=_packet(context),
@@ -152,7 +143,7 @@ def test_decision_supplied_without_snapshot_terminates():
 
 def test_snapshot_supplied_without_decision_terminates():
     context = _context()
-    client = TriageClient(backend=FailClosedBackend())
+    client = TriageClient.from_governed_context(context)
     with pytest.raises(GovernedBindingError):
         client.run_task(
             task_packet=_packet(context),
@@ -226,13 +217,12 @@ def test_a_packet_that_is_not_the_snapshot_task_data_terminates():
 # --------------------------------------------------------------------------
 
 
-def test_configuration_changed_after_decision_formation_terminates(monkeypatch):
+def test_configuration_changed_after_decision_formation_uses_frozen_endpoint(monkeypatch, recorded_http):
     context = _context()
-    monkeypatch.setattr(
-        default_config, "get_backend_type", lambda: "a-different-backend"
-    )
-    with pytest.raises(GovernedBindingError):
-        _run(context)
+    monkeypatch.setenv("TRIAGE_BASE_URL", "https://later.invalid")
+    result = _run(context)
+    assert result["status"] == "success"
+    assert [r.url for r, _ in recorded_http.calls] == ["http://127.0.0.1:11434/api/chat"]
 
 
 # --------------------------------------------------------------------------
@@ -319,7 +309,7 @@ def test_no_authorized_binding_terminates_before_any_backend(monkeypatch):
             permitted_fallback_envelope=("local_fast",),
         ),
     )
-    client = TriageClient(backend=FailClosedBackend())
+    client = TriageClient.from_governed_context(context)
     with pytest.raises(GovernedBindingError):
         client.run_task(
             task_packet=_packet(context),
@@ -373,7 +363,7 @@ def test_the_cli_maps_a_fail_closed_attempt_to_exit_two(tmp_path, monkeypatch, c
         model="generic-8k",
     )
     with pytest.raises(SystemExit) as exc:
-        tc_cli.tc_run(args, client=TriageClient(backend=FailClosedBackend()))
+        tc_cli.tc_run(args)
 
     assert exc.value.code == 2
     assert "failing closed" in capsys.readouterr().out
@@ -447,22 +437,21 @@ def test_no_decision_id_linkage_without_a_decision(tmp_path):
 def cr019_attempt(tmp_path, monkeypatch):
     """A real governed consumer with only the execution boundary stubbed."""
     context = _context()
-    client = TriageClient(backend=FailClosedBackend())
     ledger = TaskLedger(str(tmp_path))
     calls = []
 
-    def execute(**kwargs):
+    def execute(engine, **kwargs):
         calls.append(kwargs)
         return {"status": "success", "source": "local", "output": "STUB_OUTPUT",
                 "worker_result_status": "completed", "validation_status": "not_run"}
 
-    monkeypatch.setattr(client.engine, "execute_task", execute)
-    return SimpleNamespace(context=context, client=client, ledger=ledger, calls=calls)
+    monkeypatch.setattr("triage_core.engine.TriageEngine.execute_task", execute)
+    return SimpleNamespace(context=context, ledger=ledger, calls=calls)
 
 
 def _cr019_consume(attempt, *, no_ledger=False, context=None):
     context = attempt.context if context is None else context
-    return attempt.client.run_task(
+    return TriageClient.from_governed_context(context).run_task(
         task_packet=_packet(context), snapshot=context.snapshot, decision=context.decision,
         capability=capability_evidence.resolve_from_config(default_config),
         ledger=None if no_ledger else attempt.ledger,
@@ -543,3 +532,16 @@ def test_cr019_worker_validation_failure_is_not_reclassified_as_preexecution(
     assert not isinstance(caught.value, GovernedBindingError)
     assert len(cr019_attempt.calls) == expected_calls
     assert _cr019_event_types(tmp_path) == ["route_audit", "route_decision"]
+
+
+def test_substituting_snapshot_context_with_same_decision_id_fails_before_io(recorded_http):
+    original = _context()
+    other = _context()
+    assert other is not original and other.decision.decision_id == original.decision.decision_id
+    client = TriageClient.from_governed_context(original)
+    with pytest.raises(GovernedBindingError, match="destination_binding_mismatch"):
+        client.run_task(
+            task_packet=_packet(other), snapshot=other.snapshot, decision=other.decision,
+            governed_context=other, capability=capability_evidence.resolve_from_config(default_config),
+        )
+    assert recorded_http.calls == []
