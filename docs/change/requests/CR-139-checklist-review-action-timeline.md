@@ -9,7 +9,7 @@
 | Proposal acceptance | Accepted at `62e328d`. [Decision record](#proposal-acceptance-record) |
 | Design acceptance | Accepted at `62e328d`. [Decision record](#design-acceptance-record) |
 | Operator guide and timeline design amendment | Accepted on 2026-11-22. [Design amendment](#design-amendment-for-the-operator-guide-and-timeline) |
-| Implementation authority | **Approved for Claude.** One local candidate on `49e3ad4` and two local launcher files. [Current grant](#implementation-grant-for-the-operator-guide-and-timeline) · [Preceding corrective grant](#corrective-grant-for-malformed-and-interrupted-runs) · [First corrective grant](#local-corrective-implementation-grant) · [Original grant](#implementation-authority-record) |
+| Implementation authority | **Approved for Claude.** One local corrective commit on `7c17cab` for the four operator-guide findings and their fixture regressions. [Current grant](#corrective-grant-for-the-operator-guide-on-7c17cab) · [Preceding operator guide grant](#implementation-grant-for-the-operator-guide-and-timeline) · [Earlier corrective grants](#corrective-grant-for-malformed-and-interrupted-runs) · [Original grant](#implementation-authority-record) |
 | Implementation acceptance | Pending |
 | Merge authority | Pending |
 | Release authority | Pending |
@@ -150,6 +150,8 @@ fields:
 The following scope applies to the original timeline candidate. The
 [operator guide and timeline grant](#implementation-grant-for-the-operator-guide-and-timeline)
 defines the writable paths for the candidate based on `49e3ad4`.
+The [current corrective grant](#corrective-grant-for-the-operator-guide-on-7c17cab) defines
+the three writable paths for the follow-up on `7c17cab`.
 
 The base is `origin/main` at `10af245c18095346d7d60b55b2e105bb819f4828`. The
 first-delivery release `022b4a1227b68b899bf1df2aa83d154e9f4855f4` is the
@@ -789,6 +791,70 @@ Implementation acceptance, remote publication, merge, release, and closeout
 require separate decisions. Replay, linked resume, rollback, file
 restoration, and new model runs are outside this grant.
 [Saved-run procedure](#operator-checks-on-the-saved-runs)
+
+## Corrective grant for the operator guide on `7c17cab`
+
+On 2026-11-22 (Pacific), Corey Shaffer authorized Claude to fix the four
+findings below with disposable fixture regression tests in **one local
+corrective commit**. Its sole parent must be
+`7c17cab0705e646a290ef0e2f9d2b2d08a26a477` on
+`claude/cr-139-che-89-action-timeline-impl`. The preceding grant, published at
+`6d9af08`, ended when Claude handed back that parent. This decision takes
+effect with this local CR record and ends at handback of the corrective commit.
+Implementation acceptance is pending.
+
+| Writable repository path | Purpose |
+| --- | --- |
+| `triage_core/checklist_review_guide_tk.py` | Correct the four guide behaviors below. |
+| `tests/test_checklist_review_guide_tk.py` | Add offline fixture regressions through the operator controls and the associated read and result guards. |
+| `docs/operations/checklist-review-timeline.md` | Update only the affected instructions for pause or close, restart retries, and choosing a local folder. |
+
+1. **Show the final integrity result even after repeated input.** Once an
+   attempt with a before reading ends through Finish, Pause, or window Close,
+   complete one after reading. Further Pause or Close requests while it runs
+   must preserve the comparison and the operator's recorded steps. Show the
+   handback with `no differences`, `differences found`, or `incomplete` as
+   appropriate. Dismissal requires a close action after the result is visible.
+   Use a fixture-controlled delayed read to exercise repeated input, including
+   a marker changed by the test and an after reading that fails.
+2. **Tie restart verification to the latest launch.** Starting a fresh-viewer
+   retry clears eligibility for **Passed**. A blocked launch, early exit, or
+   stale callback must leave that retry unverified. Exercise a successful
+   fresh process followed by a failed retry before the operator records an
+   observation. Check both the displayed choice and the save action. A later
+   fresh process with a new, verified PID and a normal close restores
+   eligibility. Recording **Passed** still requires an explicit operator choice.
+3. **Validate local folders before accessing their contents.** Check roots,
+   path components, and the database marker without following links or Windows
+   reparse points. Perform these checks before browsing or marking a folder,
+   on explicit selection, and again before a guarded store read. A redirected
+   or unverifiable path must stop before any target lookup, marker probe,
+   enumeration, or reader call that would follow it. Use simulated path
+   attributes and call counters over disposable local fixtures. Keep ordinary
+   local drives and hidden-only folders such as AppData usable.
+4. **Make folders beyond the first 500 reachable.** Provide keyboard and pointer
+   access to the next folders within the same directory. Preserve focus and
+   ordering across pages and require explicit selection. Place a valid fixture
+   review folder last among at least 501 siblings. Reach and select it by
+   keyboard, exercise the pointer continuation and Cancel, and check the page
+   boundary for missing or duplicated folders.
+
+Preserve the single-window guide, the **Larger** default, adjustable text,
+visible keyboard focus, the candidate pin and passive listener checks, and
+read-only store access. Verification uses synthetic cases, temporary local
+stores, and the isolated test clipboard. Report the regression results for
+each finding, the existing CR-139 and CR-138 suite results with failures or
+skips, the parent and candidate SHAs, changed paths, and final worktree status.
+
+The staged launcher and shortcut are read-only inputs to this commit. The
+launcher is pinned to `7c17cab`. Staging the returned SHA for operator use
+is a separate step after handback. **Only Corey** may run the saved DC-02
+correction (`62866263-2842-4e85-acd2-2e681fadb0fa`) and saved DC-03 preflight
+stop (`a64e0a30-08ba-43e6-acc1-658575f309c9`), with Ollama stopped. Both
+checks are planned. D5 touch remains for Corey's device check or explicit
+waiver. Candidate publication, merge, release, and closeout require separate
+decisions. Replay, linked resume, rollback, file restoration, and new model
+runs are outside this grant. [Saved-run procedure](#operator-checks-on-the-saved-runs)
 
 ## Limitations
 
