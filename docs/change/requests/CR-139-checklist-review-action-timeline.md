@@ -8,7 +8,7 @@
 | --- | --- |
 | Proposal acceptance | Accepted at `62e328d`. [Decision record](#proposal-acceptance-record) |
 | Design acceptance | Accepted at `62e328d`. [Decision record](#design-acceptance-record) |
-| Implementation authority | **Pending.** No implementation grant exists. |
+| Implementation authority | **Approved for Claude.** One local candidate through handback, effective when this record is published to draft PR #205. [Grant record](#implementation-authority-record) |
 | Implementation acceptance | Pending |
 | Merge authority | Pending |
 | Release authority | Pending |
@@ -551,6 +551,42 @@ command's usage lists `timeline`.
 - **D6 — Timing of the operator checks.** Corey runs the planned read-only
   checks on the saved cases against the candidate before the separate
   implementation acceptance decision.
+
+## Implementation authority record
+
+On 2026-11-21 (Pacific), Corey Shaffer explicitly approved the draft
+`CR-139-implementation-grant-draft.md` for Claude, pinned to design
+`62e328d1f0f9546c409643f9df203efd86b91166`. The approved grant has SHA-256
+`94264302be0daa30efcc6c16c1ea4980dd6a6f53efbf4e51df6cc818d2ca4338`.
+[Accepted design](https://github.com/coreytshaffer/TriageCore/blob/62e328d1f0f9546c409643f9df203efd86b91166/docs/change/requests/CR-139-checklist-review-action-timeline.md) ·
+[Design decision and CLI clarification](https://github.com/coreytshaffer/TriageCore/blob/0b605723c8e5b64c40e317394863296018e661da/docs/change/requests/CR-139-checklist-review-action-timeline.md#design-acceptance-record)
+
+The grant takes effect when this record is committed and published to
+[draft PR #205](https://github.com/coreytshaffer/TriageCore/pull/205), before Claude starts implementation.
+Claude verifies the published record, the design pin, and the base before
+editing implementation files.
+
+- **Candidate scope.** Claude may build and verify one local candidate
+  in an isolated worktree based on `10af245c18095346d7d60b55b2e105bb819f4828`.
+  Repository writes are limited to the six paths in the accepted file
+  scope. The CLI change covers registration, lazy dispatch, and inclusion
+  of `timeline` in the parent usage. Preserve help and output for the
+  existing subcommands. [Accepted file scope](https://github.com/coreytshaffer/TriageCore/blob/0b605723c8e5b64c40e317394863296018e661da/docs/change/requests/CR-139-checklist-review-action-timeline.md#exact-file-scope)
+- **Verification scope.** Claude may use disposable offline fixture stores
+  and test directories and create one local candidate commit. Timeline
+  inspection opens the selected store read-only, makes zero network calls
+  including loopback, and keeps private evidence in the details pane.
+  [Accepted system and action scope](https://github.com/coreytshaffer/TriageCore/blob/0b605723c8e5b64c40e317394863296018e661da/docs/change/requests/CR-139-checklist-review-action-timeline.md#system-and-action-scope)
+- **Operator checks.** Corey runs the planned read-only DC-02 and DC-03
+  checks on the candidate before implementation acceptance. Corey retains
+  the private store and returns run and event IDs, check results, and the
+  store integrity comparison. The D5 touch check requires device evidence
+  or a separately recorded waiver. [Operator procedure](#operator-checks-on-the-saved-runs)
+- **End of authority.** This grant ends at local candidate handback.
+  Implementation acceptance, remote publication of the candidate, merge,
+  release, and closeout require separate decisions. Replay and linked
+  resume (CHE-90), rollback and file restoration (CHE-91), and the solo
+  trial (CHE-92) are out of scope.
 
 ## Limitations
 
