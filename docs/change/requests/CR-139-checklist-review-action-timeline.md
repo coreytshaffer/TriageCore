@@ -2,13 +2,12 @@
 
 ## Status
 
-**Proposed.** Draft for Corey's review. Nothing in this document is accepted
-or authorized.
+**Proposed.** Proposal and design acceptance are recorded separately below.
 
 | Decision | State |
 | --- | --- |
-| Proposal acceptance | Pending |
-| Design acceptance | Pending. A separate decision from proposal acceptance. |
+| Proposal acceptance | Accepted at `62e328d`. [Decision record](#proposal-acceptance-record) |
+| Design acceptance | Accepted at `62e328d`. [Decision record](#design-acceptance-record) |
 | Implementation authority | **Pending.** No implementation grant exists. |
 | Implementation acceptance | Pending |
 | Merge authority | Pending |
@@ -56,6 +55,14 @@ CR-139 is the next numeric identifier in the observed namespace. On
 - During proposal review, GitHub issue and pull request title searches in
   `coreytshaffer/TriageCore` for `CR-139`, `CHE-89`, and "action timeline"
   returned no matches. The searches found no identifier conflict.
+
+## Proposal acceptance record
+
+On 2026-11-21 (Pacific), Corey Shaffer accepted the CR-139 proposal at
+`62e328d` in draft PR #205. The decision covers the problem and the bounded
+read-only timeline delivery for CHE-89 milestone 2, with the DC-02
+correction and DC-03 preflight stop as acceptance cases.
+[Reviewed proposal](https://github.com/coreytshaffer/TriageCore/blob/62e328d1f0f9546c409643f9df203efd86b91166/docs/change/requests/CR-139-checklist-review-action-timeline.md)
 
 ## Problem
 
@@ -150,7 +157,7 @@ to the base. Recheck these paths against it before editing.
 | --- | --- |
 | `triage_core/checklist_review_timeline.py` | New. A Tk-free view model: run summaries, ordered timeline rows, text labels, link resolution, per-event details and evidence, and the navigation state for focus, scroll, and the back stack. It is read-only and imports no network module. |
 | `triage_core/checklist_review_timeline_tk.py` | New. The `tkinter.ttk` window: run list, run view, timeline, preview strip, and details pane. It contains only input bindings and rendering. |
-| `triage_core/checklist_review_cli.py` | Additive edit, limited to the `timeline` subparser in `configure_parser` and its dispatch branch in `run`. The timeline modules are imported lazily, so other subcommands never import `tkinter`. Existing subcommands, help text, and output are unchanged. |
+| `triage_core/checklist_review_cli.py` | Add the `timeline` subparser and include `timeline` in the parent command's usage list in `configure_parser`. Add its dispatch branch in `run`. Import the timeline modules lazily. Preserve help and output for the existing `save`, `run`, `show`, and `review` subcommands. |
 | `tests/test_checklist_review_timeline.py` | New. Headless tests: fixtures, ordering, labels, links, evidence and gaps, navigation state, `--list`, the read-only snapshot, zero connection attempts, and restart in a new process. |
 | `tests/test_checklist_review_timeline_tk.py` | New. Tk interaction tests for preview, pinned details, Escape, focus, scroll restoration, back to item, and the private-evidence clipboard boundary. They skip with a recorded reason when `tkinter` or a display is unavailable. |
 | `docs/operations/checklist-review-timeline.md` | New. Operator steps, the Windows `python -m triage_core.tc_cli` form, the store integrity comparison, and the operator checks below. |
@@ -398,8 +405,10 @@ Each named test file runs and fails before its implementation, then passes.
 - [ ] A new Python process returns the same ordered
   `(seq, event_id, step, kind, status, target, supersedes)` tuples for TL-02
   and TL-03S.
-- [ ] `timeline` is registered under `checklist-review` only. The four
-  CR-138 test files pass unchanged, and `tc_cli.py` is unchanged.
+- [ ] `timeline` is registered under `checklist-review` only and appears in
+  the parent usage printed by `tc checklist-review --help`. Existing
+  subcommand help and output are preserved. The four CR-138 test files
+  pass unchanged, and `tc_cli.py` is unchanged.
 
 **Integration:**
 
@@ -515,36 +524,33 @@ Per the
   cannot record a decision.
 - No row is weakened.
 
-## Decisions for design review
+## Design acceptance record
 
-D2 records a timeline requirement. Corey reviews the implementation approach
-and remaining design choices before design acceptance.
+On 2026-11-21 (Pacific), Corey Shaffer separately accepted CR-139's
+recommended design at `62e328d` in draft PR #205. The decision includes
+D1–D6, the planned acceptance checks, and the clarification that the parent
+command's usage lists `timeline`.
+[Reviewed design](https://github.com/coreytshaffer/TriageCore/blob/62e328d1f0f9546c409643f9df203efd86b91166/docs/change/requests/CR-139-checklist-review-action-timeline.md#L518) ·
+[Exact file scope](#exact-file-scope)
 
-- **D1 — Surface.** The recommendation is the standalone `ttk` window opened
-  by `tc checklist-review timeline`. Choosing a TriageDesk tab instead would
-  add `triage_core/ui/app.py` to the scope. It would also need its own
-  decision on the start-up probes, log writes, and IPC auto-dispatch, or a
-  read-only launch mode.
+- **D1 — Surface.** Use the standalone `ttk` window opened by
+  `tc checklist-review timeline`.
 - **D2 — Timeline scope.** The timeline includes every saved event in the
   selected run, with run-level rows labelled "Run". DC-03's preflight is
   selectable by its saved event ID and opens its own outcome and reason.
-- **D3 — Evidence-check reuse.** The recommendation is to call `_load_case`
-  and `_artifact_status` from `checklist_review_cli.py` as they are, with a
-  parity test against `render_evidence`. This is the smallest diff, but it
-  couples the view model to private helpers. The alternative is to move both
-  helpers into the view-model module and have the CLI import them, with CLI
-  output unchanged and guarded by the existing CLI tests.
-- **D4 — Details presentation.** The recommendation is a docked, non-modal
-  pane that stays open until Close or Escape. The alternative is a modal
-  dialog.
+- **D3 — Evidence-check reuse.** Call `_load_case` and `_artifact_status`
+  in place from `checklist_review_cli.py` and check parity against
+  `render_evidence`.
+- **D4 — Details presentation.** Use the docked, non-modal details pane.
+  Keep the opened details visible during hover and keyboard previews of
+  other rows, with the close and return behaviour defined above.
 - **D5 — Touch verification.** Record step 7 on Windows touch hardware
   against the candidate. If hardware is unavailable, keep the check
   unverified until a device test or an explicit waiver from Corey. Record
   any waiver separately from the passed checks.
-- **D6 — Timing of the operator checks.** The recommendation is that Corey
-  runs them on the candidate build before implementation acceptance, because
-  they are read-only and inform that decision. The alternative is to run
-  them after acceptance, as CR-138 did with its live checks.
+- **D6 — Timing of the operator checks.** Corey runs the planned read-only
+  checks on the saved cases against the candidate before the separate
+  implementation acceptance decision.
 
 ## Limitations
 
@@ -581,9 +587,10 @@ Observed on 2026-11-21 (Pacific) in `<recovered TriageCore checkout>`:
 - Code and documents were read from a `git archive` export of `10af245`.
   Every code link above is pinned to `022b4a1`, whose `triage_core/` and
   `tests/` trees are identical.
-- This draft was written, uncommitted, in a new worktree on local branch
-  `claude/cr-139-che-89-action-timeline-proposal` at `10af245`. Nothing was
-  committed or pushed.
+- Claude prepared the initial uncommitted draft in a new worktree on
+  `claude/cr-139-che-89-action-timeline-proposal` at `10af245`. The revised
+  proposal entered [draft PR #205](https://github.com/coreytshaffer/TriageCore/pull/205)
+  at `62e328d`, the revision reviewed for both decisions above.
 
 Recorded evidence used, with no private store access:
 [DC-02 fresh live verification on `697f8e1`](https://github.com/coreytshaffer/TriageCore/blob/10af245c18095346d7d60b55b2e105bb819f4828/docs/change/requests/CR-138-checklist-review-first-delivery.md#fresh-live-verification-record-for-697f8e1) ·
