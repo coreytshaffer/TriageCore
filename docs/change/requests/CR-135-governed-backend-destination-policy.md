@@ -10,7 +10,8 @@
   on 2026-10-18 as `1ef3f5d49f2e39e97bfa556787573e42cd0aa175`, from head `c2dc932`, whose
   runtime module is byte-identical to `149aa8e`. On 2026-11-22, slice 2 integrated
   that module into governed `tc run`, merged in [PR #206](https://github.com/coreytshaffer/TriageCore/pull/206)
-  at `58f2aecb3301199c9e756d6e3dfaa9a701353f32`. See [Slice 2 merge and verification](#slice-2-merge-and-verification).
+  at `58f2aecb3301199c9e756d6e3dfaa9a701353f32`. The operator accepted slice 2 at
+  that merge commit after verification. See [Slice 2 implementation acceptance](#slice-2-implementation-acceptance).
   (First recorded as: Proposed. Proposal-only documentation. Then, at
   `e127d7e`: Proposal and design accepted; implementation not authorized. Then, at
   `df23d62`: as above, without the slice 1 merge.)
@@ -63,10 +64,12 @@
   grant, four corrective grants and one test-only grant (U-3). The operator subsequently
   approved the 15-file slice 2 implementation and the corrections in PR #206. Those
   grants were exercised. Slice 3 requires a separate CR-134 grant.
-- **Implementation acceptance:** Slice 1 only, pinned to `149aa8e`, recorded in
+- **Slice 1 implementation acceptance:** Pinned to `149aa8e`, recorded in
   [PR #187](https://github.com/coreytshaffer/TriageCore/pull/187). No separate operator
   acceptance of the merged head `c2dc932` was found; see Slice 1 merge (PR #187). (First
   recorded as: Not granted.)
+- **Slice 2 implementation acceptance:** Granted by the operator on 2026-11-22 at
+  `58f2aecb3301199c9e756d6e3dfaa9a701353f32` after verification on merged `main`.
 - **Slice 1 merge:** Performed by the operator: PR #187 squash-merged into `main` as
   `1ef3f5d49f2e39e97bfa556787573e42cd0aa175` on 2026-10-18. No merge authority was issued
   to the agent. See Slice 1 merge (PR #187).
@@ -101,7 +104,7 @@
 | slice 1 release / closeout | not granted |
 | slice 2 implementation and corrections | operator-approved 15-file scope, exercised in PR #206 |
 | slice 2 merge and verification | operator authorized ready-for-review and merge; PR #206 merged into `main` at `58f2aec`; post-merge evidence below |
-| slice 2 implementation acceptance | a separate operator decision on the verified implementation is still open |
+| slice 2 implementation acceptance | **granted** by the operator on 2026-11-22 at the verified merge commit `58f2aec` |
 | slice 2 release / deployment | no grant recorded |
 | slice 3 implementation authority | separate CR-134 consumer; no implementation grant recorded |
 | CR-135 closeout | not granted |
@@ -704,10 +707,15 @@ device-wide egress are outside this verification.
 The seven-file digest uses sorted repository-relative UTF-8 paths, each followed
 by a NUL byte and the binary SHA-256 of that file's Git blob contents.
 
+### Slice 2 implementation acceptance
+
+On 2026-11-22, after verification on merged `main`, the operator accepted the slice 2
+implementation at commit `58f2aecb3301199c9e756d6e3dfaa9a701353f32`.
+
+> I accept CR-135 slice 2 at 58f2aec.
+
 ### Remaining decisions and scope
 
-- **Slice 2 implementation acceptance.** The operator authorized the merge. A
-  separate acceptance decision for the implementation verified at `58f2aec` remains open.
 - **Release and closeout.** Release or deployment requires a separate operator decision.
   CR-135 remains open for formal closeout.
 - **Slice 3.** The public-export consumer requires its own implementation grant under
@@ -1605,10 +1613,10 @@ This document is the stop point. It records:
 - the U-3 test-only cycle at `c2dc932`, its independent review, and the operator's merge
   of PR #187 as `1ef3f5d` (Post-Acceptance Record);
 - the slice 2 grant, review corrections, operator-authorized merge of PR #206 as
-  `58f2aec`, and verification on merged `main` (Slice 2 merge and verification).
+  `58f2aec`, verification on merged `main`, and the operator's acceptance of slice 2
+  at that commit (Slice 2 implementation acceptance).
 
-The slice 2 record leaves implementation acceptance, release and CR-135 closeout with
-the operator. Slice 3 requires its own grant under CR-134.
+Release and CR-135 closeout remain open. Slice 3 requires its own grant under CR-134.
 (First recorded as: "It grants no acceptance and no implementation,
 publication, merge, release, or closeout authority." Then, at `e127d7e`: "It grants no
 implementation, implementation-acceptance, merge, release, or closeout authority." Then,
