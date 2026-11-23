@@ -107,19 +107,28 @@ def _git(root, *args):
 
 
 def source_repository(selected):
+    from .public_export_staging import require_local_path
+
+    if selected is not None and selected.drive and not selected.is_absolute():
+        raise OSError("source_repository_unavailable")
     start = Path.cwd() if selected is None else selected.absolute()
+    require_local_path(start)
     values = _git(start, "rev-parse", "--is-inside-work-tree", "--show-toplevel").decode("utf-8").splitlines()
     if len(values) != 2 or values[0] != "true":
         raise OSError("source_repository_unavailable")
     root = Path(values[1])
-    if not root.is_absolute() or (selected is not None and root != start) or not (root / ".git").exists():
+    if not root.is_absolute() or (selected is not None and root != start):
+        raise OSError("source_repository_unavailable")
+    if root != start:
+        require_local_path(root)
+    if not (root / ".git").exists():
         raise OSError("source_repository_unavailable")
     return root
 
 
 def implementation_commit():
     """Bind the clean checkout containing our package, independently of input paths."""
-    code_root = source_repository(Path(__file__).resolve().parents[1])
+    code_root = source_repository(Path(__file__).parents[1])
     # `status` alone can omit changes for entries marked assume-unchanged or
     # skip-worktree. Include ignored Python sources in the untracked check.
     raw = _git(code_root, "ls-files", "-v", "-z", "--cached", "--others", "--", "triage_core/*.py")

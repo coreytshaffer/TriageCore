@@ -31,6 +31,13 @@ def directory(root, *, path=None, denied=(), evidence=False):
     return storage.open_directory(path or root, root=root, denied_sync_roots=denied, evidence=evidence)
 
 
+@pytest.mark.parametrize("blob,count", [(b"\0" * 8, 1), (b"\0" * 12, 1),
+                                         (b"\0" * 8 + b"\0\0\x10\0", 1), (b"\0" * 12, 0)])
+def test_native_acl_entries_must_fill_the_bounded_in_use_extent(blob, count):
+    with pytest.raises(storage.StorageError, match="acl_unverifiable"):
+        storage._acl_entries(blob, count)
+
+
 def test_private_exclusive_native_file_and_digest(tmp_path):
     root = private_directory(tmp_path / "stage")
     payload = b"public\r\nexample\n"
@@ -282,6 +289,86 @@ def test_actual_known_folder_move_treated_as_sync_risk(tmp_path, monkeypatch):
     blocked = storage._windows_sync_roots()
     assert tmp_path / "redirected-outside-onedrive" / "work-documents" in blocked
     assert tmp_path / "profile" / "Desktop" not in blocked
+
+
+@pytest.mark.parametrize("status,registered,value,allowed", [
+    (0x80070057, False, "unused", True), (0x80070057, True, "unused", False),
+    (0x80070005, False, "unused", False), (0x80004005, False, "unused", False),
+    (0, True, None, False), (0, True, "relative", False),
+])
+def test_unknown_folder_discovery_refuses_and_releases_result(monkeypatch, status, registered, value, allowed):
+    import ctypes
+    from ctypes import wintypes
+
+    value = wintypes.LPWSTR(value)
+    free = []
+    def get(_guid, _flags, _token, output):
+        ctypes.cast(output, ctypes.POINTER(wintypes.LPWSTR))[0] = value
+        return status
+
+    monkeypatch.setattr(storage, "_known_folder_registered", lambda _: registered)
+    args = (storage._ONEDRIVE, 0x4000, get, free.append)
+    if allowed:
+        assert storage._folder_path(*args, optional=True) is None
+    else:
+        with pytest.raises(storage.StorageError, match="known_folder_unavailable"):
+            storage._folder_path(*args, optional=True)
+    assert len(free) == 1 and free[0].value == ctypes.cast(value, ctypes.c_void_p).value
+
+
+def test_create_validation_and_close_fault_preserve_observed_creation(tmp_path):
+    from unittest.mock import patch
+
+    root = private_directory(tmp_path / "stage")
+    with directory(root) as handle:
+        if os.name == "nt":
+            checked, close_owner, close_name = "_permissions", storage, "_close_windows"
+            check_owner = storage
+        else:
+            checked, close_owner, close_name = "fstat", os, "close"
+            check_owner = os
+        close = getattr(close_owner, close_name)
+        validation_started = False
+
+        def fail_validation(*args, **kwargs):
+            nonlocal validation_started
+            validation_started = True
+            raise OSError("synthetic validation error")
+
+        def close_then_fail(token):
+            close(token)
+            if validation_started:
+                raise OSError("synthetic close error")
+
+        with (patch.object(check_owner, checked, fail_validation),
+              patch.object(close_owner, close_name, close_then_fail),
+              pytest.raises(storage.StorageError, match="staging_uncertain") as failure):
+            storage._create_fd(root / "created", handle._token)
+        assert failure.value.cleanup == "unknown"
+    assert (root / "created").is_file()
+
+
+@pytest.mark.parametrize("kind", [0, 1, 4])
+def test_unknown_or_remote_drive_is_refused_before_open(kind, monkeypatch):
+    from pathlib import PureWindowsPath
+
+    monkeypatch.setattr(storage, "_windows_drive_type", lambda _: kind)
+    monkeypatch.setattr(storage, "_windows_api", lambda: pytest.fail("attempted a native file open"))
+    with pytest.raises(storage.StorageError, match="unsupported_filesystem"):
+        storage._open_windows(PureWindowsPath("Z:/synthetic"), 0)
+
+
+@pytest.mark.parametrize("fs", ["nfs4", "cifs", "fuse.sshfs", "autofs", "unrecognized"])
+def test_advertised_nonlocal_mount_never_opens_the_target(fs):
+    from pathlib import PurePosixPath
+
+    mountinfo = (b"1 1 0:1 / / rw - ext4 /dev/test rw\n"
+                 + f"2 1 0:2 / /mnt/remote\\040dir rw - {fs} synthetic rw\n".encode()
+                 + b"3 2 0:3 / /mnt/remote\\040dir/nested rw - tmpfs tmpfs rw\n")
+    denied = storage._untrusted_mounts(mountinfo)
+    with pytest.raises(storage.StorageError, match="unsupported_filesystem"):
+        storage._check_linux_mounts(PurePosixPath("/mnt/remote dir/nested"), denied)
+    storage._check_linux_mounts(PurePosixPath("/mnt/remote dir2"), denied)
 
 
 def test_unsupported_native_boundary_refuses_before_staging(tmp_path, monkeypatch):

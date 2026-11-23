@@ -7,12 +7,14 @@ import hashlib
 import os
 import re
 import stat
-from contextlib import ExitStack, contextmanager
+import sys
+from contextlib import ExitStack, contextmanager, suppress
+from ctypes import wintypes
 from dataclasses import dataclass
-from pathlib import Path
+from functools import cache
+from pathlib import Path, PurePosixPath
 from uuid import UUID, uuid4
 
-from . import mediated_executor_win32 as win
 from .public_export_policy import InputError, parse_policy
 
 
@@ -76,11 +78,14 @@ def _contains(parent: Path, candidate: Path) -> bool:
     return candidate == parent or parent in candidate.parents
 
 
-def _worktree(directory: Path):
+def _worktree(directory: Path, denied_mounts):
     # lexists semantics, with failure to inspect a marker treated as refusal.
     for marker in (".git", ".hg", ".svn"):
+        path = directory / marker
+        if os.name == "posix":
+            _check_linux_mounts(path, denied_mounts)
         try:
-            (directory / marker).lstat()
+            path.lstat()
         except FileNotFoundError:
             continue
         raise StorageError("destination_in_worktree")
@@ -92,8 +97,171 @@ def _normalized(code: str):
         yield
     except StorageError:
         raise
-    except (OSError, ValueError, win.Win32AdapterError) as exc:
+    except (OSError, ValueError) as exc:
         raise StorageError(code) from exc
+
+
+# Only the handle, identity and access-control operations needed for staging.
+# Load the system DLLs lazily; POSIX never needs a Windows entry point.
+@cache
+def _windows_api():
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    adv = ctypes.WinDLL("advapi32", use_last_error=True)
+    pointer = ctypes.c_void_p
+    output = ctypes.POINTER(pointer)
+    handle, word, number, flag = wintypes.HANDLE, wintypes.LPWSTR, wintypes.DWORD, wintypes.BOOL
+
+    def bind(function, result, *arguments):
+        function.restype = result
+        function.argtypes = arguments
+
+    bind(kernel.CreateFileW, handle, wintypes.LPCWSTR, number, number, pointer, number, number, handle)
+    bind(kernel.CloseHandle, flag, handle)
+    bind(kernel.GetCurrentProcess, handle)
+    bind(kernel.GetDriveTypeW, wintypes.UINT, wintypes.LPCWSTR)
+    bind(kernel.GetFinalPathNameByHandleW, number, handle, word, number, number)
+    bind(kernel.GetFileInformationByHandle, flag, handle, ctypes.POINTER(_FileInfo))
+    bind(kernel.GetVolumeInformationByHandleW, flag, handle, word, number, pointer, pointer, pointer, word, number)
+    bind(kernel.LocalFree, pointer, pointer)
+    bind(adv.OpenProcessToken, flag, handle, number, ctypes.POINTER(handle))
+    bind(adv.GetTokenInformation, flag, handle, ctypes.c_int, pointer, number, ctypes.POINTER(number))
+    bind(adv.ConvertSidToStringSidW, flag, pointer, ctypes.POINTER(word))
+    bind(adv.ConvertStringSecurityDescriptorToSecurityDescriptorW, flag, wintypes.LPCWSTR, number, output,
+         ctypes.POINTER(number))
+    bind(adv.GetSecurityInfo, number, handle, ctypes.c_int, number, output, output, output, output, output)
+    bind(adv.IsValidAcl, flag, pointer)
+    bind(adv.GetAclInformation, flag, pointer, pointer, number, ctypes.c_int)
+    return kernel, adv
+
+
+class _FileInfo(ctypes.Structure):
+    # BY_HANDLE_FILE_INFORMATION. The file times are six DWORDs.
+    _fields_ = [("attributes", wintypes.DWORD), ("timestamps", wintypes.DWORD * 6),
+                ("volume", wintypes.DWORD), ("size_high", wintypes.DWORD), ("size_low", wintypes.DWORD),
+                ("links", wintypes.DWORD), ("index_high", wintypes.DWORD), ("index_low", wintypes.DWORD)]
+
+
+_REPARSE = 0x400
+_DIRECTORY = 0x10
+_OPEN_REPARSE = 0x00200000
+_BACKUP_SEMANTICS = 0x02000000
+_GENERIC_READ = 0x80000000
+_GENERIC_WRITE = 0x40000000
+_DOS_PATH = "\\\\?\\"
+
+
+def _open_windows(path, access, *, security=None):
+    _check_windows_drive(path)
+    kernel, _ = _windows_api()
+    if security is None:
+        # Share reads only; pin existing components against writes and deletion.
+        share, disposition, flags = 1, 3, _OPEN_REPARSE | _BACKUP_SEMANTICS
+    else:
+        share, disposition, flags = 0, 1, _OPEN_REPARSE  # CREATE_NEW
+    handle = kernel.CreateFileW(_DOS_PATH + str(path), access, share, security, disposition, flags, None)
+    if handle in (None, ctypes.c_void_p(-1).value):
+        raise OSError("native_open_failed")
+    return handle
+
+
+def _windows_drive_type(anchor):
+    kernel, _ = _windows_api()
+    return kernel.GetDriveTypeW(anchor)
+
+
+def _check_windows_drive(path):
+    if not re.fullmatch(r"[A-Za-z]:", path.drive) or _windows_drive_type(path.anchor) not in (2, 3, 6):
+        raise StorageError("unsupported_filesystem")
+
+
+def _close_windows(handle):
+    kernel, _ = _windows_api()
+    if not kernel.CloseHandle(handle):
+        raise OSError("native_close_failed")
+
+
+def _windows_info(handle):
+    kernel, _ = _windows_api()
+    info = _FileInfo()
+    if not kernel.GetFileInformationByHandle(handle, ctypes.byref(info)):
+        raise OSError("file_information_unavailable")
+    return info
+
+
+def _windows_path_matches(handle, path):
+    kernel, _ = _windows_api()
+    size = kernel.GetFinalPathNameByHandleW(handle, None, 0, 0)
+    if not 0 < size <= 32768:
+        raise OSError("file_path_unavailable")
+    buffer = ctypes.create_unicode_buffer(size)
+    written = kernel.GetFinalPathNameByHandleW(handle, buffer, size, 0)
+    if not 0 < written < size:
+        raise OSError("file_path_unavailable")
+    return buffer.value.startswith(_DOS_PATH) and Path(buffer.value[len(_DOS_PATH):]) == path
+
+
+def _is_windows_regular(handle, path):
+    return not _windows_info(handle).attributes & (_DIRECTORY | _REPARSE) and _windows_path_matches(handle, path)
+
+
+def _volume_is_ntfs(handle):
+    kernel, _ = _windows_api()
+    name = ctypes.create_unicode_buffer(261)
+    if not kernel.GetVolumeInformationByHandleW(handle, None, 0, None, None, None, name, len(name)):
+        raise OSError("filesystem_unavailable")
+    return name.value.upper() == "NTFS"
+
+
+def _sid_text(pointer):
+    kernel, adv = _windows_api()
+    value = wintypes.LPWSTR()
+    if not pointer or not adv.ConvertSidToStringSidW(pointer, ctypes.byref(value)):
+        raise StorageError("identity_unavailable")
+    try:
+        return value.value.encode("ascii")
+    finally:
+        kernel.LocalFree(ctypes.cast(value, ctypes.c_void_p))
+
+
+def _acl_entries(raw, count):
+    """Split the OS-reported ACL extent into complete aligned ACEs."""
+    offset = 8  # ACL header
+    entries = []
+    for _ in range(count):
+        if offset + 4 > len(raw):
+            raise StorageError("acl_unverifiable")
+        size = int.from_bytes(raw[offset + 2:offset + 4], "little")
+        if size < 4 or size % 4 or offset + size > len(raw):
+            raise StorageError("acl_unverifiable")
+        entries.append(raw[offset:offset + size])
+        offset += size
+    if offset != len(raw):
+        raise StorageError("acl_unverifiable")
+    return entries
+
+
+def _windows_acl(handle):
+    kernel, adv = _windows_api()
+    owner, dacl, descriptor = ctypes.c_void_p(), ctypes.c_void_p(), ctypes.c_void_p()
+    # SE_FILE_OBJECT, OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION
+    if adv.GetSecurityInfo(handle, 1, 5, ctypes.byref(owner), None, ctypes.byref(dacl), None,
+                           ctypes.byref(descriptor)):
+        raise StorageError("acl_unverifiable")
+    try:
+        if not descriptor.value or not dacl.value or not adv.IsValidAcl(dacl):
+            raise StorageError("acl_unverifiable")
+        # ACL_SIZE_INFORMATION: AceCount, AclBytesInUse, AclBytesFree.
+        sizes = (wintypes.DWORD * 3)()
+        if not adv.GetAclInformation(dacl, sizes, ctypes.sizeof(sizes), 2):
+            raise StorageError("acl_unverifiable")
+        count, used, _ = sizes
+        header = ctypes.string_at(dacl, 8)
+        if (not 8 <= used <= int.from_bytes(header[2:4], "little")
+                or count != int.from_bytes(header[4:6], "little")):
+            raise StorageError("acl_unverifiable")
+        return _sid_text(owner), _acl_entries(ctypes.string_at(dacl, used), count)
+    finally:
+        kernel.LocalFree(descriptor)
 
 
 def _sid_from_ace(ace: bytes) -> bytes:
@@ -110,44 +278,40 @@ def _sid_from_ace(ace: bytes) -> bytes:
 
 
 def _win_user_sid() -> bytes:
-    from ctypes import wintypes
-
+    kernel, adv = _windows_api()
     token = wintypes.HANDLE()
-    if not win._ADV.OpenProcessToken(win._K32.GetCurrentProcess(), win.TOKEN_QUERY, ctypes.byref(token)):
+    if not adv.OpenProcessToken(kernel.GetCurrentProcess(), 0x8, ctypes.byref(token)):
         raise StorageError("identity_unavailable")
     try:
         size = wintypes.DWORD()
-        win._ADV.GetTokenInformation(token, 1, None, 0, ctypes.byref(size))  # TokenUser
+        adv.GetTokenInformation(token, 1, None, 0, ctypes.byref(size))  # TokenUser
         if not size.value:
             raise StorageError("identity_unavailable")
         buf = ctypes.create_string_buffer(size.value)
-        if not win._ADV.GetTokenInformation(token, 1, buf, size.value, ctypes.byref(size)):
+        if not adv.GetTokenInformation(token, 1, buf, size.value, ctypes.byref(size)):
             raise StorageError("identity_unavailable")
-        return win._sid_to_canonical_bytes(ctypes.cast(buf, ctypes.POINTER(ctypes.c_void_p))[0])
+        return _sid_text(ctypes.cast(buf, ctypes.POINTER(ctypes.c_void_p))[0])
     finally:
-        win.close_handle(token.value)
+        _close_windows(token.value)
 
 
 @contextmanager
 def _owner_security():
     """Explicit protected, current-user-only DACL supplied at CREATE_NEW."""
-    from ctypes import wintypes
+    kernel, adv = _windows_api()
 
     class SecurityAttributes(ctypes.Structure):
         _fields_ = [("length", wintypes.DWORD), ("descriptor", ctypes.c_void_p), ("inherit", wintypes.BOOL)]
 
     sid = _win_user_sid().decode("ascii")
-    convert = win._ADV.ConvertStringSecurityDescriptorToSecurityDescriptorW
-    convert.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, ctypes.POINTER(ctypes.c_void_p),
-                        ctypes.POINTER(wintypes.DWORD)]
-    convert.restype = wintypes.BOOL
+    convert = adv.ConvertStringSecurityDescriptorToSecurityDescriptorW
     descriptor = ctypes.c_void_p()
     if not convert(f"O:{sid}D:P(A;;FA;;;{sid})", 1, ctypes.byref(descriptor), None):
         raise StorageError("acl_unverifiable")
     try:
         yield SecurityAttributes(ctypes.sizeof(SecurityAttributes), descriptor.value, False)
     finally:
-        win._K32.LocalFree(descriptor)
+        kernel.LocalFree(descriptor)
 
 
 _ADMIN_SIDS = frozenset({
@@ -160,12 +324,12 @@ _WRITE = 0x40000000 | 0x10000000 | 0x000D0000 | 0x156
 
 
 def _windows_permissions(handle, *, private=False, admin=False, ancestor=False):
-    acl = win.capture_security(handle)
+    owner_sid, entries = _windows_acl(handle)
     owner = _win_user_sid()
     trusted = _ADMIN_SIDS if admin else {owner}
-    if acl.owner_sid not in trusted or not acl.dacl_present or acl.dacl_is_null:
+    if owner_sid not in trusted:
         raise StorageError("unsafe_permissions")
-    for ace in acl.aces:
+    for ace in entries:
         sid = _sid_from_ace(ace)
         if ace[0] == 1 or ace[1] & 0x08:  # deny or inherit-only
             continue
@@ -182,39 +346,62 @@ _DOCUMENTS = "fdd39ad0-238f-46af-adb4-6c85480369c7"
 _DESKTOP = "b4bfcc3a-db2c-424c-b029-7fe99a87c641"
 
 
-def _known_folder(identifier: str, *, optional=False, default=False) -> Path | None:
-    from ctypes import wintypes
+def _known_folder_registered(identifier):
+    import winreg
 
+    branch = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\FolderDescriptions"
+    access = winreg.KEY_READ | winreg.KEY_WOW64_64KEY
+    with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, branch, 0, access) as descriptions:
+        try:
+            with winreg.OpenKey(descriptions, "{" + str(UUID(identifier)) + "}", 0, access):
+                return True
+        except FileNotFoundError:
+            return False
+
+
+def _folder_path(identifier, flags, get, free, *, optional):
+    pointer = wintypes.LPWSTR()
+    guid = ctypes.create_string_buffer(UUID(identifier).bytes_le)
+    try:
+        status = get(guid, flags, None, ctypes.byref(pointer)) & 0xFFFFFFFF
+        # E_INVALIDARG can also indicate a failure unrelated to registration.
+        if status == 0x80070057 and optional and not _known_folder_registered(identifier):
+            return None
+        if status != 0 or not pointer.value:
+            raise StorageError("known_folder_unavailable")
+        folder = Path(pointer.value)
+        if not folder.is_absolute() or ".." in folder.parts:
+            raise StorageError("known_folder_unavailable")
+        return folder
+    finally:
+        free(ctypes.cast(pointer, ctypes.c_void_p))
+
+
+def _known_folder(identifier: str, *, optional=False, default=False) -> Path | None:
     shell = ctypes.WinDLL("shell32", use_last_error=True)
     ole = ctypes.WinDLL("ole32", use_last_error=True)
     get = shell.SHGetKnownFolderPath
     get.argtypes = [ctypes.c_void_p, wintypes.DWORD, wintypes.HANDLE, ctypes.POINTER(wintypes.LPWSTR)]
     get.restype = ctypes.c_long
-    pointer = wintypes.LPWSTR()
-    guid = ctypes.create_string_buffer(UUID(identifier).bytes_le)
-    # DONT_VERIFY also reports a configured redirect whose directory is offline.
-    # DEFAULT_PATH obtains the unredirected comparison value.
-    if get(guid, 0x4000 | (0x0400 if default else 0), None, ctypes.byref(pointer)) < 0:
-        if optional:
-            return None
-        raise StorageError("policy_unavailable")
+    ole.CoTaskMemFree.argtypes, ole.CoTaskMemFree.restype = [ctypes.c_void_p], None
+    ole.CoInitializeEx.argtypes, ole.CoInitializeEx.restype = [ctypes.c_void_p, wintypes.DWORD], ctypes.c_long
+    ole.CoUninitialize.argtypes, ole.CoUninitialize.restype = [], None
+    initialized = ole.CoInitializeEx(None, 2) & 0xFFFFFFFF
+    # An apartment already initialized in another mode can also call the shell.
+    if initialized not in (0, 1, 0x80010106):
+        raise StorageError("known_folder_unavailable")
     try:
-        folder = Path(pointer.value)
-        if not folder.is_absolute():
-            raise StorageError("known_folder_unavailable")
-        return folder
+        # DONT_VERIFY returns offline redirects. DEFAULT_PATH ignores redirection.
+        return _folder_path(identifier, 0x4000 | (0x0400 if default else 0), get, ole.CoTaskMemFree, optional=optional)
     finally:
-        ole.CoTaskMemFree.argtypes = [ctypes.c_void_p]
-        ole.CoTaskMemFree(ctypes.cast(pointer, ctypes.c_void_p))
+        if initialized in (0, 1):
+            ole.CoUninitialize()
 
 
 def _win_open_dir(path: Path, security: bool):
     # Pin every path component against rename, deletion and reparse writes.
     access = 0x80 | (0x20000 if security else 0)  # READ_ATTRIBUTES, READ_CONTROL
-    handle = win._create_file(str(path), access, win.FILE_SHARE_READ, win.OPEN_EXISTING,
-                              win.FILE_FLAG_OPEN_REPARSE_POINT | win.FILE_FLAG_BACKUP_SEMANTICS,
-                              "directory_open")
-    return handle
+    return _open_windows(path, access)
 
 
 def _permissions(token, *, private=False, admin=False, ancestor=False):
@@ -228,10 +415,54 @@ def _permissions(token, *, private=False, admin=False, ancestor=False):
 
 def _native_supported():
     if os.name == "nt":
-        return win.windows_support_probe()
-    return (os.name == "posix" and hasattr(os, "O_DIRECTORY") and hasattr(os, "O_NOFOLLOW")
+        try:
+            _windows_api()
+        except (AttributeError, OSError):
+            return False
+        return True
+    return (sys.platform.startswith("linux") and hasattr(os, "O_DIRECTORY") and hasattr(os, "O_NOFOLLOW")
             and os.open in os.supports_dir_fd and os.stat in os.supports_dir_fd
             and os.listdir in os.supports_fd)
+
+
+_LOCAL_FILESYSTEMS = frozenset({b"ext2", b"ext3", b"ext4", b"xfs", b"btrfs", b"f2fs", b"jfs",
+                                b"bcachefs", b"ntfs3", b"tmpfs", b"ramfs", b"overlay", b"zfs"})
+
+
+def _untrusted_mounts(mountinfo):
+    """Read only the kernel's mount metadata. Keep every nonlocal/unknown ancestor."""
+    denied = []
+    have_root = False
+    for line in mountinfo.splitlines():
+        fields, separator, details = line.partition(b" - ")
+        mount, tail = fields.split(), details.split()
+        if not separator or len(mount) < 6 or len(tail) < 3:
+            raise StorageError("filesystem_unavailable")
+        raw = re.sub(rb"\\([0-7]{3})", lambda m: bytes([int(m[1], 8)]), mount[4])
+        location = PurePosixPath(os.fsdecode(raw))
+        if not location.is_absolute():
+            raise StorageError("filesystem_unavailable")
+        have_root |= location == PurePosixPath("/")
+        if tail[0] not in _LOCAL_FILESYSTEMS:
+            denied.append(location)
+    if not have_root:
+        raise StorageError("filesystem_unavailable")
+    return denied
+
+
+def _linux_mounts():
+    return _untrusted_mounts(Path("/proc/self/mountinfo").read_bytes())
+
+
+def _check_linux_mounts(path, denied):
+    if any(path.is_relative_to(mount) for mount in denied):
+        raise StorageError("unsupported_filesystem")
+
+
+def require_local_path(path: Path) -> None:
+    """Inspect a local directory and its ancestry before a consumer invokes Git."""
+    with _normalized("source_unavailable"), _chain(_absolute(path)):
+        pass
 
 
 @contextmanager
@@ -240,17 +471,21 @@ def _chain(path: Path, *, checked_from: Path | None = None, private=False, admin
     """Open the namespace from its anchor. All directory handles survive the operation."""
     if not _native_supported():
         raise StorageError("unsupported_platform")
+    denied_mounts = ()
+    if os.name == "posix":
+        denied_mounts = _linux_mounts()
+        _check_linux_mounts(path, denied_mounts)
     previous = None
     with ExitStack() as stack:
         for component in _ancestors(path):
             checked = checked_from is not None and _contains(checked_from, component)
             if os.name == "nt":
                 token = _win_open_dir(component, checked or admin)
-                stack.callback(win.close_handle, token)
-                attrs = win._file_information(token).dwFileAttributes
-                if not attrs & win.FILE_ATTRIBUTE_DIRECTORY or attrs & win.FILE_ATTRIBUTE_REPARSE_POINT:
+                stack.callback(_close_windows, token)
+                attrs = _windows_info(token).attributes
+                if not attrs & _DIRECTORY or attrs & _REPARSE:
                     raise StorageError("unsafe_directory")
-                if not win.paths_equal(win.final_path(token), str(component)):
+                if not _windows_path_matches(token, component):
                     raise StorageError("unsafe_directory")
             else:
                 flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
@@ -267,16 +502,17 @@ def _chain(path: Path, *, checked_from: Path | None = None, private=False, admin
                         or (info.st_mode & 0o022 and not info.st_mode & stat.S_ISVTX)):
                     raise StorageError("unsafe_permissions")
             if exclude_worktrees:
-                _worktree(component)
+                _worktree(component, denied_mounts)
             previous = token
-        if os.name == "nt" and not win.volume_is_ntfs(previous):
+        if os.name == "nt" and not _volume_is_ntfs(previous):
             raise StorageError("unsupported_filesystem")
         yield previous
 
 
 def _identity(token):
     if os.name == "nt":
-        return win.file_identity(token)
+        info = _windows_info(token)
+        return info.volume, info.index_high, info.index_low
     info = os.fstat(token)
     return info.st_dev, info.st_ino
 
@@ -286,18 +522,18 @@ def _read_fd(path: Path, parent, *, admin=False, private=False):
     if os.name == "nt":
         import msvcrt
 
-        handle = win._create_file(str(path), win.GENERIC_READ, win.FILE_SHARE_READ, win.OPEN_EXISTING,
-                                  win.FILE_FLAG_OPEN_REPARSE_POINT | win.FILE_FLAG_BACKUP_SEMANTICS, "read")
+        handle = _open_windows(path, _GENERIC_READ)
         try:
-            if not win.is_regular_file(handle) or not win.paths_equal(win.final_path(handle), str(path)):
+            if not _is_windows_regular(handle, path):
                 raise StorageError("unsafe_file")
             if admin or private:
                 _permissions(handle, admin=admin, private=private)
             fd = msvcrt.open_osfhandle(handle, os.O_BINARY | os.O_RDONLY)
         except BaseException:
-            win.close_handle(handle)
+            _close_windows(handle)
             raise
     else:
+        _check_linux_mounts(path, _linux_mounts())
         fd = os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
     with os.fdopen(fd, "rb") as stream:
         info = os.fstat(stream.fileno())
@@ -391,27 +627,32 @@ def _check_exclusions(path, denied_sync_roots):
         raise StorageError("synchronized_destination")
 
 
+@contextmanager
+def _new_handle(token, close):
+    """A file already exists; retain that fact even if validation and closing both fail."""
+    try:
+        yield
+    except BaseException as exc:
+        with suppress(OSError):
+            close(token)
+        if isinstance(exc, Exception):
+            raise StorageError("staging_uncertain", cleanup="unknown") from exc
+        raise
+
+
 def _create_fd(path, directory):
     if os.name == "nt":
         import msvcrt
 
         with _owner_security() as security:
-            handle = win._K32.CreateFileW(
-                win._verbatim(str(path)), win.GENERIC_READ | win.GENERIC_WRITE, 0,
-                ctypes.byref(security), win.CREATE_NEW, win.FILE_FLAG_OPEN_REPARSE_POINT, None,
-            )
-        if handle in (None, win._INVALID_HANDLE_VALUE):
-            raise StorageError("exclusive_create_failed")
-        try:
+            handle = _open_windows(path, _GENERIC_READ | _GENERIC_WRITE, security=ctypes.byref(security))
+        with _new_handle(handle, _close_windows):
             _permissions(handle, private=True)
-            if not win.is_regular_file(handle) or not win.paths_equal(win.final_path(handle), str(path)):
+            if not _is_windows_regular(handle, path):
                 raise StorageError("staging_uncertain", cleanup="unknown")
             return msvcrt.open_osfhandle(handle, os.O_BINARY | os.O_RDWR)
-        except (OSError, win.Win32AdapterError) as exc:
-            win.close_handle(handle)
-            raise StorageError("staging_uncertain", cleanup="unknown") from exc
     fd = os.open(path.name, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=directory)
-    try:
+    with _new_handle(fd, os.close):
         if stat.S_IMODE(os.fstat(fd).st_mode) != 0o600:
             # umask may only have removed owner rights. The file was private
             # from first creation; restoring its owner's rights is safe.
@@ -419,9 +660,6 @@ def _create_fd(path, directory):
             if stat.S_IMODE(os.fstat(fd).st_mode) != 0o600:
                 raise StorageError("staging_uncertain", cleanup="unknown")
         return fd
-    except OSError as exc:
-        os.close(fd)
-        raise StorageError("staging_uncertain", cleanup="unknown") from exc
 
 
 class Directory:

@@ -278,6 +278,29 @@ def test_explicit_source_root_must_be_an_actual_worktree_root(monkeypatch, capsy
         assert json.loads(out)["outside_visibility"] == list(OUTSIDE_VISIBILITY)
 
 
+@pytest.mark.parametrize("selection", ["explicit", "current_directory", "implementation"])
+def test_nonlocal_source_path_refuses_before_git(monkeypatch, tmp_path, selection):
+    from triage_core import public_export_cli as cli
+    from triage_core import public_export_staging as staging
+
+    checked = []
+
+    def reject_path(path):
+        checked.append(path)
+        raise staging.StorageError("nonlocal_filesystem")
+
+    monkeypatch.setattr(staging, "require_local_path", reject_path)
+    monkeypatch.setattr(cli, "_git", lambda *args: pytest.fail("Git received an unverified path"))
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(staging.StorageError):
+        if selection == "implementation":
+            monkeypatch.setattr(cli, "__file__", str(tmp_path / "triage_core" / "public_export_cli.py"))
+            cli.implementation_commit()
+        else:
+            cli.source_repository(tmp_path if selection == "explicit" else None)
+    assert checked == [tmp_path]
+
+
 def test_revision_and_source_ignore_git_overrides_and_bind_clean_package(monkeypatch, tmp_path):
     from triage_core import public_export_cli as cli
 
