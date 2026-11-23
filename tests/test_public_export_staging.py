@@ -293,6 +293,8 @@ def test_actual_known_folder_move_treated_as_sync_risk(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("status,registered,value,allowed", [
     (0x80070057, False, "unused", True), (0x80070057, True, "unused", False),
+    (0x80070002, False, None, True), (0x80070002, True, None, False),
+    (0x80070003, False, None, False),
     (0x80070005, False, "unused", False), (0x80004005, False, "unused", False),
     (0, True, None, False), (0, True, "relative", False),
 ])
@@ -307,6 +309,7 @@ def test_unknown_folder_discovery_refuses_and_releases_result(monkeypatch, statu
         return status
 
     monkeypatch.setattr(storage, "_known_folder_registered", lambda _: registered)
+    monkeypatch.setattr(storage, "_onedrive_user_configured", lambda: False)
     args = (storage._ONEDRIVE, 0x4000, get, free.append)
     if allowed:
         assert storage._folder_path(*args, optional=True) is None
@@ -314,6 +317,46 @@ def test_unknown_folder_discovery_refuses_and_releases_result(monkeypatch, statu
         with pytest.raises(storage.StorageError, match="known_folder_unavailable"):
             storage._folder_path(*args, optional=True)
     assert len(free) == 1 and free[0].value == ctypes.cast(value, ctypes.c_void_p).value
+
+
+@pytest.mark.parametrize("override,accounts", [
+    (True, False), (False, True), (False, False), ("unreadable", False), (False, "unreadable"),
+])
+def test_missing_onedrive_requires_absent_user_configuration(monkeypatch, override, accounts):
+    import sys
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+
+    def open_key(_root, path, _reserved, _access):
+        if path.endswith("User Shell Folders"):
+            return nullcontext("shell")
+        assert path.endswith(r"OneDrive\Accounts")
+        if accounts == "unreadable":
+            raise PermissionError
+        if accounts:
+            return nullcontext("accounts")
+        raise FileNotFoundError
+
+    def query(key, name):
+        assert key == "shell" and name.lower() == "{" + storage._ONEDRIVE + "}"
+        if override == "unreadable":
+            raise PermissionError
+        if override:
+            return ("configured", 1)
+        raise FileNotFoundError
+
+    registry = SimpleNamespace(OpenKey=open_key, QueryValueEx=query, HKEY_CURRENT_USER=1,
+                               KEY_READ=2, KEY_WOW64_64KEY=4)
+    monkeypatch.setitem(sys.modules, "winreg", registry)
+    monkeypatch.setattr(storage, "_known_folder_registered", lambda _: False)
+    args = (storage._ONEDRIVE, 0x4000, lambda *args: 0x80070002, lambda _: None)
+    if override or accounts:
+        with pytest.raises(storage.StorageError, match="known_folder_unavailable"):
+            storage._folder_path(*args, optional=True)
+    else:
+        assert storage._folder_path(*args, optional=True) is None
+    with pytest.raises(storage.StorageError, match="known_folder_unavailable"):
+        storage._folder_path(*args, optional=False)
 
 
 def test_create_validation_and_close_fault_preserve_observed_creation(tmp_path):

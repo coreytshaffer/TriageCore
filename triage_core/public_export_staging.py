@@ -359,14 +359,35 @@ def _known_folder_registered(identifier):
             return False
 
 
+def _onedrive_user_configured():
+    import winreg
+
+    access = winreg.KEY_READ | winreg.KEY_WOW64_64KEY
+    folders = r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders"
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, folders, 0, access) as key:
+            winreg.QueryValueEx(key, "{" + _ONEDRIVE + "}")
+            return True
+    except FileNotFoundError:
+        pass
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\OneDrive\Accounts", 0, access):
+            return True
+    except FileNotFoundError:
+        return False
+
+
 def _folder_path(identifier, flags, get, free, *, optional):
     pointer = wintypes.LPWSTR()
     guid = ctypes.create_string_buffer(UUID(identifier).bytes_le)
     try:
         status = get(guid, flags, None, ctypes.byref(pointer)) & 0xFFFFFFFF
-        # E_INVALIDARG can also indicate a failure unrelated to registration.
-        if status == 0x80070057 and optional and not _known_folder_registered(identifier):
-            return None
+        # An unprovisioned OneDrive folder can return FILE_NOT_FOUND or
+        # E_INVALIDARG. A redirect or account still requires a verifiable path.
+        if optional and identifier == _ONEDRIVE and status in (0x80070002, 0x80070057):
+            with _normalized("known_folder_unavailable"):
+                if not _known_folder_registered(identifier) and not _onedrive_user_configured():
+                    return None
         if status != 0 or not pointer.value:
             raise StorageError("known_folder_unavailable")
         folder = Path(pointer.value)

@@ -139,7 +139,11 @@ def implementation_commit():
     )}
     if any(not entry.startswith(b"H ") for entry in entries) or not core.issubset({e[2:] for e in entries}):
         raise OSError("implementation_revision_unavailable")
-    if _git(code_root, "status", "--porcelain=v1", "--untracked-files=all", "--", "triage_core"):
+    # Compare Git's canonical text content even when a Windows checkout materialized
+    # LF blobs as CRLF. Git attributes still govern paths marked as binary or -text.
+    eol = ("-c", "core.autocrlf=input") if os.name == "nt" else ()
+    if _git(code_root, *eol, "status", "--porcelain=v1",
+            "--untracked-files=all", "--", "triage_core"):
         raise OSError("implementation_revision_unavailable")
     commit = _git(code_root, "rev-parse", "--verify", "HEAD^{commit}").decode("ascii").strip()
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
@@ -168,12 +172,12 @@ def run_command(parser, args):
     try:
         repo = source_repository(args.repo_root)
     except (OSError, ValueError):
-        _report("refused_pre_staging", reason_codes=["source_repository_unavailable"])
+        _report("refused_pre_staging", reason_codes=["source_repository_unavailable"], policy_digest=None)
         return 2
     try:
         commit = implementation_commit()
     except (OSError, ValueError):
-        _report("refused_pre_staging", reason_codes=["implementation_revision_unavailable"])
+        _report("refused_pre_staging", reason_codes=["implementation_revision_unavailable"], policy_digest=None)
         return 2
     result = run_export(
         repo_root=repo, proposal_locator=args.proposal,

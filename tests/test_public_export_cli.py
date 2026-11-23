@@ -205,7 +205,7 @@ def test_frozen_file_stage(group, case, tmp_path, monkeypatch, capsys, record_pr
         added = set(payload_root.iterdir()) - before
         readbacks = sorted(sha256(path.read_bytes()) for path in added)
         assert not network
-        assert result["policy_digest"] == sha256(policy)
+        assert result["policy_digest"] == sha256(policy), result["reason_codes"]
         if expected == REFUSE:
             assert code == 2 and result["outcome"] == "ineligible", result
             assert wanted_reasons <= set(result["reason_codes"])
@@ -278,6 +278,30 @@ def test_explicit_source_root_must_be_an_actual_worktree_root(monkeypatch, capsy
         assert json.loads(out)["outside_visibility"] == list(OUTSIDE_VISIBILITY)
 
 
+@pytest.mark.parametrize(("failure", "reason"), [
+    ("source_repository", "source_repository_unavailable"),
+    ("implementation_commit", "implementation_revision_unavailable"),
+])
+def test_preflight_refusal_reports_null_policy_digest(monkeypatch, capsys, tmp_path, failure, reason):
+    from triage_core import public_export_cli as cli
+
+    def unavailable(*args):
+        raise OSError("synthetic preflight failure")
+
+    monkeypatch.setattr(cli, "source_repository", lambda _: tmp_path)
+    monkeypatch.setattr(cli, failure, unavailable)
+    monkeypatch.setattr(cli, "read_system_policy", lambda: pytest.fail("policy read after refused preflight"))
+    code, out, _ = invoke_tc(
+        monkeypatch, capsys, "--stage", "--evidence-dir", tmp_path,
+        "--proposal", "proposal.json", "--payload", "payload.txt", "--parent", "parent.json",
+    )
+    result = json.loads(out)
+    assert code == 2 and result["outcome"] == "refused_pre_staging"
+    assert result["reason_codes"] == [reason]
+    assert result["policy_digest"] is None
+    assert not list(tmp_path.iterdir())
+
+
 @pytest.mark.parametrize("selection", ["explicit", "current_directory", "implementation"])
 def test_nonlocal_source_path_refuses_before_git(monkeypatch, tmp_path, selection):
     from triage_core import public_export_cli as cli
@@ -301,9 +325,8 @@ def test_nonlocal_source_path_refuses_before_git(monkeypatch, tmp_path, selectio
     assert checked == [tmp_path]
 
 
-def test_revision_and_source_ignore_git_overrides_and_bind_clean_package(monkeypatch, tmp_path):
-    from triage_core import public_export_cli as cli
-
+@pytest.fixture
+def implementation_checkout(tmp_path):
     repo = tmp_path / "checkout"
     package = repo / "triage_core"
     package.mkdir(parents=True)
@@ -312,13 +335,24 @@ def test_revision_and_source_ignore_git_overrides_and_bind_clean_package(monkeyp
     for name in ("__init__", "tc_cli", "public_export", "public_export_policy", "public_export_staging",
                  "public_export_evidence", "public_export_release"):
         (package / f"{name}.py").write_bytes(b"# synthetic package module\n")
+    (repo / ".gitattributes").write_text("triage_core/opaque.bin -text\n", encoding="ascii")
+    (package / "opaque.bin").write_bytes(b"exact\nbytes\n")
     subprocess.run(["git", "init", "--quiet", "--template=", str(repo)], check=True)
-    subprocess.run(["git", "-C", str(repo), "add", "triage_core"], check=True)
+    subprocess.run(["git", "-C", str(repo), "add", ".gitattributes", "triage_core"], check=True)
     subprocess.run(
         ["git", "-C", str(repo), "-c", "user.name=Synthetic", "-c", "user.email=fixture@example.invalid",
          "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "Synthetic local source"],
         check=True,
     )
+    return repo
+
+
+def test_revision_and_source_ignore_git_overrides_and_bind_clean_package(monkeypatch, tmp_path, implementation_checkout):
+    from triage_core import public_export_cli as cli
+
+    repo = implementation_checkout
+    package = repo / "triage_core"
+    module = package / "public_export_cli.py"
     expected = subprocess.check_output(["git", "-C", str(repo), "rev-parse", "HEAD"], text=True).strip()
     monkeypatch.setattr(cli, "__file__", str(module))
     monkeypatch.setenv("GIT_DIR", str(tmp_path / "elsewhere"))
@@ -346,6 +380,41 @@ def test_revision_and_source_ignore_git_overrides_and_bind_clean_package(monkeyp
     subprocess.run([*git, "rm", "--quiet", "triage_core/public_export_evidence.py"], check=True)
     subprocess.run([*git, "-c", "user.name=Synthetic", "-c", "user.email=fixture@example.invalid",
                     "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "Synthetic missing module"], check=True)
+    with pytest.raises(OSError, match="implementation_revision_unavailable"):
+        cli.implementation_commit()
+
+
+def test_clean_crlf_checkout_preserves_revision_and_detects_real_edits(monkeypatch, implementation_checkout):
+    from triage_core import public_export_cli as cli
+
+    repo = implementation_checkout
+    package = repo / "triage_core"
+    module = package / "public_export_cli.py"
+    monkeypatch.setattr(cli, "__file__", str(module))
+    # Materialize the same LF blob with Git's CRLF checkout conversion.
+    module.unlink()
+    subprocess.run(["git", "-C", str(repo), "-c", "core.autocrlf=true",
+                    "checkout-index", "--index", "--", "triage_core/public_export_cli.py"], check=True)
+    clean = module.read_bytes()
+    assert clean.endswith(b"\r\n")
+    # Ensure the Git stat cache cannot hide which line endings are compared.
+    os.utime(module, (1_600_000_000, 1_600_000_000))
+    expected = subprocess.check_output(["git", "-C", str(repo), "rev-parse", "HEAD"], text=True).strip()
+    if os.name == "nt":
+        assert cli.implementation_commit() == expected
+    else:
+        # The sanitized POSIX checkout has no CRLF conversion configured.
+        with pytest.raises(OSError, match="implementation_revision_unavailable"):
+            cli.implementation_commit()
+
+    module.write_bytes(clean + b"# content changed\r\n")
+    with pytest.raises(OSError, match="implementation_revision_unavailable"):
+        cli.implementation_commit()
+    module.unlink()
+    subprocess.run(["git", "-C", str(repo), "-c", "core.autocrlf=false",
+                    "checkout-index", "--index", "--", "triage_core/public_export_cli.py"], check=True)
+    assert cli.implementation_commit() == expected
+    (package / "opaque.bin").write_bytes(b"exact\r\nbytes\r\n")
     with pytest.raises(OSError, match="implementation_revision_unavailable"):
         cli.implementation_commit()
 
