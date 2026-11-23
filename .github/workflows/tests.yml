@@ -162,6 +162,62 @@ jobs:
               print("\n</details>", file=summary)
           PY
 
+      - name: Diagnose Windows staging preflight
+        if: failure() && runner.os == 'Windows'
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import os
+          import subprocess
+          import tempfile
+          import winreg
+          from unittest.mock import patch
+          from triage_core import public_export_cli as cli, public_export_staging as native
+
+          original = native._folder_path
+          def traced(identifier, flags, get, free, *, optional):
+              def measured(*args):
+                  result = get(*args)
+                  print("known-folder HRESULT", hex(result & 0xffffffff))
+                  return result
+              return original(identifier, flags, measured, free, optional=optional)
+
+          def observe(label, call):
+              try:
+                  print(label, call())
+              except FileNotFoundError:
+                  print(label, "absent")
+              except (ValueError, OSError) as exc:
+                  print(label, type(exc).__name__, getattr(exc, "code", None), getattr(exc, "winerror", None))
+
+          def registration(subkey, name=None):
+              with winreg.OpenKey(winreg.HKEY_CURRENT_USER, subkey) as key:
+                  if name is not None:
+                      return bool(winreg.QueryValueEx(key, name)[0])
+                  return winreg.QueryInfoKey(key)[0]
+
+          with patch.object(native, "_folder_path", traced):
+              observe("OneDrive actual", lambda: bool(native._known_folder(native._ONEDRIVE, optional=True)))
+              observe("OneDrive default", lambda: bool(native._known_folder(native._ONEDRIVE, optional=True, default=True)))
+          observe("OneDrive description", lambda: native._known_folder_registered(native._ONEDRIVE))
+          shells = r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders"
+          observe("user shell value", lambda: registration(shells, "{" + native._ONEDRIVE + "}"))
+          observe("OneDrive accounts", lambda: registration(r"Software\Microsoft\OneDrive\Accounts"))
+          root = Path(cli.__file__).parents[1]
+          observe("implementation path check", lambda: native.require_local_path(root) is None)
+          observe("implementation Git checkout", lambda: cli.source_repository(root) == root)
+          observe("implementation Git status entries", lambda: len(cli._git(root, "status", "--porcelain=v1", "--", "triage_core").splitlines()))
+          observe("implementation Git status entries with CRLF normalization", lambda: len(cli._git(root, "-c", "core.autocrlf=true", "status", "--porcelain=v1", "--", "triage_core").splitlines()))
+          observe("implementation tracked", lambda: {x[:1].decode() for x in cli._git(root, "ls-files", "-v", "-z", "--cached", "--others", "--", "triage_core/*.py").split(b"\0") if x})
+          observe("implementation revision", lambda: cli.implementation_commit() == os.environ["GITHUB_SHA"])
+          with tempfile.TemporaryDirectory() as tmp:
+              repo = Path(tmp)
+              subprocess.run(["git", "init", "-q", str(repo)], check=True)
+              observe("source path check", lambda: native.require_local_path(repo) is None)
+              observe("source Git checkout", lambda: cli.source_repository(repo) == repo)
+          PY
+
   # CR-OC-001C Windows/NTFS evidence. Additive: the Ubuntu matrix above is
   # unchanged, and is deliberately NOT converted into an OS x Python matrix.
   windows_executor:
