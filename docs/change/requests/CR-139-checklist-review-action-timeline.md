@@ -9,7 +9,7 @@
 | Proposal acceptance | Accepted at `62e328d`. [Decision record](#proposal-acceptance-record) |
 | Design acceptance | Accepted at `62e328d`. [Decision record](#design-acceptance-record) |
 | Operator guide and timeline design amendment | Accepted on 2026-11-22. [Design amendment](#design-amendment-for-the-operator-guide-and-timeline) |
-| Implementation authority | **Approved for Claude.** One local corrective commit on `7c17cab` for the four operator-guide findings and their fixture regressions. [Current grant](#corrective-grant-for-the-operator-guide-on-7c17cab) · [Preceding operator guide grant](#implementation-grant-for-the-operator-guide-and-timeline) · [Earlier corrective grants](#corrective-grant-for-malformed-and-interrupted-runs) · [Original grant](#implementation-authority-record) |
+| Implementation authority | **Approved for Claude.** One local corrective commit on `3df1a1c` for the three read-path findings and runbook wording, with fixture tests. [Current grant](#corrective-grant-on-3df1a1c-for-verified-file-reads) · [Preceding corrective grant](#corrective-grant-on-5c33d4d-for-restart-attribution-folder-validation-and-paging) · [Operator guide grant](#implementation-grant-for-the-operator-guide-and-timeline) · [Original grant](#implementation-authority-record) |
 | Implementation acceptance | Pending |
 | Merge authority | Pending |
 | Release authority | Pending |
@@ -150,8 +150,11 @@ fields:
 The following scope applies to the original timeline candidate. The
 [operator guide and timeline grant](#implementation-grant-for-the-operator-guide-and-timeline)
 defines the writable paths for the candidate based on `49e3ad4`.
-The [current corrective grant](#corrective-grant-for-the-operator-guide-on-7c17cab) defines
-the three writable paths for the follow-up on `7c17cab`.
+The [grant on `7c17cab`](#corrective-grant-for-the-operator-guide-on-7c17cab)
+covered the first four operator-guide findings. The [grant on `5c33d4d`](#corrective-grant-on-5c33d4d-for-restart-attribution-folder-validation-and-paging)
+covered restart attribution, folder validation, and paging. The [current
+grant](#corrective-grant-on-3df1a1c-for-verified-file-reads) defines the writable paths for
+the three read-path findings and runbook wording on `3df1a1c`.
 
 The base is `origin/main` at `10af245c18095346d7d60b55b2e105bb819f4828`. The
 first-delivery release `022b4a1227b68b899bf1df2aa83d154e9f4855f4` is the
@@ -855,6 +858,149 @@ checks are planned. D5 touch remains for Corey's device check or explicit
 waiver. Candidate publication, merge, release, and closeout require separate
 decisions. Replay, linked resume, rollback, file restoration, and new model
 runs are outside this grant. [Saved-run procedure](#operator-checks-on-the-saved-runs)
+
+## Corrective grant on `5c33d4d` for restart attribution, folder validation, and paging
+
+On 2026-11-22 (Pacific), Corey Shaffer authorized Claude to correct the three
+findings below with disposable fixture tests in **one local commit**. Its sole
+parent must be `5c33d4db30a170b028ef27aa131457a765d99fef` on
+`claude/cr-139-che-89-action-timeline-impl`. The previous grant at
+`6e7487a` ended at handback of `5c33d4d`. This grant takes effect with this
+local CR record and ends at handback of the new commit. Implementation
+acceptance is pending. [Preceding grant](#corrective-grant-for-the-operator-guide-on-7c17cab)
+
+| Writable repository path | Authorized change |
+| --- | --- |
+| `triage_core/checklist_review_guide_tk.py` | Correct restart attribution, validation where the guide or fresh viewer reads local folders, and continuation labels. |
+| `tests/test_checklist_review_guide_tk.py` | Add regression fixtures and check the actual guide and viewer entry points. |
+| `docs/operations/checklist-review-timeline.md` | Update the affected operator instructions and describe the verified read behavior accurately. |
+
+1. **Restart attribution.** Retain the operator's saved result from launch 1,
+   `Passed (fresh viewer launch 1)`, after a second success. Open the form on launch
+   2 with no choice selected for that launch. Cancel, Back, or Save without a
+   new choice must preserve the earlier attribution in the step and handback.
+   Only explicitly choosing **Passed** and saving it for launch 2 may change
+   the attribution. Keep the verified fresh PID, normal exit, and failed-retry
+   checks. Exercise both successful launches through the guide controls.
+2. **Folder validation at use.** Recheck the current parent, each displayed
+   entry, and its path components before a later chooser page probes the
+   database marker. Recheck the selected store and marker inside the fresh
+   viewer immediately before loading its snapshot. Preserve validation at
+   selection and at the guide's case, timeline, and run-list entry points.
+   Cover the directories and individual files the before and after integrity
+   reader enumerates or hashes. The read must stay within the selected plain
+   local entries through use. If that cannot be established, stop before
+   probing, opening, or hashing the affected target. Block an unstarted check
+   or report an incomplete final reading as appropriate. Keep the comparison
+   exactly once and preserve the handback on repeated Pause or Close.
+
+   On Windows, use metadata that permits rejection of all reparse entries
+   before resolving them, including an unknown type. Python 3.12 documents
+   that Windows may resolve some kinds during `os.lstat`. Use an ordinary
+   disposable local store for the success path and simulate changed,
+   redirected, or unverifiable entries for rejection. Assert call order and
+   zero target access after rejection in the chooser, child viewer, and
+   integrity reader. [Python 3.12 filesystem documentation](https://docs.python.org/3.12/library/os.html#os.lstat)
+3. **Paging labels.** Keep the original directory total and the absolute
+   position across continuations. With 1,001 eligible folders and pages of
+   500, the two labels must read `Show more folders (501 to 1000 of 1001)` and
+   `Show more folders (1001 to 1001 of 1001)`. The final page has no
+   continuation. Check ordering, keyboard and pointer activation, focus on
+   the first new row, explicit selection, and Cancel.
+
+Use synthetic cases, temporary local stores, and the isolated test clipboard.
+Preserve the one-window guide, **Larger** default, adjustable text, read-only
+store access, candidate pin, and passive listener checks. Return the new
+commit and sole-parent SHAs, changed paths, clean worktree status, and the
+failing and passing fixture evidence for each correction. Report the focused
+CR-139 and CR-138 suite results, including any failures, skips, or reruns.
+
+**Only Corey** performs the saved **DC-02 correction**
+(`62866263-2842-4e85-acd2-2e681fadb0fa`) and **DC-03 preflight stop**
+(`a64e0a30-08ba-43e6-acc1-658575f309c9`), with Ollama stopped. Both are planned.
+The staged launcher and shortcut are read-only inputs. The launcher is pinned
+to `7c17cab`. Staging the returned candidate is a separate decision after
+handback. D5 touch remains for Corey's device check or explicit waiver.
+Implementation acceptance, candidate publication, merge, release, and closeout
+remain pending. Replay, linked resume, rollback, file restoration, and new
+model runs are outside this grant. [Saved-run procedure](#operator-checks-on-the-saved-runs)
+
+## Corrective grant on `3df1a1c` for verified file reads
+
+On 2026-11-22 (Pacific), Corey Shaffer authorized Claude to fix all three
+read-path findings and the affected runbook wording, with fixture regression
+tests, in **one local corrective commit**. Its sole parent must be
+`3df1a1c1aeae502c3dec097570c5c16b5300bed0` on
+`claude/cr-139-che-89-action-timeline-impl`. The preceding grant ended when Claude
+returned `3df1a1c`. This grant takes effect with this local CR record and ends
+when Claude returns the new commit and its evidence. Implementation acceptance
+is pending. [Preceding grant](#corrective-grant-on-5c33d4d-for-restart-attribution-folder-validation-and-paging)
+
+Only the following repository paths are writable for this commit. Use the
+subset needed to protect the actual reads. The store and timeline are named
+here because the timeline loads nested evidence through the shared store.
+
+| Writable repository path | Authorized change |
+| --- | --- |
+| `triage_core/checklist_review_readonly.py` | Optional new Tk-free helper shared by the integrity and evidence readers. Limit it to verified local, read-only access. |
+| `triage_core/checklist_review_store.py` | Protect nested artifact reads for a read-only snapshot and their digest checks. Preserve existing callers and the writable store contract. |
+| `triage_core/checklist_review_timeline.py` | Carry the verified reader through snapshot loading for the guide, run list, and fresh viewer. |
+| `triage_core/checklist_review_guide_tk.py` | Correct the guide’s actual before/after integrity reads, manifest validation, and reader wiring. |
+| `tests/test_checklist_review_store.py` | Exercise ordinary and refused nested artifact reads using disposable stores. |
+| `tests/test_checklist_review_timeline.py` | Exercise the complete snapshot and run-list paths with generated evidence. |
+| `tests/test_checklist_review_guide_tk.py` | Exercise guide, fresh-viewer, and integrity outcomes through their operator entry points. |
+| `docs/operations/checklist-review-timeline.md` | Correct the child error wording and the description of the verified read and comparison behavior. |
+
+1. **Bind integrity checks to the object read.** Keep the selected plain local
+   root, descendant directories, and files bound to their verified identities
+   through enumeration, open, and byte consumption. Hash the verified file
+   and take size and modification time from that same object. If identity or
+   type cannot be established, stop before listing a refused target or reading
+   its contents. A path check or an open notification alone cannot establish
+   what was read. Cover the ordinary staged launcher callback contract using
+   the repository implementation, including both before and after readings.
+2. **Protect nested evidence at use.** Apply the same boundary inside actual
+   snapshot reads, including definitions, templates, case evidence, model
+   output, and review notes where present. Verify and consume the same bytes.
+   Exercise the in-process guide, the run list, and a fresh fixture viewer.
+   Preserve schema-1 stores, read-only SQLite, `--list`, and existing missing
+   or digest-mismatch reporting. Keep writable operations and the ledger outside
+   this correction.
+3. **Require a complete manifest.** Each reading must return exactly one
+   completed size, modification time, and SHA-256 result for every expected
+   eligible relative name. Validate the actual keys and completed reads.
+   Missing or unexpected names, malformed digests, and interrupted reads make
+   that reading incomplete, even if both attempts give the same partial data.
+   A failed before reading blocks the check. A failed after reading reports
+   `incomplete` and preserves the operator’s observations. A complete matched
+   pair reports `no differences`. A genuine change reports `differences found`.
+   Finish, Pause, and Close share a single final comparison per check.
+4. **Correct the runbook.** An ordinary local folder with no database marker
+   gives `store_missing`. A refused or unverifiable existing entry gives
+   `store_unreadable`. Both fresh-child refusals return `ready: false` with a
+   fixed path-free error, exit unsuccessfully, and leave restart unverified.
+   Describe the guarantees and limits established by the new fixtures.
+
+Use an ordinary disposable Windows store for the success paths. Simulate
+identity mismatches, unverifiable entries, and incomplete results with test
+doubles. Assert zero refused-target access and check the actual objects read.
+Include the parent failure where every file was opened but only 21 of 22
+fixture rows were returned, an equal-count wrong-key result, and an unfinished
+digest. Exercise both a complete unchanged store and a deliberate benign change.
+Report parent failures and candidate passes through the product entry points,
+focused CR-139 and CR-138 results with skips or reruns, parent and candidate
+SHAs, changed paths, and final worktree status.
+
+The staged launcher and shortcut are read-only inputs. The launcher remains
+pinned to `7c17cab`. Preserve the pin, passive listener check, explicit store
+selection, one-window guide, **Larger** default, and adjustable text. Use
+generated fixtures only. **Corey alone** performs the saved DC-02 correction
+(`62866263-2842-4e85-acd2-2e681fadb0fa`) and DC-03 preflight stop
+(`a64e0a30-08ba-43e6-acc1-658575f309c9`), with Ollama stopped. Both checks await
+a separate staging decision. D5 touch remains for Corey’s device check or
+explicit waiver. Candidate publication, merge, release, and closeout require
+separate decisions. Replay, linked resume, rollback, file restoration, and
+new model runs are outside this grant. [Saved-run procedure](#operator-checks-on-the-saved-runs)
 
 ## Limitations
 
