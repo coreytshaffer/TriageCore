@@ -2,11 +2,13 @@
 
 ## Status
 
-- **Status:** Proposal and design accepted by the human operator on 2026-10-18.
+- **Status:** Formally closed on 2026-11-22 for Grant A's offline evaluator and
+  Grant B's synthetic local file staging. The operator accepted the proposal and design on 2026-10-18.
   On 2026-11-22 the operator accepted the Grant A offline evaluator at `f6c5a06`
   and authorized publication of the six-file branch. [PR #209](https://github.com/coreytshaffer/TriageCore/pull/209)
-  merged into `main` at `c22a3d5`. Post-merge CI passed. The operator accepted
-  Grant B at `4a013cc` and authorized publication of its 13-file branch as a draft PR.
+  merged into `main` at `c22a3d5`. The operator accepted Grant B at `4a013cc`
+  and its Windows fixes at `6970e2d`. [PR #210](https://github.com/coreytshaffer/TriageCore/pull/210)
+  merged into `main` at `9b8f71b`. Post-merge CI passed for both grants.
 - **Type:** Governance kernel — privacy and provenance; identity and authority;
   capability and effect bounds; review and human control. Classified under the
   [Backlog Scope Taxonomy](../../current_backlog.md) by the invariant it strengthens:
@@ -35,10 +37,9 @@
   authority as not granted; that state is preserved in the lifecycle table below.
 - **Grant A implementation acceptance:** Granted for `f6c5a06`. The operator's
   acceptance, publication direction and subsequent merge decision are recorded below.
-- **Grant B implementation acceptance:** Granted for `4a013cc` on 2026-11-22.
-  The operator authorized a draft PR into `main` with the frozen corpus and both
-  native verification results. Merge, release, deployment, live transfer and
-  formal closeout remain separate operator decisions.
+- **Grant B implementation acceptance:** Granted for `4a013cc` and subsequently for
+  the Windows discovery and CLI preflight fixes at `6970e2d`. The operator authorized
+  merging the corrected PR and subsequently authorized formal closeout for Grants A and B.
 
 ### Lifecycle state
 
@@ -46,16 +47,18 @@
 |---|---|
 | identifier allocation | CR-134, allocated by the operator after a census of `docs/change/requests/` at `ede8ef1` (highest numeric CR-133; no existing delegation or export CR) |
 | proposal drafting | granted, single document |
-| publication | original design branch published October 18. Grant A six-file branch and verification results published November 22. Grant B publication authorized for the 13-file branch and its verification evidence. |
-| draft pull request | design [PR #184](https://github.com/coreytshaffer/TriageCore/pull/184) merged. Grant A [PR #209](https://github.com/coreytshaffer/TriageCore/pull/209) opened as draft, marked ready and merged November 22. Grant B draft PR into `main` authorized November 22. |
+| publication | original design branch published October 18. Grant A six-file branch and Grant B 13-file branch published with verification evidence November 22. |
+| draft pull request | design [PR #184](https://github.com/coreytshaffer/TriageCore/pull/184) merged. Grant A [PR #209](https://github.com/coreytshaffer/TriageCore/pull/209) and Grant B [PR #210](https://github.com/coreytshaffer/TriageCore/pull/210) opened as drafts, marked ready and merged November 22. |
 | owner decisions | two recorded (see Owner Decisions) |
 | proposal acceptance | granted 2026-10-18 (pending when first merged; see Acceptance and merge record) |
 | design acceptance | granted 2026-10-18 for the design at `cd9a6c9` (pending when first merged; see Acceptance and merge record) |
 | implementation authority | Grant A offline eligibility and Grant B synthetic local file staging, under separate bounded grants |
-| implementation acceptance | Grant A offline evaluator accepted at `f6c5a06` and Grant B synthetic local staging accepted at `4a013cc` on 2026-11-22. |
-| merge authority | operator manually merged design PR #184 as `8f463a5`. The operator separately authorized the conditional merge of Grant A PR #209, exercised at `c22a3d5` |
+| implementation acceptance | Grant A offline evaluator accepted at `f6c5a06`. Grant B synthetic local staging accepted at `4a013cc` and its fixes at `6970e2d` on 2026-11-22. |
+| merge authority | operator manually merged design PR #184 as `8f463a5`. Grant A PR #209 and Grant B PR #210 merged under separate operator authorizations at `c22a3d5` and `9b8f71b`, respectively. |
 | release authority | not granted |
-| closeout | not granted |
+| deployment authority | not granted |
+| live-use authority | not granted |
+| closeout | granted and recorded on 2026-11-22 for the accepted Grant A and Grant B scope |
 
 ## Scope
 
@@ -809,7 +812,8 @@ This CR, and any future implementation of it, does not claim that:
 - **Authenticated approval.** A CR-YK-001 assertion over `eligibility_id`; separate CR.
 - **Persistent replay and denial history.** Requires a store (candidate patterns:
   CR-OC-001B reservation, CR-YK-002 claims); separate CR.
-- **Windows staging permissions.** Owner-only ACL equivalent of `0600` on NTFS.
+- **Windows staging permissions.** Grant B implemented owner-only NTFS access
+  and verified it in the Windows staging suite.
 - **Sync-directory detection.** Whether any reliable detection exists beyond policy lists
   and operator attestation.
 - **Manifest binding and signing.** CR-095 recorded these as future slices; unchanged here.
@@ -837,9 +841,10 @@ This CR, and any future implementation of it, does not claim that:
 
 ### Readiness gates for any later live integration
 
-The design recorded four gates for later live integration. Grant A supplied the
-offline eligibility measurements for the fourth gate. End-to-end staging and prompt
-burden still require measurement. Live integration requires separate authorization.
+The design recorded four gates for later live integration. Grants A and B supply
+the evidence for gates 3 and 4 within the accepted synthetic scope, including
+mutation checks, read-back and simulated operator response counts. Gates 1 and 2
+remain open for any chosen live surface. Live integration requires separate authorization.
 
 1. A supported standard-access context, documented for the chosen surface.
 2. Written provider answers to the applicable questions above.
@@ -1235,3 +1240,47 @@ and the focused and full Windows and Ubuntu results for that implementation.
 This grant authorizes pushing `codex/cr-134-grant-b` and opening its draft PR
 into `main` within the 13 paths listed above. Merge, live use, software release,
 deployment and formal CR closeout require separate operator decisions.
+
+### Grant B fixes, merge and post-merge verification, 2026-11-22
+
+> I accept the CR-134 Grant B fixes at 6970e2d. Go ahead and mark PR #210 ready for review, merge it into main, and confirm the merge commit.
+
+The accepted fixes handle unprovisioned OneDrive folders and clean Windows CRLF
+checkouts, and report a null policy digest when preflight refuses before reading a
+policy. PR #210 merged into `main` at `9b8f71b7cae2529cedf1aaed96aa4664ee2d09de`. Its first parent is
+`c22a3d5bdd77e928568728967f8f29edfa52be37` and its second parent is the accepted
+head `6970e2deed3fb9f1373b5d73456c36134d56edfa`. The merge and accepted head
+have the same Git tree, `de3bfe3893771f8704fbf5dcc8f841d3e522c5c7`. [Merge commit](https://github.com/coreytshaffer/TriageCore/commit/9b8f71b7cae2529cedf1aaed96aa4664ee2d09de) · [PR #210](https://github.com/coreytshaffer/TriageCore/pull/210)
+
+GitHub Actions ran `tests` on the `push` to `main` at that merge commit.
+All six jobs passed on attempt 1. [Post-merge run #575](https://github.com/coreytshaffer/TriageCore/actions/runs/45107657523)
+
+| Hosted job | Post-merge result |
+|---|---|
+| [Grant B staging on Windows](https://github.com/coreytshaffer/TriageCore/actions/runs/45107657523/job/137472523489) | 400 passed, zero skipped |
+| [Grant B staging on Ubuntu](https://github.com/coreytshaffer/TriageCore/actions/runs/45107657523/job/137472523629) | 400 passed, zero skipped |
+| [Ubuntu suite, Python 3.10](https://github.com/coreytshaffer/TriageCore/actions/runs/45107657523/job/137472523740) | 3,260 passed, 77 skipped. The job verified rejection of the unsupported mobile runtime. |
+| [Ubuntu suite, Python 3.11](https://github.com/coreytshaffer/TriageCore/actions/runs/45107657523/job/137472523583) | 3,279 passed, 77 skipped. All 19 mobile tests passed. |
+| [Ubuntu suite, Python 3.12](https://github.com/coreytshaffer/TriageCore/actions/runs/45107657523/job/137472523750) | 3,279 passed, 77 skipped. All 19 mobile tests passed. |
+| [Windows NTFS executor](https://github.com/coreytshaffer/TriageCore/actions/runs/45107657523/job/137472523727) | 261 mandatory tests passed, zero skipped. The separate symlink probe passed. |
+
+Each staging job checked that all 54 distinct case records identified the merge
+commit. Each case ran twice with fresh simulated consent. Per platform and per pass,
+the nine ordinary cases staged the displayed bytes in three responses. The three
+reviewed cases and the separate review-always control did so in four. All 41 hard
+stops produced their required diagnostics with zero final confirmations, staging
+calls or payload files. The checks also reproduced the 54 Grant A decision IDs.
+
+### Formal closeout for Grants A and B, 2026-11-22
+
+> I authorize formal closeout of CR-134 for the accepted Grant A and B scope. Go ahead and record it in the CR, push the documentation branch, and open a draft PR with the post-merge results. Keep release, deployment, and live use separate.
+
+The operator formally closed CR-134 for the offline evaluator merged at `c22a3d5`
+and synthetic local file staging, including the accepted Windows fixes, merged at
+`9b8f71b`. Both grants met their verification gates on `main`.
+[Grant A post-merge results](https://github.com/coreytshaffer/TriageCore/actions/runs/45076051212) · [Grant B post-merge results](https://github.com/coreytshaffer/TriageCore/actions/runs/45107657523)
+
+Software release, deployment and live provider use each require a separate
+operator decision. Future live use also requires a documented standard-access
+context and the applicable written provider answers. Clipboard transfer and
+the other deferred capabilities remain outside this closeout.
