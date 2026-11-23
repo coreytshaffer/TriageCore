@@ -59,4 +59,3 @@ requires its own explicit decision under the Rules for Future Slices.
 - [reviewer-checkpoint-2026-07-07.md](reviewer-checkpoint-2026-07-07.md)
 - [fable-exit-audit-2026-07-07.md](fable-exit-audit-2026-07-07.md)
 - [outer-loop-control-review-recipe.md](outer-loop-control-review-recipe.md)
-- [future-agent-maintainer-handoff-2026-07-07.md](future-agent-maintainer-handoff-2026-07-07.md)

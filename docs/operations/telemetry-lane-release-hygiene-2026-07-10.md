@@ -59,7 +59,6 @@ daily-driver enforcement.
 ## Related Docs
 
 - [local-backend-telemetry.md](local-backend-telemetry.md)
-- [future-agent-maintainer-handoff-2026-07-07.md](future-agent-maintainer-handoff-2026-07-07.md)
 - [reviewer-checkpoint-2026-07-07.md](reviewer-checkpoint-2026-07-07.md)
 - [../change/requests/CR-117-task-show-verify-signatures.md](../change/requests/CR-117-task-show-verify-signatures.md)
 - [../change/requests/CR-118-local-backend-telemetry-schema.md](../change/requests/CR-118-local-backend-telemetry-schema.md)

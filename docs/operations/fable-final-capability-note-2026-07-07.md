@@ -79,6 +79,5 @@ boundary crossings — bind successors equally.
 
 ## Related Docs
 
-- [future-agent-maintainer-handoff-2026-07-07.md](future-agent-maintainer-handoff-2026-07-07.md)
 - [reviewer-checkpoint-2026-07-07.md](reviewer-checkpoint-2026-07-07.md)
 - [fable-exit-audit-2026-07-07.md](fable-exit-audit-2026-07-07.md)
