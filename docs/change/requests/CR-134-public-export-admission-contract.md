@@ -5,7 +5,8 @@
 - **Status:** Proposal and design accepted by the human operator on 2026-10-18.
   On 2026-11-22 the operator accepted the Grant A offline evaluator at `f6c5a06`
   and authorized publication of the six-file branch. [PR #209](https://github.com/coreytshaffer/TriageCore/pull/209)
-  merged into `main` at `c22a3d5`. Post-merge CI passed. Grant B awaits a separate decision.
+  merged into `main` at `c22a3d5`. Post-merge CI passed. The operator subsequently
+  authorized Grant B implementation and synthetic verification within the 13 paths below.
 - **Type:** Governance kernel — privacy and provenance; identity and authority;
   capability and effect bounds; review and human control. Classified under the
   [Backlog Scope Taxonomy](../../current_backlog.md) by the invariant it strengthens:
@@ -28,7 +29,7 @@
 - **Design acceptance:** Granted by the human operator on 2026-10-18 for the design as
   recorded in this document at `cd9a6c9`. Recorded verbatim under Acceptance and merge
   record. It was pending when this document was first merged.
-- **Implementation authority:** Grant A only, under the separate six-file authorization below.
+- **Implementation authority:** The six-file Grant A and 13-file Grant B have separate authorizations below.
 - **Merge:** [PR #184](https://github.com/coreytshaffer/TriageCore/pull/184) was merged
   manually by the operator as `8f463a5`. At that time this document recorded merge
   authority as not granted; that state is preserved in the lifecycle table below.
@@ -47,7 +48,7 @@
 | owner decisions | two recorded (see Owner Decisions) |
 | proposal acceptance | granted 2026-10-18 (pending when first merged; see Acceptance and merge record) |
 | design acceptance | granted 2026-10-18 for the design at `cd9a6c9` (pending when first merged; see Acceptance and merge record) |
-| implementation authority | Grant A only, 2026-11-22 |
+| implementation authority | Grant A offline eligibility and Grant B synthetic local file staging, under separate bounded grants |
 | implementation acceptance | Grant A offline evaluator accepted at `f6c5a06` on 2026-11-22 |
 | merge authority | operator manually merged design PR #184 as `8f463a5`. The operator separately authorized the conditional merge of Grant A PR #209, exercised at `c22a3d5` |
 | release authority | not granted |
@@ -1073,3 +1074,30 @@ hashes matched the offline verification table. The local review workspace retain
 The provider-access and written-answer gates above apply to a later live
 integration. Grant B implementation, software release, deployment and formal
 CR closeout each require their own authority.
+
+### Grant B implementation authority and verification protocol
+
+The operator replied **“Approved”** to the 2026-11-22 Grant B implementation
+proposal. The grant covers synthetic operation under `account:ordinary-1` on
+Ubuntu/POSIX and Windows/NTFS. Its stop point is a locally reviewable implementation
+and evidence. Publication, implementation acceptance, release, deployment, live
+transfer and formal closeout remain separate decisions.
+
+The 13 authorized paths are:
+
+- `triage_core/public_export_policy.py` and `tests/test_public_export_policy.py`
+- `triage_core/public_export_release.py` and `tests/test_public_export_release.py`
+- `triage_core/public_export_staging.py` and `tests/test_public_export_staging.py`
+- `triage_core/public_export_evidence.py` and `tests/test_public_export_evidence.py`
+- `triage_core/public_export_cli.py` and `tests/test_public_export_cli.py`
+- `triage_core/tc_cli.py`, `.github/workflows/tests.yml` and this CR
+
+Grant B uses outer policy revision 2, recipient revision 1 and staging revision 2.
+One policy authorizes a single staging root, a separate explicit evidence directory
+and sync exclusions. Clipboard stays disabled. All bytes bind the policy digest.
+Each platform must reproduce the 54 Grant A IDs and meet the frozen B expectations.
+Each of the nine ordinary cases must stage verified bytes in at most three responses,
+each of the three expected reviews in at most four, and the separate review control
+in at most four. All 41 hard stops must retain their expected diagnostic and produce
+zero final confirmations and zero staged payload writes. Record actual interactions,
+native protections and failures independently for each platform.
