@@ -1,0 +1,156 @@
+"""Closed Grant B evidence and restart audit tests."""
+
+import hashlib
+import json
+import subprocess
+import sys
+import uuid
+
+import pytest
+
+from triage_core import public_export_evidence as evidence
+
+
+
+
+class Records:
+    def __init__(self):
+        self.files = {}
+
+    def write_new(self, name, data):
+        assert name not in self.files
+        self.files[name] = data
+        return "sha256:" + hashlib.sha256(data).hexdigest()
+
+    def read(self, name):
+        return self.files[name]
+
+    def names(self):
+        return sorted(self.files)
+
+    def revalidate(self):
+        pass
+
+
+
+
+def records_for_attempt():
+    attempt = str(uuid.uuid4())
+    digest = "sha256:" + "a" * 64
+    intent = evidence.intent_record(attempt, digest, digest, digest, digest, digest, (),
+                                    "2026-11-22T12:00:00Z", "2026-11-22T12:02:00Z")
+    return attempt, intent
+
+
+def test_intent_survives_reopen_and_release_pairs_to_intent_bytes():
+    records = Records()
+    attempt, intent = records_for_attempt()
+    bound = evidence.write_record(records, intent)
+    assert evidence.audit(records)[0]["outcome"] == "outcome_unknown"
+    release = evidence.release_record(attempt, bound, "staged_verified",
+                                      intent["payload_digest"], None)
+    evidence.write_record(records, release)
+    assert evidence.audit(records)[0]["outcome"] == "staged_verified"
+    assert evidence.audit(records)[0]["outside_visibility"] == list(evidence.OUTSIDE_VISIBILITY)
+
+
+
+
+@pytest.mark.parametrize("mutation", [
+    {"unexpected": True}, {"prompt": "private"}, {"attempt_id": "../../private/file"},
+    {"payload_digest": "fake"}, {"acknowledged_triggers": ["free-form"]},
+])
+def test_rejects_invalid_evidence_before_io(mutation):
+    records = Records()
+    _, intent = records_for_attempt()
+    with pytest.raises(ValueError):
+        evidence.write_record(records, {**intent, **mutation})
+    assert not records.files
+
+
+def test_orphan_release_and_wrong_binding_are_invalid_evidence():
+    records = Records()
+    attempt, intent = records_for_attempt()
+    wrong = "sha256:" + "b" * 64
+    evidence.write_record(records, evidence.release_record(attempt, wrong, "staged_verified",
+                                                          intent["payload_digest"], None))
+    with pytest.raises(ValueError):
+        evidence.audit(records)
+    evidence.write_record(records, intent)
+    with pytest.raises(ValueError):
+        evidence.audit(records)
+
+
+def test_audit_rejects_duplicate_fields_and_filename_substitution():
+    records = Records()
+    attempt, intent = records_for_attempt()
+    evidence.write_record(records, intent)
+    name, = records.files
+    original = records.files[name]
+    records.files[name] = original.replace(b"{", b'{"kind":"intent",', 1)
+    with pytest.raises(ValueError):
+        evidence.audit(records)
+    records.files = {name.replace(attempt, str(uuid.uuid4())): original}
+    with pytest.raises(ValueError):
+        evidence.audit(records)
+
+
+def test_mismatch_opens_bounded_incident():
+    records = Records()
+    attempt, intent = records_for_attempt()
+    bound = evidence.write_record(records, intent)
+    release = evidence.release_record(attempt, bound, "staged_mismatch", "sha256:" + "b" * 64, None)
+    evidence.write_record(records, release)
+    assert evidence.audit(records)[0]["incident"] == "readback_mismatch"
+    assert "/private" not in json.dumps(evidence.audit(records))
+
+
+
+
+@pytest.mark.parametrize("after_stage", [False, True])
+def test_process_termination_on_either_side_of_staging(tmp_path, after_stage):
+    from tests.test_public_export_staging import private_directory
+    from triage_core.public_export_staging import open_directory
+
+    root = private_directory(tmp_path / "records")
+    destination = private_directory(tmp_path / "stage")
+    attempt = str(uuid.uuid4())
+    script = """
+import os
+from pathlib import Path
+import sys
+from triage_core import public_export_evidence as evidence
+from triage_core.public_export_staging import open_directory, stage_payload
+records, stage = Path(sys.argv[1]), Path(sys.argv[2])
+attempt, after = sys.argv[3:]
+payload = b'synthetic crash case'
+checksum = evidence.digest(payload)
+intent = evidence.intent_record(attempt, checksum, checksum, checksum,
+    evidence.locator_digest(stage), evidence.locator_digest(stage / 'fixture.txt'),
+    (), '2026-11-22T12:00:00Z', '2026-11-22T12:02:00Z')
+with open_directory(records, root=records, denied_sync_roots=(), evidence=True) as directory:
+    evidence.write_record(directory, intent)
+    if after == 'yes':
+        with open_directory(stage, root=stage, denied_sync_roots=()) as staged:
+            result = stage_payload(staged, payload, name='fixture.txt')
+            assert result.outcome == 'staged_verified', result
+    os._exit(74)
+"""
+    child = subprocess.run([sys.executable, "-c", script, str(root), str(destination),
+                            attempt, "yes" if after_stage else "no"], check=False, capture_output=True, text=True)
+    assert child.returncode == 74, child.stderr
+    assert (destination / "fixture.txt").exists() is after_stage
+    with open_directory(root, root=root, denied_sync_roots=(), evidence=True) as records:
+        row, = evidence.audit(records)
+        assert row["outcome"] == "outcome_unknown" and row["attempt_id"] == attempt
+        raw = records.read(f"{attempt}.intent.json")
+        assert str(root).encode() not in raw and b"synthetic crash case" not in raw
+
+
+def test_interrupted_release_publication_audits_as_unknown():
+    records = Records()
+    attempt, intent = records_for_attempt()
+    evidence.write_record(records, intent)
+    records.files[f"{attempt}.release.json"] = b'{"kind":"release"'
+    row, = evidence.audit(records)
+    assert row["outcome"] == "outcome_unknown" and row["incident"] == "unreadable_release_evidence"

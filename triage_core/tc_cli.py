@@ -2412,8 +2412,11 @@ def tc_task_show(
 
 
 def main():
+    from triage_core import public_export_cli
+
     parser = argparse.ArgumentParser(description="TriageCore Operator Workflow")
     subparsers = parser.add_subparsers(dest="command")
+    public_export_parser = public_export_cli.register_parser(subparsers)
 
     # preflight
     preflight_parser = subparsers.add_parser("preflight", help="Generate a preflight context bundle")
@@ -3211,7 +3214,9 @@ def main():
 
     args = parser.parse_args()
 
-    if args.command == "propose":
+    if args.command == "public-export":
+        sys.exit(public_export_cli.run_command(public_export_parser, args))
+    elif args.command == "propose":
         title_str = " ".join(args.title)
         tc_propose(args.cr_id, title_str, args.changelog)
     elif args.command == "preflight":
