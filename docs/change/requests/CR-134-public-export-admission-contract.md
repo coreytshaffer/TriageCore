@@ -5,8 +5,8 @@
 - **Status:** Proposal and design accepted by the human operator on 2026-10-18.
   On 2026-11-22 the operator accepted the Grant A offline evaluator at `f6c5a06`
   and authorized publication of the six-file branch. [PR #209](https://github.com/coreytshaffer/TriageCore/pull/209)
-  merged into `main` at `c22a3d5`. Post-merge CI passed. The operator subsequently
-  authorized Grant B implementation and synthetic verification within the 13 paths below.
+  merged into `main` at `c22a3d5`. Post-merge CI passed. The operator accepted
+  Grant B at `4a013cc` and authorized publication of its 13-file branch as a draft PR.
 - **Type:** Governance kernel — privacy and provenance; identity and authority;
   capability and effect bounds; review and human control. Classified under the
   [Backlog Scope Taxonomy](../../current_backlog.md) by the invariant it strengthens:
@@ -35,8 +35,10 @@
   authority as not granted; that state is preserved in the lifecycle table below.
 - **Grant A implementation acceptance:** Granted for `f6c5a06`. The operator's
   acceptance, publication direction and subsequent merge decision are recorded below.
-  Grant B implementation acceptance and publication are pending. Software release,
-  deployment and formal CR closeout remain separate operator decisions.
+- **Grant B implementation acceptance:** Granted for `4a013cc` on 2026-11-22.
+  The operator authorized a draft PR into `main` with the frozen corpus and both
+  native verification results. Merge, release, deployment, live transfer and
+  formal closeout remain separate operator decisions.
 
 ### Lifecycle state
 
@@ -44,13 +46,13 @@
 |---|---|
 | identifier allocation | CR-134, allocated by the operator after a census of `docs/change/requests/` at `ede8ef1` (highest numeric CR-133; no existing delegation or export CR) |
 | proposal drafting | granted, single document |
-| publication | original design branch published October 18. Grant A six-file branch and verification results published November 22 |
-| draft pull request | design [PR #184](https://github.com/coreytshaffer/TriageCore/pull/184) merged. Grant A [PR #209](https://github.com/coreytshaffer/TriageCore/pull/209) opened as draft, marked ready and merged November 22 |
+| publication | original design branch published October 18. Grant A six-file branch and verification results published November 22. Grant B publication authorized for the 13-file branch and its verification evidence. |
+| draft pull request | design [PR #184](https://github.com/coreytshaffer/TriageCore/pull/184) merged. Grant A [PR #209](https://github.com/coreytshaffer/TriageCore/pull/209) opened as draft, marked ready and merged November 22. Grant B draft PR into `main` authorized November 22. |
 | owner decisions | two recorded (see Owner Decisions) |
 | proposal acceptance | granted 2026-10-18 (pending when first merged; see Acceptance and merge record) |
 | design acceptance | granted 2026-10-18 for the design at `cd9a6c9` (pending when first merged; see Acceptance and merge record) |
 | implementation authority | Grant A offline eligibility and Grant B synthetic local file staging, under separate bounded grants |
-| implementation acceptance | Grant A offline evaluator accepted at `f6c5a06` on 2026-11-22. Grant B awaits operator acceptance of the tested implementation. |
+| implementation acceptance | Grant A offline evaluator accepted at `f6c5a06` and Grant B synthetic local staging accepted at `4a013cc` on 2026-11-22. |
 | merge authority | operator manually merged design PR #184 as `8f463a5`. The operator separately authorized the conditional merge of Grant A PR #209, exercised at `c22a3d5` |
 | release authority | not granted |
 | closeout | not granted |
@@ -1105,7 +1107,7 @@ native protections and failures independently for each platform.
 
 ### Grant B local implementation and verification
 
-The implementation for operator review is `4a013ccc4586d940ee9680f81e544a0672756e9f`
+The accepted implementation is `4a013ccc4586d940ee9680f81e544a0672756e9f`
 on `codex/cr-134-grant-b`. The policy construction, corpus labels, repeat procedure
 and response budgets were frozen before the first staging measurement at
 `1d34d00b2b87eb9dacd1af0b397b050210e4f406`. The accepted evaluator and its
@@ -1150,8 +1152,8 @@ metadata, and per-use nonsync status remains operator-attested.
 
 These measurements cover staging and read-back in the simulated workflow.
 Human comprehension, provider behavior, manual delivery and survival of sudden
-power loss are outside the measured scope. Hosted CI, branch publication, Grant B
-acceptance, software release, deployment and formal closeout remain pending.
+power loss are outside the measured scope. The native runs below were completed
+before publication. Hosted checks run separately on the pull request.
 
 #### Frozen-corpus measurements at 4a013cc
 
@@ -1221,3 +1223,15 @@ response fields, both restart probes, skip details and the native authority chec
 | `windows-full-4a013cc.xml` | `5e6cdbce296a4926ba90a571dae7159de5b4137ece8657b40a47a94330f224bc` |
 | `ubuntu-focused-4a013cc.xml` | `5948fc6547a889a23b10696672e8cb86a6cc90afd32c5550c4ad60c104dfe4ff` |
 | `ubuntu-full-4a013cc.xml` | `bf9e75f25ed8e1ca4cc8bf874d682778df8058cc46fe3bed0037afe1070ee057` |
+
+### Grant B implementation acceptance and draft publication, 2026-11-22
+
+> I accept CR-134 Grant B at 4a013cc. Go ahead and record my acceptance in the CR, push the 13-file branch, and open a draft PR with the frozen corpus and verification results for Windows and Ubuntu.
+
+The operator accepted the synthetic local staging implementation at
+`4a013ccc4586d940ee9680f81e544a0672756e9f`. The verification record at
+`579e4409cd24669b85520fe0211d6ce675f3a45b` documents the 54 frozen cases
+and the focused and full Windows and Ubuntu results for that implementation.
+This grant authorizes pushing `codex/cr-134-grant-b` and opening its draft PR
+into `main` within the 13 paths listed above. Merge, live use, software release,
+deployment and formal CR closeout require separate operator decisions.
