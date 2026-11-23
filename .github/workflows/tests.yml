@@ -111,6 +111,61 @@ jobs:
           print(f"Mobile tests passed: {len(cases)}")
           PY
 
+  public_export_staging:
+    name: Grant B staging (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test dependencies
+        run: python -m pip install -e ".[dev]"
+      - name: Exercise native staging and the frozen synthetic corpus
+        shell: bash
+        env:
+          # The hosted Windows profile temp failed the native directory-identity check.
+          # Build synthetic repositories and private staging directories in job-local temp.
+          TMPDIR: ${{ runner.temp }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          import sys
+          from pathlib import Path
+          from xml.etree import ElementTree
+
+          report = Path(os.environ["RUNNER_TEMP"]) / "public-export-staging.xml"
+          modules = ("policy", "release", "staging", "evidence", "cli")
+          subprocess.run([
+              sys.executable, "-m", "pytest", "-q", "-o", "junit_family=xunit1",
+              f"--junitxml={report}", "tests/test_public_export.py",
+              *(f"tests/test_public_export_{module}.py" for module in modules),
+          ], check=True)
+          root = ElementTree.parse(report)
+          if root.find(".//skipped") is not None:
+              raise SystemExit("Mandatory Grant B checks must run on the selected native platform")
+          cases = [json.loads(prop.attrib["value"])
+                   for prop in root.findall(".//property[@name='grant_b_case']")]
+          if len(cases) != 54 or len({case["case_id"] for case in cases}) != 54:
+              raise SystemExit("Expected 54 distinct measured Grant B cases")
+          if any(case["tested_commit"] != os.environ["GITHUB_SHA"] for case in cases):
+              raise SystemExit("Corpus evidence must identify the tested checkout")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              print("### Grant B native staging evidence", file=summary)
+              print("\n54 synthetic cases, each exercised twice. All mandatory checks passed.", file=summary)
+              print("\n<details><summary>Case-level measurements (JSON)</summary>\n", file=summary)
+              print("```json", json.dumps(cases, sort_keys=True), "```", sep="\n", file=summary)
+              print("\n</details>", file=summary)
+          PY
+
   # CR-OC-001C Windows/NTFS evidence. Additive: the Ubuntu matrix above is
   # unchanged, and is deliberately NOT converted into an OS x Python matrix.
   windows_executor:

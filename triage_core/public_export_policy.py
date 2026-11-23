@@ -2,7 +2,10 @@
 
 import hashlib
 import json
+import os
+import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import NoReturn
 
 
@@ -96,6 +99,9 @@ class ExportPolicy:
     attestation_freshness_seconds: int
     eligibility_duration_seconds: int
     approval_ttl_seconds: int
+    roots: tuple[str, ...] = ()
+    evidence_root: str | None = None
+    denied_sync_roots: tuple[str, ...] = ()
 
     def recipient(self, provider: str, surface: str) -> Recipient | None:
         for recipient in self.recipients:
@@ -125,6 +131,53 @@ EXPORT_OPERATIONS = frozenset({
 })
 
 
+def _directory(value: object) -> Path:
+    """Parse a local absolute directory without resolving links or touching disk."""
+    if not isinstance(value, str) or not value or any(ord(c) < 32 for c in value):
+        raise InputError("policy_invalid")
+    path = Path(value)
+    if not path.is_absolute() or ".." in path.parts or value.startswith(("//", "\\\\")):
+        raise InputError("policy_invalid")
+    if os.name == "nt":
+        if not re.fullmatch(r"[a-zA-Z]:", path.drive):
+            raise InputError("policy_invalid")
+        for part in path.parts[1:]:
+            if (part.endswith((".", " ")) or any(c in '<>:"|?*' for c in part)
+                    or Path(part).is_reserved()):
+                raise InputError("policy_invalid")
+    return path
+
+
+def _staging_settings(doc: dict) -> tuple[tuple[str, ...], str | None, tuple[str, ...]]:
+    revision = doc["version"]
+    if type(revision) is not int or revision not in (1, 2):
+        raise InputError("policy_invalid")
+    fields = ("version", "roots", "clipboard")
+    if revision == 2:
+        fields += ("evidence_root", "denied_sync_roots")
+    staging = _policy_object(doc["local_staging"], *fields)
+    if (type(staging["version"]) is not int or staging["version"] != revision
+            or staging["clipboard"] is not False):
+        raise InputError("policy_invalid")
+    roots = staging["roots"]
+    if revision == 1:
+        if roots != []:
+            raise InputError("policy_invalid")
+        return (), None, ()
+    if not isinstance(roots, list) or len(roots) != 1:
+        raise InputError("policy_invalid")
+    root = _directory(roots[0])
+    evidence = _directory(staging["evidence_root"])
+    if root.is_relative_to(evidence) or evidence.is_relative_to(root):
+        raise InputError("policy_invalid")
+    if not isinstance(staging["denied_sync_roots"], list):
+        raise InputError("policy_invalid")
+    denied = tuple(_directory(x) for x in staging["denied_sync_roots"])
+    if any(root.is_relative_to(x) or evidence.is_relative_to(x) for x in denied):
+        raise InputError("policy_invalid")
+    return (str(root),), str(evidence), tuple(str(x) for x in denied)
+
+
 def parse_policy(raw: bytes) -> ExportPolicy:
     """Read the closed recipient and staging sections without any ambient settings or I/O."""
     doc = _policy_object(
@@ -138,11 +191,8 @@ def parse_policy(raw: bytes) -> ExportPolicy:
         "max_payload_bytes", "attestation_freshness_seconds",
         "eligibility_duration_seconds", "approval_ttl_seconds",
     )
-    staging = _policy_object(doc["local_staging"], "version", "roots", "clipboard")
-    for section in (doc, external, staging):
-        _require_revision_one(section["version"])
-    if staging["roots"] != [] or staging["clipboard"] is not False:
-        raise InputError("policy_invalid")
+    _require_revision_one(external["version"])
+    roots, evidence_root, denied_sync_roots = _staging_settings(doc)
     if external["data_class_ceiling"] != "public" or not isinstance(external["recipients"], list):
         raise InputError("policy_invalid")
 
@@ -166,4 +216,7 @@ def parse_policy(raw: bytes) -> ExportPolicy:
         attestation_freshness_seconds=_limit(external["attestation_freshness_seconds"], 900),
         eligibility_duration_seconds=_limit(external["eligibility_duration_seconds"], 600),
         approval_ttl_seconds=_limit(external["approval_ttl_seconds"], 120),
+        roots=roots,
+        evidence_root=evidence_root,
+        denied_sync_roots=denied_sync_roots,
     )

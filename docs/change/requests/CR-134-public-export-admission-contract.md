@@ -4,7 +4,9 @@
 
 - **Status:** Proposal and design accepted by the human operator on 2026-10-18.
   On 2026-11-22 the operator accepted the Grant A offline evaluator at `f6c5a06`
-  and authorized publication of the six-file branch as a draft PR.
+  and authorized publication of the six-file branch. [PR #209](https://github.com/coreytshaffer/TriageCore/pull/209)
+  merged into `main` at `c22a3d5`. Post-merge CI passed. The operator accepted
+  Grant B at `4a013cc` and authorized publication of its 13-file branch as a draft PR.
 - **Type:** Governance kernel — privacy and provenance; identity and authority;
   capability and effect bounds; review and human control. Classified under the
   [Backlog Scope Taxonomy](../../current_backlog.md) by the invariant it strengthens:
@@ -27,13 +29,16 @@
 - **Design acceptance:** Granted by the human operator on 2026-10-18 for the design as
   recorded in this document at `cd9a6c9`. Recorded verbatim under Acceptance and merge
   record. It was pending when this document was first merged.
-- **Implementation authority:** Grant A only, under the separate six-file authorization below.
+- **Implementation authority:** The six-file Grant A and 13-file Grant B have separate authorizations below.
 - **Merge:** [PR #184](https://github.com/coreytshaffer/TriageCore/pull/184) was merged
   manually by the operator as `8f463a5`. At that time this document recorded merge
   authority as not granted; that state is preserved in the lifecycle table below.
 - **Grant A implementation acceptance:** Granted for `f6c5a06`. The operator's
-  acceptance and draft publication direction are recorded below. Merge, staging,
-  release, deployment and CR closeout remain separate decisions.
+  acceptance, publication direction and subsequent merge decision are recorded below.
+- **Grant B implementation acceptance:** Granted for `4a013cc` on 2026-11-22.
+  The operator authorized a draft PR into `main` with the frozen corpus and both
+  native verification results. Merge, release, deployment, live transfer and
+  formal closeout remain separate operator decisions.
 
 ### Lifecycle state
 
@@ -41,14 +46,14 @@
 |---|---|
 | identifier allocation | CR-134, allocated by the operator after a census of `docs/change/requests/` at `ede8ef1` (highest numeric CR-133; no existing delegation or export CR) |
 | proposal drafting | granted, single document |
-| publication | original design branch published October 18. Grant A six-file branch and verification results authorized for publication November 22 |
-| draft pull request | design [PR #184](https://github.com/coreytshaffer/TriageCore/pull/184) merged. Separate Grant A draft PR directed November 22 |
+| publication | original design branch published October 18. Grant A six-file branch and verification results published November 22. Grant B publication authorized for the 13-file branch and its verification evidence. |
+| draft pull request | design [PR #184](https://github.com/coreytshaffer/TriageCore/pull/184) merged. Grant A [PR #209](https://github.com/coreytshaffer/TriageCore/pull/209) opened as draft, marked ready and merged November 22. Grant B draft PR into `main` authorized November 22. |
 | owner decisions | two recorded (see Owner Decisions) |
 | proposal acceptance | granted 2026-10-18 (pending when first merged; see Acceptance and merge record) |
 | design acceptance | granted 2026-10-18 for the design at `cd9a6c9` (pending when first merged; see Acceptance and merge record) |
-| implementation authority | Grant A only, 2026-11-22 |
-| implementation acceptance | Grant A offline evaluator accepted at `f6c5a06` on 2026-11-22 |
-| merge authority | not granted by this document when PR #184 merged; the operator merged it manually as `8f463a5` (see Acceptance and merge record) |
+| implementation authority | Grant A offline eligibility and Grant B synthetic local file staging, under separate bounded grants |
+| implementation acceptance | Grant A offline evaluator accepted at `f6c5a06` and Grant B synthetic local staging accepted at `4a013cc` on 2026-11-22. |
+| merge authority | operator manually merged design PR #184 as `8f463a5`. The operator separately authorized the conditional merge of Grant A PR #209, exercised at `c22a3d5` |
 | release authority | not granted |
 | closeout | not granted |
 
@@ -832,7 +837,9 @@ This CR, and any future implementation of it, does not claim that:
 
 ### Readiness gates for any later live integration
 
-None of these is satisfied, and none is authorized by this CR:
+The design recorded four gates for later live integration. Grant A supplied the
+offline eligibility measurements for the fourth gate. End-to-end staging and prompt
+burden still require measurement. Live integration requires separate authorization.
 
 1. A supported standard-access context, documented for the chosen surface.
 2. Written provider answers to the applicable questions above.
@@ -1010,3 +1017,221 @@ and `93864bb94bf91eefe191e7ecd8afd437e0c25042` records its verification results.
 The publication grant covers the six approved paths on `codex/cr-134-grant-a`
 and a draft pull request into `main` with that evidence. Grant B, merge, release,
 deployment and formal CR closeout each require a separate decision.
+
+### Grant A merge and post-merge verification, 2026-11-22
+
+> Go ahead and review draft PR #209 against my Grant A acceptance at f6c5a06. If the six-file scope and frozen-corpus results match and CI is green, mark it ready for review, merge it into main, and confirm the merge commit.
+
+[PR #209](https://github.com/coreytshaffer/TriageCore/pull/209) merged into `main` at
+[`c22a3d5bdd77e928568728967f8f29edfa52be37`](https://github.com/coreytshaffer/TriageCore/commit/c22a3d5bdd77e928568728967f8f29edfa52be37).
+Its parents are the preceding `main` at `9622ce9` and the reviewed PR head at
+`51251e5`. The merge and PR head have the identical Git tree
+`591c5c88ba8d50b80f5e67847281cde7d84f7fbf`. Only this CR differs from the
+accepted implementation at `f6c5a06`.
+
+GitHub Actions completed the [post-merge tests run #571](https://github.com/coreytshaffer/TriageCore/actions/runs/45076051212)
+on attempt 1 for the `push` to `main` at that exact merge commit. All four jobs passed.
+
+| Hosted job | Result from the job log |
+|---|---|
+| [Ubuntu, Python 3.10](https://github.com/coreytshaffer/TriageCore/actions/runs/45076051212/job/137373395431) | 3,057 passed, 77 skipped. The job verified that the unsupported mobile runtime was rejected. |
+| [Ubuntu, Python 3.11](https://github.com/coreytshaffer/TriageCore/actions/runs/45076051212/job/137373395139) | 3,076 passed, 77 skipped. All 19 mobile tests passed. |
+| [Ubuntu, Python 3.12](https://github.com/coreytshaffer/TriageCore/actions/runs/45076051212/job/137373395437) | 3,076 passed, 77 skipped. All 19 mobile tests passed. |
+| [Windows executor](https://github.com/coreytshaffer/TriageCore/actions/runs/45076051212/job/137373395509) | 261 mandatory tests passed with zero skips. The supplemental symlink probe passed. |
+
+A fresh local run of the two Grant A test modules on `c22a3d5` passed all 197 tests.
+All 54 case records matched the accepted focused and full JUnit reports, including
+the decision IDs, reasons, triggers and effect counts. Nine ordinary tasks qualified,
+three required the expected reviews, all 41 hard stops refused, and the separate policy
+control required review. There were zero guarded effect attempts. The corpus and policy
+hashes matched the offline verification table. The local review workspace retains
+`outputs/cr134-grant-a/postmerge-c22a3d5.xml` with SHA-256
+`9462b99f0043b5e8ea9a26e116c0c0293fdca3aca1c6e4728928feae6bdffb58`.
+
+### Decisions before Grant B
+
+- **Writable scope and trust boundary.** The proposed file-staging increment covers
+  the release, staging, evidence and CLI modules, their four test modules, CLI
+  registration in `triage_core/tc_cli.py`, and this CR. Reconcile that list with
+  Grant A: the revision-1 parser requires empty staging roots and disabled clipboard,
+  and the evaluator binds attestations to the synthetic `account:ordinary-1`.
+  Specify how an operator-controlled policy will authorize a test root while
+  binding the entire policy file. Decide whether the simulated account suffices for
+  B. Name any required changes to Grant A files and tests, platform helpers or CI.
+  Preserve the frozen Grant A policy and corpus as a regression baseline.
+- **Supported platforms and destinations.** Select POSIX file staging, Windows
+  file staging, or both. Specify trusted policy ownership, explicit staging and
+  evidence directories, and known sync-root exclusions plus the operator's per-use
+  attestation. The destination checks exclude working trees, links and group- or
+  world-writable roots. Windows support requires evidence for owner-only NTFS ACLs, junctions and
+  redirected or synchronized folders such as OneDrive. Confirm whether clipboard
+  remains deferred as proposed.
+- **Acceptance and stop point.** Set a budget for prompts per successfully staged
+  export before the first measured run. Grant A completed zero exports. The proposed
+  B verification uses a simulated operator and isolated directories to exercise
+  lossless display, exact review acknowledgements, one-use confirmation, release-time
+  file and clock checks, and read-back against the displayed bytes. It must show zero
+  payload writes on hard refusal, durable metadata-only intent before staging, and
+  accurate outcomes for partial writes or a missing release record.
+
+The provider-access and written-answer gates above apply to a later live
+integration. Grant B implementation, software release, deployment and formal
+CR closeout each require their own authority.
+
+### Grant B implementation authority and verification protocol
+
+The operator replied **“Approved”** to the 2026-11-22 Grant B implementation
+proposal. The grant covers synthetic operation under `account:ordinary-1` on
+Ubuntu/POSIX and Windows/NTFS. Its stop point is a locally reviewable implementation
+and evidence. Publication, implementation acceptance, release, deployment, live
+transfer and formal closeout remain separate decisions.
+
+The 13 authorized paths are:
+
+- `triage_core/public_export_policy.py` and `tests/test_public_export_policy.py`
+- `triage_core/public_export_release.py` and `tests/test_public_export_release.py`
+- `triage_core/public_export_staging.py` and `tests/test_public_export_staging.py`
+- `triage_core/public_export_evidence.py` and `tests/test_public_export_evidence.py`
+- `triage_core/public_export_cli.py` and `tests/test_public_export_cli.py`
+- `triage_core/tc_cli.py`, `.github/workflows/tests.yml` and this CR
+
+Grant B uses outer policy revision 2, recipient revision 1 and staging revision 2.
+One policy authorizes a single staging root, a separate explicit evidence directory
+and sync exclusions. Clipboard stays disabled. All bytes bind the policy digest.
+Each platform must reproduce the 54 Grant A IDs and meet the frozen B expectations.
+Each of the nine ordinary cases must stage verified bytes in at most three responses,
+each of the three expected reviews in at most four, and the separate review control
+in at most four. All 41 hard stops must retain their expected diagnostic and produce
+zero final confirmations and zero staged payload writes. Record actual interactions,
+native protections and failures independently for each platform.
+
+### Grant B local implementation and verification
+
+The accepted implementation is `4a013ccc4586d940ee9680f81e544a0672756e9f`
+on `codex/cr-134-grant-b`. The policy construction, corpus labels, repeat procedure
+and response budgets were frozen before the first staging measurement at
+`1d34d00b2b87eb9dacd1af0b397b050210e4f406`. The accepted evaluator and its
+54-case fixture remain byte-identical to Grant A. The fixture SHA-256 is
+`4c6f7abdb96137eb7cd36fed5d1fbf7a1fb29af687a1027839029ec89b6af3af`.
+
+`tc public-export` evaluates by default. An explicit `--stage` invocation
+requires a source repository, proposal, payload and parent locators, and an
+explicit evidence directory. The operator supplies account and program status
+in one response, destination and nonsync attestation in a second, and the
+12-hex-character confirmation code in a third. Reviewed cases require an
+additional acknowledgement of the exact trigger set. The display includes the
+complete JSON-escaped payload, byte length, SHA-256, decision and destination.
+The release checks sample wall and monotonic clocks, allow up to 50 ms of
+sampling difference, and reject backward movement. The exporter requires a
+locally inspectable Git checkout to identify the implementation.
+
+Before creating a payload, staging rereads the inputs and writes a durable,
+metadata-only intent. The release record binds to the intent and records the
+observed outcome. If final evidence fails after verified staging, the CLI reports
+the verified file and exits 4. Read-only audit reports an unmatched intent as
+`outcome_unknown`. A damaged record produces a nonzero audit status and preserves
+the results for other attempts in the same directory.
+
+The first Windows measurement exposed a test observer that parsed only one line
+of the multiline operator display. The corrected observer decodes the full
+display. Integration review also found that an interrupted intent could hide
+independent audit results. The first full regression runs caught an import of a
+Windows helper reserved for the mediated executor. The final implementation uses
+staging-specific native calls and retains the original isolation test. None
+of these corrections changed the frozen outcome labels or response budgets.
+
+The tests used temporary native directories, a simulated operator, the single
+synthetic account and an injected policy source. Independent checks opened an
+existing OS-owned file under protected ancestors on each platform. The tests
+also exercised refusal of user-controlled policy files. No system export policy
+was installed. Windows used local NTFS. Ubuntu used a local WSL2 container
+running as UID 1000 with an overlay filesystem. Mapped drives, network mounts
+and discovery failures were tested with synthetic OS responses. Storage
+advertised as local can have transparent backing, Git relies on its local
+metadata, and per-use nonsync status remains operator-attested.
+
+These measurements cover staging and read-back in the simulated workflow.
+Human comprehension, provider behavior, manual delivery and survival of sudden
+power loss are outside the measured scope. The native runs below were completed
+before publication. Hosted checks run separately on the pull request.
+
+#### Frozen-corpus measurements at 4a013cc
+
+Each platform ran all 54 Grant B cases twice with fresh consent. Repeats used
+identical input bytes, paths and simulated times. All 54 pairs matched within
+each run. Both platforms also reproduced the 54 accepted revision-1 eligibility
+IDs, whose sorted pair list has SHA-256
+`17a65bfddbc8977820353622ae8fba681e727a29248cb75c52f1d58e13cd8def`.
+Revision-2 policy digests are case- and run-specific because the authorized
+native directory paths are part of the original policy bytes.
+
+| Frozen group | Result on each platform, per pass | Operator responses per case |
+|---|---|---|
+| Ordinary benign | 9/9 staged with read-back matching the displayed bytes | 3 each |
+| Reviewed benign | 3/3 staged with the exact trigger acknowledgement and matching read-back | 4 each |
+| Mandatory refusals | 41/41 refused with the required diagnostic, zero final confirmations, zero staging calls and zero payload files | 14 needed zero responses and 27 needed only the account/program response |
+| Review-always policy control | 1/1 staged after exact acknowledgement and matched read-back | 4 |
+
+Across the two passes on **each** platform, the 12 benign cases consumed 78
+responses for 24 verified stages (3.25 per stage). Including refusals and the
+separate control gives 140 responses for 26 verified stages (5.38 per stage).
+The refusal group's ratio is N/A because it staged zero files. The test guards
+recorded zero attempted network connections or name lookups in all 54 cases.
+Case records identify the CLI selections, every requested response field, policy
+digest, decision ID, triggers, reason codes and observed payload digests.
+
+A supplemental sequence on each platform counted three responses for a decline,
+three for a verified stage whose final evidence write failed, and three for a
+freshly confirmed retry. Audit reported the interrupted attempt as
+`outcome_unknown` and the retry as `staged_verified`. Including this sequence
+gives 149 responses for 28 observed verified stages (5.32 per stage). Separate
+tests terminated the exporter process immediately before and after staging and
+audited its durable intent from another process.
+
+#### Verification record
+
+| Platform | Focused export suite | Full repository suite |
+|---|---|---|
+| Windows 11 build 26300, NTFS, Python 3.12.16 | 389 passed, 0 skipped | 3,339 passed, 6 skipped |
+| Ubuntu 24.04.5 LTS, Python 3.12.3, local POSIX container | 389 passed, 0 skipped | 3,289 passed, 56 skipped |
+
+Each full run collected 3,345 tests with zero failures or errors. All 51 storage
+tests ran on each platform. The Windows full suite skipped one POSIX permissions
+test, three optional symlink tests and two live model canaries. The Ubuntu full
+suite skipped 54 Windows-only obligations and the same two live canaries.
+The dedicated Windows junction regression passed. Each full JUnit also contains a
+second independently validated run of the frozen corpus.
+
+On each platform a supplemental check stopped the registered `tc public-export`
+process on either side of native staging for D01. A fresh `--audit` process
+found one unmatched intent in each case. The first interruption left no payload.
+The second left one file with the displayed SHA-256. Both audits preserved the
+evidence bytes. Staging occurred only inside isolated test directories.
+
+The focused invocation used `python -m pytest -q -p no:cacheprovider
+-o junit_family=xunit1` with the public-export evaluator, policy, staging,
+release, evidence and CLI test modules. The full run used the default selection
+and a separate temporary directory. The two-platform CI job was validated
+locally. The machine-readable records below are retained in the review workspace
+under `outputs/cr134-grant-b/`. The JSON includes case-level measurements,
+response fields, both restart probes, skip details and the native authority checks.
+
+| Evidence file | SHA-256 |
+|---|---|
+| `results.json` | `b0536b550ea3d7738023ea89584ac0db02f0c51338e8c96b115b0628600f6ce2` |
+| `windows-focused-4a013cc.xml` | `48213223f398e5f039a3cdc5ec3a935bb813b5bb5ae7527cfa93e68d7f29bc65` |
+| `windows-full-4a013cc.xml` | `5e6cdbce296a4926ba90a571dae7159de5b4137ece8657b40a47a94330f224bc` |
+| `ubuntu-focused-4a013cc.xml` | `5948fc6547a889a23b10696672e8cb86a6cc90afd32c5550c4ad60c104dfe4ff` |
+| `ubuntu-full-4a013cc.xml` | `bf9e75f25ed8e1ca4cc8bf874d682778df8058cc46fe3bed0037afe1070ee057` |
+
+### Grant B implementation acceptance and draft publication, 2026-11-22
+
+> I accept CR-134 Grant B at 4a013cc. Go ahead and record my acceptance in the CR, push the 13-file branch, and open a draft PR with the frozen corpus and verification results for Windows and Ubuntu.
+
+The operator accepted the synthetic local staging implementation at
+`4a013ccc4586d940ee9680f81e544a0672756e9f`. The verification record at
+`579e4409cd24669b85520fe0211d6ce675f3a45b` documents the 54 frozen cases
+and the focused and full Windows and Ubuntu results for that implementation.
+This grant authorizes pushing `codex/cr-134-grant-b` and opening its draft PR
+into `main` within the 13 paths listed above. Merge, live use, software release,
+deployment and formal CR closeout require separate operator decisions.

@@ -169,3 +169,77 @@ def test_duplicate_policy_key_has_specific_diagnostic():
     with pytest.raises(InputError) as exc:
         parse_policy(b'{"version":1,"version":1}')
     assert exc.value.code == "duplicate_key"
+
+
+def staging_document(base):
+    document = policy_document()
+    document["version"] = 2
+    document["local_staging"] = {
+        "version": 2,
+        "roots": [str(base / "stage")],
+        "evidence_root": str(base / "evidence"),
+        "denied_sync_roots": [str(base / "sync")],
+        "clipboard": False,
+    }
+    return document
+
+
+def test_staging_settings_bind_exact_policy_bytes(tmp_path):
+    doc = staging_document(tmp_path)
+    raw = encode(doc)
+    policy = parse_policy(raw)
+    assert policy.version == 2
+    assert policy.roots == (str(tmp_path / "stage"),)
+    assert policy.evidence_root == str(tmp_path / "evidence")
+    assert policy.denied_sync_roots == (str(tmp_path / "sync"),)
+    assert policy.digest == "sha256:" + hashlib.sha256(raw).hexdigest()
+    for key, value in (("roots", [str(tmp_path / "other")]),
+                       ("evidence_root", str(tmp_path / "other")),
+                       ("denied_sync_roots", [])):
+        variant = staging_document(tmp_path)
+        variant["local_staging"][key] = value
+        assert parse_policy(encode(variant)).digest != policy.digest
+    v1 = parse_policy(encode(policy_document()))
+    assert (v1.roots, v1.evidence_root, v1.denied_sync_roots) == ((), None, ())
+
+
+@pytest.mark.parametrize("field,value", [
+    ("version", 1), ("version", 2.0), ("clipboard", True), ("roots", []),
+    ("roots", ["relative"]), ("roots", [None]), ("evidence_root", "."),
+    ("denied_sync_roots", {}), ("denied_sync_roots", ["../relative"]),
+])
+def test_invalid_staging_settings(tmp_path, field, value):
+    doc = staging_document(tmp_path)
+    doc["local_staging"][field] = value
+    with pytest.raises(InputError, match="policy_invalid"):
+        parse_policy(encode(doc))
+
+
+def test_staging_authority_rejects_ambiguous_and_overlapping_directories(tmp_path):
+    for key, value in (
+        ("roots", [str(tmp_path / "stage"), str(tmp_path / "other")]),
+        ("roots", [str(tmp_path / "evidence" / "nested")]),
+        ("evidence_root", str(tmp_path / "stage")),
+        ("evidence_root", str(tmp_path / "stage" / "nested")),
+        ("evidence_root", str(tmp_path / "stage" / ".." / "alternate")),
+        ("denied_sync_roots", [str(tmp_path)]),
+    ):
+        doc = staging_document(tmp_path)
+        doc["local_staging"][key] = value
+        with pytest.raises(InputError, match="policy_invalid"):
+            parse_policy(encode(doc))
+
+
+def test_policy_families_select_exact_section_revisions(tmp_path):
+    for field, revision in (("version", 1), ("external_recipient", 2), ("version", 3)):
+        doc = staging_document(tmp_path)
+        if field == "version":
+            doc[field] = revision
+        else:
+            doc[field]["version"] = revision
+        with pytest.raises(InputError):
+            parse_policy(encode(doc))
+    doc = staging_document(tmp_path)
+    doc["local_staging"]["operator_decision"] = "allow"
+    with pytest.raises(InputError, match="forbidden_field"):
+        parse_policy(encode(doc))
