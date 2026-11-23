@@ -2,13 +2,13 @@
 
 ## Status
 
-- **Status:** Proposal and design accepted by the human operator on 2026-10-18.
+- **Status:** Formally closed on 2026-11-22 for Grant A's offline evaluator and
+  Grant B's synthetic local file staging. The operator accepted the proposal and design on 2026-10-18.
   On 2026-11-22 the operator accepted the Grant A offline evaluator at `f6c5a06`
   and authorized publication of the six-file branch. [PR #209](https://github.com/coreytshaffer/TriageCore/pull/209)
   merged into `main` at `c22a3d5`. The operator accepted Grant B at `4a013cc`
   and its Windows fixes at `6970e2d`. [PR #210](https://github.com/coreytshaffer/TriageCore/pull/210)
   merged into `main` at `9b8f71b`. Post-merge CI passed for both grants.
-  Formal closeout of the accepted scope awaits operator authorization.
 - **Type:** Governance kernel — privacy and provenance; identity and authority;
   capability and effect bounds; review and human control. Classified under the
   [Backlog Scope Taxonomy](../../current_backlog.md) by the invariant it strengthens:
@@ -39,8 +39,7 @@
   acceptance, publication direction and subsequent merge decision are recorded below.
 - **Grant B implementation acceptance:** Granted for `4a013cc` and subsequently for
   the Windows discovery and CLI preflight fixes at `6970e2d`. The operator authorized
-  merging the corrected PR. Release, deployment, live transfer and formal closeout
-  remain separate decisions.
+  merging the corrected PR and subsequently authorized formal closeout for Grants A and B.
 
 ### Lifecycle state
 
@@ -57,7 +56,9 @@
 | implementation acceptance | Grant A offline evaluator accepted at `f6c5a06`. Grant B synthetic local staging accepted at `4a013cc` and its fixes at `6970e2d` on 2026-11-22. |
 | merge authority | operator manually merged design PR #184 as `8f463a5`. Grant A PR #209 and Grant B PR #210 merged under separate operator authorizations at `c22a3d5` and `9b8f71b`, respectively. |
 | release authority | not granted |
-| closeout | not granted |
+| deployment authority | not granted |
+| live-use authority | not granted |
+| closeout | granted and recorded on 2026-11-22 for the accepted Grant A and Grant B scope |
 
 ## Scope
 
@@ -1270,10 +1271,16 @@ reviewed cases and the separate review-always control did so in four. All 41 har
 stops produced their required diagnostics with zero final confirmations, staging
 calls or payload files. The checks also reproduced the 54 Grant A decision IDs.
 
-**Closeout decision.** Grant A's offline evaluator and Grant B's synthetic local
-file staging have met their accepted verification gates on `main`. The remaining
-decision is the operator's explicit authorization to close CR-134 for that scope.
-Release and deployment require their own decisions. Future live use requires a
-documented standard-access context, applicable written provider answers and
-separate authorization. Clipboard transfer and the other deferred capabilities
-remain outside the accepted scope.
+### Formal closeout for Grants A and B, 2026-11-22
+
+> I authorize formal closeout of CR-134 for the accepted Grant A and B scope. Go ahead and record it in the CR, push the documentation branch, and open a draft PR with the post-merge results. Keep release, deployment, and live use separate.
+
+The operator formally closed CR-134 for the offline evaluator merged at `c22a3d5`
+and synthetic local file staging, including the accepted Windows fixes, merged at
+`9b8f71b`. Both grants met their verification gates on `main`.
+[Grant A post-merge results](https://github.com/coreytshaffer/TriageCore/actions/runs/45076051212) · [Grant B post-merge results](https://github.com/coreytshaffer/TriageCore/actions/runs/45107657523)
+
+Software release, deployment and live provider use each require a separate
+operator decision. Future live use also requires a documented standard-access
+context and the applicable written provider answers. Clipboard transfer and
+the other deferred capabilities remain outside this closeout.
