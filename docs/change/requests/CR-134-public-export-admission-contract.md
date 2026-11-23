@@ -35,7 +35,8 @@
   authority as not granted; that state is preserved in the lifecycle table below.
 - **Grant A implementation acceptance:** Granted for `f6c5a06`. The operator's
   acceptance, publication direction and subsequent merge decision are recorded below.
-  Grant B staging, software release, deployment and CR closeout remain open.
+  Grant B implementation acceptance and publication are pending. Software release,
+  deployment and formal CR closeout remain separate operator decisions.
 
 ### Lifecycle state
 
@@ -49,7 +50,7 @@
 | proposal acceptance | granted 2026-10-18 (pending when first merged; see Acceptance and merge record) |
 | design acceptance | granted 2026-10-18 for the design at `cd9a6c9` (pending when first merged; see Acceptance and merge record) |
 | implementation authority | Grant A offline eligibility and Grant B synthetic local file staging, under separate bounded grants |
-| implementation acceptance | Grant A offline evaluator accepted at `f6c5a06` on 2026-11-22 |
+| implementation acceptance | Grant A offline evaluator accepted at `f6c5a06` on 2026-11-22. Grant B awaits operator acceptance of the tested implementation. |
 | merge authority | operator manually merged design PR #184 as `8f463a5`. The operator separately authorized the conditional merge of Grant A PR #209, exercised at `c22a3d5` |
 | release authority | not granted |
 | closeout | not granted |
@@ -1101,3 +1102,122 @@ each of the three expected reviews in at most four, and the separate review cont
 in at most four. All 41 hard stops must retain their expected diagnostic and produce
 zero final confirmations and zero staged payload writes. Record actual interactions,
 native protections and failures independently for each platform.
+
+### Grant B local implementation and verification
+
+The implementation for operator review is `4a013ccc4586d940ee9680f81e544a0672756e9f`
+on `codex/cr-134-grant-b`. The policy construction, corpus labels, repeat procedure
+and response budgets were frozen before the first staging measurement at
+`1d34d00b2b87eb9dacd1af0b397b050210e4f406`. The accepted evaluator and its
+54-case fixture remain byte-identical to Grant A. The fixture SHA-256 is
+`4c6f7abdb96137eb7cd36fed5d1fbf7a1fb29af687a1027839029ec89b6af3af`.
+
+`tc public-export` evaluates by default. An explicit `--stage` invocation
+requires a source repository, proposal, payload and parent locators, and an
+explicit evidence directory. The operator supplies account and program status
+in one response, destination and nonsync attestation in a second, and the
+12-hex-character confirmation code in a third. Reviewed cases require an
+additional acknowledgement of the exact trigger set. The display includes the
+complete JSON-escaped payload, byte length, SHA-256, decision and destination.
+The release checks sample wall and monotonic clocks, allow up to 50 ms of
+sampling difference, and reject backward movement. The exporter requires a
+locally inspectable Git checkout to identify the implementation.
+
+Before creating a payload, staging rereads the inputs and writes a durable,
+metadata-only intent. The release record binds to the intent and records the
+observed outcome. If final evidence fails after verified staging, the CLI reports
+the verified file and exits 4. Read-only audit reports an unmatched intent as
+`outcome_unknown`. A damaged record produces a nonzero audit status and preserves
+the results for other attempts in the same directory.
+
+The first Windows measurement exposed a test observer that parsed only one line
+of the multiline operator display. The corrected observer decodes the full
+display. Integration review also found that an interrupted intent could hide
+independent audit results. The first full regression runs caught an import of a
+Windows helper reserved for the mediated executor. The final implementation uses
+staging-specific native calls and retains the original isolation test. None
+of these corrections changed the frozen outcome labels or response budgets.
+
+The tests used temporary native directories, a simulated operator, the single
+synthetic account and an injected policy source. Independent checks opened an
+existing OS-owned file under protected ancestors on each platform. The tests
+also exercised refusal of user-controlled policy files. No system export policy
+was installed. Windows used local NTFS. Ubuntu used a local WSL2 container
+running as UID 1000 with an overlay filesystem. Mapped drives, network mounts
+and discovery failures were tested with synthetic OS responses. Storage
+advertised as local can have transparent backing, Git relies on its local
+metadata, and per-use nonsync status remains operator-attested.
+
+These measurements cover staging and read-back in the simulated workflow.
+Human comprehension, provider behavior, manual delivery and survival of sudden
+power loss are outside the measured scope. Hosted CI, branch publication, Grant B
+acceptance, software release, deployment and formal closeout remain pending.
+
+#### Frozen-corpus measurements at 4a013cc
+
+Each platform ran all 54 Grant B cases twice with fresh consent. Repeats used
+identical input bytes, paths and simulated times. All 54 pairs matched within
+each run. Both platforms also reproduced the 54 accepted revision-1 eligibility
+IDs, whose sorted pair list has SHA-256
+`17a65bfddbc8977820353622ae8fba681e727a29248cb75c52f1d58e13cd8def`.
+Revision-2 policy digests are case- and run-specific because the authorized
+native directory paths are part of the original policy bytes.
+
+| Frozen group | Result on each platform, per pass | Operator responses per case |
+|---|---|---|
+| Ordinary benign | 9/9 staged with read-back matching the displayed bytes | 3 each |
+| Reviewed benign | 3/3 staged with the exact trigger acknowledgement and matching read-back | 4 each |
+| Mandatory refusals | 41/41 refused with the required diagnostic, zero final confirmations, zero staging calls and zero payload files | 14 needed zero responses and 27 needed only the account/program response |
+| Review-always policy control | 1/1 staged after exact acknowledgement and matched read-back | 4 |
+
+Across the two passes on **each** platform, the 12 benign cases consumed 78
+responses for 24 verified stages (3.25 per stage). Including refusals and the
+separate control gives 140 responses for 26 verified stages (5.38 per stage).
+The refusal group's ratio is N/A because it staged zero files. The test guards
+recorded zero attempted network connections or name lookups in all 54 cases.
+Case records identify the CLI selections, every requested response field, policy
+digest, decision ID, triggers, reason codes and observed payload digests.
+
+A supplemental sequence on each platform counted three responses for a decline,
+three for a verified stage whose final evidence write failed, and three for a
+freshly confirmed retry. Audit reported the interrupted attempt as
+`outcome_unknown` and the retry as `staged_verified`. Including this sequence
+gives 149 responses for 28 observed verified stages (5.32 per stage). Separate
+tests terminated the exporter process immediately before and after staging and
+audited its durable intent from another process.
+
+#### Verification record
+
+| Platform | Focused export suite | Full repository suite |
+|---|---|---|
+| Windows 11 build 26300, NTFS, Python 3.12.16 | 389 passed, 0 skipped | 3,339 passed, 6 skipped |
+| Ubuntu 24.04.5 LTS, Python 3.12.3, local POSIX container | 389 passed, 0 skipped | 3,289 passed, 56 skipped |
+
+Each full run collected 3,345 tests with zero failures or errors. All 51 storage
+tests ran on each platform. The Windows full suite skipped one POSIX permissions
+test, three optional symlink tests and two live model canaries. The Ubuntu full
+suite skipped 54 Windows-only obligations and the same two live canaries.
+The dedicated Windows junction regression passed. Each full JUnit also contains a
+second independently validated run of the frozen corpus.
+
+On each platform a supplemental check stopped the registered `tc public-export`
+process on either side of native staging for D01. A fresh `--audit` process
+found one unmatched intent in each case. The first interruption left no payload.
+The second left one file with the displayed SHA-256. Both audits preserved the
+evidence bytes. Staging occurred only inside isolated test directories.
+
+The focused invocation used `python -m pytest -q -p no:cacheprovider
+-o junit_family=xunit1` with the public-export evaluator, policy, staging,
+release, evidence and CLI test modules. The full run used the default selection
+and a separate temporary directory. The two-platform CI job was validated
+locally. The machine-readable records below are retained in the review workspace
+under `outputs/cr134-grant-b/`. The JSON includes case-level measurements,
+response fields, both restart probes, skip details and the native authority checks.
+
+| Evidence file | SHA-256 |
+|---|---|
+| `results.json` | `b0536b550ea3d7738023ea89584ac0db02f0c51338e8c96b115b0628600f6ce2` |
+| `windows-focused-4a013cc.xml` | `48213223f398e5f039a3cdc5ec3a935bb813b5bb5ae7527cfa93e68d7f29bc65` |
+| `windows-full-4a013cc.xml` | `5e6cdbce296a4926ba90a571dae7159de5b4137ece8657b40a47a94330f224bc` |
+| `ubuntu-focused-4a013cc.xml` | `5948fc6547a889a23b10696672e8cb86a6cc90afd32c5550c4ad60c104dfe4ff` |
+| `ubuntu-full-4a013cc.xml` | `bf9e75f25ed8e1ca4cc8bf874d682778df8058cc46fe3bed0037afe1070ee057` |
