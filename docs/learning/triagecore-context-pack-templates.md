@@ -135,10 +135,10 @@ Avoid:
   "source_project": "SafeTask AI",
   "task_goal": "Expose source registry examples in Admin Governance without adding registry writes.",
   "source_artifacts": [
-    "docs/compliance/source-registry.md",
-    "safetask/apps/surveillance_command_center/app.py",
-    "safetask/apps/surveillance_command_center/app.js",
-    "safetask/apps/surveillance_command_center/index.html"
+    "source registry specification",
+    "server-side route implementation",
+    "client-side request handler",
+    "administration page markup"
   ],
   "constraints": [
     "read-only display",
