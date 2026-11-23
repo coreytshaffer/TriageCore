@@ -11,6 +11,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .public_export_evidence import OUTSIDE_VISIBILITY
 from .public_export_policy import InputError, parse_policy
 
 
@@ -119,12 +120,26 @@ def source_repository(selected):
 def implementation_commit():
     """Bind the clean checkout containing our package, independently of input paths."""
     code_root = source_repository(Path(__file__).resolve().parents[1])
+    # `status` alone can omit changes for entries marked assume-unchanged or
+    # skip-worktree. Include ignored Python sources in the untracked check.
+    raw = _git(code_root, "ls-files", "-v", "-z", "--cached", "--others", "--", "triage_core/*.py")
+    entries = raw.removesuffix(b"\0").split(b"\0")
+    core = {b"triage_core/" + name + b".py" for name in (
+        b"__init__", b"tc_cli", b"public_export", b"public_export_cli", b"public_export_evidence",
+        b"public_export_policy", b"public_export_release", b"public_export_staging",
+    )}
+    if any(not entry.startswith(b"H ") for entry in entries) or not core.issubset({e[2:] for e in entries}):
+        raise OSError("implementation_revision_unavailable")
     if _git(code_root, "status", "--porcelain=v1", "--untracked-files=all", "--", "triage_core"):
         raise OSError("implementation_revision_unavailable")
     commit = _git(code_root, "rev-parse", "--verify", "HEAD^{commit}").decode("ascii").strip()
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise OSError("implementation_revision_unavailable")
     return commit
+
+
+def _report(outcome, **fields):
+    print(json.dumps({"outcome": outcome, "outside_visibility": OUTSIDE_VISIBILITY, **fields}, sort_keys=True))
 
 
 def run_command(parser, args):
@@ -144,12 +159,12 @@ def run_command(parser, args):
     try:
         repo = source_repository(args.repo_root)
     except (OSError, ValueError):
-        print(json.dumps({"outcome": "refused_pre_staging", "reason_codes": ["source_repository_unavailable"]}))
+        _report("refused_pre_staging", reason_codes=["source_repository_unavailable"])
         return 2
     try:
         commit = implementation_commit()
     except (OSError, ValueError):
-        print(json.dumps({"outcome": "refused_pre_staging", "reason_codes": ["implementation_revision_unavailable"]}))
+        _report("refused_pre_staging", reason_codes=["implementation_revision_unavailable"])
         return 2
     result = run_export(
         repo_root=repo, proposal_locator=args.proposal,
@@ -162,26 +177,26 @@ def run_command(parser, args):
             print("STAGED — evidence record failed", file=sys.stderr)
         else:
             print(f"Staging outcome: {result.outcome}. Evidence record failed.", file=sys.stderr)
-    print(json.dumps({
-        "outcome": result.outcome, "reason_codes": result.reason_codes, "review_triggers": result.review_triggers,
-        "eligibility_id": result.eligibility_id, "policy_digest": result.policy_digest,
-        "attempt_id": result.attempt_id, "outside_visibility": result.outside_visibility,
-    }, sort_keys=True))
+    _report(result.outcome, reason_codes=result.reason_codes, review_triggers=result.review_triggers,
+            eligibility_id=result.eligibility_id, policy_digest=result.policy_digest, attempt_id=result.attempt_id)
     return result.exit_code
 
 
 def _audit(evidence_dir):
-    from .public_export_evidence import audit, open_evidence_directory
+    from .public_export_evidence import audit, has_audit_errors, open_evidence_directory
 
     try:
         policy = parse_policy(read_system_policy())
         with open_evidence_directory(policy, evidence_dir) as handle:
             entries = audit(handle)
     except InputError as exc:
-        print(json.dumps({"outcome": "audit_refused", "reason_codes": [exc.code]}))
+        _report("audit_refused", reason_codes=[exc.code])
         return 2
     except (ValueError, OSError):
-        print(json.dumps({"outcome": "audit_refused", "reason_codes": ["evidence_unavailable"]}))
+        _report("audit_refused", reason_codes=["evidence_unavailable"])
         return 2
-    print(json.dumps({"outcome": "audit_complete", "entries": entries}, sort_keys=True))
+    if has_audit_errors(entries):
+        _report("audit_incomplete", entries=entries)
+        return 3
+    _report("audit_complete", entries=entries)
     return 0

@@ -32,7 +32,9 @@ _OUTCOMES = {
     "staged_verified", "staged_unverified", "staged_mismatch",
 }
 _DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
-_FILE = re.compile(r"([0-9a-f-]{36})\.(intent|release)\.json\Z")
+_FILE = re.compile(
+    r"([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.(intent|release)\.json\Z"
+)
 
 
 def digest(data: bytes) -> str:
@@ -134,41 +136,61 @@ def write_record(handle, record) -> str:
     return committed_digest
 
 
+def _unknown(attempt, incident=None):
+    return {"attempt_id": attempt, "eligibility_id": None, "outcome": "outcome_unknown",
+            "incident": incident, "outside_visibility": list(OUTSIDE_VISIBILITY)}
+
+
+def _read_record(handle, name):
+    raw = handle.read(name)
+    record = decode_object(raw)
+    _validate(record)
+    return raw, record
+
+
+def _audit_attempt(handle, attempt, names):
+    if "intent" not in names:
+        return _unknown(attempt, "release_without_intent")
+    try:
+        raw, intent = _read_record(handle, names["intent"])
+    except (OSError, ValueError):
+        return _unknown(attempt, "unreadable_intent_evidence")
+    if intent["kind"] != "intent" or intent["attempt_id"] != attempt:
+        return _unknown(attempt, "evidence_identity_mismatch")
+    row = {**_unknown(attempt), "eligibility_id": intent["eligibility_id"]}
+    if "release" not in names:
+        return row
+    try:
+        _, record = _read_record(handle, names["release"])
+    except (OSError, ValueError):
+        return {**row, "incident": "unreadable_release_evidence"}
+    if (record["kind"] != "release" or record["attempt_id"] != attempt
+            or record["intent_digest"] != digest(raw)):
+        return {**row, "incident": "evidence_identity_mismatch"}
+    equal = record["readback_digest"] == intent["payload_digest"]
+    if ((record["outcome"] == "staged_verified" and not equal)
+            or (record["outcome"] == "staged_mismatch" and equal)):
+        return {**row, "incident": "evidence_digest_mismatch"}
+    return {**row, "outcome": record["outcome"], "incident": record["incident"], "cleanup": record["cleanup"]}
+
+
 def audit(handle) -> list[dict]:
-    """Pair each intent with its release. These records never authorize a write."""
+    """Inspect attempts independently so an interrupted record cannot hide other outcomes."""
     handle.revalidate()
     grouped = {}
+    results = []
     for name in handle.names():
         match = _FILE.fullmatch(name)
         if match:
             attempt, kind = match.groups()
             grouped.setdefault(attempt, {})[kind] = name
-    results = []
-    for attempt, names in sorted(grouped.items()):
-        if "intent" not in names:
-            raise ValueError("release_without_intent")
-        raw = handle.read(names["intent"])
-        intent = decode_object(raw)
-        _validate(intent)
-        if intent["attempt_id"] != attempt or intent["kind"] != "intent":
-            raise ValueError("evidence_identity_mismatch")
-        row = {"attempt_id": attempt, "eligibility_id": intent["eligibility_id"],
-               "outcome": "outcome_unknown", "incident": None, "outside_visibility": list(OUTSIDE_VISIBILITY)}
-        if "release" in names:
-            try:
-                record = decode_object(handle.read(names["release"]))
-                _validate(record)
-            except (OSError, ValueError):
-                # A crash can leave a partially written release. The intent still exists.
-                row["incident"] = "unreadable_release_evidence"
-            else:
-                if (record["kind"] != "release" or record["attempt_id"] != attempt
-                        or record["intent_digest"] != digest(raw)):
-                    raise ValueError("evidence_identity_mismatch")
-                equal = record["readback_digest"] == intent["payload_digest"]
-                if ((record["outcome"] == "staged_verified" and not equal)
-                        or (record["outcome"] == "staged_mismatch" and equal)):
-                    raise ValueError("evidence_digest_mismatch")
-                row.update(outcome=record["outcome"], incident=record["incident"], cleanup=record["cleanup"])
-        results.append(row)
+        elif name.endswith((".intent.json", ".release.json")):
+            # A name from the directory could contain sensitive, free-form text.
+            results.append(_unknown(None, "invalid_evidence_name"))
+    results.extend(_audit_attempt(handle, attempt, names) for attempt, names in sorted(grouped.items()))
     return results
+
+
+def has_audit_errors(rows) -> bool:
+    """Operational readback incidents can have complete, valid audit evidence."""
+    return any(row["incident"] not in (None, "readback_mismatch") for row in rows)

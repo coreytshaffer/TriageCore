@@ -12,8 +12,6 @@ from triage_core import public_export_evidence as evidence
 from triage_core import public_export_release as release
 
 
-
-
 @pytest.mark.parametrize("text", ["", "a\\b\r\n", "x\u202ey\u200b\u0085\0\x1b", "é😀", "literal \\u202e"])
 def test_display_is_lossless_and_terminal_safe(text, workflow):
     workflow.kwargs["stage"] = False
@@ -23,8 +21,6 @@ def test_display_is_lossless_and_terminal_safe(text, workflow):
     assert json.loads(displayed)["payload"].encode() == text.encode()
     assert json.dumps(text, ensure_ascii=True) in displayed
     assert all(c == "\n" or 32 <= ord(c) <= 126 for c in displayed)
-
-
 
 
 class Clock:
@@ -42,8 +38,6 @@ class Clock:
 
     def monotonic(self):
         return self.samples[self.sample] + self.offsets[self.sample]
-
-
 
 
 class Operator:
@@ -77,8 +71,6 @@ class Operator:
         return code if self.code else None
 
 
-
-
 class Handle:
     def __init__(self):
         self.files = {}
@@ -99,8 +91,6 @@ class Handle:
         assert name not in self.files
         self.files[name] = raw
         return evidence.digest(raw)
-
-
 
 
 @pytest.fixture
@@ -146,8 +136,6 @@ def test_confirmed_file_matches_display_and_intent_precedes_payload(workflow):
     assert evidence.audit(w.records)[0]["outcome"] == "staged_verified"
 
 
-
-
 @pytest.mark.parametrize(("field", "expected"), [
     ("payload_locator", "bytes_changed"), ("parent_locator", "parent_changed"),
     ("proposal_locator", "proposal_changed"), ("policy", "policy_changed"),
@@ -164,8 +152,6 @@ def test_change_after_display_refuses_and_requires_new_confirmation(workflow, fi
     again = w.run()
     assert again.outcome == "refused_pre_staging"
     assert w.op.events.count("confirm") == 2 and not w.storage.files
-
-
 
 
 @pytest.mark.parametrize(("samples", "offsets", "reason"), [
@@ -191,8 +177,6 @@ def test_parent_expiry_checked_at_release(workflow):
     assert not w.storage.files
 
 
-
-
 @pytest.mark.parametrize("ack", [(), ("elevated_task_risk", "extra"), ("not_requested",)])
 def test_inexact_acknowledgement_never_confirms(workflow, ack):
     w = workflow
@@ -211,8 +195,6 @@ def test_read_only_default_has_no_writes_or_confirmation(workflow):
     assert result.outcome == "eligible_for_operator_reviewed_export"
     assert w.op.events == ["access", "display"]
     assert not w.storage.files and not w.records.files
-
-
 
 
 @pytest.mark.parametrize(("kind", "result", "code"), [
@@ -257,8 +239,6 @@ def test_requested_expiry_is_exclusive_at_release(workflow):
     assert not w.storage.files and not w.records.files
 
 
-
-
 @pytest.mark.parametrize(("duration", "eligible"), [(119.999999, True), (120, False), (120.000001, False)])
 def test_approval_expires_at_confirmation_plus_ttl(workflow, duration, eligible):
     w = workflow
@@ -275,8 +255,6 @@ def test_destination_disclaimer_required(workflow):
     w.op.destination = lambda: (w.op.target, False)
     assert w.run().reason_codes == ("destination_not_attested",)
     assert "confirm" not in w.op.events and not w.records.files and not w.storage.files
-
-
 
 
 @pytest.mark.parametrize(("outcome", "cleanup"), [
@@ -297,8 +275,6 @@ def test_actual_write_fault_outcome_and_incident(workflow, monkeypatch, outcome,
     assert row["incident"] == ("readback_mismatch" if outcome == "staged_mismatch" else None)
 
 
-
-
 @pytest.mark.parametrize("field", ["proposal", "parent"])
 def test_schema_refusal_precedes_any_operator_questions(workflow, field):
     w = workflow
@@ -313,8 +289,6 @@ def test_schema_refusal_precedes_any_operator_questions(workflow, field):
     assert not w.records.files and not w.storage.files
 
 
-
-
 @pytest.mark.parametrize("which", ["storage", "records"])
 def test_substituted_directory_before_intent_refuses_without_writes(workflow, which):
     w = workflow
@@ -325,8 +299,6 @@ def test_substituted_directory_before_intent_refuses_without_writes(workflow, wh
     w.op.change = lambda: setattr(getattr(w, which), "revalidate", substituted)
     assert w.run().reason_codes == ("destination_changed",)
     assert not w.records.files and not w.storage.files
-
-
 
 
 @pytest.mark.parametrize("which", ["open_directory", "open_evidence_directory"])

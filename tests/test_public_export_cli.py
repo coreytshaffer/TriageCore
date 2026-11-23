@@ -262,6 +262,7 @@ def test_evaluation_default_is_read_only(monkeypatch, capsys, tmp_path):
 
 def test_explicit_source_root_must_be_an_actual_worktree_root(monkeypatch, capsys, tmp_path):
     from triage_core import public_export_cli as cli
+    from triage_core.public_export_evidence import OUTSIDE_VISIBILITY
 
     inputs, repo, _, _, _ = materialize(tmp_path, CORPUS["benign"][0])
     monkeypatch.setattr(cli, "read_system_policy", lambda: pytest.fail("untrusted source root accepted"))
@@ -274,6 +275,7 @@ def test_explicit_source_root_must_be_an_actual_worktree_root(monkeypatch, capsy
             "--payload", inputs["payload_locator"], "--parent", inputs["parent_locator"],
         )
         assert code == 2 and json.loads(out)["reason_codes"] == ["source_repository_unavailable"]
+        assert json.loads(out)["outside_visibility"] == list(OUTSIDE_VISIBILITY)
 
 
 def test_revision_and_source_ignore_git_overrides_and_bind_clean_package(monkeypatch, tmp_path):
@@ -284,6 +286,9 @@ def test_revision_and_source_ignore_git_overrides_and_bind_clean_package(monkeyp
     package.mkdir(parents=True)
     module = package / "public_export_cli.py"
     module.write_bytes(b"# synthetic implementation\n")
+    for name in ("__init__", "tc_cli", "public_export", "public_export_policy", "public_export_staging",
+                 "public_export_evidence", "public_export_release"):
+        (package / f"{name}.py").write_bytes(b"# synthetic package module\n")
     subprocess.run(["git", "init", "--quiet", "--template=", str(repo)], check=True)
     subprocess.run(["git", "-C", str(repo), "add", "triage_core"], check=True)
     subprocess.run(
@@ -299,6 +304,13 @@ def test_revision_and_source_ignore_git_overrides_and_bind_clean_package(monkeyp
     assert cli.source_repository(None) == repo
     (repo / "review-notes.txt").write_bytes(b"unrelated synthetic notes")
     assert cli.implementation_commit() == expected
+    for flag in ("assume-unchanged", "skip-worktree"):
+        git = ["git", "--git-dir", str(repo / ".git"), "--work-tree", str(repo), "-C", str(repo)]
+        subprocess.run([*git, "update-index", f"--{flag}", "triage_core/public_export_cli.py"], check=True)
+        with pytest.raises(OSError, match="implementation_revision_unavailable"):
+            cli.implementation_commit()
+        subprocess.run([*git, "update-index", f"--no-{flag}", "triage_core/public_export_cli.py"], check=True)
+    assert cli.implementation_commit() == expected
     new_module = package / "untracked.py"
     new_module.write_bytes(b"pass\n")
     with pytest.raises(OSError, match="implementation_revision_unavailable"):
@@ -307,18 +319,58 @@ def test_revision_and_source_ignore_git_overrides_and_bind_clean_package(monkeyp
     module.write_bytes(b"pass\n")
     with pytest.raises(OSError, match="implementation_revision_unavailable"):
         cli.implementation_commit()
+    subprocess.run([*git, "restore", "triage_core/public_export_cli.py"], check=True)
+    subprocess.run([*git, "rm", "--quiet", "triage_core/public_export_evidence.py"], check=True)
+    subprocess.run([*git, "-c", "user.name=Synthetic", "-c", "user.email=fixture@example.invalid",
+                    "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "Synthetic missing module"], check=True)
+    with pytest.raises(OSError, match="implementation_revision_unavailable"):
+        cli.implementation_commit()
 
 
 def test_audit_selected_empty_directory_is_read_only(monkeypatch, capsys, tmp_path):
     from triage_core import public_export_cli as cli
+    from triage_core.public_export_evidence import OUTSIDE_VISIBILITY
 
     _, _, payload_root, evidence_root, policy = materialize(tmp_path, CORPUS["benign"][0])
     monkeypatch.setattr(cli, "read_system_policy", lambda: policy)
     code, out, _ = invoke_tc(monkeypatch, capsys, "--audit", "--evidence-dir", evidence_root)
-    assert code == 0 and json.loads(out) == {"outcome": "audit_complete", "entries": []}
+    assert code == 0 and json.loads(out) == {
+        "outcome": "audit_complete", "entries": [], "outside_visibility": list(OUTSIDE_VISIBILITY),
+    }
     code, out, _ = invoke_tc(monkeypatch, capsys, "--audit", "--evidence-dir", payload_root)
     assert code == 2 and json.loads(out)["outcome"] == "audit_refused"
+    assert json.loads(out)["outside_visibility"] == list(OUTSIDE_VISIBILITY)
     assert list(payload_root.iterdir()) == list(evidence_root.iterdir()) == []
+
+
+def test_audit_preserves_other_attempts_when_an_intent_is_truncated(monkeypatch, capsys, tmp_path):
+    from uuid import uuid4
+
+    from triage_core import public_export_cli as cli
+    from triage_core import public_export_evidence as evidence
+    from triage_core.public_export_policy import parse_policy
+
+    _, _, _, root, raw_policy = materialize(tmp_path, CORPUS["benign"][0])
+    monkeypatch.setattr(cli, "read_system_policy", lambda: raw_policy)
+    complete, unmatched, interrupted = (str(uuid4()) for _ in range(3))
+    checksum = sha256(b"synthetic evidence test")
+    with evidence.open_evidence_directory(parse_policy(raw_policy), root) as handle:
+        for attempt in (complete, unmatched):
+            intent = evidence.intent_record(attempt, checksum, checksum, checksum, checksum, checksum, (),
+                                            "2026-11-22T12:00:00Z", "2026-11-22T12:02:00Z")
+            bound = evidence.write_record(handle, intent)
+            if attempt == complete:
+                evidence.write_record(handle, evidence.release_record(attempt, bound, "staged_verified", checksum, None))
+        handle.write_new(f"{interrupted}.intent.json", b'{"private-synthetic-canary":')
+    before = {item.name: item.read_bytes() for item in root.iterdir()}
+    code, out, err = invoke_tc(monkeypatch, capsys, "--audit", "--evidence-dir", root)
+    report = json.loads(out)
+    assert code == 3 and report["outcome"] == "audit_incomplete"
+    assert report["outside_visibility"] == list(evidence.OUTSIDE_VISIBILITY)
+    outcomes = {row["attempt_id"]: row["outcome"] for row in report["entries"]}
+    assert outcomes == {complete: "staged_verified", unmatched: "outcome_unknown", interrupted: "outcome_unknown"}
+    assert str(root) not in out + err and "private-synthetic-canary" not in out + err
+    assert before == {item.name: item.read_bytes() for item in root.iterdir()}
 
 
 @pytest.mark.parametrize("flags", [("--audit",), ("--stage",), ("--stage", "--audit")])

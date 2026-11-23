@@ -11,8 +11,6 @@ import pytest
 from triage_core import public_export_evidence as evidence
 
 
-
-
 class Records:
     def __init__(self):
         self.files = {}
@@ -30,8 +28,6 @@ class Records:
 
     def revalidate(self):
         pass
-
-
 
 
 def records_for_attempt():
@@ -54,8 +50,6 @@ def test_intent_survives_reopen_and_release_pairs_to_intent_bytes():
     assert evidence.audit(records)[0]["outside_visibility"] == list(evidence.OUTSIDE_VISIBILITY)
 
 
-
-
 @pytest.mark.parametrize("mutation", [
     {"unexpected": True}, {"prompt": "private"}, {"attempt_id": "../../private/file"},
     {"payload_digest": "fake"}, {"acknowledged_triggers": ["free-form"]},
@@ -74,11 +68,13 @@ def test_orphan_release_and_wrong_binding_are_invalid_evidence():
     wrong = "sha256:" + "b" * 64
     evidence.write_record(records, evidence.release_record(attempt, wrong, "staged_verified",
                                                           intent["payload_digest"], None))
-    with pytest.raises(ValueError):
-        evidence.audit(records)
+    orphan, = evidence.audit(records)
+    assert orphan["outcome"] == "outcome_unknown" and orphan["incident"] == "release_without_intent"
+    assert evidence.has_audit_errors([orphan]) and orphan["eligibility_id"] is None
     evidence.write_record(records, intent)
-    with pytest.raises(ValueError):
-        evidence.audit(records)
+    unbound, = evidence.audit(records)
+    assert unbound["outcome"] == "outcome_unknown" and unbound["incident"] == "evidence_identity_mismatch"
+    assert evidence.has_audit_errors([unbound])
 
 
 def test_audit_rejects_duplicate_fields_and_filename_substitution():
@@ -88,11 +84,11 @@ def test_audit_rejects_duplicate_fields_and_filename_substitution():
     name, = records.files
     original = records.files[name]
     records.files[name] = original.replace(b"{", b'{"kind":"intent",', 1)
-    with pytest.raises(ValueError):
-        evidence.audit(records)
+    invalid, = evidence.audit(records)
+    assert invalid["outcome"] == "outcome_unknown" and invalid["incident"] == "unreadable_intent_evidence"
     records.files = {name.replace(attempt, str(uuid.uuid4())): original}
-    with pytest.raises(ValueError):
-        evidence.audit(records)
+    mismatch, = evidence.audit(records)
+    assert mismatch["outcome"] == "outcome_unknown" and mismatch["incident"] == "evidence_identity_mismatch"
 
 
 def test_mismatch_opens_bounded_incident():
@@ -103,8 +99,6 @@ def test_mismatch_opens_bounded_incident():
     evidence.write_record(records, release)
     assert evidence.audit(records)[0]["incident"] == "readback_mismatch"
     assert "/private" not in json.dumps(evidence.audit(records))
-
-
 
 
 @pytest.mark.parametrize("after_stage", [False, True])
@@ -154,3 +148,29 @@ def test_interrupted_release_publication_audits_as_unknown():
     records.files[f"{attempt}.release.json"] = b'{"kind":"release"'
     row, = evidence.audit(records)
     assert row["outcome"] == "outcome_unknown" and row["incident"] == "unreadable_release_evidence"
+    assert evidence.has_audit_errors([row])
+
+
+def test_incomplete_intent_does_not_hide_other_verified_or_unmatched_attempts():
+    records = Records()
+    success, complete = records_for_attempt()
+    bound = evidence.write_record(records, complete)
+    evidence.write_record(records, evidence.release_record(success, bound, "staged_verified",
+                                                          complete["payload_digest"], None))
+    unmatched, intent = records_for_attempt()
+    evidence.write_record(records, intent)
+    assert not evidence.has_audit_errors(evidence.audit(records))
+    broken = str(uuid.uuid4())
+    records.files[f"{broken}.intent.json"] = b'{"private_input":"sensitive'
+    records.files["sensitive-name.release.json"] = b""
+    original = dict(records.files)
+    rows = evidence.audit(records)
+    assert evidence.has_audit_errors(rows) and len(rows) == 4
+    by_id = {row["attempt_id"]: row for row in rows}
+    assert by_id[success]["outcome"] == "staged_verified"
+    assert by_id[unmatched]["outcome"] == "outcome_unknown" and by_id[unmatched]["incident"] is None
+    assert by_id[broken]["incident"] == "unreadable_intent_evidence"
+    assert by_id[None]["incident"] == "invalid_evidence_name"
+    for key in (broken, None):
+        assert by_id[key]["eligibility_id"] is None and by_id[key]["outcome"] == "outcome_unknown"
+    assert "sensitive" not in json.dumps(rows) and records.files == original
