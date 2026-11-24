@@ -360,6 +360,22 @@ Implementation acceptance, merge, release, and closeout have separate
 authority requirements. See the [local operating procedure](
 ../../operations/task-review-provenance.md).
 
+### Integration candidate evidence
+
+- Base `2c0bdc866c75d76ce64e858a4ff1cefca0caaaf7`, tested code
+  `92989355676e1fed5533388e9989385629d68cfe`. The changed-path census
+  matched the 26 paths in the recorded grant.
+- The focused Windows/Python 3.12 suite passed 308 tests with one
+  existing POSIX-only permission check skipped. It included synthetic
+  signed proof through the real mobile API and read projections,
+  migration and rollback, review history, and the existing authz checks.
+- A synthetic Windows desktop exercise displayed the complete
+  scrollable evidence and checked both confirmation actions. Chrome
+  Playwright on a narrow viewport checked the real mobile assets with
+  a synthetic API, including keyboard focus and retry identity. A
+  physical authenticator was outside this verification.
+- The candidate draft PR records the repository-wide regression results.
+
 ## Identifier census
 
 On 2026-11-23, GitHub `main` at `ad2aa69` contained
