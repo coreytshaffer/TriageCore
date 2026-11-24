@@ -124,3 +124,68 @@ def test_close_work_item_prevents_overwrite_without_force(tmp_path):
         
     # With force it should work
     close_work_item(str(live_file), "CR-WU-011", str(live_file), force=True)
+
+
+def test_close_does_not_follow_predictable_staging_symlink(tmp_path):
+    live_file = tmp_path / "live.yaml"
+    output_file = tmp_path / "out.yaml"
+    sentinel = tmp_path / "sentinel.txt"
+    sentinel.write_text("unchanged", encoding="utf-8")
+    live_file.write_text(
+        """version: 1
+items:
+  - id: CR-WU-011
+    project: triagecore
+    title: Workspace Closing Packet
+    type: feature
+    kanban:
+      status: active
+      priority: high
+""",
+        encoding="utf-8",
+    )
+    legacy_stage = tmp_path / "out.yaml.tmp.yaml"
+    try:
+        legacy_stage.symlink_to(sentinel)
+    except OSError:
+        pytest.skip("symlink creation is unavailable")
+
+    with pytest.raises(OSError, match="Legacy workspace staging entry"):
+        close_work_item(str(live_file), "CR-WU-011", str(output_file))
+
+    assert sentinel.read_text(encoding="utf-8") == "unchanged"
+    assert legacy_stage.is_symlink()
+    assert not output_file.exists()
+
+
+def test_close_rejects_linked_output_parent(tmp_path):
+    live_file = tmp_path / "live.yaml"
+    real_output = tmp_path / "real-output"
+    linked_output = tmp_path / "linked-output"
+    real_output.mkdir()
+    live_file.write_text(
+        """version: 1
+items:
+  - id: CR-WU-011
+    project: triagecore
+    title: Workspace Closing Packet
+    type: feature
+    kanban:
+      status: active
+      priority: high
+""",
+        encoding="utf-8",
+    )
+    try:
+        linked_output.symlink_to(real_output, target_is_directory=True)
+    except OSError:
+        pytest.skip("directory symlink creation is unavailable")
+
+    with pytest.raises(OSError, match="linked or reparse-backed"):
+        close_work_item(
+            str(live_file),
+            "CR-WU-011",
+            str(linked_output / "out.yaml"),
+        )
+
+    assert not (real_output / "out.yaml").exists()

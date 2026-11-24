@@ -140,3 +140,25 @@ def test_promote_prevents_overwrite_without_force(tmp_path):
         
     # With force it should work
     promote_items(str(live_file), str(preview_file), str(live_file), [], force=True)
+
+
+def test_promote_does_not_follow_predictable_staging_symlink(tmp_path):
+    live_file = tmp_path / "live.yaml"
+    preview_file = tmp_path / "preview.yaml"
+    output_file = tmp_path / "out.yaml"
+    sentinel = tmp_path / "sentinel.txt"
+    sentinel.write_text("unchanged", encoding="utf-8")
+    live_file.write_text("version: 1\nitems: []\n", encoding="utf-8")
+    preview_file.write_text("version: 1\nitems: []\n", encoding="utf-8")
+    legacy_stage = tmp_path / "out.yaml.tmp.yaml"
+    try:
+        legacy_stage.symlink_to(sentinel)
+    except OSError:
+        pytest.skip("symlink creation is unavailable")
+
+    with pytest.raises(OSError, match="Legacy workspace staging entry"):
+        promote_items(str(live_file), str(preview_file), str(output_file), [])
+
+    assert sentinel.read_text(encoding="utf-8") == "unchanged"
+    assert legacy_stage.is_symlink()
+    assert not output_file.exists()

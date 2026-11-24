@@ -1,9 +1,13 @@
 import yaml
 import os
-import shutil
 import datetime
 from copy import deepcopy
-from triage_core.workspace_board import load_work_items
+from triage_core.workspace_atomic import (
+    WorkspaceValidationError,
+    copy_workspace_backup,
+    require_output_available,
+    write_validated_workspace_yaml,
+)
 
 
 def promote_items(live_path: str, preview_path: str, output_path: str, target_ids: list[str], force: bool = False, backup: bool = False):
@@ -13,8 +17,7 @@ def promote_items(live_path: str, preview_path: str, output_path: str, target_id
     but all other user-authored fields are preserved.
     If it is new, it is appended.
     """
-    if os.path.exists(output_path) and not force:
-        raise FileExistsError(f"Output file {output_path} already exists. Use --force to overwrite.")
+    require_output_available(output_path, force=force)
             
     # Load raw dicts to preserve structure/order as best as possible
     with open(live_path, 'r', encoding='utf-8') as f:
@@ -52,20 +55,7 @@ def promote_items(live_path: str, preview_path: str, output_path: str, target_id
         "items": live_items
     }
     
-    # Write to a temporary file first to validate
-    tmp_path = output_path + ".tmp.yaml"
-    with open(tmp_path, 'w', encoding='utf-8') as f:
-        yaml.dump(output_data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
-        
-    # Validate the written file using the rigorous dataclass loader
-    try:
-        load_work_items(tmp_path)
-    except Exception as e:
-        os.remove(tmp_path)
-        raise RuntimeError(f"Promotion failed validation: {e}")
-        
-    # Validation passed, move to final destination
-    if os.path.exists(output_path):
+    def backup_existing_output() -> None:
         if backup and os.path.abspath(output_path) == os.path.abspath(live_path):
             # The user asked for a backup of the live file before we overwrite it
             backup_dir = os.path.join(os.path.dirname(os.path.abspath(output_path)), "backups")
@@ -74,7 +64,14 @@ def promote_items(live_path: str, preview_path: str, output_path: str, target_id
             basename = os.path.basename(output_path)
             name, ext = os.path.splitext(basename)
             backup_file = os.path.join(backup_dir, f"{name}.{timestamp}{ext}")
-            shutil.copy2(output_path, backup_file)
-            
-        os.remove(output_path)
-    os.rename(tmp_path, output_path)
+            copy_workspace_backup(output_path, backup_file)
+
+    try:
+        write_validated_workspace_yaml(
+            output_path,
+            output_data,
+            force=force,
+            before_replace=backup_existing_output,
+        )
+    except WorkspaceValidationError as e:
+        raise RuntimeError(f"Promotion failed validation: {e}") from e

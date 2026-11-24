@@ -17,7 +17,7 @@ import json
 import os
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Optional, TextIO
 
 
 # ---------------------------------------------------------------------------
@@ -510,19 +510,10 @@ def _parse_work_item(raw: dict[str, Any], index: int) -> WorkItem:
 # File loading
 # ---------------------------------------------------------------------------
 
-def load_work_items(path: str) -> list[WorkItem]:
-    """Load and validate work items from a YAML or JSON file.
-
-    Supports .yaml, .yml, and .json extensions.
-    Raises FileNotFoundError for missing files, ValueError for malformed or invalid data.
-    """
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"Work items file not found: {path}")
-
-    ext = os.path.splitext(path)[1].lower()
-
-    with open(path, "r", encoding="utf-8") as f:
-        content = f.read()
+def load_work_items_stream(stream: TextIO, *, source: str) -> list[WorkItem]:
+    """Load and validate work items from an already-open text stream."""
+    ext = os.path.splitext(source)[1].lower()
+    content = stream.read()
 
     if ext in (".yaml", ".yml"):
         try:
@@ -533,29 +524,29 @@ def load_work_items(path: str) -> list[WorkItem]:
         try:
             data = yaml.safe_load(content)
         except yaml.YAMLError as e:
-            raise ValueError(f"Malformed YAML in {path}: {e}")
+            raise ValueError(f"Malformed YAML in {source}: {e}")
     elif ext == ".json":
         try:
             data = json.loads(content)
         except json.JSONDecodeError as e:
-            raise ValueError(f"Malformed JSON in {path}: {e}")
+            raise ValueError(f"Malformed JSON in {source}: {e}")
     else:
-        raise ValueError(f"Unsupported file extension {ext!r} for {path}. "
+        raise ValueError(f"Unsupported file extension {ext!r} for {source}. "
                          f"Use .yaml, .yml, or .json.")
 
     if not isinstance(data, dict):
         raise ValueError(f"Work items file must contain a mapping, got {type(data).__name__}")
 
     if "version" not in data:
-        raise ValueError(f"Missing required field 'version' in {path}")
+        raise ValueError(f"Missing required field 'version' in {source}")
     if data["version"] != 1:
-        raise ValueError(f"Unsupported schema version {data['version']} in {path}. "
+        raise ValueError(f"Unsupported schema version {data['version']} in {source}. "
                          f"Only version 1 is supported.")
 
     if "items" not in data:
-        raise ValueError(f"Missing required field 'items' in {path}")
+        raise ValueError(f"Missing required field 'items' in {source}")
     if not isinstance(data["items"], list):
-        raise ValueError(f"'items' must be a list in {path}")
+        raise ValueError(f"'items' must be a list in {source}")
 
     items = []
     for i, raw_item in enumerate(data["items"]):
@@ -564,6 +555,19 @@ def load_work_items(path: str) -> list[WorkItem]:
         items.append(_parse_work_item(raw_item, i))
 
     return items
+
+
+def load_work_items(path: str) -> list[WorkItem]:
+    """Load and validate work items from a YAML or JSON file.
+
+    Supports .yaml, .yml, and .json extensions.
+    Raises FileNotFoundError for missing files, ValueError for malformed or invalid data.
+    """
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Work items file not found: {path}")
+
+    with open(path, "r", encoding="utf-8") as stream:
+        return load_work_items_stream(stream, source=path)
 
 
 # ---------------------------------------------------------------------------
