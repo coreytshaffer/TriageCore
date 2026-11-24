@@ -11,9 +11,9 @@ Design revision 1 was accepted by Corey Shaffer on 2026-11-23
 
 > Design and implementation approved.
 
-The second decision records design acceptance and approval to proceed with
-implementation in principle. The exact writable paths and permitted actions
-for the first slice are proposed below for confirmation.
+The second decision records design acceptance. Corey's subsequent grant
+authorizes the bounded receipt foundation and its tests. Implementation
+acceptance is pending.
 
 ## Scope
 
@@ -52,15 +52,22 @@ checklist-review store are outside this proposal.
 
 ## Implementation authority
 
-**Implementation approved in principle.** The bounded implementation grant
-is pending confirmation of the exact paths and actions below. The integration
-slice requires a separate grant.
+**First slice authorized by Corey Shaffer on 2026-11-23
+(America/Los_Angeles).** The grant refers to the seven paths and actions at
+PR head `efa81b4d64063bad4057cacc28e090b4b3560232`.
 
-### Proposed first-slice grant
+> I authorize the seven-path first slice of CR-140 as proposed. Implement it,
+> run the tests, and publish the tested candidate to draft PR #212.
+
+GitHub merged the design-only PR #212 as `b3bf0e1b`. Corey approved a
+replacement draft pull request with the response “Use a new draft PR.”
+The integration slice requires a separate grant.
+
+### Authorized first-slice grant
 
 Implement the review-receipt foundation from accepted design revision 1 in an
 isolated checkout. Use synthetic fixtures, run focused and regression tests,
-and publish the candidate on the existing draft PR #212 branch for review.
+and publish the candidate in a new draft PR linked to #212.
 
 | Writable path | Purpose |
 | --- | --- |
