@@ -15,7 +15,7 @@ def write_private(path, content):
 
 
 @pytest.fixture
-def configured_review(tmp_path, monkeypatch):
+def paired_review(tmp_path, monkeypatch):
     trust = tmp_path / "private"
     scope = trust / "workspace-a"
     state = scope / "state"
@@ -23,9 +23,11 @@ def configured_review(tmp_path, monkeypatch):
     ledger = tmp_path / "ledger"
     for directory in (trust, scope, state, evidence, ledger):
         directory.mkdir(mode=0o700)
-    key, policy = make_reviewer(scope)
-    (scope / "authz").chmod(0o700)
-    (scope / "authz" / "credentials.json").chmod(0o600)
+    (scope / "authz").mkdir(mode=0o700)
+    write_private(
+        scope / "authz" / "credentials.json",
+        b'{"schema":"triagecore.authz_credentials.v2","credentials":[]}',
+    )
     write_private(
         trust / "profiles.json",
         json.dumps(
@@ -36,10 +38,7 @@ def configured_review(tmp_path, monkeypatch):
                         "ledger_dir": str(ledger),
                         "scope_id": "workspace-a",
                         "reviewer_id": "reviewer-a",
-                        "grants": {
-                            identity: list(ids)
-                            for identity, ids in policy.grants.items()
-                        },
+                        "grants": {},
                     }
                 ],
             }
@@ -84,12 +83,29 @@ def configured_review(tmp_path, monkeypatch):
             task_review_service, "_private_directory", lambda *args: nullcontext()
         )
 
+    service = ReviewService(ledger, root=trust)
+    service.migrate()
+    return service, ledger, trust, artifact, manifest
+
+
+@pytest.fixture
+def configured_review(paired_review):
+    _, ledger, trust, artifact, manifest = paired_review
+    scope = trust / "workspace-a"
+    key, policy = make_reviewer(scope)
+    (scope / "authz" / "credentials.json").chmod(0o600)
+    path = trust / "profiles.json"
+    profiles = json.loads(path.read_bytes())
+    profiles["profiles"][0]["grants"] = {
+        identity: list(ids) for identity, ids in policy.grants.items()
+    }
+    write_private(path, json.dumps(profiles).encode())
+
     def acquire(request, credential_ids):
         assert credential_ids
         return assertion(key, request)
 
     service = ReviewService(ledger, root=trust, acquire_assertion=acquire)
-    service.migrate()
     return service, ledger, trust, artifact, manifest
 
 
@@ -379,6 +395,16 @@ def test_mobile_and_desktop_decisions_share_queue_cli_and_metrics(
             lambda snapshot: True,
             intent_id=result.json()["intent_id"],
         )
+        committed_retry = client.post(
+            "/api/tasks/task-1/review",
+            headers=headers,
+            json={"decision": "needs_revision", "request_id": "integration-1"},
+        )
+        assert committed_retry.status_code == 200
+        assert committed_retry.json() == {
+            "status": "committed",
+            "intent_id": result.json()["intent_id"],
+        }
         task = ledger.get_task("task-1")
         assert task.review.decision == "needs_revision"
         assert [row.task_id for row in get_pending_reviews(ledger)] == ["task-1"]

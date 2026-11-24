@@ -6,7 +6,7 @@ from pathlib import Path
 import fastapi
 import pytest
 from fastapi.testclient import TestClient
-from test_task_review_integration import configured_review
+from test_task_review_integration import paired_review
 
 from triage_core.task_ledger import TaskLedger
 
@@ -128,9 +128,9 @@ def test_mobile_page_uses_operator_token_entry(mobile_api):
     assert "console.log" not in script_response.text
 
 
-def test_mobile_web_lists_safe_tasks_and_requests_review(mobile_api, configured_review, monkeypatch):
+def test_mobile_web_lists_safe_tasks_and_requests_review(mobile_api, paired_review, monkeypatch):
     server, _, _, client, headers = mobile_api
-    service, ledger_dir, *_ = configured_review
+    service, ledger_dir, *_ = paired_review
     ledger = TaskLedger(str(ledger_dir), review_service=service)
     monkeypatch.setattr(server, "ledger", ledger)
     task_id = "task-1"
@@ -172,21 +172,21 @@ def test_mobile_web_lists_safe_tasks_and_requests_review(mobile_api, configured_
     assert pending["accepted"] is None
     assert intent_id not in json.dumps(pending)
 
-    service.confirm(task_id, "accepted", lambda snapshot: True, intent_id=intent_id)
+    service.cancel_intent(task_id, intent_id)
     resolved_retry = client.post(route, json=body, headers=headers)
     assert resolved_retry.status_code == 200
-    assert resolved_retry.json() == {"status": "committed", "intent_id": intent_id}
+    assert resolved_retry.json() == {"status": "cancelled", "intent_id": intent_id}
     competing = client.post(
         route, json={"request_id": "request-2", "decision": "needs_revision"}, headers=headers,
     )
     assert competing.status_code == 202
-    verified = client.get("/api/tasks", headers=headers).json()["tasks"][0]
-    assert verified["review_status"] == "verified"
-    assert verified["review_decision"] == "accepted"
-    assert verified["review_pending_count"] == 1
-    assert verified["accepted"] is True
-    assert "Exact synthetic text" not in json.dumps(verified)
-    assert "rev-1" not in json.dumps(verified)
+    current = client.get("/api/tasks", headers=headers).json()["tasks"][0]
+    assert current["review_status"] == "pending"
+    assert current["review_decision"] is None
+    assert current["review_pending_count"] == 1
+    assert current["accepted"] is None
+    assert "Exact synthetic text" not in json.dumps(current)
+    assert "rev-1" not in json.dumps(current)
     assert Path(ledger.ledger_path).read_bytes() == before
 
 
