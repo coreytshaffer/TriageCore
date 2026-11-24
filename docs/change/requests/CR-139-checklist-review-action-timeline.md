@@ -9,7 +9,7 @@
 | Proposal acceptance | Accepted at `62e328d`. [Decision record](#proposal-acceptance-record) |
 | Design acceptance | Accepted at `62e328d`. [Decision record](#design-acceptance-record) |
 | Operator guide and timeline design amendment | Accepted on 2026-11-22. [Design amendment](#design-amendment-for-the-operator-guide-and-timeline) |
-| Implementation authority | **Approved for Claude.** One local corrective commit on `3df1a1c` for the three read-path findings and runbook wording, with fixture tests. [Current grant](#corrective-grant-on-3df1a1c-for-verified-file-reads) · [Preceding corrective grant](#corrective-grant-on-5c33d4d-for-restart-attribution-folder-validation-and-paging) · [Operator guide grant](#implementation-grant-for-the-operator-guide-and-timeline) · [Original grant](#implementation-authority-record) |
+| Implementation authority | **Approved for Claude.** One local corrective commit on `82a4972` for the two Windows filename regressions, with fixture tests. [Current grant](#corrective-grant-on-82a4972-for-windows-filenames) · [Preceding corrective grant](#corrective-grant-on-f0232cd-for-store-integrity-and-read-errors) · [Operator guide grant](#implementation-grant-for-the-operator-guide-and-timeline) · [Original grant](#implementation-authority-record) |
 | Implementation acceptance | Pending |
 | Merge authority | Pending |
 | Release authority | Pending |
@@ -152,9 +152,11 @@ The following scope applies to the original timeline candidate. The
 defines the writable paths for the candidate based on `49e3ad4`.
 The [grant on `7c17cab`](#corrective-grant-for-the-operator-guide-on-7c17cab)
 covered the first four operator-guide findings. The [grant on `5c33d4d`](#corrective-grant-on-5c33d4d-for-restart-attribution-folder-validation-and-paging)
-covered restart attribution, folder validation, and paging. The [current
-grant](#corrective-grant-on-3df1a1c-for-verified-file-reads) defines the writable paths for
-the three read-path findings and runbook wording on `3df1a1c`.
+covered restart attribution, folder validation, and paging. The [grant on
+`3df1a1c`](#corrective-grant-on-3df1a1c-for-verified-file-reads) covered verified reads and runbook wording.
+The [grant on `f0232cd`](#corrective-grant-on-f0232cd-for-store-integrity-and-read-errors) covered
+inventory, closed stores, and interrupted reads. The [current grant](#corrective-grant-on-82a4972-for-windows-filenames)
+defines the writable paths for the Windows filename corrections on `82a4972`.
 
 The base is `origin/main` at `10af245c18095346d7d60b55b2e105bb819f4828`. The
 first-delivery release `022b4a1227b68b899bf1df2aa83d154e9f4855f4` is the
@@ -1001,6 +1003,130 @@ a separate staging decision. D5 touch remains for Corey’s device check or
 explicit waiver. Candidate publication, merge, release, and closeout require
 separate decisions. Replay, linked resume, rollback, file restoration, and
 new model runs are outside this grant. [Saved-run procedure](#operator-checks-on-the-saved-runs)
+
+## Corrective grant on `f0232cd` for store integrity and read errors
+
+On 2026-11-22 (Pacific), Corey Shaffer authorized Claude to fix all three
+findings below, with fixture regression tests, in **one local corrective commit**.
+Its sole parent must be `f0232cdd6f555ce652ac9fd5fb30bfcb749ed612` on
+`claude/cr-139-che-89-action-timeline-impl`. The grant published at `7748d4b`
+ended with handback of `f0232cd`. This grant takes effect with this local CR
+record and ends when Claude returns the new candidate and its evidence.
+**Implementation acceptance is pending.** [Preceding grant](#corrective-grant-on-3df1a1c-for-verified-file-reads)
+
+Only the following repository paths are writable for the corrective commit.
+
+| Writable repository path | Authorized change |
+| --- | --- |
+| `triage_core/checklist_review_readonly.py` | Bind manifest and inventory reads to the same verified root, reject duplicate relative names, and distinguish interruptions during consumption. |
+| `triage_core/checklist_review_guide_tk.py` | Require the database marker and complete inventory for each reading. Report pre-read and in-read failures accurately. |
+| `triage_core/checklist_review_store.py` | Keep artifact reads on an open read-only store verified and refuse them once that store closes. |
+| `tests/test_checklist_review_guide_tk.py` | Exercise both integrity readings, the fixed operator messages, and preservation of recorded observations with disposable fixtures. |
+| `tests/test_checklist_review_store.py` | Exercise open and closed read-only stores, the writable-store control, and shared reader fixtures as needed. |
+| `docs/operations/checklist-review-timeline.md` | Align the integrity procedure and its operator messages with the observed outcomes. |
+
+1. **Require a complete inventory of the same store.** For each before and
+   after reading, bind the hashing pass and the independent inventory to the
+   same verified root. A reading must fail if that identity cannot be established.
+   Require the plain `checklist_review.sqlite3` file in the inventory and in
+   the completed manifest. Reject duplicate relative file names in either pass
+   before a dictionary or set can hide them. Preserve the existing full key,
+   size, modification-time, and digest checks. On the parent, one fixture
+   reading opened the root twice. An inventory that lost the marker was accepted
+   with just `a.txt`. A repeated entry produced two reads and one accepted row.
+   Exercise all three conditions through the guide’s normal reading path.
+2. **Refuse artifact reads on a closed read-only store.** Select the read path
+   from the store’s access mode and open state. After close, a read-only request
+   must return a fixed, path-free failure with zero artifact I/O. On the
+   parent, a fixture intercepted one `Path.read_bytes()` call after close.
+   Check explicit close and context-manager exit. Confirm an open read-only
+   store still verifies the fixture bytes and an open writable store still
+   reads normally.
+3. **Report interrupted reads accurately.** Keep a refusal before content
+   access distinguishable from an interruption during reading or a failed
+   final consistency check. Use fixed, path-free operator text. On the parent,
+   the fixture delivered two bytes before an I/O error, and the guide said it
+   had stopped before reading the file. Exercise the real consumption and
+   guide error path. Check a genuine pre-read refusal with zero bytes read
+   and an interruption after a positive byte count. Update the runbook to
+   match both messages.
+
+Use generated fixtures only. A failed before reading blocks the check. A
+failed after reading reports `incomplete` and preserves the operator’s
+observations. Retain `no differences` for a complete unchanged store,
+`differences found` for a genuine change, and one final comparison on Finish,
+Pause, or Close. The staged launcher and shortcut are read-only inputs. Preserve
+the launcher contract and pin, passive listener check, guide controls, and the
+documented SQLite pathname-open limitation. This grant does not extend to a
+SQLite redesign, replay, linked resume, rollback, restoration, or new model runs.
+
+Return the candidate and its sole-parent SHAs, changed paths, clean worktree
+status, parent-fail and candidate-pass fixture evidence for each finding,
+and the focused CR-139 and CR-138 suite results with failures, skips, and
+reruns. The parent Windows baseline was 120 CR-139 and 174 CR-138 tests
+passing. **Corey alone** performs the saved DC-02 correction
+(`62866263-2842-4e85-acd2-2e681fadb0fa`) and DC-03 preflight stop
+(`a64e0a30-08ba-43e6-acc1-658575f309c9`), with Ollama stopped. Both await a
+separate staging decision. D5 touch remains for Corey’s device check or waiver.
+Candidate publication, merge, release, and closeout remain pending.
+[Saved-run procedure](#operator-checks-on-the-saved-runs)
+
+## Corrective grant on `82a4972` for Windows filenames
+
+On 2026-11-23 (Pacific), Corey Shaffer authorized Claude to fix both Windows
+filename regressions with fixture tests in **one local corrective commit**.
+Its sole parent must be `82a49724a5db2f39b5d4673be82082f8dd605107` on
+`claude/cr-139-che-89-action-timeline-impl`. The preceding grant ended at handback
+of `82a4972`. This grant takes effect with this local CR record and ends when
+Claude returns the candidate and its evidence. **Implementation acceptance is
+pending.** [Preceding grant](#corrective-grant-on-f0232cd-for-store-integrity-and-read-errors)
+
+Only the following repository paths are writable for this commit. Use the
+subset needed for these two corrections.
+
+| Writable repository path | Authorized change |
+| --- | --- |
+| `triage_core/checklist_review_readonly.py` | Preserve native directory-entry names in lookup, duplicate detection, hashing, and inventory. |
+| `triage_core/checklist_review_guide_tk.py` | Verify the database marker in both passes using the entry that the store recognizes. |
+| `triage_core/checklist_review_store.py` | Align read-only marker lookup with the guide if needed. |
+| `tests/test_checklist_review_guide_tk.py` | Check both Windows filename cases through the guide and retain its existing refusal controls. |
+| `tests/test_checklist_review_store.py` | Check that the read-only store opens the two ordinary Windows fixtures. |
+| `docs/operations/checklist-review-timeline.md` | Clarify the filename and database-marker behavior where the operator instructions require it. |
+
+1. **Preserve distinct Windows filenames.** On a disposable Windows store,
+   create `Maße.txt` and `Masse.txt` with different bytes. Verify that Windows
+   exposes two distinct files. Both `ReviewStore.open_readonly` and the guide’s
+   integrity reading must succeed. Each pass must retain both original names.
+   Check each returned digest against its own file. A genuinely repeated
+   directory entry in either the hashing pass or the independent inventory
+   must still fail before the result can be accepted.
+2. **Recognize the database the store opens.** On an ordinary case-insensitive
+   Windows fixture, use the on-disk spelling `CHECKLIST_REVIEW.SQLITE3` and
+   verify that the canonical `checklist_review.sqlite3` resolves to that file.
+   The guide and the read-only store must agree. Both verified passes must
+   include the actual marker under its stored spelling. Preserve exact relative
+   names in the manifest. A missing marker in either or both passes, an
+   unverifiable marker, and disagreement about the verified root must still
+   block the before reading or leave the after reading `incomplete`.
+
+Use only generated fixtures. Show the two failures on `82a4972` and the
+corresponding passes on the candidate through the normal store and guide
+entry points. Retain unchanged and changed comparison results, recorded
+operator observations, closed-store protections, and phase-specific read
+errors. Report both focused suites with actual totals, failures, skips, and
+reruns. The parent Windows baseline is 140 CR-139 and 180 CR-138 tests passing.
+Return the candidate SHA, sole parent, changed files, and clean worktree
+status. If the commit is available only in Claude’s checkout, return a Git
+bundle containing it for local review.
+
+**Corey alone** performs the saved DC-02 correction
+(`62866263-2842-4e85-acd2-2e681fadb0fa`) and DC-03 preflight stop
+(`a64e0a30-08ba-43e6-acc1-658575f309c9`), with Ollama stopped, after a separate
+staging decision. The staged launcher and shortcut are read-only inputs.
+D5 touch awaits Corey’s device check or waiver. Candidate publication, merge,
+release, and closeout remain pending. Replay, linked resume, rollback, file
+restoration, and new model runs remain outside this grant.
+[Saved-run procedure](#operator-checks-on-the-saved-runs)
 
 ## Limitations
 
