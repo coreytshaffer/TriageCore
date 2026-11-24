@@ -175,6 +175,42 @@ items:
     backup_file = tmp_path / "input.yaml.bak"
     assert backup_file.exists()
 
+
+def test_inplace_backup_does_not_follow_symlink(tmp_path):
+    input_file = tmp_path / "input.yaml"
+    sentinel = tmp_path / "sentinel.txt"
+    sentinel.write_text("unchanged", encoding="utf-8")
+    input_file.write_text(
+        """version: 1
+items:
+  - id: CR-001
+    project: Proj A
+    title: Test
+    type: task
+    kanban:
+      status: active
+      priority: high
+""",
+        encoding="utf-8",
+    )
+    backup_file = tmp_path / "input.yaml.bak"
+    try:
+        backup_file.symlink_to(sentinel)
+    except OSError:
+        pytest.skip("symlink creation is unavailable")
+
+    touch_work_item(
+        str(input_file),
+        "CR-001",
+        str(input_file),
+        force=True,
+        backup=True,
+    )
+
+    assert sentinel.read_text(encoding="utf-8") == "unchanged"
+    assert not backup_file.is_symlink()
+    assert read_yaml(backup_file)[0]["id"] == "CR-001"
+
 def test_unknown_id_fails(tmp_path):
     """Touching an unknown ID should fail."""
     input_file = tmp_path / "input.yaml"
@@ -195,3 +231,35 @@ items:
     
     with pytest.raises(ValueError, match="not found"):
         touch_work_item(str(input_file), "UNKNOWN-001", str(output_file))
+
+
+def test_touch_does_not_follow_predictable_staging_symlink(tmp_path):
+    input_file = tmp_path / "input.yaml"
+    output_file = tmp_path / "output.yaml"
+    sentinel = tmp_path / "sentinel.txt"
+    sentinel.write_text("unchanged", encoding="utf-8")
+    input_file.write_text(
+        """version: 1
+items:
+  - id: CR-001
+    project: Proj A
+    title: Test
+    type: task
+    kanban:
+      status: active
+      priority: high
+""",
+        encoding="utf-8",
+    )
+    legacy_stage = tmp_path / "output.yaml.tmp.yaml"
+    try:
+        legacy_stage.symlink_to(sentinel)
+    except OSError:
+        pytest.skip("symlink creation is unavailable")
+
+    with pytest.raises(OSError, match="Legacy workspace staging entry"):
+        touch_work_item(str(input_file), "CR-001", str(output_file))
+
+    assert sentinel.read_text(encoding="utf-8") == "unchanged"
+    assert legacy_stage.is_symlink()
+    assert not output_file.exists()

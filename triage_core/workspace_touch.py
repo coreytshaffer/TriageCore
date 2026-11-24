@@ -1,8 +1,11 @@
 import os
-import shutil
 import yaml
 from datetime import datetime, timezone
-from triage_core.workspace_board import load_work_items
+from triage_core.workspace_atomic import (
+    WorkspaceValidationError,
+    copy_workspace_backup,
+    write_validated_workspace_yaml,
+)
 
 def touch_work_item(filepath: str, item_id: str, output_path: str, note: str = None, force: bool = False, backup: bool = False) -> None:
     """
@@ -57,25 +60,18 @@ def touch_work_item(filepath: str, item_id: str, output_path: str, note: str = N
         "items": live_items
     }
 
-    # Write candidate to a temporary file
-    temp_output = f"{output_path}.tmp.yaml"
-    try:
-        with open(temp_output, "w", encoding="utf-8") as f:
-            yaml.safe_dump(output_data, f, sort_keys=False, allow_unicode=True)
-            
-        # Validate candidate
-        try:
-            load_work_items(temp_output)
-        except Exception as e:
-            raise ValueError(f"Updated YAML failed validation: {e}")
-            
+    def backup_existing_output() -> None:
         # Backup if requested and overwriting in-place
         if backup and in_place and os.path.exists(filepath):
             backup_path = f"{filepath}.bak"
-            shutil.copy2(filepath, backup_path)
-            
-        # Commit to output_path
-        os.replace(temp_output, output_path)
-    finally:
-        if os.path.exists(temp_output):
-            os.remove(temp_output)
+            copy_workspace_backup(filepath, backup_path)
+
+    try:
+        write_validated_workspace_yaml(
+            output_path,
+            output_data,
+            force=force or not in_place,
+            before_replace=backup_existing_output,
+        )
+    except WorkspaceValidationError as e:
+        raise ValueError(f"Updated YAML failed validation: {e}") from e

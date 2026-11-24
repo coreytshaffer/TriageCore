@@ -1,9 +1,14 @@
 import os
 import yaml
-import shutil
 import datetime
 from typing import Optional
-from triage_core.workspace_board import WorkItem, load_work_items
+from triage_core.workspace_atomic import (
+    WorkspaceValidationError,
+    copy_workspace_backup,
+    require_output_available,
+    write_validated_workspace_yaml,
+)
+from triage_core.workspace_board import WorkItem
 
 def generate_closing_packet(item: WorkItem, commit: Optional[str] = None, tests: Optional[str] = None, summary: Optional[str] = None) -> str:
     """Generate a Markdown closing packet for a work item."""
@@ -39,8 +44,7 @@ def generate_closing_packet(item: WorkItem, commit: Optional[str] = None, tests:
 
 def close_work_item(live_path: str, target_id: str, output_path: str, force: bool = False, backup: bool = False):
     """Mutate the work_items.yaml to mark the target_id as done."""
-    if os.path.exists(output_path) and not force:
-        raise FileExistsError(f"Output file {output_path} already exists. Use --force to overwrite.")
+    require_output_available(output_path, force=force)
         
     with open(live_path, 'r', encoding='utf-8') as f:
         live_data = yaml.safe_load(f)
@@ -65,17 +69,7 @@ def close_work_item(live_path: str, target_id: str, output_path: str, force: boo
         "items": live_items
     }
     
-    tmp_path = output_path + ".tmp.yaml"
-    with open(tmp_path, 'w', encoding='utf-8') as f:
-        yaml.dump(output_data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
-        
-    try:
-        load_work_items(tmp_path)
-    except Exception as e:
-        os.remove(tmp_path)
-        raise RuntimeError(f"Close mutation failed validation: {e}")
-        
-    if os.path.exists(output_path):
+    def backup_existing_output() -> None:
         if backup and os.path.abspath(output_path) == os.path.abspath(live_path):
             backup_dir = os.path.join(os.path.dirname(os.path.abspath(output_path)), "backups")
             os.makedirs(backup_dir, exist_ok=True)
@@ -83,7 +77,14 @@ def close_work_item(live_path: str, target_id: str, output_path: str, force: boo
             basename = os.path.basename(output_path)
             name, ext = os.path.splitext(basename)
             backup_file = os.path.join(backup_dir, f"{name}.{timestamp}{ext}")
-            shutil.copy2(output_path, backup_file)
-            
-        os.remove(output_path)
-    os.rename(tmp_path, output_path)
+            copy_workspace_backup(output_path, backup_file)
+
+    try:
+        write_validated_workspace_yaml(
+            output_path,
+            output_data,
+            force=force,
+            before_replace=backup_existing_output,
+        )
+    except WorkspaceValidationError as e:
+        raise RuntimeError(f"Close mutation failed validation: {e}") from e
