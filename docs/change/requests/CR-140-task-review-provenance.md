@@ -118,6 +118,19 @@ authority.
    sites. Record the exact base, candidate revision and observed results
    in the CR before requesting implementation acceptance.
 
+### First-slice evidence
+
+- Base `b3bf0e1b5fbeb430f32662e08ba5632b2a2cdfd2`; tested implementation
+  `31e404ec64f80194d06a6a1f7ada63e71f288d67`.
+- Windows, Python 3.12.14, python-fido2 2.2.1. The focused receipt, store,
+  authorization, and capability-store suites passed 157 tests. One existing
+  POSIX permission test skipped. The cryptographic fixtures used software
+  keys. Hardware confirmation remains an integration verification.
+- The receipt and store have no call sites in the existing review writers
+  and readers. The existing FIDO2 adapter shares assertion verification
+  between the two receipt types.
+- Implementation acceptance remains pending.
+
 ## Human approval requirement
 
 Record design acceptance before granting implementation authority. Record
