@@ -309,6 +309,57 @@ review state, and current-policy re-evaluation of past receipts. Approval of
 the design covers these choices. Each implementation slice still requires
 its own bounded grant.
 
+## Live review integration grant
+
+**Authorized for implementation; candidate review pending.** On
+2026-11-23 (America/Los_Angeles), Corey Shaffer accepted the proposed
+integration following first-slice PR #214, merged at
+`2c0bdc866c75d76ce64e858a4ff1cefca0caaaf7`.
+
+> I approve the CR-140 live review integration scope and authorize the 25 named paths. Implement it, run the proposed tests, and publish the tested candidate in a new draft PR linked to #214.
+
+Corey separately authorized `tests/test_reviewer_traceability.py` to update
+three legacy expectations for unsigned decisions and the review queue.
+
+### Writable paths
+
+- Shared service and store: `triage_core/task_review_service.py`,
+  `triage_core/task_review_store.py`, `triage_core/fido2_adapter.py`.
+- Projection and desktop: `triage_core/task_ledger.py`,
+  `triage_core/review_queue.py`, `triage_core/triagedesk_adapter.py`,
+  `triage_core/ui/app.py`.
+- Mobile: `triage_core/web/server.py`, `triage_core/web/static/app.js`,
+  `triage_core/web/static/index.html`.
+- CLI and metrics: `triage_core/tc_cli.py`, `triage_core/cli.py`,
+  `triage_core/lab.py`.
+- Tests: `tests/test_task_review_integration.py`,
+  `tests/test_task_review_store.py`, `tests/test_task_ledger.py`,
+  `tests/test_review_queue.py`, `tests/test_triagedesk_adapter.py`,
+  `tests/test_cr_098_task_show.py`, `tests/test_ui_execute_context_review.py`,
+  `tests/test_ui_smoke.py`, `tests/test_mobile_web.py`, `tests/test_lab.py`,
+  and `tests/test_reviewer_traceability.py`.
+- Documentation: `docs/change/requests/CR-140-task-review-provenance.md`
+  and `docs/operations/task-review-provenance.md`.
+
+### Integration acceptance
+
+The candidate must tie desktop actions and mobile requests to one local
+confirmation flow using an operator-controlled evidence snapshot. The
+transactional migration preserves existing review records. A mobile
+intent alone remains outside verified results. Task views, queues and
+metrics agree about the current decision. Historical unsigned observations
+remain inspectable and exclude themselves from verified labels. The
+initial cutover uses the private store and preserves existing JSONL bytes.
+
+Verify synthetic signed end-to-end decisions, local trust and evidence
+changes, unavailable or revoked credentials and grants, intent expiry,
+concurrency and cancellation, migration failures, existing signed-event
+behavior, and the full regression suite. Hardware observation requires
+a designated local reviewer and corresponding test authorization.
+Implementation acceptance, merge, release, and closeout have separate
+authority requirements. See the [local operating procedure](
+../../operations/task-review-provenance.md).
+
 ## Identifier census
 
 On 2026-11-23, GitHub `main` at `ad2aa69` contained
