@@ -11,9 +11,9 @@ Design revision 1 was accepted by Corey Shaffer on 2026-11-23
 
 > Design and implementation approved.
 
-The second decision records design acceptance and approval to proceed with
-implementation in principle. The exact writable paths and permitted actions
-for the first slice are proposed below for confirmation.
+The second decision records design acceptance. Corey's subsequent grant
+authorizes the bounded receipt foundation and its tests. Implementation
+acceptance is pending.
 
 ## Scope
 
@@ -52,15 +52,22 @@ checklist-review store are outside this proposal.
 
 ## Implementation authority
 
-**Implementation approved in principle.** The bounded implementation grant
-is pending confirmation of the exact paths and actions below. The integration
-slice requires a separate grant.
+**First slice authorized by Corey Shaffer on 2026-11-23
+(America/Los_Angeles).** The grant refers to the seven paths and actions at
+PR head `efa81b4d64063bad4057cacc28e090b4b3560232`.
 
-### Proposed first-slice grant
+> I authorize the seven-path first slice of CR-140 as proposed. Implement it,
+> run the tests, and publish the tested candidate to draft PR #212.
+
+GitHub merged the design-only PR #212 as `b3bf0e1b`. Corey approved a
+replacement draft pull request with the response “Use a new draft PR.”
+The integration slice requires a separate grant.
+
+### Authorized first-slice grant
 
 Implement the review-receipt foundation from accepted design revision 1 in an
 isolated checkout. Use synthetic fixtures, run focused and regression tests,
-and publish the candidate on the existing draft PR #212 branch for review.
+and publish the candidate in a new draft PR linked to #212.
 
 | Writable path | Purpose |
 | --- | --- |
@@ -110,6 +117,19 @@ authority.
    changes only the allowed paths and has no writer or projection call
    sites. Record the exact base, candidate revision and observed results
    in the CR before requesting implementation acceptance.
+
+### First-slice evidence
+
+- Base `b3bf0e1b5fbeb430f32662e08ba5632b2a2cdfd2`; tested implementation
+  `31e404ec64f80194d06a6a1f7ada63e71f288d67`.
+- Windows, Python 3.12.14, python-fido2 2.2.1. The focused receipt, store,
+  authorization, and capability-store suites passed 157 tests. One existing
+  POSIX permission test skipped. The cryptographic fixtures used software
+  keys. Hardware confirmation remains an integration verification.
+- The receipt and store have no call sites in the existing review writers
+  and readers. The existing FIDO2 adapter shares assertion verification
+  between the two receipt types.
+- Implementation acceptance remains pending.
 
 ## Human approval requirement
 

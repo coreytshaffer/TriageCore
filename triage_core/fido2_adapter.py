@@ -285,6 +285,23 @@ def verify_receipt(
         # names; otherwise any enrolled human's key could satisfy it.
         raise AuthzVerificationError(VERIFY_FAIL_APPROVER_MISMATCH)
 
+    verify_enrolled_assertion(
+        enrolled,
+        compute_challenge(receipt.request),
+        receipt.assertion_response,
+        user_verification_required=receipt.request.user_verification_required,
+    )
+    return enrolled
+
+
+def verify_enrolled_assertion(
+    enrolled: EnrolledCredential,
+    challenge: bytes,
+    assertion_response: dict,
+    *,
+    user_verification_required: bool,
+) -> None:
+    """Verify an assertion after the caller has enforced its receipt policy."""
     fido2 = _import_fido2()
     from fido2.server import Fido2Server
     from fido2.utils import websafe_encode
@@ -295,14 +312,14 @@ def verify_receipt(
     )
 
     server = Fido2Server(
-        PublicKeyCredentialRpEntity(id=receipt.request.rp_id, name=RP_NAME),
+        PublicKeyCredentialRpEntity(id=enrolled.rp_id, name=RP_NAME),
         verify_origin=lambda origin: origin == ORIGIN,
     )
     state = {
-        "challenge": websafe_encode(compute_challenge(receipt.request)),
+        "challenge": websafe_encode(challenge),
         "user_verification": (
             UserVerificationRequirement.REQUIRED
-            if receipt.request.user_verification_required
+            if user_verification_required
             else UserVerificationRequirement.DISCOURAGED
         ),
     }
@@ -315,7 +332,7 @@ def verify_receipt(
     )
     try:
         server.authenticate_complete(
-            state, [registered], receipt.assertion_response
+            state, [registered], assertion_response
         )
     except ValueError as exc:
         raise AuthzVerificationError(str(exc)) from exc
@@ -323,4 +340,3 @@ def verify_receipt(
         raise AuthzVerificationError(
             f"assertion verification failed: {exc}"
         ) from exc
-    return enrolled
