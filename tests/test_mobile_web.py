@@ -265,7 +265,7 @@ def test_start_server_defaults_to_loopback(monkeypatch):
         lambda app, host, port: calls.append((app, host, port)),
     )
 
-    server.start_server(token="test-mobile-token")
+    server.start_server(token="test-mobile-token", actor_id="legacy-mobile-actor")
 
     assert calls == [(server.app, "127.0.0.1", 8000)]
 

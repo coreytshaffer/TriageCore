@@ -207,8 +207,10 @@ def start_server(
     port: int = 8000,
     *,
     token: Optional[str] = None,
+    actor_id: Optional[str] = None,
     allow_network: bool = False,
 ) -> None:
+    """Start the mobile API. The legacy actor argument has no authority."""
     global MOBILE_TOKEN
 
     configured_token = token or os.environ.get("TRIAGECORE_MOBILE_TOKEN", "")
