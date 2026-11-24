@@ -3,12 +3,17 @@
 ## Status
 
 **Proposal accepted by Corey Shaffer on 2026-11-23 (America/Los_Angeles).**
-Design revision 1 is proposed for human review.
+Design revision 1 was accepted by Corey Shaffer on 2026-11-23
+(America/Los_Angeles), at PR head
+`37bceec44a360f40bddc127182f94fa7b174de2f`.
 
 > I accept the CR-140 proposal.
 
-The acceptance covers the proposal. Design acceptance and implementation
-authority are pending.
+> Design and implementation approved.
+
+The second decision records design acceptance and approval to proceed with
+implementation in principle. The exact writable paths and permitted actions
+for the first slice are proposed below for confirmation.
 
 ## Scope
 
@@ -47,8 +52,64 @@ checklist-review store are outside this proposal.
 
 ## Implementation authority
 
-**Pending.** A later grant must name the accepted design revision, the exact
-source and test paths, and the permitted actions for a bounded slice.
+**Implementation approved in principle.** The bounded implementation grant
+is pending confirmation of the exact paths and actions below. The integration
+slice requires a separate grant.
+
+### Proposed first-slice grant
+
+Implement the review-receipt foundation from accepted design revision 1 in an
+isolated checkout. Use synthetic fixtures, run focused and regression tests,
+and publish the candidate on the existing draft PR #212 branch for review.
+
+| Writable path | Purpose |
+| --- | --- |
+| `triage_core/task_review_receipt.py` | Canonical review request, receipt and evidence manifest. Verify reviewer eligibility and proof against trusted inputs. |
+| `triage_core/task_review_store.py` | Local SQLite persistence for challenges, verified receipts and per-task review heads. |
+| `triage_core/fido2_adapter.py` | Share only the low-level assertion verification needed by both receipt types. Preserve the execution receipt API and policy. |
+| `tests/test_task_review_receipt.py` | Synthetic evidence and credential verification tests. |
+| `tests/test_task_review_store.py` | SQLite admission, failure and isolation tests. |
+| `docs/change/adr/ADR-CR-140-task-review-authority.md` | Record the accepted review-store trust boundary and its consequences. |
+| `docs/change/requests/CR-140-task-review-provenance.md` | Record the grant and evidence for this slice. |
+
+The slice ends with the foundation and its tests. Desktop and mobile
+writers, task projection, reporting, migrations of existing data, runtime
+ledger writes, hardware operations, merge, and release require later
+authority.
+
+### First-slice implementation plan
+
+1. **Receipt contract.** Start with synthetic tests in
+   `test_task_review_receipt.py` for canonical evidence digest and request
+   construction. Test that a change to any bound field changes the
+   challenge, and reject unknown versions, invalid decision values, and
+   noncanonical identifiers. Implement the versioned request, receipt
+   and manifest in `task_review_receipt.py`. The manifest builder accepts
+   the already-captured item bytes and stable item identifiers. It never
+   resolves a path or reads a live evidence source.
+2. **Proof verification.** Test signed synthetic assertions, purpose and
+   scope separation, reviewer grant and enrollment checks, user-presence
+   and user-verification requirements, and wrong origin or relying party.
+   Share the existing FIDO2 primitive through `fido2_adapter.py`. Review
+   verification uses the review challenge and trusted policy supplied by
+   the caller. Run `tests/test_authz.py` as the execution-receipt regression
+   check.
+3. **Transactional admission.** Start with synthetic SQLite tests for
+   competing confirmations, expiry, idempotent retry and ambiguous
+   commit, cross-scope access, stale evidence and predecessor, and an
+   inaccessible store. Implement one transaction in
+   `task_review_store.py` to check trusted scope, current evidence
+   binding and predecessor, consume the challenge, persist the verified
+   receipt and admission time, and advance the head. Test historical
+   verification at the admission time under current eligibility policy,
+   and preserve failure outcomes without restoring superseded decisions.
+4. **Handoff.** Record the authority boundary in the ADR. In a disposable
+   test environment run
+   `python -m pytest tests/test_task_review_receipt.py tests/test_task_review_store.py tests/test_authz.py tests/test_capability_claims.py`,
+   then `python -m pytest` and `git diff --check`. Confirm the candidate
+   changes only the allowed paths and has no writer or projection call
+   sites. Record the exact base, candidate revision and observed results
+   in the CR before requesting implementation acceptance.
 
 ## Human approval requirement
 
