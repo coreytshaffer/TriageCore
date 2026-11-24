@@ -6,6 +6,7 @@ from pathlib import Path
 import fastapi
 import pytest
 from fastapi.testclient import TestClient
+from test_task_review_integration import configured_review
 
 from triage_core.task_ledger import TaskLedger
 
@@ -69,7 +70,7 @@ def test_mobile_import_accepts_supported_fastapi(version, startup_ledger_path, m
 def mobile_api(tmp_path, monkeypatch):
     import triage_core.web.server as server
 
-    ledger = TaskLedger(ledger_dir=str(tmp_path / "ledger"))
+    ledger = TaskLedger(ledger_dir=str(tmp_path / "mobile-ledger"))
     task_id = "task-mobile"
     ledger.append_event(
         task_id,
@@ -81,10 +82,9 @@ def mobile_api(tmp_path, monkeypatch):
     )
     ledger.append_event(task_id, "runner_selected", {"runner": "local_llm"})
 
-    monkeypatch.setattr(server, "LEDGER_DIR", str(tmp_path / "ledger"))
+    monkeypatch.setattr(server, "LEDGER_DIR", str(tmp_path / "mobile-ledger"))
     monkeypatch.setattr(server, "ledger", ledger)
     monkeypatch.setattr(server, "MOBILE_TOKEN", "test-mobile-token")
-    monkeypatch.setattr(server, "MOBILE_ACTOR", "test-mobile-operator")
 
     client = TestClient(server.app)
     headers = {"Authorization": "Bearer test-mobile-token"}
@@ -128,9 +128,14 @@ def test_mobile_page_uses_operator_token_entry(mobile_api):
     assert "console.log" not in script_response.text
 
 
-def test_mobile_web_lists_safe_tasks_and_records_review(mobile_api):
-    _, ledger, task_id, client, headers = mobile_api
-
+def test_mobile_web_lists_safe_tasks_and_requests_review(mobile_api, configured_review, monkeypatch):
+    server, _, _, client, headers = mobile_api
+    service, ledger_dir, *_ = configured_review
+    ledger = TaskLedger(str(ledger_dir), review_service=service)
+    monkeypatch.setattr(server, "ledger", ledger)
+    task_id = "task-1"
+    ledger.append_event(task_id, "task_created", {"description": "Private synthetic prompt"})
+    before = Path(ledger.ledger_path).read_bytes()
     tasks_response = client.get("/api/tasks", headers=headers)
     assert tasks_response.status_code == 200
     task = tasks_response.json()["tasks"][0]
@@ -139,26 +144,76 @@ def test_mobile_web_lists_safe_tasks_and_records_review(mobile_api):
     assert "description" not in task
     assert "target_files" not in task
     assert "artifact_paths" not in task
-    assert "private prompt" not in json.dumps(task)
+    assert "Private synthetic prompt" not in json.dumps(task)
+    assert task["accepted"] is None
+    assert task["review_status"] == "no_decision"
 
-    review_response = client.post(
-        f"/api/tasks/{task_id}/review",
-        json={"decision": "accepted", "workload": "low"},
-        headers=headers,
-    )
-    assert review_response.status_code == 200
+    route = f"/api/tasks/{task_id}/review"
+    body = {"decision": "accepted", "request_id": "request-1", "workload": "low"}
+    review_response = client.post(route, json=body, headers=headers)
+    assert review_response.status_code == 202
+    intent_id = review_response.json()["intent_id"]
+    assert review_response.json() == {"status": "pending", "intent_id": intent_id}
+    assert intent_id != body["request_id"]
+    retry = client.post(route, json=body, headers=headers)
+    assert retry.status_code == 202
+    assert retry.json() == review_response.json()
+    assert client.post(route, json={**body, "workload": "high"}, headers=headers).status_code == 409
+    assert tuple(intent.intent_id for intent in service.pending_for_task(task_id)) == (intent_id,)
 
     reviewed = ledger.get_task(task_id)
     assert reviewed is not None
-    assert reviewed.status == "reviewed"
-    assert reviewed.accepted is True
-    assert reviewed.review_workload == "low"
+    assert reviewed.status != "reviewed"
+    assert reviewed.accepted is None
+    assert reviewed.human_review_minutes is None
+    pending = client.get("/api/tasks", headers=headers).json()["tasks"][0]
+    assert pending["review_status"] == "pending"
+    assert pending["review_pending_count"] == 1
+    assert pending["accepted"] is None
+    assert intent_id not in json.dumps(pending)
 
-    events = ledger.get_events(task_id=task_id)
-    review_event = next(
-        event for event in events if event["event_type"] == "review_completed"
+    service.confirm(task_id, "accepted", lambda snapshot: True, intent_id=intent_id)
+    resolved_retry = client.post(route, json=body, headers=headers)
+    assert resolved_retry.status_code == 200
+    assert resolved_retry.json() == {"status": "committed", "intent_id": intent_id}
+    competing = client.post(
+        route, json={"request_id": "request-2", "decision": "needs_revision"}, headers=headers,
     )
-    assert review_event["payload"]["actor"] == "test-mobile-operator"
+    assert competing.status_code == 202
+    verified = client.get("/api/tasks", headers=headers).json()["tasks"][0]
+    assert verified["review_status"] == "verified"
+    assert verified["review_decision"] == "accepted"
+    assert verified["review_pending_count"] == 1
+    assert verified["accepted"] is True
+    assert "Exact synthetic text" not in json.dumps(verified)
+    assert "rev-1" not in json.dumps(verified)
+    assert Path(ledger.ledger_path).read_bytes() == before
+
+
+@pytest.mark.parametrize("field", ["actor", "evidence", "assertion", "credential_id"])
+def test_mobile_review_rejects_fields_outside_intent_contract(mobile_api, field):
+    _, _, task_id, client, headers = mobile_api
+
+    response = client.post(
+        f"/api/tasks/{task_id}/review",
+        json={"decision": "accepted", "request_id": "request-1", field: "secret-sentinel"},
+        headers=headers,
+    )
+
+    assert response.status_code == 422
+    assert "secret-sentinel" not in response.text
+
+
+def test_mobile_review_requires_a_request_id(mobile_api):
+    _, _, task_id, client, headers = mobile_api
+
+    response = client.post(
+        f"/api/tasks/{task_id}/review",
+        json={"decision": "accepted"},
+        headers=headers,
+    )
+
+    assert response.status_code == 422
 
 
 def test_mobile_web_rejects_invalid_review_decision(mobile_api):
@@ -166,7 +221,7 @@ def test_mobile_web_rejects_invalid_review_decision(mobile_api):
 
     response = client.post(
         f"/api/tasks/{task_id}/review",
-        json={"decision": "maybe", "workload": "low"},
+        json={"decision": "maybe", "request_id": "request-1", "workload": "low"},
         headers=headers,
     )
 
@@ -181,11 +236,12 @@ def test_mobile_web_rejects_invalid_review_workload(mobile_api):
 
     response = client.post(
         f"/api/tasks/{task_id}/review",
-        json={"decision": "accepted", "workload": "private notes"},
+        json={"decision": "accepted", "request_id": "request-1", "workload": "private notes"},
         headers=headers,
     )
 
     assert response.status_code == 422
+    assert "private notes" not in response.text
     reviewed = ledger.get_task(task_id)
     assert reviewed is not None
     assert reviewed.status != "reviewed"
@@ -262,9 +318,7 @@ def test_start_server_allows_explicit_authenticated_network_binding(
         host="0.0.0.0",
         port=9000,
         token="test-mobile-token",
-        actor_id="test-operator",
         allow_network=True,
     )
 
     assert calls == [(server.app, "0.0.0.0", 9000)]
-    assert server.MOBILE_ACTOR == "test-operator"

@@ -249,6 +249,45 @@ def get_assertion_receipt(
     )
 
 
+def acquire_review_assertion(
+    challenge: bytes,
+    credential_ids: tuple[str, ...],
+    expires_at: datetime,
+) -> dict:
+    """Acquire a local, user-verified assertion for a review challenge."""
+    _import_fido2()
+    from fido2.client import ClientError
+    from fido2.webauthn import (
+        PublicKeyCredentialDescriptor,
+        PublicKeyCredentialRequestOptions,
+        PublicKeyCredentialType,
+        UserVerificationRequirement,
+    )
+
+    remaining = expires_at - datetime.now(expires_at.tzinfo)
+    timeout = int(remaining.total_seconds() * 1000)
+    if not credential_ids or timeout <= 0:
+        raise AuthzHardwareUnavailable("review challenge unavailable")
+    options = PublicKeyCredentialRequestOptions(
+        challenge=challenge,
+        rp_id=RP_ID,
+        timeout=timeout,
+        allow_credentials=[
+            PublicKeyCredentialDescriptor(
+                type=PublicKeyCredentialType.PUBLIC_KEY,
+                id=b64url_decode(credential_id),
+            )
+            for credential_id in credential_ids
+        ],
+        user_verification=UserVerificationRequirement.REQUIRED,
+    )
+    try:
+        response = _make_client().get_assertion(options).get_response(0)
+    except (ClientError, OSError, ValueError, IndexError):
+        raise AuthzHardwareUnavailable("local review assertion unavailable") from None
+    return dict(response)
+
+
 # --- Offline verification -----------------------------------------------------
 
 def verify_receipt(

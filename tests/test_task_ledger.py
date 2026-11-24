@@ -1,6 +1,7 @@
 import os
 import uuid
 import tempfile
+from types import SimpleNamespace
 from unittest.mock import patch
 import pytest
 
@@ -150,7 +151,7 @@ def test_ledger_tracks_handoff_reason_for_review():
         assert record.handoff_reason == "Risk level high detected."
         assert record.human_review_required is True
 
-def test_ledger_tracks_human_review_minutes_and_completion_timestamp():
+def test_ledger_keeps_legacy_review_minutes_in_history():
     with tempfile.TemporaryDirectory() as temp_dir:
         ledger = TaskLedger(ledger_dir=temp_dir)
         task_id = str(uuid.uuid4())
@@ -168,13 +169,14 @@ def test_ledger_tracks_human_review_minutes_and_completion_timestamp():
         record = ledger.get_task(task_id)
 
         assert record is not None
-        assert record.status == "reviewed"
-        assert record.accepted is True
-        assert record.human_review_minutes == 1.5
+        assert record.status == "local_draft_generated"
+        assert record.accepted is None
+        assert record.human_review_minutes is None
+        assert ledger.get_events(task_id)[-1]["payload"]["human_review_minutes"] == 1.5
         assert record.completed_at != ""
         assert record.updated_at != ""
 
-def test_ledger_tracks_review_workload():
+def test_ledger_keeps_legacy_review_workload_in_history():
     with tempfile.TemporaryDirectory() as temp_dir:
         ledger = TaskLedger(ledger_dir=temp_dir)
         task_id = str(uuid.uuid4())
@@ -189,9 +191,10 @@ def test_ledger_tracks_review_workload():
         record = ledger.get_task(task_id)
 
         assert record is not None
-        assert record.status == "reviewed"
-        assert record.accepted is False
-        assert record.review_workload == "high"
+        assert record.status == "pending"
+        assert record.accepted is None
+        assert not record.review_workload
+        assert ledger.get_events(task_id)[-1]["payload"]["review_workload"] == "high"
 
 def test_ledger_tracks_supervisor_review():
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -241,7 +244,7 @@ def test_ledger_updates_updated_at_on_later_events():
         assert reviewed_record is not None
         assert reviewed_record.created_at == created_at
         assert reviewed_record.updated_at >= created_at
-        assert reviewed_record.status == "reviewed"
+        assert reviewed_record.status == "pending"
 
 def test_ledger_context_methods():
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -496,7 +499,7 @@ def test_mixed_schema_versions_do_not_crash():
         record = ledger.get_task(task_id)
         assert record is not None
         assert record.title == "Mixed Version Task"
-        assert record.status == "reviewed"
+        assert record.status == "pending"
         # Since the second event had versions, the record should have the latest version.
         assert record.schema_version == "0.2.0"
         assert record.role_taxonomy_version == "2026-06-worker-council-v2"
@@ -519,20 +522,22 @@ def test_local_draft_generated_sets_artifact_not_resolution():
         assert record.artifact_status == "generated"
         assert record.task_outcome == "unresolved"
 
-def test_review_completed_can_set_resolved_task_outcome():
+def test_legacy_review_cannot_override_operational_artifact_or_outcome():
     with tempfile.TemporaryDirectory() as temp_dir:
         ledger = TaskLedger(ledger_dir=temp_dir)
         task_id = str(uuid.uuid4())
+        ledger.append_event(task_id, "local_draft_generated", {})
+        ledger.append_event(task_id, "validator_completed", {"passed": True})
         ledger.append_event(task_id, "review_completed", {
             "review_decision": "accepted",
             "task_outcome": "resolved"
         })
         record = ledger.get_task(task_id)
-        assert record.artifact_status == "reviewed"
-        assert record.task_outcome == "resolved"
-        assert record.review_decision == "accepted"
+        assert record.artifact_status == "validated"
+        assert record.task_outcome == "unresolved"
+        assert record.review_decision is None
 
-def test_legacy_accepted_boolean_does_not_imply_resolved():
+def test_legacy_accepted_boolean_does_not_imply_review():
     with tempfile.TemporaryDirectory() as temp_dir:
         ledger = TaskLedger(ledger_dir=temp_dir)
         task_id = str(uuid.uuid4())
@@ -540,9 +545,10 @@ def test_legacy_accepted_boolean_does_not_imply_resolved():
             "accepted": True
         })
         record = ledger.get_task(task_id)
-        assert record.artifact_status == "reviewed"
-        assert record.task_outcome == "unresolved"
-        assert record.review_decision == "accepted"
+        assert record.artifact_status is None
+        assert record.task_outcome is None
+        assert record.review_decision is None
+        assert record.legacy_review_history[0].decision == "accepted"
 
 def test_ledger_tracks_provenance_fields():
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -978,44 +984,68 @@ def test_append_signed_validation_result_event_fails_for_unauthorized_agent():
             )
 
 
-def test_review_completed_preserves_needs_revision_end_to_end():
+def test_legacy_review_observations_preserve_named_decisions_as_history():
     with tempfile.TemporaryDirectory() as temp_dir:
         ledger = TaskLedger(ledger_dir=temp_dir)
         task_id = str(uuid.uuid4())
         ledger.append_event(task_id, "task_created", {"title": "test task"})
 
-        # 1. Test approved
         ledger.append_event(task_id, "review_completed", {"accepted": True, "review_decision": "accepted"})
-        r = ledger.get_task(task_id)
-        assert r.status == "reviewed"
-        assert r.accepted is True
-        assert r.review_decision == "accepted"
-
-        # 2. Test rejected
         ledger.append_event(task_id, "review_completed", {"accepted": False, "review_decision": "rejected"})
-        r = ledger.get_task(task_id)
-        assert r.accepted is False
-        assert r.review_decision == "rejected"
-
-        # 3. Test needs_revision
         ledger.append_event(task_id, "review_completed", {"accepted": False, "review_decision": "needs_revision"})
-        r = ledger.get_task(task_id)
-        assert r.accepted is False
-        assert r.review_decision == "needs_revision"
-
-        # 4. Old-style payload without review_decision behaves compatibly
         ledger.append_event(task_id, "review_completed", {"accepted": True})
-        r = ledger.get_task(task_id)
-        assert r.accepted is True
-        assert r.review_decision == "accepted"
-
         ledger.append_event(task_id, "review_completed", {"accepted": False})
-        r = ledger.get_task(task_id)
-        assert r.accepted is False
-        assert r.review_decision == "rejected"
-
-        # 5. Negative regression check: the reducer ignores the legacy/wrong 'decision' key and falls back to boolean-derived rejected behavior
         ledger.append_event(task_id, "review_completed", {"accepted": False, "decision": "needs_revision"})
         r = ledger.get_task(task_id)
-        assert r.accepted is False
-        assert r.review_decision == "rejected"
+        assert r.review.status == "unpaired"
+        assert r.accepted is None
+        assert r.review_decision is None
+        assert r.legacy_review_observation_count == 6
+        assert [entry.decision for entry in r.legacy_review_history] == [
+            "accepted", "rejected", "needs_revision", "accepted", "rejected", "rejected"
+        ]
+
+
+def test_review_projection_stays_current_across_task_reads(tmp_path):
+    from triage_core.task_review_service import ReviewState
+
+    current = ReviewState(status="verified", decision="accepted")
+    service = SimpleNamespace(project=lambda task_id, *, include_history: current)
+    ledger = TaskLedger(str(tmp_path), review_service=service)
+    ledger.append_event("task", "local_draft_generated", {})
+    ledger.append_event("task", "outcome_revised", {"revised_outcome": "resolved"})
+    ledger.append_event("task", "review_completed", {"accepted": False})
+    before = (tmp_path / "ledger.jsonl").read_bytes()
+
+    detail = ledger.get_task("task")
+    listing = ledger.get_all_tasks()[0]
+    assert detail.review == listing.review
+    assert detail.accepted is listing.accepted is True
+    assert detail.review_decision == listing.review_decision == "accepted"
+    assert detail.status == listing.status == "local_draft_generated"
+    assert detail.task_outcome == listing.task_outcome == "unresolved"
+    assert detail.legacy_review_observation_count == listing.legacy_review_observation_count == 2
+    assert len(detail.legacy_review_history) == 2
+    assert listing.legacy_review_history == []
+    assert ledger.get_task_context("task").review_summary["decision"] == "accepted"
+
+    current = ReviewState(status="evidence_changed", reason="evidence_changed")
+    assert ledger.get_task("task").accepted is None
+    assert ledger.get_all_tasks()[0].review.status == "evidence_changed"
+    assert (tmp_path / "ledger.jsonl").read_bytes() == before
+
+
+def test_ledger_csv_uses_unknown_for_a_legacy_label(tmp_path):
+    import csv
+
+    ledger = TaskLedger(str(tmp_path))
+    ledger.append_event("task", "review_completed", {"accepted": True})
+    path = tmp_path / "tasks.csv"
+    ledger.export_csv(str(path))
+
+    with path.open(newline="", encoding="utf-8") as input_file:
+        row = next(csv.DictReader(input_file))
+    assert row["accepted"] == ""
+    assert row["review_decision"] == ""
+    assert row["review_status"] == "unpaired"
+    assert row["legacy_review_observation_count"] == "1"

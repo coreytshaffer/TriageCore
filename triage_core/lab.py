@@ -4,6 +4,8 @@ import os
 import json
 from typing import List, Dict, Any, Optional, Tuple
 
+from triage_core.task_ledger import TaskRecord
+
 
 # ─── Usage Metrics Extraction ───────────────────────────────────────────────────
 
@@ -39,18 +41,20 @@ def get_usage_metrics(r: Any) -> Tuple[int, int, float]:
 
 # ─── Scientific Metrics ───────────────────────────────────────────────────────
 
-def calculate_scientific_metrics(records: List[Any]) -> Dict[str, Any]:
-    """Calculate derived views and scientific metrics over historical task ledger records."""
-    reviewed = [r for r in records if r.status == "reviewed"]
-    accepted = [r for r in reviewed if r.accepted]
+def calculate_scientific_metrics(records: List[TaskRecord]) -> Dict[str, Any]:
+    """Calculate usage metrics and decision metrics from verified review projections."""
+    verified = [r for r in records if r.review.status == "verified"]
+    terminal = [r for r in verified if r.review.is_terminal]
+    accepted = [r for r in terminal if r.review.binary_label is True]
+    unavailable = sum(r.review.status == "unavailable" for r in records)
+    if unavailable:
+        verification_status = "incomplete"
+    elif records and all(r.review.status == "unpaired" for r in records):
+        verification_status = "unpaired"
+    else:
+        verification_status = "complete"
     
-    accepted_yield_pct = 0.0
-    if len(reviewed) > 0:
-        accepted_yield_pct = (len(accepted) / len(reviewed)) * 100.0
-        
-    mean_review_burden = 0.0
-    if len(reviewed) > 0:
-        mean_review_burden = sum(r.human_review_minutes for r in reviewed) / len(reviewed)
+    accepted_yield_pct = len(accepted) / len(terminal) * 100.0 if terminal else None
         
     mean_tokens_accepted = 0.0
     if len(accepted) > 0:
@@ -81,10 +85,15 @@ def calculate_scientific_metrics(records: List[Any]) -> Dict[str, Any]:
         
     return {
         "total_runs": len(records),
-        "total_reviewed": len(reviewed),
+        "review_verification_status": verification_status,
+        "unavailable_reviews": unavailable,
+        "total_reviewed": len(verified),
         "total_accepted": len(accepted),
+        "binary_review_sample_size": len(terminal),
+        "excluded_from_binary_sample": len(records) - len(terminal),
+        "excluded_review_observations": sum(r.legacy_review_observation_count for r in records),
         "accepted_yield_pct": accepted_yield_pct,
-        "mean_review_burden_mins": mean_review_burden,
+        "mean_review_burden_mins": None,  # Live reviews do not measure duration.
         "mean_tokens_per_accepted_task": mean_tokens_accepted,
         "mean_energy_kwh_per_accepted_task": mean_energy_accepted,
         "mean_emissions_gco2e_per_accepted_task": mean_emissions_accepted,
@@ -97,7 +106,7 @@ def calculate_scientific_metrics(records: List[Any]) -> Dict[str, Any]:
 
 # ─── Dataset Export ──────────────────────────────────────────────────────────
 
-def export_tabular_dataset(records: List[Any], output_path: str):
+def export_tabular_dataset(records: List[TaskRecord], output_path: str):
     """Export all task records to a flat tabular dataset for machine learning."""
     fieldnames = [
         "task_id",
@@ -114,7 +123,8 @@ def export_tabular_dataset(records: List[Any], output_path: str):
         "emissions_gco2e",
         "human_review_required",
         "status",
-        "accepted"
+        "review_status",
+        "accepted",
     ]
     
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
@@ -122,9 +132,8 @@ def export_tabular_dataset(records: List[Any], output_path: str):
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
         for r in records:
-            accepted_lbl = 0
-            if r.status == "reviewed" and r.accepted:
-                accepted_lbl = 1
+            label = r.review.binary_label
+            accepted_lbl = None if label is None else int(label)
 
             total_tok, wasted_tok, elapsed_sec = get_usage_metrics(r)
 
@@ -143,6 +152,7 @@ def export_tabular_dataset(records: List[Any], output_path: str):
                 "emissions_gco2e": r.emissions_gco2e_estimate,
                 "human_review_required": 1 if r.human_review_required else 0,
                 "status": r.status,
+                "review_status": r.review.status,
                 "accepted": accepted_lbl
             })
 

@@ -107,15 +107,18 @@ def test_lifecycle_reduces_to_traceable_record(tmp_path):
     assert record.validator_name == "python_syntax_validator"
     assert record.checked_files == ["examples/logs_parsing.py"]
 
-    # Approval state
-    assert record.status == "reviewed"
-    assert record.review_decision == "accepted"
-    assert record.task_outcome == "resolved"
-    assert record.accepted is True
-    assert record.artifact_status == "reviewed"
+    # The historical observation leaves operational validation and review distinct.
+    assert record.status == "pending"
+    assert record.task_outcome is None
+    assert record.artifact_status == "validated"
+    assert record.review.status == "unpaired"
+    assert record.review_decision is None
+    assert record.accepted is None
+    assert record.legacy_review_observation_count == 1
+    assert record.legacy_review_history[0].decision == "accepted"
 
 
-def test_review_queue_gate_opens_and_clears(tmp_path):
+def test_review_queue_gate_stays_open_after_historical_observation(tmp_path):
     events = _load_fixture_events()
 
     _write_ledger(tmp_path, events[:-1])
@@ -124,7 +127,7 @@ def test_review_queue_gate_opens_and_clears(tmp_path):
     assert [task.task_id for task in pending] == [TASK_ID]
 
     _write_ledger(tmp_path, events)
-    assert get_pending_reviews(TaskLedger(str(tmp_path))) == []
+    assert [task.task_id for task in get_pending_reviews(TaskLedger(str(tmp_path)))] == [TASK_ID]
 
 
 def test_tc_review_list_reflects_review_state(tmp_path, capsys):
@@ -141,4 +144,6 @@ def test_tc_review_list_reflects_review_state(tmp_path, capsys):
     with patch("triage_core.tc_cli._ledger_path", return_value=ledger_path):
         tc_cli.tc_review_list()
     out = capsys.readouterr().out
-    assert "Status: empty" in out
+    assert "Status: available" in out
+    assert "Review status: unpaired" in out
+    assert "Historical unsigned review observations: 1" in out

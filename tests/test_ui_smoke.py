@@ -1,5 +1,7 @@
 import pytest
 
+from triage_core.task_review_service import ReviewState
+
 
 def test_ui_import_graceful_degradation():
     from triage_core.ui.app import UI_AVAILABLE, TriageDeskApp
@@ -61,8 +63,8 @@ def test_ledger_detail_text_includes_review_and_benchmark_context():
         expected_status="success",
         observed_status="success",
         validator_passed=True,
-        accepted=True,
-        human_review_minutes=1.25,
+        review=ReviewState(status="pending", pending_count=1),
+        legacy_review_observation_count=2,
         supervisor_tool="codex",
         supervisor_model="gpt-5",
         supervisor_profile="high",
@@ -81,7 +83,8 @@ def test_ledger_detail_text_includes_review_and_benchmark_context():
 
     assert "Task ID: task-123" in text
     assert "Updated: 2026-06-04T01:05:00+00:00" in text
-    assert "Review: accepted, 1.25 review min" in text
+    assert "Review: Pending local confirmation" in text
+    assert "Historical unsigned observations: 2" in text
     assert "Supervisor: tool=codex, decision=needs_revision, model=gpt-5" in text
     assert "tokens_est=1200 in/300 out" in text
     assert "Supervisor notes: Local draft needs tests." in text
@@ -165,16 +168,6 @@ def test_compact_ledger_line_prioritizes_recent_status():
     assert "supervisor: codex/needs_revision" in line
 
 
-def test_review_workload_value_maps_labels_to_ledger_values():
-    from triage_core.ui.app import _review_workload_value
-
-    assert _review_workload_value("Not set") == "not_recorded"
-    assert _review_workload_value("Low") == "low"
-    assert _review_workload_value("Medium") == "medium"
-    assert _review_workload_value("High") == "high"
-    assert _review_workload_value("Unexpected") == "not_recorded"
-
-
 def test_telemetry_local_benefit_metrics_are_evidence_bound():
     from triage_core.task_ledger import TaskRecord
     from triage_core.ui.app import _telemetry_local_benefit_metrics
@@ -183,27 +176,40 @@ def test_telemetry_local_benefit_metrics_are_evidence_bound():
         TaskRecord(
             task_id="local-accepted",
             runner="local_llm",
-            accepted=True,
+            review=ReviewState(status="verified", decision="accepted"),
             total_tokens=100,
         ),
         TaskRecord(
             task_id="council-review",
             runner="worker_council",
-            accepted=False,
+            review=ReviewState(status="unavailable"),
             estimated_input_tokens=50,
             estimated_output_tokens=25,
             human_review_required=True,
         ),
-        TaskRecord(task_id="codex-task", runner="codex", accepted=True),
+        TaskRecord(
+            task_id="codex-task",
+            runner="codex",
+            review=ReviewState(status="verified", decision="rejected"),
+        ),
+        TaskRecord(
+            task_id="legacy-task",
+            runner="codex",
+            legacy_review_observation_count=3,
+        ),
     ]
 
     metrics = _telemetry_local_benefit_metrics(tasks)
 
-    assert metrics["accepted_yield_pct"] == pytest.approx(66.666666)
-    assert metrics["local_first_pct"] == pytest.approx(66.666666)
-    assert metrics["review_light_pct"] == pytest.approx(66.666666)
+    assert metrics["accepted_yield_pct"] == 50.0
+    assert metrics["local_first_pct"] == 50.0
+    assert metrics["review_light_pct"] == 75.0
     assert metrics["local_tokens"] == 175
     assert metrics["local_accepted"] == 1
+    assert metrics["binary_review_sample_size"] == 2
+    assert metrics["excluded_from_binary_sample"] == 2
+    assert metrics["excluded_review_observations"] == 3
+    assert metrics["review_verification_status"] == "incomplete"
 
 
 def test_telemetry_control_summary_surfaces_story_118_signals():

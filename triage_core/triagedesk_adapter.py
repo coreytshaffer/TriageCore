@@ -37,6 +37,10 @@ class TriageDeskDoctorSnapshot:
 class TriageDeskReviewQueueSnapshot:
     pending_tasks: List[TaskRecord]
 
+    @property
+    def unavailable_reviews(self) -> int:
+        return sum(task.review.status == "unavailable" for task in self.pending_tasks)
+
 @dataclass
 class TriageDeskContextPlanSnapshot:
     input_path: str
