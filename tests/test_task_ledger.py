@@ -1026,6 +1026,7 @@ def test_review_projection_stays_current_across_task_reads(tmp_path):
     assert detail.task_outcome == listing.task_outcome == "unresolved"
     assert detail.legacy_review_observation_count == listing.legacy_review_observation_count == 2
     assert len(detail.legacy_review_history) == 2
+    assert detail.legacy_review_history[0].reported_outcome == "resolved"
     assert listing.legacy_review_history == []
     assert ledger.get_task_context("task").review_summary["decision"] == "accepted"
 

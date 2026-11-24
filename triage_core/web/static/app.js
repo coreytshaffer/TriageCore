@@ -41,6 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function openModal(task) {
+        if (currentTask || btnSubmit.disabled) return;
         currentTask = task;
         modalOpener = document.activeElement;
         document.getElementById('modal-task-title').textContent =
@@ -52,12 +53,14 @@ document.addEventListener('DOMContentLoaded', () => {
         reviewError.textContent = '';
 
         modal.classList.remove('hidden');
+        ledgerPanel.inert = true;
         decisionInput.focus();
     }
 
     function closeModal() {
         modal.classList.add('hidden');
         currentTask = null;
+        ledgerPanel.inert = false;
         modalOpener?.focus();
         modalOpener = null;
     }
@@ -65,6 +68,16 @@ document.addEventListener('DOMContentLoaded', () => {
     btnClose.addEventListener('click', closeModal);
     modal.addEventListener('keydown', event => {
         if (event.key === 'Escape' && !btnSubmit.disabled) closeModal();
+        if (event.key !== 'Tab') return;
+        if (btnSubmit.disabled) {
+            event.preventDefault();
+        } else if (event.shiftKey && document.activeElement === btnClose) {
+            event.preventDefault();
+            btnSubmit.focus();
+        } else if (!event.shiftKey && document.activeElement === btnSubmit) {
+            event.preventDefault();
+            btnClose.focus();
+        }
     });
 
     function reviewLabel(task) {
@@ -94,6 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const decision = decisionInput.value;
         const workload = workloadInput.value === 'not_recorded' ? null : workloadInput.value;
         const retryKey = JSON.stringify([taskId, decision, workload]);
+        modal.focus();
         btnSubmit.disabled = true;
         btnClose.disabled = true;
         decisionInput.disabled = true;
@@ -139,6 +153,7 @@ document.addEventListener('DOMContentLoaded', () => {
             btnClose.disabled = false;
             decisionInput.disabled = false;
             workloadInput.disabled = false;
+            if (currentTask) btnSubmit.focus();
         }
     });
 

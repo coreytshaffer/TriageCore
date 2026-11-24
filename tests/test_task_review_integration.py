@@ -248,6 +248,87 @@ def test_prior_decision_can_coexist_with_a_new_pending_intent(configured_review)
     assert state.pending_count == 1
 
 
+def test_pending_count_survives_unavailable_verification(configured_review):
+    service, _, trust, *_ = configured_review
+    service.confirm("task-1", "accepted", lambda snapshot: True)
+    service.request_intent("task-1", "request-5", "rejected")
+    (trust / "workspace-a" / "authz" / "credentials.json").unlink()
+    result = service.project("task-1")
+    assert result.status == "unavailable"
+    assert result.pending_count == 1
+    assert result.binary_label is None
+
+
+def test_live_confirmation_waits_for_explicit_v1_migration(configured_review):
+    from test_task_review_store import _install_v1_store
+
+    from triage_core.task_review_store import ReviewStore
+
+    service, _, trust, *_ = configured_review
+    directory = trust / "workspace-a" / "state"
+    existing = ReviewStore(directory, "workspace-a", lambda: None)
+    existing.path.unlink()
+    _install_v1_store(existing)
+    with pytest.raises(ReviewServiceError, match="review_store_migration_required"):
+        service.confirm(
+            "task-1",
+            "accepted",
+            lambda snapshot: pytest.fail("unmigrated review shown"),
+        )
+    assert existing.list_history("task-1") == ()
+
+
+def test_lost_admission_acknowledgement_resolves_the_exact_receipt(
+    configured_review, monkeypatch
+):
+    from triage_core.task_review_store import ReviewStore, ReviewStoreError
+
+    service, *_ = configured_review
+    admit = ReviewStore.admit
+    events = []
+
+    def drop_reply(store, receipt, **kwargs):
+        result = admit(store, receipt, **kwargs)
+        events.append(result.receipt.request.event_id)
+        raise ReviewStoreError("review_store_unavailable")
+
+    monkeypatch.setattr(ReviewStore, "admit", drop_reply)
+    result = service.confirm("task-1", "needs_revision", lambda snapshot: True)
+    assert result.status == "verified"
+    assert [
+        item.event_id
+        for item in service.project("task-1", include_history=True).history
+    ] == events
+    assert len(events) == 1
+
+
+def test_portable_ctap_can_request_a_local_pin_without_changing_windows_ceremony(
+    monkeypatch,
+):
+    pytest.importorskip("fido2")
+    from triage_core import fido2_adapter
+
+    observed = []
+
+    def client_for_review(*, user_interaction):
+        observed.append(user_interaction.request_pin(None, "triagecore.local"))
+        return type(
+            "Client",
+            (),
+            {
+                "get_assertion": lambda self, options: self,
+                "get_response": lambda self, index: {"type": "public-key"},
+            },
+        )()
+
+    monkeypatch.setattr(fido2_adapter, "_make_client", client_for_review)
+    expiry = datetime.now(timezone.utc) + timedelta(minutes=5)
+    fido2_adapter.acquire_review_assertion(
+        b"x" * 32, ("aWQ",), expiry, request_pin=lambda: "synthetic-pin"
+    )
+    assert observed == ["synthetic-pin"]
+
+
 def test_mobile_and_desktop_decisions_share_queue_cli_and_metrics(
     configured_review,
     monkeypatch,

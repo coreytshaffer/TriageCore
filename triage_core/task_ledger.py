@@ -41,6 +41,7 @@ class LegacyReviewObservation:
     event_type: str
     decision: Optional[str]
     accepted: Optional[bool]
+    reported_outcome: Optional[str] = None
 
 
 @dataclass
@@ -493,12 +494,18 @@ class TaskLedger:
                 decision = payload.get("review_decision")
                 if decision not in ("accepted", "accepted_with_minor_edits", "rejected", "needs_revision"):
                     decision = None if accepted is None else ("accepted" if accepted else "rejected")
+                reported_outcome = payload.get(
+                    "revised_outcome" if etype == "outcome_revised" else "task_outcome"
+                )
                 record.legacy_review_history.append(LegacyReviewObservation(
                     event_id=event.get("event_id", ""),
                     timestamp=event_timestamp,
                     event_type=etype,
                     decision=decision,
                     accepted=accepted,
+                    reported_outcome=(
+                        reported_outcome if reported_outcome in ("resolved", "unresolved") else None
+                    ),
                 ))
                 if len(record.legacy_review_history) > LEGACY_REVIEW_HISTORY_LIMIT:
                     del record.legacy_review_history[0]

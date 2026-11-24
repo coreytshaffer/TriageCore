@@ -2353,7 +2353,8 @@ def tc_task_show(
         print(f"Historical unsigned review observations: {task.legacy_review_observation_count}")
         for observation in task.legacy_review_history:
             decision = observation.decision or "not_recorded"
-            print(f"  {observation.timestamp} | {observation.event_type} | {decision}")
+            outcome = f" | reported outcome: {observation.reported_outcome}" if observation.reported_outcome else ""
+            print(f"  {observation.timestamp} | {observation.event_type} | {decision}{outcome}")
     if task.review.history:
         print("Review receipt history by evidence revision:")
         for item in task.review.history:

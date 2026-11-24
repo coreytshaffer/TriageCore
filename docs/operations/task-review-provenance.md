@@ -93,6 +93,10 @@ credential when prompted. The desktop reports success after the private
 database commits. **Approve & Load** fills the task fields for the
 operator's next action.
 
+Windows uses its native WebAuthn dialog when available. The direct
+authenticator path can request a masked local PIN for a key that requires
+one. The PIN is passed to the authenticator interaction only.
+
 Use `tc task show` to inspect current verification and receipt history.
 An unpaired ledger can still show historical observations. Required
 reviews stay actionable when the current decision is absent, needs
@@ -102,8 +106,16 @@ from an empty verified sample when using review metrics or exports.
 If a profile, verifier, or store becomes unavailable, check the
 operator-controlled pairing, file permissions, enrollment, and
 migration state. Reopen the same store to resolve an ambiguous request.
-A repeated mobile submission uses the original request ID. Review
+The running service resolves the original receipt ID when a commit
+acknowledgement is lost. After restarting a desktop client, inspect the
+task's receipt history before starting another confirmation. A repeated
+mobile submission uses the original request ID. Review
 status updates are confined to the private store. Retain the original
 ledger and previously exported data for historical review.
+
+A running client can distinguish removal of its previously observed
+profile from an unpaired workspace. A fresh client with no private
+registry treats the workspace as unpaired and excludes its reviews from
+verified labels.
 
 [CR-140 change request](../change/requests/CR-140-task-review-provenance.md)

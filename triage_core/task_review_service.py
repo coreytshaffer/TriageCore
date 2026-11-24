@@ -176,11 +176,12 @@ def _json_object(raw: bytes) -> dict:
 def _credential_answer(
     request: ReviewRequest,
     credential_ids: tuple[str, ...],
+    request_pin: Callable[[], str | None] | None,
 ) -> Mapping[str, object]:
     from triage_core.fido2_adapter import acquire_review_assertion
 
     return acquire_review_assertion(
-        request.challenge(), credential_ids, request.expires_at
+        request.challenge(), credential_ids, request.expires_at, request_pin=request_pin
     )
 
 
@@ -209,12 +210,14 @@ class ReviewService:
         root: Path | None = None,
         acquire_assertion: Callable[
             [ReviewRequest, tuple[str, ...]], Mapping[str, object]
-        ] = _credential_answer,
+        ]
+        | None = None,
     ) -> None:
         self._ledger_dir = Path(ledger_dir)
         self._root = root
         self._acquire_assertion = acquire_assertion
         self._had_pairing = False
+        self._uncertain_receipts: dict[tuple[str, str], ReviewReceipt] = {}
 
     def _profile(self) -> _Profile | None:
         try:
@@ -461,6 +464,32 @@ class ReviewService:
             raise ReviewServiceError("review_evidence_changed")
         return current
 
+    def _resolve_admission(self, store: ReviewStore, receipt: ReviewReceipt) -> bool:
+        request = receipt.request
+        key = (request.evidence.scope_id, request.evidence.task_id)
+        recorded = store.get_history(request.event_id)
+        if recorded is not None and recorded.receipt != receipt:
+            raise ReviewServiceError("review_event_conflict")
+        self._uncertain_receipts.pop(key, None)
+        return recorded is not None
+
+    def _admit(
+        self, profile: _Profile, snapshot: EvidenceSnapshot, receipt: ReviewReceipt
+    ) -> None:
+        def check_evidence() -> None:
+            self._recheck(profile, snapshot)
+
+        with self._store(profile) as store:
+            try:
+                store.admit(receipt, check_current=check_evidence)
+            except ReviewStoreError as exc:
+                if str(exc) != "review_store_unavailable":
+                    raise
+                key = (snapshot.binding.scope_id, snapshot.binding.task_id)
+                self._uncertain_receipts[key] = receipt
+                if not self._resolve_admission(store, receipt):
+                    raise
+
     def confirm(
         self,
         task_id: str,
@@ -468,6 +497,7 @@ class ReviewService:
         show: Callable[[EvidenceSnapshot], bool],
         *,
         intent_id: str | None = None,
+        request_pin: Callable[[], str | None] | None = None,
     ) -> ReviewState:
         """Present the exact snapshot before creating and acquiring the challenge."""
         try:
@@ -475,6 +505,11 @@ class ReviewService:
             if not isinstance(decision, str) or decision not in DECISIONS:
                 raise ReviewServiceError("invalid_review_request")
             profile = self._required_profile()
+            with self._store(profile) as store:
+                store.require_live_schema()
+                uncertain = self._uncertain_receipts.get((profile.scope_id, task_id))
+                if uncertain is not None and self._resolve_admission(store, uncertain):
+                    raise ReviewServiceError("review_previous_commit_reconciled")
             snapshot = self._snapshot(profile, task_id)
             if intent_id is not None:
                 with self._store(profile) as store:
@@ -510,13 +545,13 @@ class ReviewService:
                     profile.reviewer_id,
                     intent_id=intent_id,
                 )
-            assertion = self._acquire_assertion(request, allowed)
+            if self._acquire_assertion is None:
+                assertion = _credential_answer(request, allowed, request_pin)
+            else:
+                assertion = self._acquire_assertion(request, allowed)
             profile = self._recheck(profile, snapshot)
             receipt = ReviewReceipt.from_assertion(request, assertion)
-            with self._store(profile) as store:
-                store.admit(
-                    receipt, check_current=lambda: self._recheck(profile, snapshot)
-                )
+            self._admit(profile, snapshot, receipt)
             return ReviewState("verified", decision)
         except (ReviewStoreError, ReviewProofError) as exc:
             raise ReviewServiceError(str(exc)) from None
@@ -527,6 +562,7 @@ class ReviewService:
 
     def project(self, task_id: str, *, include_history: bool = False) -> ReviewState:
         history: tuple[ReviewHistory, ...] = ()
+        pending_count = 0
         try:
             profile = self._profile()
             if profile is None:
@@ -539,6 +575,7 @@ class ReviewService:
                     )
                 current_binding = store.current_evidence(task_id)
                 pending = store.list_pending_intents(task_id)
+                pending_count = len(pending)
                 if current_binding is not None:
                     try:
                         snapshot = self._snapshot(profile, task_id)
@@ -578,7 +615,12 @@ class ReviewService:
                     )
                 return ReviewState("no_decision", history=history)
         except (ReviewServiceError, ReviewProofError, ReviewStoreError) as exc:
-            return ReviewState("unavailable", reason=str(exc), history=history)
+            return ReviewState(
+                "unavailable",
+                reason=str(exc),
+                history=history,
+                pending_count=pending_count,
+            )
         except ValueError:
             return ReviewState(
                 "unavailable", reason="invalid_review_request", history=history

@@ -60,7 +60,7 @@ import threading
 import time
 from typing import Optional
 from datetime import datetime, timezone
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, simpledialog
 from ..config import default_config
 from ..task_ledger import TaskLedger
 from ..task_review_service import ReviewServiceError
@@ -151,7 +151,7 @@ def _telemetry_local_benefit_metrics(tasks) -> dict[str, float | int | str | Non
     statuses = {task.review.status for task in tasks}
     verification_status = (
         "incomplete"
-        if statuses & {"unavailable", "evidence_changed"}
+        if "unavailable" in statuses
         else "unpaired" if statuses == {"unpaired"} else "complete"
     )
     review_light = [task for task in tasks if not task.human_review_required]
@@ -175,6 +175,8 @@ def _telemetry_local_benefit_metrics(tasks) -> dict[str, float | int | str | Non
         "excluded_review_observations": sum(
             task.legacy_review_observation_count for task in tasks
         ),
+        "evidence_changed_reviews": sum(task.review.status == "evidence_changed" for task in tasks),
+        "unavailable_reviews": sum(task.review.status == "unavailable" for task in tasks),
         "review_verification_status": verification_status,
     }
 
@@ -311,6 +313,10 @@ def _review_state_label(review) -> str:
     return label
 
 
+def _required_review_tasks(tasks):
+    return [task for task in tasks if task.human_review_required and not task.review.is_terminal]
+
+
 def _ledger_detail_lines(task) -> list[str]:
     lines = [
         f"Task ID: {task.task_id}",
@@ -427,7 +433,12 @@ def _review_history_lines(task) -> list[str]:
         outcome = observation.decision or {True: "accepted", False: "rejected"}.get(
             observation.accepted, "unspecified"
         )
-        history.append(f"Unsigned · {observation.timestamp} · {outcome.replace('_', ' ')}")
+        reported = (
+            f" · reported outcome {observation.reported_outcome}"
+            if observation.reported_outcome
+            else ""
+        )
+        history.append(f"Unsigned · {observation.timestamp} · {outcome.replace('_', ' ')}{reported}")
     for receipt in task.review.history:
         scope = f" · scope {receipt.scope_id}" if receipt.scope_id else ""
         history.append(
@@ -2078,12 +2089,21 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         decision = decision_override or ("accepted" if accepted else "rejected")
         self._confirm_task_review(task_id, decision, load=accepted and decision == "accepted")
 
+    def _prompt_review_pin(self) -> str | None:
+        return simpledialog.askstring(
+            "Security key PIN",
+            "Enter the PIN for your local security key.",
+            show="*",
+            parent=self,
+        )
+
     def _confirm_task_review(self, task_id: str, decision: str, *, intent_id=None, load=False):
         try:
             result = self.ledger.review_service.confirm(
                 task_id, decision,
                 lambda snapshot: self._show_review_snapshot(task_id, decision, snapshot),
                 intent_id=intent_id,
+                request_pin=self._prompt_review_pin,
             )
         except ReviewServiceError as exc:
             if exc.reason != "review_cancelled":
@@ -3045,8 +3065,10 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         val_lbl.pack(anchor="w", padx=10, pady=(2, 8))
         return val_lbl
 
-    def _refresh_status_panel(self):
+    def _refresh_status_panel(self, tasks):
         """Update the operator status panel from the adapter. Read-only, no mutation."""
+        count = len(_required_review_tasks(tasks))
+        self._op_reviews_lbl.configure(text=str(count) if count else "none")
         if not _TD_ADAPTER_AVAILABLE or _td_adapter is None:
             self._op_adapter_lbl.configure(text="unavailable")
             return
@@ -3063,13 +3085,6 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             self._op_repo_lbl.configure(text="error")
             self._op_ledger_lbl.configure(text="error")
             self._op_last_event_lbl.configure(text="error")
-
-        try:
-            rq = _td_adapter.get_review_queue_snapshot()
-            count = len(rq.pending_tasks)
-            self._op_reviews_lbl.configure(text=str(count) if count > 0 else "none")
-        except Exception:
-            self._op_reviews_lbl.configure(text="error")
 
         self._op_adapter_lbl.configure(text="connected")
 
@@ -3101,30 +3116,12 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         self._review_list_frame.grid_columnconfigure(0, weight=1)
 
     def _refresh_review_queue_panel(self, tasks):
-        """Update the review queue panel from the adapter."""
+        """Render required reviews and pending requests from this ledger snapshot."""
         # Clear existing items
         for w in self._review_list_frame.winfo_children():
             w.destroy()
 
-        if not _TD_ADAPTER_AVAILABLE or _td_adapter is None:
-            self._review_queue_summary_lbl.configure(text="Status: unavailable")
-            ctk.CTkLabel(
-                self._review_list_frame, text="Adapter unavailable. Cannot fetch reviews.",
-                text_color="gray", font=ctk.CTkFont(size=12)
-            ).pack(anchor="w", pady=4)
-            return
-
-        try:
-            rq = _td_adapter.get_review_queue_snapshot()
-            required = rq.pending_tasks
-        except Exception as e:
-            self._review_queue_summary_lbl.configure(text="Status: error")
-            ctk.CTkLabel(
-                self._review_list_frame, text=f"Error fetching reviews: {e}",
-                text_color="#ef4444", font=ctk.CTkFont(size=12)
-            ).pack(anchor="w", pady=4)
-            return
-
+        required = _required_review_tasks(tasks)
         requests = [task for task in tasks if task.review.pending_count]
         by_id = {task.task_id: task for task in requests}
         by_id.update((task.task_id, task) for task in required)
@@ -3169,8 +3166,8 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         self.select_frame("ledger")
 
     def _refresh_telemetry(self):
-        self._refresh_status_panel()
         tasks = self.ledger.get_all_tasks()
+        self._refresh_status_panel(tasks)
         self._refresh_review_queue_panel(tasks)
         accepted = [t for t in tasks if t.review.binary_label is True]
         n_local = sum(1 for t in tasks if t.runner == "local_llm")
@@ -3190,6 +3187,8 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         sample = local_benefits["binary_review_sample_size"]
         excluded = local_benefits["excluded_from_binary_sample"]
         observations = local_benefits["excluded_review_observations"]
+        changed = local_benefits["evidence_changed_reviews"]
+        unavailable = local_benefits["unavailable_reviews"]
 
         # Update dynamic visual gauges
         self.gauge_energy.set_value(total_kwh)
@@ -3218,8 +3217,12 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             text=(
                 f"Review verification {verification} · {sample} verified terminal decisions · "
                 f"{excluded} tasks excluded · {observations} unsigned observations excluded"
+                + (f" · {changed} with changed evidence" if changed else "")
+                + (f" · {unavailable} unavailable" if unavailable else "")
             ),
             text_color="gray",
+            justify="left",
+            wraplength=800,
         ).grid(row=1, column=0, columnspan=4, padx=16, pady=(0, 8), sticky="w")
 
         savings_metrics = [

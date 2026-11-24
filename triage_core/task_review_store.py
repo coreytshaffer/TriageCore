@@ -298,6 +298,11 @@ class ReviewStore:
         if self._schema_version(db) < 2:
             raise ReviewStoreError("review_store_migration_required")
 
+    def require_live_schema(self) -> None:
+        """Check the initial integration schema without writing or migrating."""
+        with self._transaction() as db:
+            self._require_intent_schema(db)
+
     def request_intent(
         self, task_id: str, request_id: str, decision: str, workload: str | None = None
     ) -> ReviewIntent:
