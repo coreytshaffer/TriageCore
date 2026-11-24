@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from triage_core.agent_identity import (
     AgentIdentityRegistry,
@@ -17,11 +17,31 @@ from triage_core.agent_identity import (
 )
 from triage_core.privacy_invariants import assert_persistent_privacy_safe
 
+if TYPE_CHECKING:
+    from triage_core.task_review_service import ReviewService, ReviewState
+
 LEDGER_SCHEMA_VERSION = "0.2.0"
 ROLE_TAXONOMY_VERSION = "2026-06-worker-council-v2"
 ROUTE_AUDIT_SIGN_CAPABILITY = "route_audit:sign"
 VALIDATION_RESULT_SIGN_CAPABILITY = "validation_result:sign"
 ROUTE_DECISION_SIGN_CAPABILITY = "route_decision:sign"
+LEGACY_REVIEW_HISTORY_LIMIT = 20
+
+
+def _unpaired_review() -> "ReviewState":
+    from triage_core.task_review_service import ReviewState
+
+    return ReviewState(status="unpaired")
+
+
+@dataclass(frozen=True)
+class LegacyReviewObservation:
+    event_id: str
+    timestamp: str
+    event_type: str
+    decision: Optional[str]
+    accepted: Optional[bool]
+    reported_outcome: Optional[str] = None
 
 
 @dataclass
@@ -73,7 +93,7 @@ class TaskRecord:
     validator_passed: Optional[bool] = None
     handoff_reason: Optional[str] = None
     human_review_required: bool = False
-    accepted: bool = False
+    accepted: Optional[bool] = None
     artifact_paths: List[str] = field(default_factory=list)
     artifact_status: Optional[str] = None
     task_outcome: Optional[str] = None
@@ -107,7 +127,7 @@ class TaskRecord:
     water_liters_estimate: float = 0.0
     embodied_gco2e_allocated: float = 0.0
     storage_written_mb: float = 0.0
-    human_review_minutes: float = 0.0
+    human_review_minutes: Optional[float] = None
     review_workload: str = ""
     supervisor_tool: str = ""
     supervisor_model: str = ""
@@ -131,6 +151,9 @@ class TaskRecord:
     context_helpful_items: int = 0
     context_optional_items: int = 0
     context_excluded_items: int = 0
+    review: "ReviewState" = field(default_factory=_unpaired_review)
+    legacy_review_observation_count: int = 0
+    legacy_review_history: List[LegacyReviewObservation] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize task state for lightweight UI/API responses."""
@@ -174,9 +197,15 @@ class LedgerSignatureVerificationSummary:
 
 
 class TaskLedger:
-    def __init__(self, ledger_dir: str = ".triagecore"):
+    def __init__(
+        self,
+        ledger_dir: str = ".triagecore",
+        *,
+        review_service: Optional["ReviewService"] = None,
+    ):
         self.ledger_dir = ledger_dir
         self.ledger_path = os.path.join(self.ledger_dir, "ledger.jsonl")
+        self._review_service = review_service
         try:
             os.makedirs(self.ledger_dir, exist_ok=True)
         except PermissionError as e:
@@ -185,6 +214,19 @@ class TaskLedger:
                 "Ensure you are running TriageCore from within your project workspace, "
                 "not a system directory."
             ) from e
+
+    @property
+    def review_service(self) -> "ReviewService":
+        if self._review_service is None:
+            from triage_core.task_review_service import get_review_service
+
+            self._review_service = get_review_service(self.ledger_dir)
+        return self._review_service
+
+    def _project_review(self, record: TaskRecord, *, include_history: bool = False) -> None:
+        record.review = self.review_service.project(record.task_id, include_history=include_history)
+        record.accepted = record.review.binary_label
+        record.review_decision = record.review.decision if record.review.status == "verified" else None
 
     def append_event(self, task_id: str, event_type: str, payload: Dict[str, Any]):
         assert_persistent_privacy_safe(
@@ -284,7 +326,7 @@ class TaskLedger:
             "payload": payload,
         }
 
-    def get_task(self, task_id: str) -> Optional[TaskRecord]:
+    def get_task(self, task_id: str, *, include_history: bool = True) -> Optional[TaskRecord]:
         if not os.path.exists(self.ledger_path):
             return None
 
@@ -304,9 +346,12 @@ class TaskLedger:
                     continue
 
                 found = True
-                self._apply_event(record, event)
+                self._apply_event(record, event, include_history=include_history)
 
-        return record if found else None
+        if not found:
+            return None
+        self._project_review(record, include_history=include_history)
+        return record
 
     def get_all_tasks(self) -> List[TaskRecord]:
         if not os.path.exists(self.ledger_path) or os.path.getsize(self.ledger_path) == 0:
@@ -330,6 +375,8 @@ class TaskLedger:
 
                 self._apply_event(tasks_map[task_id], event)
 
+        for record in tasks_map.values():
+            self._project_review(record)
         return sorted(list(tasks_map.values()), key=lambda x: x.created_at, reverse=True)
 
     def get_events(self, task_id: str) -> List[Dict[str, Any]]:
@@ -388,7 +435,10 @@ class TaskLedger:
         }
 
         review_summary = {
-            "status": record.status,
+            "status": record.review.status,
+            "task_status": record.status,
+            "decision": record.review_decision,
+            "reason": record.review.reason,
             "accepted": record.accepted,
             "human_review_required": record.human_review_required,
             "supervisor_tool": record.supervisor_tool,
@@ -419,7 +469,9 @@ class TaskLedger:
                 results.append(task)
         return results
 
-    def _apply_event(self, record: TaskRecord, event: Dict[str, Any]) -> None:
+    def _apply_event(
+        self, record: TaskRecord, event: Dict[str, Any], *, include_history: bool = False
+    ) -> None:
         """Single reducer used by both get_task and get_all_tasks."""
         etype = event.get("event_type")
         payload = event.get("payload", {})
@@ -431,6 +483,33 @@ class TaskLedger:
             record.schema_version = event["schema_version"]
         if "role_taxonomy_version" in event:
             record.role_taxonomy_version = event["role_taxonomy_version"]
+
+        if etype in ("review_completed", "outcome_revised"):
+            record.legacy_review_observation_count += 1
+            if include_history:
+                if not isinstance(payload, dict):
+                    payload = {}
+                accepted = payload.get("accepted")
+                accepted = accepted if isinstance(accepted, bool) else None
+                decision = payload.get("review_decision")
+                if decision not in ("accepted", "accepted_with_minor_edits", "rejected", "needs_revision"):
+                    decision = None if accepted is None else ("accepted" if accepted else "rejected")
+                reported_outcome = payload.get(
+                    "revised_outcome" if etype == "outcome_revised" else "task_outcome"
+                )
+                record.legacy_review_history.append(LegacyReviewObservation(
+                    event_id=event.get("event_id", ""),
+                    timestamp=event_timestamp,
+                    event_type=etype,
+                    decision=decision,
+                    accepted=accepted,
+                    reported_outcome=(
+                        reported_outcome if reported_outcome in ("resolved", "unresolved") else None
+                    ),
+                ))
+                if len(record.legacy_review_history) > LEGACY_REVIEW_HISTORY_LIMIT:
+                    del record.legacy_review_history[0]
+            return
 
         if etype == "task_created":
             record.created_at = event_timestamp
@@ -498,39 +577,6 @@ class TaskLedger:
             record.water_liters_estimate += payload.get("water_liters_estimate", 0.0)
             record.embodied_gco2e_allocated += payload.get("embodied_gco2e_allocated", 0.0)
             record.duration_seconds += payload.get("duration_seconds", 0.0)
-        elif etype == "review_completed":
-            record.status = "reviewed"
-            record.accepted = payload.get("accepted", False)
-            record.human_review_minutes = payload.get("human_review_minutes", 0.0)
-            record.review_workload = payload.get("review_workload", "")
-            record.reviewer_notes = payload.get("reviewer_notes", record.reviewer_notes)
-            record.correction_summary = payload.get("correction_summary", record.correction_summary)
-            if "affected_files" in payload:
-                record.affected_files = payload["affected_files"]
-            record.remaining_risk = payload.get("remaining_risk", record.remaining_risk)
-
-            if "review_decision" in payload:
-                record.review_decision = payload["review_decision"]
-            elif "accepted" in payload:
-                record.review_decision = "accepted" if payload["accepted"] else "rejected"
-
-            if "task_outcome" in payload:
-                record.task_outcome = payload["task_outcome"]
-            elif "accepted" in payload:
-                # Do not infer resolved from old boolean accepted
-                if not record.task_outcome:
-                    record.task_outcome = "unresolved"
-
-            if record.review_decision in ["accepted", "accepted_with_minor_edits"]:
-                record.artifact_status = "reviewed"
-            elif record.review_decision == "rejected":
-                record.artifact_status = "rejected"
-        elif etype == "outcome_revised":
-            if "revised_outcome" in payload:
-                record.task_outcome = payload["revised_outcome"]
-            record.reviewer_notes = payload.get("reason", record.reviewer_notes)
-            if "affected_files" in payload:
-                record.affected_files = payload["affected_files"]
         elif etype == "supervisor_reviewed":
             record.supervisor_tool = payload.get("supervisor_tool", "")
             record.supervisor_model = payload.get("supervisor_model", "")
@@ -701,12 +747,17 @@ class TaskLedger:
         if not tasks:
             return
 
-        field_names = [f.name for f in dataclasses.fields(TaskRecord)]
+        field_names = [
+            f.name for f in dataclasses.fields(TaskRecord)
+            if f.name not in ("review", "legacy_review_history")
+        ] + ["review_status", "review_reason"]
         with open(export_path, "w", newline="", encoding="utf-8") as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=field_names)
             writer.writeheader()
             for task in tasks:
-                row = dataclasses.asdict(task)
+                row = {name: getattr(task, name) for name in field_names[:-2]}
+                row["review_status"] = task.review.status
+                row["review_reason"] = task.review.reason
                 row["target_files"] = ";".join(row["target_files"]) if row["target_files"] else ""
                 row["artifact_paths"] = ";".join(row["artifact_paths"]) if row["artifact_paths"] else ""
                 writer.writerow(row)

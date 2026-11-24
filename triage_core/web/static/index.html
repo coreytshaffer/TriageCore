@@ -31,17 +31,18 @@
         </section>
 
         <section id="ledger-panel" class="hidden">
+            <p id="review-feedback" role="status" tabindex="-1"></p>
             <div id="task-list" class="task-list">
                 <div class="loading">Connect to load tasks.</div>
             </div>
         </section>
     </main>
 
-    <div id="review-modal" class="modal hidden">
-        <div class="modal-content">
+    <div id="review-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="review-modal-title" tabindex="-1">
+        <form id="review-form" class="modal-content">
             <div class="modal-header">
-                <h2>Review Task</h2>
-                <button id="close-modal" class="close-btn">&times;</button>
+                <h2 id="review-modal-title">Request review decision</h2>
+                <button id="close-modal" type="button" class="close-btn" aria-label="Close">&times;</button>
             </div>
             <div class="modal-body">
                 <h3 id="modal-task-title"></h3>
@@ -49,9 +50,20 @@
                     <span id="modal-task-runner" class="badge"></span>
                     <span id="modal-task-status" class="badge"></span>
                 </div>
-                
+                <p id="modal-review-status"></p>
+                <p>An enrolled reviewer confirms this decision on the local desktop.</p>
                 <div class="review-controls">
-                    <label>Workload:</label>
+                    <label for="review-decision">Decision</label>
+                    <select id="review-decision" required>
+                        <option value="">Select a decision</option>
+                        <option value="accepted">Accept</option>
+                        <option value="accepted_with_minor_edits">Accept with minor edits</option>
+                        <option value="needs_revision">Needs revision</option>
+                        <option value="rejected">Reject</option>
+                    </select>
+                </div>
+                <div class="review-controls">
+                    <label for="review-workload">Workload</label>
                     <select id="review-workload">
                         <option value="not_recorded">Not Recorded</option>
                         <option value="low">Low</option>
@@ -59,12 +71,12 @@
                         <option value="high">High</option>
                     </select>
                 </div>
+                <p id="review-error" class="error-message" role="alert"></p>
             </div>
             <div class="modal-footer">
-                <button id="btn-reject" class="btn danger">Reject</button>
-                <button id="btn-accept" class="btn success">Accept</button>
+                <button id="submit-review" type="submit" class="btn primary">Request local confirmation</button>
             </div>
-        </div>
+        </form>
     </div>
 
     <script src="/static/app.js"></script>

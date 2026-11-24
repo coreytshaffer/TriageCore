@@ -2320,7 +2320,6 @@ def tc_task_show(
         sys.exit(1)
 
     events = ledger.get_events(task_id)
-    has_review = any(e.get("event_type") == "review_completed" for e in events)
 
     try:
         confirmations = [
@@ -2338,18 +2337,29 @@ def tc_task_show(
     title = task.title if task.title else "N/A"
     status = task.status if task.status else "not_recorded"
 
-    if has_review:
-        accepted = str(task.accepted).lower()
-        review_decision = task.review_decision if task.review_decision else "not_recorded"
-    else:
-        accepted = "not_recorded"
-        review_decision = "not_recorded"
+    label = task.review.binary_label
+    accepted = "not_recorded" if label is None else str(label).lower()
+    review_decision = task.review.decision if task.review.status == "verified" else "not_recorded"
 
     print(f"Task ID: {task.task_id}")
     print(f"Title: {title}")
     print(f"Status: {status}")
     print(f"Accepted: {accepted}")
+    print(f"Review status: {task.review.status}")
     print(f"Review decision: {review_decision}")
+    if task.review.reason:
+        print(f"Review reason: {task.review.reason}")
+    if task.legacy_review_observation_count:
+        print(f"Historical unsigned review observations: {task.legacy_review_observation_count}")
+        for observation in task.legacy_review_history:
+            decision = observation.decision or "not_recorded"
+            outcome = f" | reported outcome: {observation.reported_outcome}" if observation.reported_outcome else ""
+            print(f"  {observation.timestamp} | {observation.event_type} | {decision}{outcome}")
+    if task.review.history:
+        print("Review receipt history by evidence revision:")
+        for item in task.review.history:
+            scope = f" | scope={item.scope_id}" if item.scope_id else ""
+            print(f"  {item.admitted_at} | {item.event_id} | {item.revision} | {item.decision}{scope}")
     print(f"Ledger events: {len(events)}")
     print("Run plan review linkage:")
     if confirmations:

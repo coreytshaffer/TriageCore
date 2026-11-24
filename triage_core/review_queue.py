@@ -2,15 +2,12 @@ from typing import List
 from triage_core.task_ledger import TaskLedger, TaskRecord
 
 def get_pending_reviews(ledger: TaskLedger) -> List[TaskRecord]:
-    """
-    Returns tasks that require human review but do not yet have a review decision.
-    """
-    tasks = ledger.get_all_tasks()
-    pending = []
-    for task in tasks:
-        if task.human_review_required and not task.review_decision:
-            pending.append(task)
-    return pending
+    """Return required reviews without a verified terminal decision."""
+    return [
+        task
+        for task in ledger.get_all_tasks()
+        if task.human_review_required and not task.review.is_terminal
+    ]
 
 def format_review_queue(pending: List[TaskRecord]) -> str:
     """
@@ -37,5 +34,14 @@ def format_review_queue(pending: List[TaskRecord]) -> str:
         lines.append(f"  Type/kind: {kind}")
         lines.append(f"  Created timestamp: {timestamp}")
         lines.append(f"  Reason/status: {reason}")
+        lines.append(f"  Review status: {task.review.status}")
+        if task.review.status == "verified":
+            lines.append(f"  Review decision: {task.review.decision}")
+        if task.review.reason:
+            lines.append(f"  Review reason: {task.review.reason}")
+        if task.legacy_review_observation_count:
+            lines.append(
+                f"  Historical unsigned review observations: {task.legacy_review_observation_count}"
+            )
         
     return "\n".join(lines)

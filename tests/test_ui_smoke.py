@@ -1,4 +1,9 @@
+from types import SimpleNamespace
+from unittest.mock import Mock
+
 import pytest
+
+from triage_core.task_review_service import ReviewState
 
 
 def test_ui_import_graceful_degradation():
@@ -41,7 +46,7 @@ def test_ui_paths_use_config(tmp_path, monkeypatch):
 
 
 def test_ledger_detail_text_includes_review_and_benchmark_context():
-    from triage_core.task_ledger import TaskRecord
+    from triage_core.task_ledger import LegacyReviewObservation, TaskRecord
     from triage_core.ui.app import _ledger_detail_text
 
     task = TaskRecord(
@@ -61,8 +66,18 @@ def test_ledger_detail_text_includes_review_and_benchmark_context():
         expected_status="success",
         observed_status="success",
         validator_passed=True,
-        accepted=True,
-        human_review_minutes=1.25,
+        review=ReviewState(status="pending", pending_count=1),
+        legacy_review_observation_count=2,
+        legacy_review_history=[
+            LegacyReviewObservation(
+                event_id="unsigned-event",
+                timestamp="2026-06-04T01:03:00+00:00",
+                event_type="review_completed",
+                decision="rejected",
+                accepted=False,
+                reported_outcome="unresolved",
+            )
+        ],
         supervisor_tool="codex",
         supervisor_model="gpt-5",
         supervisor_profile="high",
@@ -81,7 +96,9 @@ def test_ledger_detail_text_includes_review_and_benchmark_context():
 
     assert "Task ID: task-123" in text
     assert "Updated: 2026-06-04T01:05:00+00:00" in text
-    assert "Review: accepted, 1.25 review min" in text
+    assert "Review: Pending local confirmation" in text
+    assert "Historical unsigned observations: 2" in text
+    assert "Unsigned · 2026-06-04T01:03:00+00:00 · rejected · reported outcome unresolved" in text
     assert "Supervisor: tool=codex, decision=needs_revision, model=gpt-5" in text
     assert "tokens_est=1200 in/300 out" in text
     assert "Supervisor notes: Local draft needs tests." in text
@@ -165,14 +182,55 @@ def test_compact_ledger_line_prioritizes_recent_status():
     assert "supervisor: codex/needs_revision" in line
 
 
-def test_review_workload_value_maps_labels_to_ledger_values():
-    from triage_core.ui.app import _review_workload_value
+def test_dashboard_review_queue_uses_the_tasks_from_its_own_ledger(monkeypatch):
+    from triage_core.task_ledger import TaskRecord
+    from triage_core.ui import app
 
-    assert _review_workload_value("Not set") == "not_recorded"
-    assert _review_workload_value("Low") == "low"
-    assert _review_workload_value("Medium") == "medium"
-    assert _review_workload_value("High") == "high"
-    assert _review_workload_value("Unexpected") == "not_recorded"
+    def reject_other_ledger():
+        pytest.fail("Dashboard must not query the repository-default review queue")
+
+    monkeypatch.setattr(app, "_TD_ADAPTER_AVAILABLE", True)
+    monkeypatch.setattr(app, "_td_adapter", SimpleNamespace(
+        get_review_queue_snapshot=reject_other_ledger,
+        get_status_snapshot=lambda: SimpleNamespace(
+            git_status="clean", ledger_exists=True, ledger_writable=True, last_event_timestamp="recent",
+        ),
+    ))
+    monkeypatch.setattr(app, "ctk", Mock())
+    frame = Mock()
+    frame.winfo_children.return_value = []
+    desk = SimpleNamespace(
+        _review_list_frame=frame,
+        _review_queue_summary_lbl=Mock(),
+        _op_reviews_lbl=Mock(),
+        _op_adapter_lbl=Mock(),
+        _op_repo_lbl=Mock(),
+        _op_ledger_lbl=Mock(),
+        _op_last_event_lbl=Mock(),
+    )
+    tasks = [
+        TaskRecord(task_id="local-required", human_review_required=True),
+        TaskRecord(
+            task_id="local-mobile", human_review_required=False,
+            review=ReviewState("verified", "accepted", pending_count=1),
+        ),
+        TaskRecord(
+            task_id="local-complete", human_review_required=True,
+            review=ReviewState("verified", "rejected"),
+        ),
+    ]
+
+    app.TriageDeskApp._refresh_review_queue_panel(desk, tasks)
+    app.TriageDeskApp._refresh_status_panel(desk, tasks)
+
+    desk._op_reviews_lbl.configure.assert_called_once_with(text="1")
+    assert desk._review_queue_summary_lbl.configure.call_args.kwargs["text"] == (
+        "1 required reviews · 1 pending mobile requests"
+    )
+    labels = [call.kwargs["text"] for call in app.ctk.CTkLabel.call_args_list]
+    assert len(labels) == 2
+    assert labels[0].startswith("[local-mo]") and "pending local requests" in labels[0]
+    assert labels[1].startswith("[local-re]")
 
 
 def test_telemetry_local_benefit_metrics_are_evidence_bound():
@@ -183,27 +241,56 @@ def test_telemetry_local_benefit_metrics_are_evidence_bound():
         TaskRecord(
             task_id="local-accepted",
             runner="local_llm",
-            accepted=True,
+            review=ReviewState(status="verified", decision="accepted"),
             total_tokens=100,
         ),
         TaskRecord(
             task_id="council-review",
             runner="worker_council",
-            accepted=False,
+            review=ReviewState(status="unavailable"),
             estimated_input_tokens=50,
             estimated_output_tokens=25,
             human_review_required=True,
         ),
-        TaskRecord(task_id="codex-task", runner="codex", accepted=True),
+        TaskRecord(
+            task_id="codex-task",
+            runner="codex",
+            review=ReviewState(status="verified", decision="rejected"),
+        ),
+        TaskRecord(
+            task_id="legacy-task",
+            runner="codex",
+            legacy_review_observation_count=3,
+        ),
     ]
 
     metrics = _telemetry_local_benefit_metrics(tasks)
 
-    assert metrics["accepted_yield_pct"] == pytest.approx(66.666666)
-    assert metrics["local_first_pct"] == pytest.approx(66.666666)
-    assert metrics["review_light_pct"] == pytest.approx(66.666666)
+    assert metrics["accepted_yield_pct"] == 50.0
+    assert metrics["local_first_pct"] == 50.0
+    assert metrics["review_light_pct"] == 75.0
     assert metrics["local_tokens"] == 175
     assert metrics["local_accepted"] == 1
+    assert metrics["binary_review_sample_size"] == 2
+    assert metrics["excluded_from_binary_sample"] == 2
+    assert metrics["excluded_review_observations"] == 3
+    assert metrics["review_verification_status"] == "incomplete"
+
+
+def test_telemetry_excludes_stale_evidence_without_reporting_a_verifier_failure():
+    from triage_core.task_ledger import TaskRecord
+    from triage_core.ui.app import _telemetry_local_benefit_metrics
+
+    tasks = [
+        TaskRecord(task_id="changed", review=ReviewState("evidence_changed")),
+        TaskRecord(task_id="verified", review=ReviewState("verified", "accepted")),
+    ]
+    metrics = _telemetry_local_benefit_metrics(tasks)
+    assert metrics["binary_review_sample_size"] == 1
+    assert metrics["excluded_from_binary_sample"] == 1
+    assert metrics["review_verification_status"] == "complete"
+    assert metrics["evidence_changed_reviews"] == 1
+    assert metrics["unavailable_reviews"] == 0
 
 
 def test_telemetry_control_summary_surfaces_story_118_signals():

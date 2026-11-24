@@ -1,6 +1,7 @@
 import os
 import uuid
 import tempfile
+from types import SimpleNamespace
 import pytest
 from unittest.mock import patch
 from triage_core.tc_cli import tc_task_show
@@ -38,7 +39,7 @@ def test_existing_task_timeline_and_metadata(capsys):
             assert "task_classified" in captured.out
             assert "Signature verification: not checked by this command; run tc audit --verify-signatures" in captured.out
 
-def test_reviewed_task_accepted_decision(capsys):
+def test_historical_acceptance_is_not_a_current_decision(capsys):
     with tempfile.TemporaryDirectory() as temp_dir:
         ledger = TaskLedger(ledger_dir=temp_dir)
         task_id = str(uuid.uuid4())
@@ -51,11 +52,13 @@ def test_reviewed_task_accepted_decision(capsys):
             tc_task_show(task_id)
             
             captured = capsys.readouterr()
-            assert "Accepted: true" in captured.out
-            assert "Review decision: accepted" in captured.out
-            assert "Status: reviewed" in captured.out
+            assert "Accepted: not_recorded" in captured.out
+            assert "Review decision: not_recorded" in captured.out
+            assert "Review status: unpaired" in captured.out
+            assert "Status: pending" in captured.out
+            assert "Historical unsigned review observations: 1" in captured.out
 
-def test_reviewed_task_needs_revision_decision(capsys):
+def test_historical_revision_cannot_supply_a_binary_label(capsys):
     with tempfile.TemporaryDirectory() as temp_dir:
         ledger = TaskLedger(ledger_dir=temp_dir)
         task_id = str(uuid.uuid4())
@@ -68,9 +71,38 @@ def test_reviewed_task_needs_revision_decision(capsys):
             tc_task_show(task_id)
             
             captured = capsys.readouterr()
-            assert "Accepted: false" in captured.out
-            assert "Review decision: needs_revision" in captured.out
-            assert "Review decision: rejected" not in captured.out
+            assert "Accepted: not_recorded" in captured.out
+            assert "Review decision: not_recorded" in captured.out
+            assert "review_completed | needs_revision" in captured.out
+
+def test_task_show_preserves_prior_receipt_when_current_evidence_changes(tmp_path, monkeypatch, capsys):
+    from triage_core import task_review_service
+    from triage_core.task_review_service import ReviewHistory, ReviewState
+
+    ledger = TaskLedger(str(tmp_path))
+    ledger.append_event("task", "task_created", {"title": "Review receipt history"})
+    ledger.append_event("task", "review_completed", {"accepted": False})
+    receipt = ReviewHistory("receipt-1", "r1", "accepted", "2026-11-23T00:00:00Z", scope_id="scope-a")
+    current = ReviewState(status="verified", decision="accepted", history=(receipt,))
+    service = SimpleNamespace(project=lambda task_id, *, include_history: current)
+    monkeypatch.setattr(task_review_service, "get_review_service", lambda ledger_dir: service)
+
+    tc_task_show("task", ledger_dir=str(tmp_path))
+
+    output = capsys.readouterr().out
+    assert "Review status: verified" in output
+    assert "Review decision: accepted" in output
+    assert "Accepted: true" in output
+    assert "review_completed | rejected" in output
+
+    current = ReviewState(status="evidence_changed", reason="review_evidence_changed", history=(receipt,))
+    tc_task_show("task", ledger_dir=str(tmp_path))
+
+    output = capsys.readouterr().out
+    assert "Review status: evidence_changed" in output
+    assert "Review reason: review_evidence_changed" in output
+    assert "Accepted: not_recorded" in output
+    assert "receipt-1 | r1 | accepted | scope=scope-a" in output
 
 def test_missing_task_behavior(capsys):
     with tempfile.TemporaryDirectory() as temp_dir:

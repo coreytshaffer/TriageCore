@@ -38,6 +38,7 @@ out of scope for CR-YK-001.
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
@@ -128,7 +129,7 @@ def ceremony_support() -> CeremonySupport:
     return CeremonySupport(False, "none", "no FIDO2 authenticator found")
 
 
-def _make_client():  # pragma: no cover - requires hardware or Windows API
+def _make_client(*, user_interaction=None):  # pragma: no cover - requires hardware or Windows API
     """Build a 2.x WebAuthn client for the current platform."""
     _import_fido2()
     from fido2.client import DefaultClientDataCollector, Fido2Client
@@ -144,7 +145,9 @@ def _make_client():  # pragma: no cover - requires hardware or Windows API
     devices = _list_ctap_devices()
     if not devices:
         raise AuthzHardwareUnavailable("no FIDO2 authenticator found")
-    return Fido2Client(devices[0], client_data_collector=collector)
+    if user_interaction is None:
+        return Fido2Client(devices[0], client_data_collector=collector)
+    return Fido2Client(devices[0], client_data_collector=collector, user_interaction=user_interaction)
 
 
 # --- Ceremonies (primary YubiKey + phone paths verified, backup unverified) ---
@@ -247,6 +250,57 @@ def get_assertion_receipt(
         assertion_response=dict(response),
         user_verified=response.response.authenticator_data.is_user_verified(),
     )
+
+
+def acquire_review_assertion(
+    challenge: bytes,
+    credential_ids: tuple[str, ...],
+    expires_at: datetime,
+    *,
+    request_pin: Callable[[], str | None] | None = None,
+) -> dict:
+    """Acquire a local, user-verified assertion for a review challenge."""
+    _import_fido2()
+    from fido2.client import ClientError, UserInteraction
+    from fido2.webauthn import (
+        PublicKeyCredentialDescriptor,
+        PublicKeyCredentialRequestOptions,
+        PublicKeyCredentialType,
+        UserVerificationRequirement,
+    )
+
+    remaining = expires_at - datetime.now(expires_at.tzinfo)
+    timeout = int(remaining.total_seconds() * 1000)
+    if not credential_ids or timeout <= 0:
+        raise AuthzHardwareUnavailable("review challenge unavailable")
+    options = PublicKeyCredentialRequestOptions(
+        challenge=challenge,
+        rp_id=RP_ID,
+        timeout=timeout,
+        allow_credentials=[
+            PublicKeyCredentialDescriptor(
+                type=PublicKeyCredentialType.PUBLIC_KEY,
+                id=b64url_decode(credential_id),
+            )
+            for credential_id in credential_ids
+        ],
+        user_verification=UserVerificationRequirement.REQUIRED,
+    )
+    class LocalReviewInteraction(UserInteraction):
+        def request_pin(self, permissions, rp_id):
+            if request_pin is not None and rp_id == RP_ID:
+                return request_pin()
+            return None
+
+    try:
+        if request_pin is None:
+            client = _make_client()
+        else:
+            client = _make_client(user_interaction=LocalReviewInteraction())
+        response = client.get_assertion(options).get_response(0)
+    except (ClientError, OSError, ValueError, IndexError):
+        raise AuthzHardwareUnavailable("local review assertion unavailable") from None
+    return dict(response)
 
 
 # --- Offline verification -----------------------------------------------------

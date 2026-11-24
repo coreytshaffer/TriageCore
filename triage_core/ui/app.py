@@ -60,9 +60,10 @@ import threading
 import time
 from typing import Optional
 from datetime import datetime, timezone
-from tkinter import filedialog
+from tkinter import filedialog, messagebox, simpledialog
 from ..config import default_config
 from ..task_ledger import TaskLedger
+from ..task_review_service import ReviewServiceError
 from ..classifier import DangerDetector, TaskClassifier
 from ..sustainability import SustainabilityEstimator, PowerMonitor
 from ..context_budget import create_context_pack_artifact
@@ -142,11 +143,17 @@ def _antigravity_task_dir(task_id: str) -> str:
     return os.path.join(default_config.get_tasks_dir(), task_id[:8])
 
 
-def _telemetry_local_benefit_metrics(tasks) -> dict[str, float | int]:
+def _telemetry_local_benefit_metrics(tasks) -> dict[str, float | int | str | None]:
     total_tasks = len(tasks)
     local_tasks = [task for task in tasks if task.runner in _LOCAL_FIRST_RUNNERS]
-    accepted = [task for task in tasks if task.accepted]
-    local_accepted = [task for task in local_tasks if task.accepted]
+    sample = [task for task in tasks if task.review.binary_label is not None]
+    accepted = [task for task in sample if task.review.binary_label is True]
+    statuses = {task.review.status for task in tasks}
+    verification_status = (
+        "incomplete"
+        if "unavailable" in statuses
+        else "unpaired" if statuses == {"unpaired"} else "complete"
+    )
     review_light = [task for task in tasks if not task.human_review_required]
     local_tokens = sum(
         task.total_tokens
@@ -157,21 +164,20 @@ def _telemetry_local_benefit_metrics(tasks) -> dict[str, float | int]:
         for task in local_tasks
     )
 
-    if total_tasks == 0:
-        return {
-            "accepted_yield_pct": 0.0,
-            "local_first_pct": 0.0,
-            "review_light_pct": 0.0,
-            "local_tokens": 0,
-            "local_accepted": 0,
-        }
-
     return {
-        "accepted_yield_pct": (len(accepted) / total_tasks) * 100.0,
-        "local_first_pct": (len(local_tasks) / total_tasks) * 100.0,
-        "review_light_pct": (len(review_light) / total_tasks) * 100.0,
+        "accepted_yield_pct": (len(accepted) / len(sample)) * 100.0 if sample else None,
+        "local_first_pct": (len(local_tasks) / total_tasks) * 100.0 if total_tasks else 0.0,
+        "review_light_pct": (len(review_light) / total_tasks) * 100.0 if total_tasks else 0.0,
         "local_tokens": local_tokens,
-        "local_accepted": len(local_accepted),
+        "local_accepted": sum(task.runner in _LOCAL_FIRST_RUNNERS for task in accepted),
+        "binary_review_sample_size": len(sample),
+        "excluded_from_binary_sample": total_tasks - len(sample),
+        "excluded_review_observations": sum(
+            task.legacy_review_observation_count for task in tasks
+        ),
+        "evidence_changed_reviews": sum(task.review.status == "evidence_changed" for task in tasks),
+        "unavailable_reviews": sum(task.review.status == "unavailable" for task in tasks),
+        "review_verification_status": verification_status,
     }
 
 
@@ -291,6 +297,26 @@ def _telemetry_control_summary(tasks, log_tail: str = "", token_credit_allowance
     }
 
 
+def _review_state_label(review) -> str:
+    if review.status == "verified":
+        label = f"Verified · {review.decision.replace('_', ' ')}"
+    else:
+        label = {
+            "pending": "Pending local confirmation",
+            "unavailable": "Verification unavailable",
+            "evidence_changed": "Evidence changed",
+            "unpaired": "No local review pairing",
+            "no_decision": "No current decision",
+        }.get(review.status, "Verification unavailable")
+    if review.pending_count and review.status != "pending":
+        label += f" · {review.pending_count} pending local requests"
+    return label
+
+
+def _required_review_tasks(tasks):
+    return [task for task in tasks if task.human_review_required and not task.review.is_terminal]
+
+
 def _ledger_detail_lines(task) -> list[str]:
     lines = [
         f"Task ID: {task.task_id}",
@@ -312,15 +338,12 @@ def _ledger_detail_lines(task) -> list[str]:
         )
         lines.append(f"Context pack: {task.context_pack_path}")
 
-    review_bits = []
-    if task.status == "reviewed":
-        review_bits.append("accepted" if task.accepted else "rejected")
-    if task.human_review_minutes:
-        review_bits.append(f"{task.human_review_minutes:.2f} review min")
-    if task.human_review_required:
-        review_bits.append("review required")
-    if review_bits:
-        lines.append(f"Review: {', '.join(review_bits)}")
+    lines.append(f"Review: {_review_state_label(task.review)}")
+    if task.review.reason and task.review.status in {"unavailable", "evidence_changed"}:
+        lines.append(f"Review reason: {task.review.reason.replace('_', ' ')}")
+    if task.legacy_review_observation_count:
+        lines.append(f"Historical unsigned observations: {task.legacy_review_observation_count}")
+    lines.extend(_review_history_lines(task))
 
     supervisor_bits = []
     if task.supervisor_tool:
@@ -404,21 +427,39 @@ def _ledger_detail_lines(task) -> list[str]:
     return lines
 
 
+def _review_history_lines(task) -> list[str]:
+    history = []
+    for observation in task.legacy_review_history:
+        outcome = observation.decision or {True: "accepted", False: "rejected"}.get(
+            observation.accepted, "unspecified"
+        )
+        reported = (
+            f" · reported outcome {observation.reported_outcome}"
+            if observation.reported_outcome
+            else ""
+        )
+        history.append(f"Unsigned · {observation.timestamp} · {outcome.replace('_', ' ')}{reported}")
+    for receipt in task.review.history:
+        scope = f" · scope {receipt.scope_id}" if receipt.scope_id else ""
+        history.append(
+            f"Local receipt · {receipt.admitted_at}{scope} · revision {receipt.revision} · "
+            f"{receipt.decision.replace('_', ' ')}"
+        )
+    return history
+
+
 def _ledger_detail_text(task) -> str:
     return "\n".join(_ledger_detail_lines(task))
 
 
 def _review_assessment_lines(task) -> list[str]:
     status = task.status or "pending"
-    if status == "reviewed":
-        decision = "approved" if task.accepted else "denied"
-        lines = [f"Decision recorded: {decision}"]
-    elif task.human_review_required:
-        lines = ["Decision needed: review required before adoption"]
+    lines = [f"Review: {_review_state_label(task.review)}"]
+    if task.human_review_required and not task.review.is_terminal:
+        lines.append("Decision needed: review required before adoption")
     elif status in ["local_draft_generated", "handoff_generated", "council_completed"]:
-        lines = ["Decision needed: draft is ready for review"]
-    else:
-        lines = [f"Current state: {status.replace('_', ' ')}"]
+        if not task.review.is_terminal:
+            lines.append("Decision needed: draft is ready for review")
 
     runner_bits = []
     if task.runner:
@@ -458,9 +499,6 @@ def _review_assessment_lines(task) -> list[str]:
     if cost_bits:
         lines.append(f"Cost: {', '.join(cost_bits)}")
 
-    if getattr(task, "review_workload", ""):
-        lines.append(f"Review load: {task.review_workload.replace('_', ' ')}")
-
     if task.artifact_paths:
         lines.append(f"Artifact: {task.artifact_paths[-1]}")
 
@@ -473,21 +511,19 @@ def _review_assessment_text(task) -> str:
 
 def _compact_ledger_line(task) -> str:
     status = task.status or "pending"
-    if status == "reviewed":
-        status = "accepted" if task.accepted else "rejected"
 
     title = task.title or task.description or task.task_id[:12]
     if len(title) > 70:
         title = title[:67] + "..."
 
     timestamp = task.updated_at or task.created_at or "no timestamp"
-    meta = [f"#{task.task_id[:8]}", status.replace("_", " ")]
+    meta = [f"#{task.task_id[:8]}", status.replace("_", " "), _review_state_label(task.review)]
     if task.runner:
         meta.append(f"runner: {task.runner}")
     model = task.model or task.backend_name or task.backend
     if model:
         meta.append(f"model: {model}")
-    if task.human_review_required and task.status != "reviewed":
+    if task.human_review_required and not task.review.is_terminal:
         meta.append("review required")
     if task.supervisor_tool:
         supervisor_status = task.supervisor_decision or "reviewed"
@@ -495,15 +531,6 @@ def _compact_ledger_line(task) -> str:
 
     return f"{timestamp} | {title} | {' · '.join(meta)}"
 
-
-def _review_workload_value(label: str) -> str:
-    values = {
-        "Not set": "not_recorded",
-        "Low": "low",
-        "Medium": "medium",
-        "High": "high",
-    }
-    return values.get(label, "not_recorded")
 
 
 def _read_text_tail(path: str, max_lines: int = 400) -> str:
@@ -1030,7 +1057,6 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         self._current_frame = "dispatch"
         self.review_timers = {}
         self.timer_labels = {}
-        self.review_workload_vars = {}
         self.expanded_ledger_task_ids = set()
         self.agent_status = {}
         self._last_logs_render = None
@@ -1874,6 +1900,9 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
 
         ctk.CTkLabel(self.inspector_content, text=f"ID: {t.task_id}").pack(anchor="w")
         ctk.CTkLabel(self.inspector_content, text=f"Status: {t.status}").pack(anchor="w")
+        ctk.CTkLabel(
+            self.inspector_content, text=f"Review: {_review_state_label(t.review)}"
+        ).pack(anchor="w")
         ctk.CTkLabel(self.inspector_content, text=f"Runner: {t.runner or 'None'}").pack(anchor="w")
         ctk.CTkLabel(self.inspector_content, text=f"Risk Level: {t.risk_level or 'None'}").pack(anchor="w")
         ctk.CTkLabel(self.inspector_content, text=f"Profile: {t.permission_profile or 'None'}").pack(anchor="w")
@@ -1943,12 +1972,25 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         rev = ctx.review_summary
         t = ctx.record
 
-        ctk.CTkLabel(self.inspector_content, text=f"Human Review Required: {rev.get('human_review_required', False)}").pack(anchor="w", pady=2)
-        ctk.CTkLabel(self.inspector_content, text=f"Accepted: {rev.get('accepted', False)}").pack(anchor="w", pady=2)
+        ctk.CTkLabel(
+            self.inspector_content, text=_review_state_label(t.review)
+        ).pack(anchor="w", pady=2)
+        if t.human_review_required and not t.review.is_terminal:
+            ctk.CTkLabel(self.inspector_content, text="Review required").pack(anchor="w")
+        if t.review.reason and t.review.status in {"unavailable", "evidence_changed"}:
+            ctk.CTkLabel(
+                self.inspector_content, text=t.review.reason.replace("_", " ")
+            ).pack(anchor="w")
         if rev.get("supervisor_decision"):
             ctk.CTkLabel(self.inspector_content, text=f"Supervisor Decision: {rev.get('supervisor_decision')}").pack(anchor="w", pady=2)
 
-        if t.status in ["local_draft_generated", "handoff_generated", "council_completed", "pending"]:
+        if t.review.status != "unpaired":
+            self._render_pending_review_intents(t.task_id)
+
+        if not t.review.is_terminal and (
+            t.human_review_required
+            or t.status in {"local_draft_generated", "handoff_generated", "council_completed", "pending"}
+        ):
             actions = ctk.CTkFrame(self.inspector_content, fg_color="transparent")
             actions.pack(fill="x", pady=20)
 
@@ -1961,34 +2003,139 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             needs_rev_btn = ctk.CTkButton(actions, text="Needs Revision", fg_color="#b45309", hover_color="#92400e", command=lambda: self._execute_context_review(t.task_id, False, "needs_revision"))
             needs_rev_btn.pack(side="left")
 
-    def _execute_context_review(self, task_id: str, accepted: bool, decision_override: str = None):
-        payload = {
-            "accepted": accepted
-        }
-        if decision_override:
-            payload["review_decision"] = decision_override
+        history = _review_history_lines(t)
+        if history:
+            _SectionLabel(self.inspector_content, "Review history").pack(anchor="w", pady=(10, 4))
+            for line in history:
+                ctk.CTkLabel(self.inspector_content, text=line).pack(anchor="w", pady=2)
 
-        self.ledger.append_event(task_id, "review_completed", payload)
+    def _render_pending_review_intents(self, task_id: str):
+        try:
+            intents = self.ledger.review_service.pending_for_task(task_id)
+        except ReviewServiceError as exc:
+            ctk.CTkLabel(
+                self.inspector_content,
+                text=f"Pending requests unavailable · {exc.reason.replace('_', ' ')}",
+            ).pack(anchor="w")
+            return
 
-        if accepted:
+        for intent in intents:
+            row = ctk.CTkFrame(self.inspector_content)
+            row.pack(fill="x", pady=4)
+            label = f"Pending mobile request · {intent.decision.replace('_', ' ')}"
+            if intent.workload:
+                label += f" · Workload: {intent.workload.replace('_', ' ')}"
+            ctk.CTkLabel(row, text=label).pack(anchor="w", padx=8)
+            ctk.CTkButton(
+                row, text="Confirm locally",
+                command=lambda item=intent: self._confirm_task_review(
+                    task_id, item.decision, intent_id=item.intent_id
+                ),
+            ).pack(side="left", padx=8, pady=6)
+            ctk.CTkButton(
+                row, text="Cancel request",
+                command=lambda item=intent: self._cancel_review_intent(task_id, item.intent_id),
+            ).pack(side="left", padx=8, pady=6)
+
+    def _cancel_review_intent(self, task_id: str, intent_id: str):
+        try:
+            self.ledger.review_service.cancel_intent(task_id, intent_id)
+        except ReviewServiceError as exc:
+            messagebox.showerror("Review request", exc.reason.replace("_", " "), parent=self)
+            return
+        self._refresh_ledger()
+        self._refresh_compact_ledger_feed()
+        self._refresh_telemetry()
+
+    def _show_review_snapshot(self, task_id, decision, snapshot):
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("Confirm task review")
+        dialog.geometry("800x620")
+        dialog.transient(self)
+
+        ctk.CTkLabel(dialog, text=f"Task {task_id}\nDecision: {decision}").pack(padx=16, pady=12)
+        ctk.CTkLabel(
+            dialog, text="Inspect the captured evidence before verifying with your security key."
+        ).pack(padx=16)
+        evidence = ctk.CTkTextbox(dialog, wrap="char")
+        evidence.pack(fill="both", expand=True, padx=16, pady=12)
+        for artifact_id, content in snapshot.items:
+            evidence.insert("end", f"Evidence: {artifact_id}\n")
+            evidence.insert("end", content)
+            evidence.insert("end", "\n\n")
+        evidence.configure(state="disabled")
+
+        confirmed = False
+
+        def verify():
+            nonlocal confirmed
+            confirmed = True
+            dialog.destroy()
+
+        actions = ctk.CTkFrame(dialog, fg_color="transparent")
+        actions.pack(pady=(0, 12))
+        cancel = ctk.CTkButton(actions, text="Cancel", command=dialog.destroy)
+        cancel.pack(side="left", padx=6)
+        ctk.CTkButton(actions, text="Verify with security key", command=verify).pack(side="left", padx=6)
+        dialog.protocol("WM_DELETE_WINDOW", dialog.destroy)
+        dialog.bind("<Escape>", lambda _event: dialog.destroy())
+        dialog.wait_visibility()
+        dialog.grab_set()
+        cancel.focus_set()
+        self.wait_window(dialog)
+        return confirmed
+
+    def _execute_context_review(self, task_id: str, accepted: bool, decision_override: str | None = None):
+        decision = decision_override or ("accepted" if accepted else "rejected")
+        self._confirm_task_review(task_id, decision, load=accepted and decision == "accepted")
+
+    def _prompt_review_pin(self) -> str | None:
+        return simpledialog.askstring(
+            "Security key PIN",
+            "Enter the PIN for your local security key.",
+            show="*",
+            parent=self,
+        )
+
+    def _confirm_task_review(self, task_id: str, decision: str, *, intent_id=None, load=False):
+        try:
+            result = self.ledger.review_service.confirm(
+                task_id, decision,
+                lambda snapshot: self._show_review_snapshot(task_id, decision, snapshot),
+                intent_id=intent_id,
+                request_pin=self._prompt_review_pin,
+            )
+        except ReviewServiceError as exc:
+            if exc.reason != "review_cancelled":
+                messagebox.showerror("Review unavailable", exc.reason.replace("_", " "), parent=self)
+            return
+
+        if result.status != "verified" or result.decision != decision:
+            messagebox.showerror("Review unavailable", "The decision could not be verified.", parent=self)
+            return
+
+        feedback = f"✓ Verified review: {decision.replace('_', ' ')}"
+        if load:
             task = self.ledger.get_task(task_id)
-            if task:
-                self.prompt_box.delete("0.0", "end")
-                self.prompt_box.insert("0.0", task.description or "")
-                self.prompt_box.configure(text_color=("gray10", "#DCE4EE"))
-                self.files_entry.delete(0, "end")
-                if task.target_files:
-                    self.files_entry.insert(0, ", ".join(task.target_files))
-                self.select_frame("dashboard")
-                self.status_label.configure(
-                    text=f"✓ Loaded task #{task_id[:8]} details. Ready to execute locally.",
-                    text_color="#22c55e",
-                )
+            if task is None or task.review.binary_label is not True or task.review.decision != decision:
+                messagebox.showerror("Review unavailable", "The current decision could not be verified.", parent=self)
+                return
+            self.current_loaded_task_id = task_id
+            self.prompt_box.delete("0.0", "end")
+            self.prompt_box.insert("0.0", task.description or "")
+            self.prompt_box.configure(text_color=("gray10", "#DCE4EE"))
+            self.files_entry.delete(0, "end")
+            if task.target_files:
+                self.files_entry.insert(0, ", ".join(task.target_files))
+            self.select_frame("dashboard")
+            feedback += f" · Loaded task #{task_id[:8]}"
+        self.status_label.configure(text=feedback, text_color="#22c55e")
 
         self._refresh_ledger()
         self._refresh_compact_ledger_feed()
         self._update_ticker()
         self._refresh_telemetry()
+        self._update_workflow_glow()
 
     def _refresh_ledger(self):
         self.timer_labels = {}
@@ -2004,8 +2151,6 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
 
         for i, t in enumerate(tasks):
             status = t.status or "pending"
-            if status == "reviewed":
-                status = "accepted" if t.accepted else "rejected"
             fg = _card_fg(status)
             badge_bg, badge_fg = _badge_color(status)
 
@@ -2056,6 +2201,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             meta_parts = []
             if t.risk_level: meta_parts.append(f"Risk: {t.risk_level}")
             if t.runner: meta_parts.append(f"Runner: {t.runner}")
+            meta_parts.append(_review_state_label(t.review))
 
             meta_lbl = ctk.CTkLabel(
                 card,
@@ -2096,8 +2242,6 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
 
         for i, task in enumerate(tasks):
             status = task.status or "pending"
-            if status == "reviewed":
-                status = "accepted" if task.accepted else "rejected"
             badge_bg, badge_fg = _badge_color(status)
 
             row = ctk.CTkFrame(
@@ -2151,58 +2295,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         self._refresh_ledger()
 
     def _review_task(self, task_id, accepted):
-        self.current_loaded_task_id = task_id
-        start_time = self.review_timers.pop(task_id, None)
-        elapsed_mins = 0.0
-        task = self.ledger.get_task(task_id)
-        if start_time is not None:
-            elapsed_mins = (time.time() - start_time) / 60.0
-        elif task:
-            completed_at_str = getattr(task, "completed_at", "") or task.created_at
-            if completed_at_str:
-                try:
-                    completed_dt = datetime.fromisoformat(completed_at_str)
-                    now_dt = datetime.now(timezone.utc)
-                    elapsed_mins = (now_dt - completed_dt).total_seconds() / 60.0
-                except Exception:
-                    pass
-
-        if elapsed_mins < 0:
-            elapsed_mins = 0.0
-
-        workload_var = self.review_workload_vars.get(task_id)
-        workload_label = workload_var.get() if workload_var else "Not set"
-
-        self.ledger.append_event(
-            task_id,
-            "review_completed",
-            {
-                "accepted": accepted,
-                "human_review_minutes": elapsed_mins,
-                "review_workload": _review_workload_value(workload_label),
-            },
-        )
-
-        if accepted and task:
-            self.prompt_box.delete("0.0", "end")
-            self.prompt_box.insert("0.0", task.description or "")
-            self.prompt_box.configure(text_color=("gray10", "#DCE4EE"))
-
-            self.files_entry.delete(0, "end")
-            if task.target_files:
-                self.files_entry.insert(0, ", ".join(task.target_files))
-
-            self.select_frame("dashboard")
-            self.status_label.configure(
-                text=f"✓ Loaded task #{task_id[:8]} details. Ready to execute locally.",
-                text_color="#22c55e",
-            )
-
-        self._refresh_ledger()
-        self._refresh_compact_ledger_feed()
-        self._update_ticker()
-        self._refresh_telemetry()
-        self._update_workflow_glow()
+        self._execute_context_review(task_id, accepted)
 
     def _update_active_timers(self):
         if self._current_frame == "ledger":
@@ -2972,8 +3065,10 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         val_lbl.pack(anchor="w", padx=10, pady=(2, 8))
         return val_lbl
 
-    def _refresh_status_panel(self):
+    def _refresh_status_panel(self, tasks):
         """Update the operator status panel from the adapter. Read-only, no mutation."""
+        count = len(_required_review_tasks(tasks))
+        self._op_reviews_lbl.configure(text=str(count) if count else "none")
         if not _TD_ADAPTER_AVAILABLE or _td_adapter is None:
             self._op_adapter_lbl.configure(text="unavailable")
             return
@@ -2990,13 +3085,6 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             self._op_repo_lbl.configure(text="error")
             self._op_ledger_lbl.configure(text="error")
             self._op_last_event_lbl.configure(text="error")
-
-        try:
-            rq = _td_adapter.get_review_queue_snapshot()
-            count = len(rq.pending_tasks)
-            self._op_reviews_lbl.configure(text=str(count) if count > 0 else "none")
-        except Exception:
-            self._op_reviews_lbl.configure(text="error")
 
         self._op_adapter_lbl.configure(text="connected")
 
@@ -3027,32 +3115,17 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         self._review_list_frame.grid(row=2, column=0, padx=16, pady=(0, 12), sticky="ew")
         self._review_list_frame.grid_columnconfigure(0, weight=1)
 
-    def _refresh_review_queue_panel(self):
-        """Update the review queue panel from the adapter."""
+    def _refresh_review_queue_panel(self, tasks):
+        """Render required reviews and pending requests from this ledger snapshot."""
         # Clear existing items
         for w in self._review_list_frame.winfo_children():
             w.destroy()
 
-        if not _TD_ADAPTER_AVAILABLE or _td_adapter is None:
-            self._review_queue_summary_lbl.configure(text="Status: unavailable")
-            ctk.CTkLabel(
-                self._review_list_frame, text="Adapter unavailable. Cannot fetch reviews.",
-                text_color="gray", font=ctk.CTkFont(size=12)
-            ).pack(anchor="w", pady=4)
-            return
-
-        try:
-            rq = _td_adapter.get_review_queue_snapshot()
-            pending = rq.pending_tasks
-        except Exception as e:
-            self._review_queue_summary_lbl.configure(text="Status: error")
-            ctk.CTkLabel(
-                self._review_list_frame, text=f"Error fetching reviews: {e}",
-                text_color="#ef4444", font=ctk.CTkFont(size=12)
-            ).pack(anchor="w", pady=4)
-            return
-
-        if not pending:
+        required = _required_review_tasks(tasks)
+        requests = [task for task in tasks if task.review.pending_count]
+        by_id = {task.task_id: task for task in requests}
+        by_id.update((task.task_id, task) for task in required)
+        if not by_id:
             self._review_queue_summary_lbl.configure(
                 text="Status: available · 0 pending reviews detected"
             )
@@ -3063,26 +3136,40 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             return
 
         self._review_queue_summary_lbl.configure(
-            text=f"Status: available · {len(pending)} pending review(s) detected"
+            text=(
+                f"{len(required)} required reviews · "
+                f"{sum(task.review.pending_count for task in requests)} pending mobile requests"
+            )
         )
 
-        for idx, task in enumerate(pending[:100]):
+        for task in list(by_id.values())[:100]:
             row = ctk.CTkFrame(self._review_list_frame, corner_radius=6, fg_color=("gray85", "gray22"))
             row.pack(fill="x", pady=2)
 
             info = f"[{task.task_id[:8]}] {task.title}  ·  Source: {task.runner}  ·  Status: {task.status}"
+            info += f" · {_review_state_label(task.review)}"
             if getattr(task, "updated_at", None):
                 info += f"  ·  {task.updated_at}"
 
             ctk.CTkLabel(
                 row, text=info, font=ctk.CTkFont(size=11), anchor="w"
             ).pack(side="left", padx=10, pady=6)
+            ctk.CTkButton(
+                row, text="Open review", width=100,
+                command=lambda task_id=task.task_id: self._open_ledger_review(task_id),
+            ).pack(side="right", padx=10, pady=6)
+
+    def _open_ledger_review(self, task_id: str):
+        self.current_loaded_task_id = task_id
+        self.current_inspector_tab = "Review"
+        self.inspector_tabs.set("Review")
+        self.select_frame("ledger")
 
     def _refresh_telemetry(self):
-        self._refresh_status_panel()
-        self._refresh_review_queue_panel()
         tasks = self.ledger.get_all_tasks()
-        accepted = [t for t in tasks if t.accepted]
+        self._refresh_status_panel(tasks)
+        self._refresh_review_queue_panel(tasks)
+        accepted = [t for t in tasks if t.review.binary_label is True]
         n_local = sum(1 for t in tasks if t.runner == "local_llm")
         n_codex = sum(1 for t in tasks if t.runner == "codex")
         n_anti = sum(1 for t in tasks if t.runner == "antigravity")
@@ -3094,11 +3181,14 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         total_embodied = sum(t.embodied_gco2e_allocated for t in tasks)
         total_tok_in = sum(t.estimated_input_tokens for t in tasks)
         total_tok_out = sum(t.estimated_output_tokens for t in tasks)
-        total_review = sum(t.human_review_minutes for t in tasks)
-
         local_benefits = _telemetry_local_benefit_metrics(tasks)
-
-        n_acc = len(accepted) or 1  # avoid div/0
+        yield_pct = local_benefits["accepted_yield_pct"]
+        verification = local_benefits["review_verification_status"]
+        sample = local_benefits["binary_review_sample_size"]
+        excluded = local_benefits["excluded_from_binary_sample"]
+        observations = local_benefits["excluded_review_observations"]
+        changed = local_benefits["evidence_changed_reviews"]
+        unavailable = local_benefits["unavailable_reviews"]
 
         # Update dynamic visual gauges
         self.gauge_energy.set_value(total_kwh)
@@ -3122,18 +3212,30 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         _SectionLabel(self._savings_card, "Local-First Benefits").grid(
             row=0, column=0, columnspan=4, padx=16, pady=(12, 8), sticky="w"
         )
+        ctk.CTkLabel(
+            self._savings_card,
+            text=(
+                f"Review verification {verification} · {sample} verified terminal decisions · "
+                f"{excluded} tasks excluded · {observations} unsigned observations excluded"
+                + (f" · {changed} with changed evidence" if changed else "")
+                + (f" · {unavailable} unavailable" if unavailable else "")
+            ),
+            text_color="gray",
+            justify="left",
+            wraplength=800,
+        ).grid(row=1, column=0, columnspan=4, padx=16, pady=(0, 8), sticky="w")
 
         savings_metrics = [
-            ("✓", f"{local_benefits['accepted_yield_pct']:.0f}%", "accepted yield"),
+            ("✓", f"{yield_pct:.0f}%" if yield_pct is not None else "—", "verified acceptance rate"),
             ("⌂", f"{local_benefits['local_first_pct']:.0f}%", "kept local"),
-            ("◆", f"{local_benefits['local_accepted']}", "local accepted work"),
+            ("◆", f"{local_benefits['local_accepted']}" if sample else "—", "local verified acceptances"),
             ("◌", f"{local_benefits['review_light_pct']:.0f}%", "review-light tasks"),
         ]
         for col, (icon, value, label) in enumerate(savings_metrics):
             chip = ctk.CTkFrame(
                 self._savings_card, corner_radius=12, fg_color=("gray85", "gray22")
             )
-            chip.grid(row=1, column=col, padx=12, pady=(0, 16), sticky="nsew")
+            chip.grid(row=2, column=col, padx=12, pady=(0, 16), sticky="nsew")
             ctk.CTkLabel(
                 chip,
                 text=f"{icon} {value}",
@@ -3152,7 +3254,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         )
 
         rows_left = [
-            ("📋 Tasks", f"{len(tasks)} total / {len(accepted)} accepted"),
+            ("📋 Tasks", f"{len(tasks)} total"),
             ("⚡ Energy", f"{total_kwh:.6f} kWh"),
             ("💧 Water", f"{total_water:.4f} L"),
             ("🔩 Embodied", f"{total_embodied:.4f} gCO₂e"),
@@ -3164,7 +3266,6 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             ),
             ("💨 Emissions", f"{total_gco2:.4f} gCO₂e"),
             ("🎫 Tokens", f"{total_tok_in} in / {total_tok_out} out"),
-            ("🕐 Review", f"{total_review:.1f} min"),
         ]
         for r, (lbl, val) in enumerate(rows_left):
             ctk.CTkLabel(
@@ -3235,22 +3336,23 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             w.destroy()
 
         _SectionLabel(
-            self._per_task_card, "Efficiency Per Accepted Task"
+            self._per_task_card, "Efficiency Per Verified Acceptance"
         ).grid(row=0, column=0, columnspan=3, padx=16, pady=(12, 8), sticky="w")
 
+        n_acc = len(accepted)
         per_metrics = [
-            ("⚡", f"{total_kwh/n_acc:.6f}", "kWh / accepted"),
-            ("💨", f"{total_gco2/n_acc:.4f}", "gCO₂e / accepted"),
-            ("🎫", f"{(total_tok_in+total_tok_out)//n_acc}", "tokens / accepted"),
-            ("💧", f"{total_water/n_acc:.4f}", "L / accepted"),
-            ("🔩", f"{total_embodied/n_acc:.5f}", "gCO₂e emb. / accepted"),
-            ("🕐", f"{total_review/n_acc:.1f}", "review min / accepted"),
+            ("⚡", sum(t.energy_kwh_estimate for t in accepted), ".6f", "kWh / acceptance"),
+            ("💨", sum(t.emissions_gco2e_estimate for t in accepted), ".4f", "gCO₂e / acceptance"),
+            ("🎫", sum(_task_token_total(t) for t in accepted), ".0f", "tokens / acceptance"),
+            ("💧", sum(t.water_liters_estimate for t in accepted), ".4f", "L / acceptance"),
+            ("🔩", sum(t.embodied_gco2e_allocated for t in accepted), ".5f", "gCO₂e emb. / acceptance"),
         ]
-        for col, (icon, val, lbl) in enumerate(per_metrics):
+        for col, (icon, total, precision, lbl) in enumerate(per_metrics):
+            val = format(total / n_acc, precision) if n_acc else "—"
             chip = ctk.CTkFrame(
                 self._per_task_card, corner_radius=12, fg_color=("gray85", "gray22")
             )
-            chip.grid(row=1, column=col % 3, padx=12, pady=(0, 16), sticky="nsew")
+            chip.grid(row=1 + col // 3, column=col % 3, padx=12, pady=(0, 16), sticky="nsew")
             self._per_task_card.grid_columnconfigure(col % 3, weight=1)
             ctk.CTkLabel(
                 chip, text=f"{icon} {val}", font=ctk.CTkFont(size=24, weight="bold")
@@ -3258,24 +3360,6 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             ctk.CTkLabel(
                 chip, text=lbl, font=ctk.CTkFont(size=14), text_color="gray"
             ).pack(padx=20, pady=(0, 16))
-            if col == 2:  # wrap to next row
-                self._per_task_card.grid_rowconfigure(2, weight=0)
-                for c2, (icon2, val2, lbl2) in enumerate(per_metrics[3:]):
-                    chip2 = ctk.CTkFrame(
-                        self._per_task_card,
-                        corner_radius=12,
-                        fg_color=("gray85", "gray22"),
-                    )
-                    chip2.grid(row=2, column=c2, padx=12, pady=(0, 16), sticky="nsew")
-                    ctk.CTkLabel(
-                        chip2,
-                        text=f"{icon2} {val2}",
-                        font=ctk.CTkFont(size=24, weight="bold"),
-                    ).pack(padx=20, pady=(16, 4))
-                    ctk.CTkLabel(
-                        chip2, text=lbl2, font=ctk.CTkFont(size=14), text_color="gray"
-                    ).pack(padx=20, pady=(0, 16))
-                break
 
     # ─── Frame Navigation ─────────────────────────────────────────────────────
     def select_frame(self, name):
@@ -4312,9 +4396,6 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             if getattr(task, "observed_status", "") != "sufficient":
                 return "codex"
             return None
-
-        if task.status == "reviewed" and not task.accepted:
-            return "council"
 
         return None
 

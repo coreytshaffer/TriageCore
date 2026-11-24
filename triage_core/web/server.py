@@ -34,19 +34,20 @@ if _installed_fastapi < Version(_MINIMUM_FASTAPI):
 
 # Load the server and app dependencies after checking the mobile environment.
 import uvicorn  # noqa: E402
-from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, status  # noqa: E402
-from fastapi.responses import HTMLResponse  # noqa: E402
+from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Request, Response, status  # noqa: E402
+from fastapi.exception_handlers import request_validation_exception_handler  # noqa: E402
+from fastapi.exceptions import RequestValidationError  # noqa: E402
+from fastapi.responses import HTMLResponse, JSONResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
-from pydantic import BaseModel  # noqa: E402
+from pydantic import BaseModel, ConfigDict, Field  # noqa: E402
 
 from triage_core.task_ledger import TaskLedger, TaskRecord  # noqa: E402
+from triage_core.task_review_service import ReviewServiceError  # noqa: E402
 
 app = FastAPI(title="TriageCore Mobile")
 
 LEDGER_DIR = os.environ.get("TRIAGECORE_LEDGER_DIR", ".triagecore")
 MOBILE_TOKEN = os.environ.get("TRIAGECORE_MOBILE_TOKEN", "")
-MOBILE_ACTOR = os.environ.get("TRIAGECORE_MOBILE_ACTOR", "mobile_operator")
-
 ledger = TaskLedger(ledger_dir=LEDGER_DIR)
 
 static_dir = os.path.join(os.path.dirname(__file__), "static")
@@ -84,9 +85,11 @@ def _safe_task_projection(task: TaskRecord) -> Dict[str, Any]:
         "status": task.status,
         "risk_level": task.risk_level,
         "human_review_required": task.human_review_required,
-        "accepted": task.accepted,
-        "review_decision": task.review_decision,
-        "review_workload": task.review_workload,
+        "accepted": task.review.binary_label,
+        "review_status": task.review.status,
+        "review_decision": task.review.decision,
+        "review_reason": task.review.reason,
+        "review_pending_count": task.review.pending_count,
         "artifact_status": task.artifact_status,
         "task_outcome": task.task_outcome,
         "selected_route": task.selected_route,
@@ -129,6 +132,8 @@ def get_tasks(limit: int = 50) -> Dict[str, Any]:
 
 class ReviewDecision(str, Enum):
     ACCEPTED = "accepted"
+    ACCEPTED_WITH_MINOR_EDITS = "accepted_with_minor_edits"
+    NEEDS_REVISION = "needs_revision"
     REJECTED = "rejected"
 
 
@@ -140,42 +145,50 @@ class ReviewWorkload(str, Enum):
 
 
 class ReviewPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     decision: ReviewDecision
-    workload: ReviewWorkload = ReviewWorkload.NOT_RECORDED
+    request_id: str = Field(min_length=1, max_length=128)
+    workload: ReviewWorkload | None = None
 
 
-@api.post("/tasks/{task_id}/review")
-def review_task(task_id: str, payload: ReviewPayload) -> Dict[str, str]:
-    tasks = ledger.get_recent_tasks(limit=100)
-    task = next((item for item in tasks if item.task_id == task_id), None)
-    if not task:
+@api.post("/tasks/{task_id}/review", status_code=status.HTTP_202_ACCEPTED)
+def review_task(task_id: str, payload: ReviewPayload, response: Response) -> Dict[str, str]:
+    if ledger.get_task(task_id, include_history=False) is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Task not found.",
         )
 
-    from triage_core.cli import _log_cli_activity
+    try:
+        intent = ledger.review_service.request_intent(
+            task_id,
+            payload.request_id,
+            payload.decision.value,
+            payload.workload.value if payload.workload else None,
+        )
+    except ReviewServiceError as exc:
+        status_code, detail = {
+            "review_intent_conflict": (status.HTTP_409_CONFLICT, "Request ID conflict."),
+            "invalid_review_request": (422, "Invalid review request."),
+            "invalid_review_identifier": (422, "Invalid review request."),
+            "review_intent_missing": (status.HTTP_404_NOT_FOUND, "Review request not found."),
+        }.get(
+            exc.reason,
+            (status.HTTP_503_SERVICE_UNAVAILABLE, "Local review is unavailable."),
+        )
+        raise HTTPException(status_code=status_code, detail=detail) from None
 
-    _log_cli_activity(
-        (
-            "mobile review recorded "
-            f"task={task_id[:8]} decision={payload.decision.value} "
-            f"workload={payload.workload.value}"
-        ),
-        ledger_dir=LEDGER_DIR,
-    )
+    if intent.status != "pending":
+        response.status_code = status.HTTP_200_OK
+    return {"status": intent.status, "intent_id": intent.intent_id}
 
-    ledger.append_event(
-        task_id=task_id,
-        event_type="review_completed",
-        payload={
-            "accepted": payload.decision is ReviewDecision.ACCEPTED,
-            "review_workload": payload.workload.value,
-            "human_review_minutes": 1,
-            "actor": MOBILE_ACTOR,
-        },
-    )
-    return {"status": "ok"}
+
+@app.exception_handler(RequestValidationError)
+async def _safe_review_validation(request: Request, exc: RequestValidationError):
+    if request.scope.get("endpoint") is review_task:
+        return JSONResponse(status_code=422, content={"detail": "Invalid review request."})
+    return await request_validation_exception_handler(request, exc)
 
 
 @api.get("/logs")
@@ -197,7 +210,8 @@ def start_server(
     actor_id: Optional[str] = None,
     allow_network: bool = False,
 ) -> None:
-    global MOBILE_ACTOR, MOBILE_TOKEN
+    """Start the mobile API. The legacy actor argument has no authority."""
+    global MOBILE_TOKEN
 
     configured_token = token or os.environ.get("TRIAGECORE_MOBILE_TOKEN", "")
     if not configured_token:
@@ -211,12 +225,6 @@ def start_server(
         )
 
     MOBILE_TOKEN = configured_token
-    MOBILE_ACTOR = (
-        actor_id
-        or os.environ.get("TRIAGECORE_MOBILE_ACTOR")
-        or "mobile_operator"
-    )
-
     print(f"Starting TriageCore Mobile Server on {host}:{port}")
     uvicorn.run(app, host=host, port=port)
 

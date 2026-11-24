@@ -1,5 +1,6 @@
 import os
 import tempfile
+from types import SimpleNamespace
 import pytest
 from triage_core import triagedesk_adapter
 from triage_core.task_ledger import TaskLedger, TaskRecord
@@ -24,6 +25,34 @@ def test_review_queue_snapshot_handles_empty_state(monkeypatch):
     monkeypatch.setattr(triagedesk_adapter, "_get_ledger_path", lambda: "/tmp/non_existent_ledger.jsonl")
     snapshot = triagedesk_adapter.get_review_queue_snapshot()
     assert len(snapshot.pending_tasks) == 0
+
+def test_review_queue_snapshot_keeps_unverified_work_visible(tmp_path, monkeypatch):
+    ledger = TaskLedger(str(tmp_path))
+    ledger.append_event("task", "task_classified", {"risk_level": "high"})
+    ledger.append_event("task", "review_completed", {"accepted": True})
+    monkeypatch.setattr(triagedesk_adapter, "_get_ledger_path", lambda: ledger.ledger_path)
+
+    snapshot = triagedesk_adapter.get_review_queue_snapshot()
+
+    assert [task.task_id for task in snapshot.pending_tasks] == ["task"]
+    assert snapshot.pending_tasks[0].review.status == "unpaired"
+
+def test_review_queue_snapshot_surfaces_unavailable_verification(tmp_path, monkeypatch):
+    from triage_core import task_review_service
+    from triage_core.task_review_service import ReviewState
+
+    ledger = TaskLedger(str(tmp_path))
+    ledger.append_event("task", "task_classified", {"risk_level": "high"})
+    service = SimpleNamespace(
+        project=lambda task_id, *, include_history: ReviewState(status="unavailable")
+    )
+    monkeypatch.setattr(triagedesk_adapter, "_get_ledger_path", lambda: ledger.ledger_path)
+    monkeypatch.setattr(task_review_service, "get_review_service", lambda ledger_dir: service)
+
+    snapshot = triagedesk_adapter.get_review_queue_snapshot()
+
+    assert [task.task_id for task in snapshot.pending_tasks] == ["task"]
+    assert snapshot.unavailable_reviews == 1
 
 def test_context_plan_snapshot_handles_fitting_input():
     with tempfile.NamedTemporaryFile("w", delete=False) as f:

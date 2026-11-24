@@ -1202,16 +1202,25 @@ def _lab_report(ledger_dir: str):
         return
         
     metrics = calculate_scientific_metrics(records)
+    yield_pct = metrics["accepted_yield_pct"]
+    yield_text = "unavailable" if yield_pct is None else f"{yield_pct:.1f}%"
+    review_burden = metrics["mean_review_burden_mins"]
+    burden_text = "unavailable" if review_burden is None else f"{review_burden:.2f} mins"
     
     print("# TriageLab Scientific Metrics Report")
     print()
     print("| Metric | Value |")
     print("| --- | ---: |")
     print(f"| Total Runs | {metrics['total_runs']} |")
-    print(f"| Total Reviewed | {metrics['total_reviewed']} |")
-    print(f"| Total Accepted | {metrics['total_accepted']} |")
-    print(f"| Accepted-Task Yield Rate | {metrics['accepted_yield_pct']:.1f}% |")
-    print(f"| Mean Review Burden | {metrics['mean_review_burden_mins']:.2f} mins |")
+    print(f"| Review Verification | {metrics['review_verification_status']} |")
+    print(f"| Unavailable Review Projections | {metrics['unavailable_reviews']} |")
+    print(f"| Verified Decisions in Sample | {metrics['total_reviewed']} |")
+    print(f"| Verified Acceptances in Sample | {metrics['total_accepted']} |")
+    print(f"| Verified Binary Sample Size | {metrics['binary_review_sample_size']} |")
+    print(f"| Runs Excluded from Binary Sample | {metrics['excluded_from_binary_sample']} |")
+    print(f"| Excluded Historical Unsigned Observations | {metrics['excluded_review_observations']} |")
+    print(f"| Accepted-Task Yield Rate | {yield_text} |")
+    print(f"| Mean Review Burden | {burden_text} |")
     print(f"| Mean Tokens / Accepted Task | {metrics['mean_tokens_per_accepted_task']:.1f} |")
     print(f"| Mean Energy / Accepted Task | {metrics['mean_energy_kwh_per_accepted_task']:.6f} kWh |")
     print(f"| Mean Emissions / Accepted Task | {metrics['mean_emissions_gco2e_per_accepted_task']:.3f} gCO2e |")
@@ -1248,28 +1257,27 @@ def _lab_train(ledger_dir: str):
     if not records:
         print("No task records found to train on.")
         return
-        
+
+    unavailable = sum(r.review.status == "unavailable" for r in records)
+    if unavailable:
+        print(f"Review verification incomplete. Excluded {unavailable} unavailable review projections.")
+
     X = []
     y = []
     for r in records:
-        if not r.runner:
+        label = r.review.binary_label
+        if not r.runner or label is None:
             continue
-
-        # Only train on explicitly reviewed terminal states
-        if r.status != "reviewed":
-            continue
-
-        accepted_lbl = 1 if r.accepted else 0
 
         X.append({
             "runner": r.runner or "unknown",
             "risk_level": r.risk_level or "unknown",
             "permission_profile": r.permission_profile or "unknown"
         })
-        y.append(accepted_lbl)
+        y.append(int(label))
         
     if not X:
-        print("No valid task runs with assigned runners found to train on.")
+        print("No task runs with an assigned runner and a verified terminal decision were available for training.")
         return
         
     features = ["runner", "risk_level", "permission_profile"]
