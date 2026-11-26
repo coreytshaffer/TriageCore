@@ -84,7 +84,7 @@ def test_qwen_generation_uses_only_the_approved_post(construct, monkeypatch, rec
 
 
 def test_qwen_probe_is_refused_without_blocking_generation(recorded_sends):
-    backend = create_backend("qwen", api_key=DUMMY_KEY)
+    backend = create_backend("qwen", base_url=QWEN_BASE, model="qwen-test", api_key=DUMMY_KEY)
 
     with pytest.raises(DestinationPolicyError, match="transport_request_not_permitted"):
         backend.ping()

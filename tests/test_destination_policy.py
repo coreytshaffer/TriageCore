@@ -1509,20 +1509,23 @@ def test_cloud_url_resolution_matches_guarded_factory_destination(
 
 @pytest.mark.parametrize(
     "env_model, toml_model",
-    list(itertools.product((_ABSENT, "", "auto", "env-model"), (_ABSENT, "auto", "toml-model"))),
+    list(itertools.product((_ABSENT, "", "auto", " auto ", "env-model"), (_ABSENT, "auto", "toml-model"))),
 )
 def test_cloud_model_resolution_matches_config_and_create_backend(
     monkeypatch, tmp_path, env_model, toml_model
 ):
     from triage_core import backends as runtime_backends
 
-    env = {"TRIAGE_QWEN_MODEL": env_model, "TRIAGE_QWEN_API_KEY": "k"}
+    env = {"TRIAGE_QWEN_MODEL": env_model, "TRIAGE_QWEN_API_KEY": "k", "TRIAGE_QWEN_ENABLED": "true"}
     sections = {"qwen": {"model": toml_model}}
     config = _runtime(monkeypatch, tmp_path, env, sections)
-    resolved_model = _resolve(env, sections).cloud_model.value
-    if resolved_model in dp.AUTO_MODEL_SENTINELS:
+    resolved = _resolve(env, sections)
+    resolved_model = resolved.cloud_model.value
+    if resolved_model.strip() in dp.AUTO_MODEL_SENTINELS:
         with pytest.raises(dp.DestinationPolicyError, match="cloud_model_unbound"):
             runtime_backends.create_backend("qwen", model=config.get_qwen_model(), api_key="k")
+        with pytest.raises(dp.DestinationPolicyError, match="cloud_model_unbound"):
+            dp.bind_route_endpoints(("cloud_primary",), resolved)
     else:
         backend = runtime_backends.create_backend("qwen", model=config.get_qwen_model(), api_key="k")
         assert backend.model == resolved_model

@@ -437,7 +437,8 @@ class TriageClient:
             selected_route = resilience_decision.selected_route
             selected_backend_name = self._selected_backend_name(selected_route)
             if selected_route in {"cloud_primary", "cloud_secondary"}:
-                selected_model = default_config.get_qwen_model()
+                configured_model = default_config.get_qwen_model()
+                selected_model = configured_model if isinstance(configured_model, str) else ""
             elif selected_route in {"local_fast", "local_heavy"}:
                 selected_model = (
                     route_decision.get("model")

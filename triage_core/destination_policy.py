@@ -730,10 +730,10 @@ class RouteBinding:
         )
 
 
-def require_qwen_model(model: Any) -> str:
+def require_qwen_model(model: Any, safe_label: Optional[str] = None) -> str:
     """Require an explicit model without attempting provider discovery."""
     if not isinstance(model, str) or model.strip() in AUTO_MODEL_SENTINELS:
-        raise DestinationPolicyError("cloud_model_unbound")
+        raise DestinationPolicyError("cloud_model_unbound", safe_label)
     return model
 
 
@@ -781,8 +781,7 @@ def bind_route_endpoints(
         else:
             if not configuration.cloud_enabled.value:
                 continue
-            if str(configuration.cloud_model.value) in AUTO_MODEL_SENTINELS:
-                raise DestinationPolicyError("cloud_model_unbound", route)
+            require_qwen_model(configuration.cloud_model.value, route)
             bindings.append(bind_qwen_endpoint(configuration.cloud_base_url.value, route))
             continue
         bindings.append(

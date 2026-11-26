@@ -134,7 +134,7 @@ class OpenAICompatibleBackend:
 
     def _request_headers(self, transport: Any) -> Dict[str, str]:
         headers = {"Content-Type": "application/json"}
-        if isinstance(transport, GuardedTransport) and type(self) is not QwenCloudBackend:
+        if isinstance(transport, GuardedTransport) and not isinstance(self, QwenCloudBackend):
             # The S1 configuration has no credential for a governed local backend.
             return headers
         if self.api_key and self.api_key != "not-needed":

@@ -1,3 +1,4 @@
+from datetime import date
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -7,6 +8,7 @@ from triage_core.backends import BackendResponse
 from triage_core.client import TriageClient
 from triage_core.routing.resilience_router import ResilienceRouteDecision
 from triage_core.safe_task_packet import LocalRouteUnavailableError
+from triage_core.task_ledger import TaskLedger
 from triage_core.task_packet import PrivacyMetadata, TaskPacket
 
 
@@ -143,10 +145,12 @@ def test_local_only_packet_never_invokes_qwen_adapter():
     (True, None, "qwen-test", "not configured"),
     (True, "synthetic-key", "qwen-test", "cloud_endpoint_not_approved"),
     (True, "synthetic-key", ["synthetic-model"], "cloud_model_unbound"),
+    (True, "synthetic-key", date(2026, 1, 1), "cloud_model_unbound"),
     (False, "synthetic-key", "qwen-test", "not enabled"),
 ])
-def test_legacy_cloud_setup_handoff_before_send(enabled, api_key, model, reason, monkeypatch, caplog):
+def test_legacy_cloud_setup_handoff_before_send(enabled, api_key, model, reason, monkeypatch, caplog, tmp_path):
     base_url = "https://example.test/v1"
+    ledger = TaskLedger(str(tmp_path / "ledger"))
     monkeypatch.delenv("TRIAGE_QWEN_API_KEY", raising=False)
     client = TriageClient(backend=RecordingBackend())
     packet = TaskPacket(
@@ -178,7 +182,7 @@ def test_legacy_cloud_setup_handoff_before_send(enabled, api_key, model, reason,
         patch("triage_core.client.default_config.get_qwen_model", return_value=model),
         patch("requests.adapters.HTTPAdapter.send") as send,
     ):
-        result = client.run_task(task_packet=packet)
+        result = client.run_task(task_packet=packet, ledger=ledger)
 
     send.assert_not_called()
     assert result["status"] == "handoff_required"
@@ -186,3 +190,4 @@ def test_legacy_cloud_setup_handoff_before_send(enabled, api_key, model, reason,
     assert reason in result["reason"]
     assert base_url not in str(result) + caplog.text
     assert "synthetic-key" not in str(result) + caplog.text
+    assert result["selected_model"] == (model if isinstance(model, str) else "")
