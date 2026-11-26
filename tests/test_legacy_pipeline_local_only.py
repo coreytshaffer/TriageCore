@@ -5,6 +5,7 @@ import sys
 import pytest
 
 from triage_core.cli import main
+from triage_core.config import default_config
 from test_endpoint_transport_guard import record_adapter, transport_tripwires
 
 
@@ -39,6 +40,7 @@ def test_pipeline_streams_through_the_approved_local_backend(monkeypatch, tmp_pa
 @pytest.mark.parametrize("kind, url", [
     ("custom", "http://example.invalid/v1"),
     ("qwen", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"),
+    ("lmstudio", None),
 ])
 def test_pipeline_refuses_before_reading_input_or_creating_output(
     monkeypatch, tmp_path, capsys, kind, url
@@ -47,7 +49,11 @@ def test_pipeline_refuses_before_reading_input_or_creating_output(
     sends = record_adapter(monkeypatch)
     monkeypatch.setenv("TRIAGE_BACKEND_TYPE", kind)
     monkeypatch.setenv("TRIAGE_MODEL", "fixture")
-    monkeypatch.setenv("TRIAGE_BASE_URL", url)
+    if url is None:
+        monkeypatch.setattr(default_config, "get_backend_base_url", lambda: None)
+        monkeypatch.setenv("TRIAGE_SUPERVISOR_BASE_URL", "")
+    else:
+        monkeypatch.setenv("TRIAGE_BASE_URL", url)
     source = tmp_path / "input.txt"
     source.write_text("Synthetic input", encoding="utf-8")
     output = tmp_path / "output.txt"
@@ -71,7 +77,8 @@ def test_pipeline_refuses_before_reading_input_or_creating_output(
     assert exit_status.value.code == 2
     message = capsys.readouterr().out
     assert "Local destination policy refused the pipeline" in message
-    assert url not in message
+    if url:
+        assert url not in message
     assert not sends
     assert not output.exists()
     assert not ledger.exists()

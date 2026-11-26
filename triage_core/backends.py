@@ -568,7 +568,11 @@ def create_legacy_local_backend(
         raise DestinationPolicyError("endpoint_malformed", "local_fast")
     if kind == "custom" and not base_url:
         raise DestinationPolicyError("endpoint_malformed", "local_fast")
-    return bind_legacy_local_backend(create_backend(kind, model, base_url))
+    try:
+        backend = create_backend(kind, model, base_url)
+    except ValueError:
+        raise DestinationPolicyError("endpoint_malformed", "local_fast") from None
+    return bind_legacy_local_backend(backend)
 
 
 def create_backend(

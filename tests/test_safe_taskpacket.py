@@ -118,3 +118,15 @@ def test_raw_taskpacket_cannot_cross_boundary():
     with patch("triage_core.safe_task_packet.verify_packet", return_value=packet):
         with pytest.raises(UnsafePacketError, match="Only VerifiedTaskPacket may enter routing boundary"):
             client.run_task(task_packet=packet)
+
+
+def test_governed_local_only_preserves_its_scanner_metadata():
+    from triage_core.run_plan import privacy_metadata_for_run
+
+    metadata = privacy_metadata_for_run("local_only", allow_cloud=False)
+    assert metadata.data_class == "public"
+    assert metadata.external_model_allowed is False
+
+    packet = TaskPacket("Summarize this", "CONFIDENTIAL sample", privacy_metadata=metadata)
+    with pytest.raises(PrivacyViolationError, match="sensitive keyword"):
+        verify_packet(packet)

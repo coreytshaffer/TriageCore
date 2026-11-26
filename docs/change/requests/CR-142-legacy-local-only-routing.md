@@ -63,6 +63,7 @@ destination enforcement.
 | `triage_core/backends.py` | Construct supported legacy backends with the sealed transport. |
 | `triage_core/cli.py` | Protect the `run-pipeline` entry point and map policy refusals to CLI status. |
 | `triage_core/public_export.py` | Preserve CR-134's public classification basis and existing approval checks. |
+| `triage_core/run_plan.py` | Preserve governed scanning with explicit privacy metadata. |
 | `tests/test_capability_binding.py` | Preserve the capability and audit checks through guarded transport. |
 | `tests/test_compression.py` | Mark two synthetic compression fixtures explicitly public. |
 | `tests/test_task_packet.py` | Verify privacy defaults and explicit metadata. |
@@ -95,6 +96,7 @@ destination enforcement.
 On November 26, 2026, Corey Shaffer approved the design and the original
 thirteen paths, synthetic testing, and publication in a separate draft
 pull request. Corey separately approved `tests/test_capability_binding.py`,
-`tests/test_compression.py`, and `triage_core/public_export.py`. The grant
-covers the sixteen listed paths and the two affected legacy entry points. Implementation
-acceptance, merge, release, and closeout are separate decisions.
+`tests/test_compression.py`, `triage_core/public_export.py`, and
+`triage_core/run_plan.py`. The grant covers the seventeen listed paths.
+Implementation acceptance, merge, release, and closeout are separate
+decisions.
