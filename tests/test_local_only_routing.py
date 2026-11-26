@@ -8,6 +8,7 @@ from triage_core.privacy_scanner import PrivacyViolationError
 from triage_core.safe_task_packet import LocalRouteUnavailableError
 from triage_core.routing.resilience_router import ResilienceRouteDecision
 from triage_core.engine import TriageEngine
+from triage_core.task_ledger import TaskLedger
 from test_endpoint_transport_guard import record_adapter, transport_tripwires
 
 
@@ -78,7 +79,7 @@ def test_unapproved_configured_local_destination_is_refused(monkeypatch, base_ur
     assert not sends
 
 
-def test_changed_bound_destination_refuses_before_the_first_send(monkeypatch):
+def test_changed_bound_destination_refuses_before_the_first_send(monkeypatch, tmp_path):
     transport_tripwires(monkeypatch)
     sends = record_adapter(monkeypatch)
     client = TriageClient(backend_type="ollama", base_url="http://127.0.0.1:11434")
@@ -89,12 +90,17 @@ def test_changed_bound_destination_refuses_before_the_first_send(monkeypatch):
         return execute(engine, **kwargs)
 
     monkeypatch.setattr(TriageEngine, "execute_task", change_endpoint)
-    result = client.run_task("Summarize this", "Synthetic data")
+    ledger = TaskLedger(str(tmp_path / "ledger"))
+    result = client.run_task("Summarize this", "Synthetic data", ledger=ledger, task_id="local-test")
 
     assert result["status"] == "handoff_required"
     assert "destination_binding_mismatch" in result["reason"]
     assert result["worker_result_status"] == "not_attempted"
     assert not sends
+    audits = [row["payload"] for row in ledger.get_events("local-test") if row["event_type"] == "route_audit"]
+    assert audits[-1]["decision"] == "blocked"
+    assert audits[-1]["reason_code"] == "destination_binding_mismatch"
+    assert "127.0.0.1" not in str(audits[-1])
 
 
 def test_loopback_discovery_and_generation_use_the_same_binding(monkeypatch):
@@ -135,6 +141,22 @@ def test_redirect_returns_bounded_handoff_without_following(monkeypatch):
     assert "example.invalid" not in result["reason"]
     assert result["worker_result_status"] == "worker_failed"
     assert sends == ["http://127.0.0.1:11434/api/chat"]
+
+
+@pytest.mark.parametrize("prompt, data", [
+    ("Review npm install notes", "Synthetic data"),
+    ("Summarize this", "x" * 30001),
+])
+def test_private_tasks_keep_conservative_handoffs_without_probing(monkeypatch, prompt, data):
+    transport_tripwires(monkeypatch)
+    sends = record_adapter(monkeypatch)
+    client = TriageClient(backend_type="ollama", base_url="http://127.0.0.1:11434")
+    with patch("triage_core.routers.is_internet_available") as probe:
+        with pytest.raises(LocalRouteUnavailableError, match="Specialist router recommended offload"):
+            client.run_task(prompt, data)
+
+    probe.assert_not_called()
+    assert not sends
 
 @pytest.fixture
 def client():

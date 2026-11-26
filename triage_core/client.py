@@ -1,5 +1,5 @@
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import wraps
 from threading import RLock
 from types import MappingProxyType
@@ -711,6 +711,8 @@ class TriageClient:
         if not governed:
             if legacy_backend is None:
                 refusal = DestinationPolicyError("destination_binding_mismatch")
+                blocked = replace(audit, decision="blocked", reason_code=refusal.code)
+                self._append_optional_event(ledger, task_id, "route_audit", blocked.to_dict())
                 return self._record_legacy_local_refusal(ledger, task_id, route_payload, refusal)
             guard = legacy_backend.transport
             try:
@@ -725,6 +727,8 @@ class TriageClient:
                     verified_transport=guard,
                 )
             except DestinationPolicyError as exc:
+                blocked = replace(audit, decision="blocked", reason_code=exc.code)
+                self._append_optional_event(ledger, task_id, "route_audit", blocked.to_dict())
                 attempted = type(guard) is GuardedTransport and bool(guard.sends)
                 return self._record_legacy_local_refusal(
                     ledger, task_id, route_payload, exc, attempted=attempted

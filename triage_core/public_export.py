@@ -446,8 +446,11 @@ def evaluate_export(*, proposal: bytes, payload: bytes, parent: bytes, policy: b
         if expiry <= now:
             reasons.add("expiry_passed")
         try:
-            _classify(p, content, PrivacyMetadata() if privacy_metadata is None else privacy_metadata,
-                      body, reasons, triggers)
+            # The public-export policy establishes its own classification basis.
+            export_metadata = privacy_metadata
+            if export_metadata is None:
+                export_metadata = PrivacyMetadata(data_class="public", external_model_allowed=True)
+            _classify(p, content, export_metadata, body, reasons, triggers)
         except Exception:  # noqa: BLE001 - mandatory classifier boundary, including third-party failures
             # Classification is mandatory. Dependency diagnostics may contain private input.
             reasons.add("classification_unavailable")

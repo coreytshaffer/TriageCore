@@ -96,6 +96,17 @@ class SpecialistRouter:
                 "offline_fallback": False
             }
 
+        if not allow_internet and (danger_info.risk_level == "medium" or len(data) > 30000):
+            return {
+                "offload_recommended": True,
+                "reason": "Local-only task requires review before execution.",
+                SPECIALIST_OFFLOAD_CAUSE_KEY: _offload_cause(
+                    offload_reason_code="safety_handoff",
+                    danger_info=danger_info,
+                ),
+                "offline_fallback": False,
+            }
+
         # Medium risk tasks: offload if online, fall back to local if offline
         if danger_info.risk_level == "medium":
             if internet_up:

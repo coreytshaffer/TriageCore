@@ -25,8 +25,8 @@ the reviewed revision. CR-135 already binds governed `tc run` routes.
   opt-in remain required for the explicit cloud route.
 - Use the existing deterministic classifier for a local-only legacy
   task. Its specialist route evaluation skips the connectivity probe and
-  retains risk-based handoffs. The policy records external routing as
-  unavailable for this task.
+  retains handoffs for medium-risk, high-risk, and oversized input. The
+  policy records external routing as unavailable for this task.
 - Require a CR-135 literal loopback binding for generation on either
   legacy local route. Resolve supported built-in backend settings once
   and use a fresh guarded transport for discovery and generation.
@@ -62,6 +62,7 @@ destination enforcement.
 | `triage_core/destination_policy.py` | Reuse the literal loopback profile for legacy local binding. |
 | `triage_core/backends.py` | Construct supported legacy backends with the sealed transport. |
 | `triage_core/cli.py` | Protect the `run-pipeline` entry point and map policy refusals to CLI status. |
+| `triage_core/public_export.py` | Preserve CR-134's public classification basis and existing approval checks. |
 | `tests/test_capability_binding.py` | Preserve the capability and audit checks through guarded transport. |
 | `tests/test_compression.py` | Mark two synthetic compression fixtures explicitly public. |
 | `tests/test_task_packet.py` | Verify privacy defaults and explicit metadata. |
@@ -93,7 +94,7 @@ destination enforcement.
 
 On November 26, 2026, Corey Shaffer approved the design and the original
 thirteen paths, synthetic testing, and publication in a separate draft
-pull request. Corey separately approved `tests/test_capability_binding.py`
-and `tests/test_compression.py`. The grant covers the fifteen listed
-paths and the two affected legacy entry points. Implementation
+pull request. Corey separately approved `tests/test_capability_binding.py`,
+`tests/test_compression.py`, and `triage_core/public_export.py`. The grant
+covers the sixteen listed paths and the two affected legacy entry points. Implementation
 acceptance, merge, release, and closeout are separate decisions.
