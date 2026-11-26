@@ -48,24 +48,36 @@ backend behavior are regression checks.
 | `triage_core/client.py` | Map destination and setup refusals to the existing legacy cloud handoff. |
 | `tests/test_qwen_backend.py` | Cover direct and factory use with dummy credentials and a recording transport. |
 | `tests/test_qwen_cloud_routing.py` | Cover legacy cloud routing, refusal, packet eligibility, and graceful handoff. |
+| `tests/test_destination_policy.py` | Verify that configuration precedence agrees with the guarded Qwen factory. |
 | `docs/change/requests/CR-141-legacy-qwen-credential-destination.md` | Record authority, scope, and verified results. |
 
 ## Implementation authority
 
-On November 26, 2026, Corey Shaffer accepted the proposal and design and granted implementation authority with the response “Approve CR-141 and draft PR.” The grant covers the six paths above, local synthetic tests, and publication of the tested candidate as a draft pull request. Implementation acceptance, merge, release, and closeout remain separate decisions.
+On November 26, 2026, Corey Shaffer accepted the proposal and design and granted implementation authority with the response “Approve CR-141 and draft PR.” The original grant covered six paths, local synthetic tests, and publication of the tested candidate as a draft pull request. Implementation acceptance, merge, release, and closeout remain separate decisions.
+
+Corey added `tests/test_destination_policy.py` with the response “Authorize this test file.” The expanded grant covers the seven listed paths.
 
 ## Acceptance criteria
 
-- [ ] Direct Qwen construction, the Qwen factory, and the legacy cloud
+- [x] Direct Qwen construction, the Qwen factory, and the legacy cloud
   client reject destinations outside the approved identity before any send.
-- [ ] Approved generation reaches the canonical URL once using a
+- [x] Approved generation reaches the canonical URL once using a
   synthetic bearer credential. Credentialed discovery, destination
   mutation, redirects, and ambient transport settings fail closed.
-- [ ] Legacy configuration failures preserve bounded handoff and
+- [x] Legacy configuration failures preserve bounded handoff and
   the application’s packet and cloud-authorization rules.
 - [ ] Governed Qwen and non-Qwen backend focused regression tests pass.
   Run the full project suite and record results against the tested revision.
 - [ ] Tests run locally with fixtures and recording transports. The draft
   includes the exact approved path list and observed verification results.
+
+## Verification
+
+The focused Windows Python 3.12 run passed 573 tests with five symlink
+tests skipped because this Windows session cannot create symlinks.
+The run includes the Qwen backend and legacy routing tests, destination
+policy and guarded transport, workspace operations, and reviewer
+traceability and integration. Qwen tests used synthetic credentials
+and recording adapters.
 
 [Change management policy](https://github.com/coreytshaffer/TriageCore/blob/114faf951470525e92d698c84eeffe841cbfd67f/docs/change/change_management.md)
