@@ -7,6 +7,7 @@ from .handoff import HandoffPacket
 from .classifier import TaskClassifier, DangerDetector
 from .config import default_config
 from .task_ledger import TaskLedger
+from .triagedesk_draft import DraftError, write_draft
 
 
 def _log_cli_activity(message: str, ledger_dir: Optional[str] = None) -> str:
@@ -52,10 +53,15 @@ def main():
     subparsers.add_parser("install-desktop", help="Create a desktop shortcut for TriageDesk.")
 
     # push-task
-    push_parser = subparsers.add_parser("push-task", help="Push a task to an open TriageDesk instance via IPC.")
-    push_parser.add_argument("--prompt", type=str, required=True, help="The instruction to inject into the UI.")
-    push_parser.add_argument("--files", type=str, nargs="*", default=[], help="Target files to populate.")
-    push_parser.add_argument("--auto-dispatch", type=str, choices=["local", "council", "codex", "antigravity", "pipeline"], help="Optional runner to auto-trigger.")
+    push_parser = subparsers.add_parser(
+        "push-task", help="Write a prompt-only draft for explicit import in TriageDesk."
+    )
+    push_parser.add_argument("--prompt", required=True, help="Prompt to include in the draft.")
+    push_parser.add_argument("--output", help="New path for the draft JSON file.")
+    push_parser.add_argument(
+        "--files", action="extend", nargs="*", default=[], help="Retired. Choose attachments in TriageDesk."
+    )
+    push_parser.add_argument("--auto-dispatch", nargs="?", const="", help="Retired. Choose a runner in TriageDesk.")
 
     # benchmark
     benchmark_parser = subparsers.add_parser("benchmark", help="Run or list model evaluation benchmark tasks.")
@@ -192,7 +198,18 @@ def main():
     elif args.command == "install-desktop":
         _install_desktop_shortcut()
     elif args.command == "push-task":
-        _push_task_to_ui(args.prompt, args.files, args.auto_dispatch)
+        if args.files or args.auto_dispatch is not None:
+            push_parser.error(
+                "--files and --auto-dispatch have been retired. Use --output to create a draft, "
+                "choose Import Draft in TriageDesk, then select attachments and a runner there."
+            )
+        if not args.output:
+            push_parser.error("--output is required. Choose a new path for the draft JSON file.")
+        try:
+            write_draft(args.output, args.prompt)
+        except DraftError as exc:
+            push_parser.error(str(exc))
+        print("Draft created. Choose Import Draft in TriageDesk to review it.")
     elif args.command == "audit":
         _audit_task(args.task_id, args.files)
     elif args.command == "codex-task":
@@ -303,22 +320,6 @@ def main():
     else:
         parser.print_help()
 
-def _push_task_to_ui(prompt: str, files: list[str], auto_dispatch: Optional[str] = None):
-    import json
-    ledger_dir = default_config.get_ledger_dir()
-    os.makedirs(ledger_dir, exist_ok=True)
-    inbox_path = os.path.join(ledger_dir, "ipc_inbox.json")
-    
-    payload = {
-        "prompt": prompt,
-        "files": files,
-        "auto_dispatch": auto_dispatch
-    }
-    with open(inbox_path, "w", encoding="utf-8") as f:
-        json.dump(payload, f)
-    _log_cli_activity(f"push-task queued auto_dispatch={auto_dispatch or 'none'}", ledger_dir=ledger_dir)
-    print(f"Success: Task pushed to {inbox_path}.")
-    print("If TriageDesk is running, it will automatically import it within 1 second.")
 
 def _audit_task(task_id: str, files: list[str]):
     from .task_ledger import TaskLedger

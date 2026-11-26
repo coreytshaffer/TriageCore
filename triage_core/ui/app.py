@@ -68,6 +68,7 @@ from ..classifier import DangerDetector, TaskClassifier
 from ..sustainability import SustainabilityEstimator, PowerMonitor
 from ..context_budget import create_context_pack_artifact
 from .. import token_budget
+from ..triagedesk_draft import DraftError, read_draft
 
 try:
     from ..evaluator_result import load_evaluator_result, EvaluatorResultValidationError
@@ -86,6 +87,8 @@ try:
 except ImportError:
     _td_adapter = None
     _TD_ADAPTER_AVAILABLE = False
+
+_PROMPT_PLACEHOLDER = "Describe your task here…"
 
 # ─── Status color map ────────────────────────────────────────────────────────
 _STATUS_FG = {
@@ -132,6 +135,7 @@ def _ledger_file_path() -> str:
 
 
 def _ipc_inbox_path() -> str:
+    """Locate the inert legacy inbox for compatibility with path callers."""
     return os.path.join(_ledger_dir(), "ipc_inbox.json")
 
 
@@ -1117,7 +1121,6 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         self._check_backends()
         self._start_ticker()
         self._start_live_logs()
-        self._start_ipc_watcher()
         self.after(1000, self._update_active_timers)
 
     def toggle_fullscreen(self, event=None):
@@ -1351,6 +1354,9 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         ctk.CTkLabel(
             f, text="Dispatch Task", font=ctk.CTkFont(size=22, weight="bold")
         ).grid(row=0, column=0, padx=24, pady=(20, 4), sticky="w")
+        ctk.CTkButton(f, text="Import Draft", command=self._import_draft).grid(
+            row=0, column=0, padx=24, pady=(20, 4), sticky="e"
+        )
 
         self.backend_status_label = ctk.CTkLabel(
             f,
@@ -1364,23 +1370,24 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
 
         self.prompt_box = ctk.CTkTextbox(f, height=90, text_color=("gray52", "gray62"))
         self.prompt_box.grid(row=2, column=0, padx=24, pady=(0, 6), sticky="ew")
-        self.prompt_box.insert("0.0", "Describe your task here…")
+        self.prompt_box.insert("0.0", _PROMPT_PLACEHOLDER)
+        self._prompt_placeholder_active = True
 
         def on_focus_in(event):
             try:
-                current_text = self.prompt_box.get("0.0", "end-1c").strip()
-                if current_text == "Describe your task here…":
+                if self._prompt_placeholder_active:
                     self.prompt_box.delete("0.0", "end")
+                    self._prompt_placeholder_active = False
                     self.prompt_box.configure(text_color=("gray10", "#DCE4EE"))
             except Exception:
                 pass
 
         def on_focus_out(event):
             try:
-                current_text = self.prompt_box.get("0.0", "end-1c").strip()
+                current_text = self.prompt_box.get("0.0", "end-1c")
                 if not current_text:
-                    self.prompt_box.delete("0.0", "end")
-                    self.prompt_box.insert("0.0", "Describe your task here…")
+                    self.prompt_box.insert("0.0", _PROMPT_PLACEHOLDER)
+                    self._prompt_placeholder_active = True
                     self.prompt_box.configure(text_color=("gray52", "gray62"))
             except Exception:
                 pass
@@ -2123,6 +2130,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             self.current_loaded_task_id = task_id
             self.prompt_box.delete("0.0", "end")
             self.prompt_box.insert("0.0", task.description or "")
+            self._prompt_placeholder_active = False
             self.prompt_box.configure(text_color=("gray10", "#DCE4EE"))
             self.files_entry.delete(0, "end")
             if task.target_files:
@@ -3640,12 +3648,74 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
         threading.Thread(target=_check, daemon=True).start()
 
     # ─── Task Dispatch ────────────────────────────────────────────────────────
+    def _import_draft(self):
+        path = filedialog.askopenfilename(
+            parent=self, title="Select a TriageDesk draft", filetypes=[("JSON drafts", "*.json")]
+        )
+        if not path:
+            return
+        try:
+            prompt = read_draft(path)
+        except DraftError as exc:
+            messagebox.showerror("Import Draft", str(exc), parent=self)
+            return
+        if not self._confirm_draft_import(prompt):
+            return
+
+        self.prompt_box.delete("0.0", "end")
+        self.prompt_box.insert("0.0", prompt)
+        self._prompt_placeholder_active = False
+        self.prompt_box.configure(text_color=("gray10", "#DCE4EE"))
+        self.files_entry.delete(0, "end")
+        self.current_loaded_task_id = None
+        self.status_label.configure(
+            text="Draft loaded. Choose attachments and a runner when ready.",
+            text_color=("#166534", "#86efac"),
+        )
+
+    def _confirm_draft_import(self, prompt: str) -> bool:
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("Review Draft")
+        dialog.geometry("720x480")
+        dialog.minsize(560, 340)
+        dialog.transient(self)
+
+        ctk.CTkLabel(
+            dialog,
+            text="Loading this draft replaces the current prompt and clears its attachments.",
+            wraplength=510,
+        ).pack(padx=16, pady=(12, 4))
+        preview = ctk.CTkTextbox(dialog, wrap="char")
+        preview.pack(fill="both", expand=True, padx=16, pady=12)
+        preview.insert("0.0", prompt)
+        preview.configure(state="disabled")
+
+        confirmed = False
+
+        def load():
+            nonlocal confirmed
+            confirmed = True
+            dialog.destroy()
+
+        actions = ctk.CTkFrame(dialog, fg_color="transparent")
+        actions.pack(pady=(0, 12))
+        cancel = ctk.CTkButton(actions, text="Cancel", command=dialog.destroy)
+        cancel.pack(side="left", padx=6)
+        ctk.CTkButton(actions, text="Load Draft", command=load).pack(side="left", padx=6)
+        dialog.protocol("WM_DELETE_WINDOW", dialog.destroy)
+        dialog.bind("<Escape>", lambda _event: dialog.destroy())
+        dialog.wait_visibility()
+        dialog.grab_set()
+        cancel.focus_set()
+        self.wait_window(dialog)
+        return confirmed
+
     def _handle_task(self, runner_type):
         prompt = self.prompt_box.get("0.0", "end").strip()
         files_str = self.files_entry.get().strip()
         files = [f.strip() for f in files_str.split(",") if f.strip()]
 
-        if not prompt or prompt == "Describe your task here…":
+        if not prompt or (prompt == _PROMPT_PLACEHOLDER and self._prompt_placeholder_active):
             self.status_label.configure(
                 text="Error: Prompt is required.", text_color="#ef4444"
             )
@@ -4331,49 +4401,6 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             if state == "running":
                 self._set_agent_state(role, "queued", "Waiting for next worker")
         self._set_agent_state(active_role, "running", "Working")
-
-    def _start_ipc_watcher(self):
-        self._check_ipc_inbox()
-
-    def _check_ipc_inbox(self):
-        try:
-            inbox_path = _ipc_inbox_path()
-            if os.path.exists(inbox_path):
-                import json
-
-                with open(inbox_path, "r", encoding="utf-8") as f:
-                    payload = json.load(f)
-                os.remove(inbox_path)
-
-                # Bring window to front
-                if self.state() == "iconic":
-                    self.state("zoomed")
-                self.lift()
-                self.focus_force()
-
-                # Inject prompt
-                prompt = payload.get("prompt", "")
-                if prompt:
-                    self.prompt_box.delete("0.0", "end")
-                    self.prompt_box.insert("0.0", prompt)
-                    self.prompt_box.configure(text_color=("gray10", "#DCE4EE"))
-
-                # Inject files
-                files = payload.get("files", [])
-                if files:
-                    self.files_entry.delete(0, "end")
-                    self.files_entry.insert(0, ", ".join(files))
-
-                # Handle auto dispatch
-                auto_dispatch = payload.get("auto_dispatch")
-                if auto_dispatch:
-                    # Give UI a moment to visually update before dispatching
-                    self.after(500, lambda: self._handle_task(auto_dispatch))
-
-        except Exception as e:
-            print(f"IPC Watcher Error: {e}")
-        finally:
-            self.after(1000, self._check_ipc_inbox)
 
     def _get_glow_target(self, task) -> Optional[str]:
         if not task:
