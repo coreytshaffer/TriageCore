@@ -200,7 +200,9 @@ def test_export_reconciles_the_name_with_the_open_file(tmp_path, monkeypatch):
                 return _stat_with_changes(info, st_ino=info.st_ino + 1)
             return info
 
-        monkeypatch.setattr(triagedesk_draft.os, "stat", stat_with_unexpected_identity)
+        # Leave the staging module's real os.stat capability probes intact.
+        draft_os = SimpleNamespace(**(vars(os) | {"stat": stat_with_unexpected_identity}))
+        monkeypatch.setattr(triagedesk_draft, "os", draft_os)
 
     with pytest.raises(triagedesk_draft.DraftError, match="incomplete"):
         triagedesk_draft.write_draft(output, PROMPT)

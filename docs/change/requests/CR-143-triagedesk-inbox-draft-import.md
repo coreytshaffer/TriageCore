@@ -74,6 +74,11 @@ hard-link and junction rejection tests passed. The focused Windows run
 passed 67 tests. It skipped two symlink cases because the host lacks
 symlink-creation privileges and two cases that require POSIX.
 
-Run the full regression suite and Linux file-boundary tests on the
-candidate revision. Reassess the Daybreak finding on the merged
-revision after human acceptance.
+The clean Windows full regression on candidate `a5aef2a` passed 3,415
+tests, skipped 18, failed 62 and reported 13 errors. All 75 failures and
+errors matched the clean `31e6bd3` base by test and outcome. A follow-up
+isolates the Linux output-identity test fixture.
+
+Verify the Linux file boundary in the Ubuntu regression matrix.
+Reassess the Daybreak finding on the merged revision after human
+acceptance.
