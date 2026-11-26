@@ -73,11 +73,13 @@ Corey added `tests/test_destination_policy.py` with the response “Authorize th
 
 ## Verification
 
-The focused Windows Python 3.12 run passed 573 tests with five symlink
+The focused Windows Python 3.12 run passed 575 tests with five symlink
 tests skipped because this Windows session cannot create symlinks.
 The run includes the Qwen backend and legacy routing tests, destination
 policy and guarded transport, workspace operations, and reviewer
 traceability and integration. Qwen tests used synthetic credentials
-and recording adapters.
+and recording adapters. They also verified that a direct worker can
+generate after an unsupported probe and that an invalid model setting
+produces a bounded legacy handoff.
 
 [Change management policy](https://github.com/coreytshaffer/TriageCore/blob/114faf951470525e92d698c84eeffe841cbfd67f/docs/change/change_management.md)

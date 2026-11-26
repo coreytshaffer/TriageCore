@@ -296,6 +296,7 @@ class QwenCloudBackend(OpenAICompatibleBackend):
     _route_binding: InitVar[Optional[RouteBinding]] = None
     _transport_policy: InitVar[TransportPolicy] = DEFAULT_TRANSPORT_POLICY
     _guard: GuardedTransport = field(init=False, repr=False, compare=False)
+    _governed: bool = field(init=False, repr=False, compare=False)
 
     def __post_init__(
         self, _route_binding: Optional[RouteBinding], _transport_policy: TransportPolicy
@@ -307,6 +308,7 @@ class QwenCloudBackend(OpenAICompatibleBackend):
         binding = bind_qwen_endpoint(self.base_url, route)
         if _route_binding is not None and _route_binding != binding:
             raise DestinationPolicyError("destination_binding_mismatch")
+        self._governed = _route_binding is not None
         self.base_url = binding.endpoint.canonical
         guard = GuardedTransport(binding, policy=_transport_policy)
         guard.bind_owner(self)
@@ -322,7 +324,10 @@ class QwenCloudBackend(OpenAICompatibleBackend):
         return require_qwen_model(self.model)
 
     def ping(self, timeout: float = 1.0) -> bool:
-        # Preserve the guarded probe refusal without constructing bearer headers.
+        if not self._governed:
+            # Direct workers may catch a probe refusal and then call generate.
+            raise DestinationPolicyError("transport_request_not_permitted")
+        # Governed probes keep the per-attempt guard refusal and evidence.
         transport = self._generation_transport(None)
         return transport.get(f"{self.base_url}/models", timeout=timeout).status_code == 200
 
@@ -539,9 +544,12 @@ def create_backend(
         resolved_api_key = api_key or os.getenv("TRIAGE_QWEN_API_KEY")
         if not resolved_api_key:
             raise ValueError("qwen backend requires api_key")
+        qwen_model = model
+        if isinstance(model, str) and model in _AUTO_MODEL_SENTINELS:
+            qwen_model = os.getenv("TRIAGE_QWEN_MODEL", "qwen-max")
         return QwenCloudBackend(
             base_url=base_url or os.getenv("TRIAGE_QWEN_BASE_URL", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"),
-            model=model if model not in _AUTO_MODEL_SENTINELS else os.getenv("TRIAGE_QWEN_MODEL", "qwen-max"),
+            model=qwen_model,
             api_key=resolved_api_key,
         )
 

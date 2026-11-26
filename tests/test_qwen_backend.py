@@ -83,13 +83,16 @@ def test_qwen_generation_uses_only_the_approved_post(construct, monkeypatch, rec
     assert settings["cert"] is None
 
 
-def test_qwen_probe_is_refused_without_sending(recorded_sends):
-    backend = QwenCloudBackend(api_key=DUMMY_KEY)
+def test_qwen_probe_is_refused_without_blocking_generation(recorded_sends):
+    backend = create_backend("qwen", api_key=DUMMY_KEY)
 
     with pytest.raises(DestinationPolicyError, match="transport_request_not_permitted"):
         backend.ping()
 
     assert not recorded_sends
+    assert backend.generate([]).text == "Qwen says hi"
+    [(request, _)] = recorded_sends
+    assert request.method == "POST"
 
 
 @pytest.mark.parametrize("base_url", [
@@ -126,6 +129,13 @@ def test_qwen_refuses_a_model_that_requires_discovery(monkeypatch, recorded_send
     backend.model = "auto"
     with pytest.raises(DestinationPolicyError, match="cloud_model_unbound"):
         backend.generate([])
+    assert not recorded_sends
+
+
+def test_qwen_factory_refuses_non_string_model(recorded_sends):
+    with pytest.raises(DestinationPolicyError, match="cloud_model_unbound"):
+        create_backend("qwen", model=["synthetic-model"], api_key=DUMMY_KEY)
+
     assert not recorded_sends
 
 

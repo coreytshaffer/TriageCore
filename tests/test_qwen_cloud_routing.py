@@ -139,12 +139,14 @@ def test_local_only_packet_never_invokes_qwen_adapter():
     mock_create_backend.assert_not_called()
 
 
-@pytest.mark.parametrize("enabled, api_key, base_url, reason", [
-    (True, None, "https://example.test/v1", "not configured"),
-    (True, "synthetic-key", "https://example.test/v1", "cloud_endpoint_not_approved"),
-    (False, "synthetic-key", "https://example.test/v1", "not enabled"),
+@pytest.mark.parametrize("enabled, api_key, model, reason", [
+    (True, None, "qwen-test", "not configured"),
+    (True, "synthetic-key", "qwen-test", "cloud_endpoint_not_approved"),
+    (True, "synthetic-key", ["synthetic-model"], "cloud_model_unbound"),
+    (False, "synthetic-key", "qwen-test", "not enabled"),
 ])
-def test_legacy_cloud_setup_handoff_before_send(enabled, api_key, base_url, reason, monkeypatch, caplog):
+def test_legacy_cloud_setup_handoff_before_send(enabled, api_key, model, reason, monkeypatch, caplog):
+    base_url = "https://example.test/v1"
     monkeypatch.delenv("TRIAGE_QWEN_API_KEY", raising=False)
     client = TriageClient(backend=RecordingBackend())
     packet = TaskPacket(
@@ -173,7 +175,7 @@ def test_legacy_cloud_setup_handoff_before_send(enabled, api_key, base_url, reas
         patch("triage_core.client.default_config.get_qwen_enabled", return_value=enabled),
         patch("triage_core.client.default_config.get_qwen_api_key", return_value=api_key),
         patch("triage_core.client.default_config.get_qwen_base_url", return_value=base_url),
-        patch("triage_core.client.default_config.get_qwen_model", return_value="qwen-test"),
+        patch("triage_core.client.default_config.get_qwen_model", return_value=model),
         patch("requests.adapters.HTTPAdapter.send") as send,
     ):
         result = client.run_task(task_packet=packet)
