@@ -730,6 +730,28 @@ class RouteBinding:
         )
 
 
+def require_qwen_model(model: Any, safe_label: Optional[str] = None) -> str:
+    """Require an explicit model without attempting provider discovery."""
+    if not isinstance(model, str) or model.strip() in AUTO_MODEL_SENTINELS:
+        raise DestinationPolicyError("cloud_model_unbound", safe_label)
+    return model
+
+
+def bind_qwen_endpoint(base_url: Any, route: str = "cloud_primary") -> RouteBinding:
+    """Bind Qwen generation to the built-in cloud profile at every entry point."""
+    if route not in CLOUD_ROUTES:
+        raise DestinationPolicyError("destination_binding_mismatch")
+    endpoint = normalize_endpoint(base_url, route)
+    return RouteBinding(
+        route=route,
+        profile_id=endpoint.profile_id,
+        locality=endpoint.locality,
+        protocol="qwen",
+        endpoint=endpoint,
+        allowed_requests=allowed_request_urls(endpoint, "qwen"),
+    )
+
+
 def bind_route_endpoints(
     envelope: Sequence[str], configuration: EffectiveBackendConfiguration
 ) -> Tuple[RouteBinding, ...]:
@@ -759,10 +781,9 @@ def bind_route_endpoints(
         else:
             if not configuration.cloud_enabled.value:
                 continue
-            if str(configuration.cloud_model.value) in AUTO_MODEL_SENTINELS:
-                raise DestinationPolicyError("cloud_model_unbound", route)
-            protocol = "qwen"
-            endpoint = normalize_endpoint(configuration.cloud_base_url.value, route)
+            require_qwen_model(configuration.cloud_model.value, route)
+            bindings.append(bind_qwen_endpoint(configuration.cloud_base_url.value, route))
+            continue
         bindings.append(
             RouteBinding(
                 route=route,

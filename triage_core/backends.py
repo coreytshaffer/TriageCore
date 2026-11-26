@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import InitVar, dataclass, field
 from typing import Any, Dict, List, Optional, Protocol, Callable, NoReturn
 import json
 import os
@@ -15,6 +15,8 @@ from .destination_policy import (
     RouteBinding,
     TransportPolicy,
     backend_protocol_key,
+    bind_qwen_endpoint,
+    require_qwen_model,
 )
 
 
@@ -132,7 +134,7 @@ class OpenAICompatibleBackend:
 
     def _request_headers(self, transport: Any) -> Dict[str, str]:
         headers = {"Content-Type": "application/json"}
-        if isinstance(transport, GuardedTransport) and type(self) is not QwenCloudBackend:
+        if isinstance(transport, GuardedTransport) and not isinstance(self, QwenCloudBackend):
             # The S1 configuration has no credential for a governed local backend.
             return headers
         if self.api_key and self.api_key != "not-needed":
@@ -162,6 +164,9 @@ class OpenAICompatibleBackend:
         self.model = self.model or "auto"
         return self.model
 
+    def _generation_transport(self, verified_transport: Optional[GuardedTransport]) -> Any:
+        return self.transport if verified_transport is None else verified_transport
+
     def generate(
         self,
         messages: List[Dict[str, str]],
@@ -172,7 +177,7 @@ class OpenAICompatibleBackend:
         _verified_transport: Optional[GuardedTransport] = None,
         **kwargs: Any,
     ) -> BackendResponse:
-        transport = self.transport if _verified_transport is None else _verified_transport
+        transport = self._generation_transport(_verified_transport)
         url = f"{self.base_url.rstrip('/')}/chat/completions"
         payload = {
             "model": _generation_model(self, transport, timeout),
@@ -288,6 +293,43 @@ class QwenCloudBackend(OpenAICompatibleBackend):
     base_url: str = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
     model: str = "qwen-max"
     api_key: str = field(default="", repr=False)
+    _route_binding: InitVar[Optional[RouteBinding]] = None
+    _transport_policy: InitVar[TransportPolicy] = DEFAULT_TRANSPORT_POLICY
+    _guard: GuardedTransport = field(init=False, repr=False, compare=False)
+    _governed: bool = field(init=False, repr=False, compare=False)
+
+    def __post_init__(
+        self, _route_binding: Optional[RouteBinding], _transport_policy: TransportPolicy
+    ) -> None:
+        if self.transport is not requests:
+            raise DestinationPolicyError("transport_not_guarded")
+        require_qwen_model(self.model)
+        route = _route_binding.route if _route_binding is not None else "cloud_primary"
+        binding = bind_qwen_endpoint(self.base_url, route)
+        if _route_binding is not None and _route_binding != binding:
+            raise DestinationPolicyError("destination_binding_mismatch")
+        self._governed = _route_binding is not None
+        self.base_url = binding.endpoint.canonical
+        guard = GuardedTransport(binding, policy=_transport_policy)
+        guard.bind_owner(self)
+        self._guard = self.transport = guard
+
+    def _generation_transport(self, verified_transport: Optional[GuardedTransport]) -> GuardedTransport:
+        transport = super()._generation_transport(verified_transport)
+        if transport is not self._guard:
+            raise DestinationPolicyError("transport_not_guarded")
+        return transport
+
+    def _resolve_model(self, transport: Any, timeout: float) -> str:
+        return require_qwen_model(self.model)
+
+    def ping(self, timeout: float = 1.0) -> bool:
+        if not self._governed:
+            # Direct workers may catch a probe refusal and then call generate.
+            raise DestinationPolicyError("transport_request_not_permitted")
+        # Governed probes keep the per-attempt guard refusal and evidence.
+        transport = self._generation_transport(None)
+        return transport.get(f"{self.base_url}/models", timeout=timeout).status_code == 200
 
 
 @dataclass
@@ -461,14 +503,14 @@ def create_bound_backend(
     transport_policy: TransportPolicy = DEFAULT_TRANSPORT_POLICY,
 ) -> LocalBackend:
     """Construct one concrete backend from the frozen S1 inputs, without discovery."""
-    guard = GuardedTransport(binding, policy=transport_policy)
     base_url = binding.endpoint.canonical
     if binding.protocol == "qwen":
-        backend = QwenCloudBackend(
+        return QwenCloudBackend(
             base_url=base_url, model=configuration.cloud_model.value,
-            api_key=api_key or "", transport=guard,
+            api_key=api_key or "", _route_binding=binding, _transport_policy=transport_policy,
         )
-    elif binding.protocol == "ollama":
+    guard = GuardedTransport(binding, policy=transport_policy)
+    if binding.protocol == "ollama":
         backend = OllamaBackend(
             base_url=base_url, model=configuration.model.value, transport=guard,
         )
@@ -502,9 +544,12 @@ def create_backend(
         resolved_api_key = api_key or os.getenv("TRIAGE_QWEN_API_KEY")
         if not resolved_api_key:
             raise ValueError("qwen backend requires api_key")
+        qwen_model = model
+        if isinstance(model, str) and model in _AUTO_MODEL_SENTINELS:
+            qwen_model = os.getenv("TRIAGE_QWEN_MODEL", "qwen-max")
         return QwenCloudBackend(
             base_url=base_url or os.getenv("TRIAGE_QWEN_BASE_URL", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"),
-            model=model if model not in _AUTO_MODEL_SENTINELS else os.getenv("TRIAGE_QWEN_MODEL", "qwen-max"),
+            model=qwen_model,
             api_key=resolved_api_key,
         )
 

@@ -437,7 +437,8 @@ class TriageClient:
             selected_route = resilience_decision.selected_route
             selected_backend_name = self._selected_backend_name(selected_route)
             if selected_route in {"cloud_primary", "cloud_secondary"}:
-                selected_model = default_config.get_qwen_model()
+                configured_model = default_config.get_qwen_model()
+                selected_model = configured_model if isinstance(configured_model, str) else ""
             elif selected_route in {"local_fast", "local_heavy"}:
                 selected_model = (
                     route_decision.get("model")
@@ -941,25 +942,40 @@ class TriageClient:
                     base_url=default_config.get_qwen_base_url(),
                     api_key=default_config.get_qwen_api_key(),
                 )
-        except ValueError as exc:
+        except (DestinationPolicyError, ValueError) as exc:
+            detail = exc.code if isinstance(exc, DestinationPolicyError) else "missing or invalid settings"
+            reason = f"Cloud route selected but Qwen Cloud is not configured: {detail}"
             return {
                 "status": "handoff_required",
                 "source": "router",
-                "reason": f"Cloud route selected but Qwen Cloud is not configured: {exc}",
-                "handoff_reason": f"Cloud route selected but Qwen Cloud is not configured: {exc}",
+                "reason": reason,
+                "handoff_reason": reason,
                 "worker_result_status": "not_attempted",
                 "failure_type": "backend_unavailable",
                 "failure_stage": "router",
             }
 
         executor = verified_destination or TriageEngine(backend=cloud_backend, timeout_seconds=timeout)
-        result = executor.execute_task(
-            task_prompt=task_prompt,
-            raw_data=raw_data,
-            validator=validator,
-            timeout=timeout,
-            post_processor=post_processor,
-        )
+        try:
+            result = executor.execute_task(
+                task_prompt=task_prompt,
+                raw_data=raw_data,
+                validator=validator,
+                timeout=timeout,
+                post_processor=post_processor,
+            )
+        except DestinationPolicyError as exc:
+            # VerifiedDestination translates governed refusals before they reach here.
+            reason = f"Qwen Cloud destination policy refused the request: {exc.code}"
+            return {
+                "status": "handoff_required",
+                "source": "cloud",
+                "reason": reason,
+                "handoff_reason": reason,
+                "worker_result_status": "worker_failed",
+                "failure_type": "backend_unavailable",
+                "failure_stage": "cloud_backend_generate",
+            }
         result["source"] = "cloud"
         return result
 
