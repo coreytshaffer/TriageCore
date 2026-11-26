@@ -277,7 +277,9 @@ def main():
             max_file_bytes=args.max_file_bytes,
         )
     elif args.command == "run-pipeline":
-        _run_pipeline(args.prompt, args.files, args.output, args.ledger_dir, args.task_id)
+        status = _run_pipeline(args.prompt, args.files, args.output, args.ledger_dir, args.task_id)
+        if status:
+            raise SystemExit(status)
     elif args.command == "stability-pass":
         _run_stability_pass(
             tasks_path=args.tasks,
@@ -924,16 +926,27 @@ def _run_pipeline(
     output_path: str,
     ledger_dir: str,
     task_id: Optional[str] = None,
-) -> None:
+) -> int:
     import time
     import os
     from .engine import TriageEngine
-    from .backends import create_backend
+    from .backends import create_legacy_local_backend
     from .config import default_config
+    from .destination_policy import DestinationPolicyError, GuardedTransport
 
     backend_type = default_config.get_backend_type()
     model = default_config.get_backend_model()
     base_url = default_config.get_backend_base_url()
+    try:
+        backend = create_legacy_local_backend(backend_type, model, base_url)
+        guard = backend.transport
+        if type(guard) is not GuardedTransport or guard.owner is not backend:
+            raise DestinationPolicyError("transport_not_guarded")
+        guard.verify_integrity()
+    except DestinationPolicyError as exc:
+        print(f"Local destination policy refused the pipeline: {exc.code}")
+        return 2
+
     ledger = TaskLedger(ledger_dir=ledger_dir)
     task_id = _start_pipeline_task(ledger, prompt, files, task_id)
     _log_cli_activity(
@@ -943,12 +956,6 @@ def _run_pipeline(
     
     print(f"Running pipeline headless using {backend_type} ({model})...")
     print(f"Ledger task: {task_id}")
-    
-    backend = create_backend(
-        backend_type=backend_type,
-        model=model,
-        base_url=base_url
-    )
     
     engine = TriageEngine(backend=backend, timeout_seconds=120)
     
@@ -965,11 +972,18 @@ def _run_pipeline(
     def _stream(chunk):
         print(".", end="", flush=True)
         
-    result = engine.execute_task(
-        task_prompt=prompt,
-        raw_data=raw_data,
-        stream_callback=_stream
-    )
+    try:
+        result = engine.execute_task(
+            task_prompt=prompt,
+            raw_data=raw_data,
+            stream_callback=_stream,
+            verified_transport=guard,
+        )
+    except DestinationPolicyError as exc:
+        reason = f"Local destination policy refused the pipeline: {exc.code}"
+        _record_pipeline_handoff(ledger, task_id, reason)
+        print(reason)
+        return 2
     
     print()
     elapsed = time.time() - t0
@@ -1031,7 +1045,8 @@ def _run_pipeline(
         print(f"\n--- Pipeline Summary ---")
         print(f"Status: HANDOFF REQUIRED")
         print(f"Reason: {reason}")
-        print("Escalating to Worker Council / Cloud...")
+        print("Review this task locally before retrying.")
+    return 0
 
 def _run_stability_pass(
     tasks_path: str,

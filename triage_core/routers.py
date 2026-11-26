@@ -58,7 +58,9 @@ def _offload_cause(
 class SpecialistRouter:
     """Routes tasks based on classified category to the appropriate model, timeout, and post-processor."""
 
-    def route_task(self, category: str, prompt: str, data: str) -> Dict[str, Any]:
+    def route_task(
+        self, category: str, prompt: str, data: str, *, allow_internet: bool = True
+    ) -> Dict[str, Any]:
         """
         Determines the routing details for a classified category.
         Returns:
@@ -73,7 +75,7 @@ class SpecialistRouter:
             - "offline_fallback": bool
         """
         danger_info = DangerDetector.analyze(prompt)
-        internet_up = is_internet_available()
+        internet_up = allow_internet and is_internet_available()
 
         # High risk or explicit safety handoffs are always blocked/offloaded for safety
         if danger_info.risk_level == "high" or category == "safety_handoff":

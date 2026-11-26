@@ -23,6 +23,7 @@ from triage_core.routing.resilience_router import (
     ResilienceRouteInput,
     choose_resilience_route,
 )
+from test_endpoint_transport_guard import record_adapter, transport_tripwires
 
 NOW = datetime(2026, 7, 26, 12, 0, 0, tzinfo=timezone.utc)
 FRESHNESS = 300
@@ -473,7 +474,7 @@ def test_run_task_without_capability_preserves_previous_route_input():
     assert route_input.capability_evidence is None
 
 
-def test_governed_run_executes_and_records_selected_route_binding():
+def test_legacy_run_executes_and_records_selected_capability_binding(monkeypatch):
     class RecordingLedger:
         def __init__(self):
             self.events = []
@@ -481,10 +482,11 @@ def test_governed_run_executes_and_records_selected_route_binding():
         def append_event(self, task_id, event_type, payload):
             self.events.append((event_type, payload))
 
-    backend = RecordingBackend()
-    backend.name = "ollama"
-    backend.model = "initial-model"
-    client = TriageClient(backend=backend)
+    transport_tripwires(monkeypatch)
+    sends = record_adapter(monkeypatch)
+    client = TriageClient(
+        backend_type="ollama", base_url="http://127.0.0.1:11434", model="initial-model"
+    )
     resolution = _resolve(None, heavy=True)
     ledger = RecordingLedger()
 
@@ -508,8 +510,9 @@ def test_governed_run_executes_and_records_selected_route_binding():
     assert route_payload["selected_model"] == "deepseek-r1:latest"
     assert worker_payload["selected_route"] == "local_heavy"
     assert worker_payload["selected_model"] == "deepseek-r1:latest"
-    assert backend.model_seen == "deepseek-r1:latest"
-    assert backend.model == "initial-model"
+    [(request, _)] = sends
+    assert json.loads(request.body)["model"] == "deepseek-r1:latest"
+    assert client.engine.backend.model == "initial-model"
 
 
 # --- 11. evidence distinguishes all four states ---------------------------

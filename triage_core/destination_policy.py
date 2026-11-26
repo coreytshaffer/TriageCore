@@ -752,6 +752,26 @@ def bind_qwen_endpoint(base_url: Any, route: str = "cloud_primary") -> RouteBind
     )
 
 
+def bind_local_endpoint(
+    backend_type: str, base_url: Any, route: str
+) -> RouteBinding:
+    """Bind a supported local backend to the built-in literal loopback profile."""
+    if route not in LOCAL_ROUTES:
+        raise DestinationPolicyError("destination_binding_mismatch")
+    protocol = _BACKEND_PROTOCOLS.get(backend_protocol_key(backend_type))
+    endpoint = normalize_endpoint(base_url, route)
+    if protocol not in _LOCAL_PROTOCOLS:
+        raise DestinationPolicyError("backend_protocol_unsupported", route)
+    return RouteBinding(
+        route=route,
+        profile_id=endpoint.profile_id,
+        locality=endpoint.locality,
+        protocol=protocol,
+        endpoint=endpoint,
+        allowed_requests=allowed_request_urls(endpoint, protocol),
+    )
+
+
 def bind_route_endpoints(
     envelope: Sequence[str], configuration: EffectiveBackendConfiguration
 ) -> Tuple[RouteBinding, ...]:
@@ -772,28 +792,12 @@ def bind_route_endpoints(
         if route in NON_NETWORK_ROUTES:
             continue
         if route in LOCAL_ROUTES:
-            protocol = _BACKEND_PROTOCOLS.get(
-                backend_protocol_key(configuration.backend_type.value)
+            bindings.append(
+                bind_local_endpoint(configuration.backend_type.value, configuration.local_base_url.value, route)
             )
-            endpoint = normalize_endpoint(configuration.local_base_url.value, route)
-            if protocol not in _LOCAL_PROTOCOLS:
-                raise DestinationPolicyError("backend_protocol_unsupported", route)
-        else:
-            if not configuration.cloud_enabled.value:
-                continue
+        elif configuration.cloud_enabled.value:
             require_qwen_model(configuration.cloud_model.value, route)
             bindings.append(bind_qwen_endpoint(configuration.cloud_base_url.value, route))
-            continue
-        bindings.append(
-            RouteBinding(
-                route=route,
-                profile_id=endpoint.profile_id,
-                locality=endpoint.locality,
-                protocol=protocol,
-                endpoint=endpoint,
-                allowed_requests=allowed_request_urls(endpoint, protocol),
-            )
-        )
     return tuple(bindings)
 
 
