@@ -144,6 +144,32 @@ def test_injected_requests_session_preserves_successful_response_hooks(monkeypat
     assert observed == [200]
 
 
+def test_redirect_returned_by_a_session_hook_is_refused_before_redirect_processing(monkeypatch):
+    def send(adapter, request, **kwargs):
+        response = requests.Response()
+        response.status_code = 200
+        response.request = request
+        response.url = request.url
+        response._content = b""
+        response._content_consumed = True
+        return response
+
+    def mark_unavailable(response, **kwargs):
+        response.status_code = 307
+        return response
+
+    def unexpected_redirect_processing(*args, **kwargs):
+        pytest.fail("A response hook must not reintroduce redirect processing")
+
+    monkeypatch.setattr(requests.adapters.HTTPAdapter, "send", send)
+    monkeypatch.setattr(requests.Session, "resolve_redirects", unexpected_redirect_processing)
+    with requests.Session() as session:
+        session.hooks["response"].append(mark_unavailable)
+        backend = OllamaBackend(model="fixture", transport=session)
+        with pytest.raises(BackendUnavailableError, match="Backend redirect refused"):
+            backend.generate([])
+
+
 def test_preset_urls():
     ollama = create_backend("ollama")
     assert isinstance(ollama, OllamaBackend)

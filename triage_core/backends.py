@@ -52,15 +52,19 @@ def request_backend_without_redirects(
 
     # Requests can prepare a redirect even when following it is disabled.
     # Refuse in its response hook before it reads Location or the response body.
-    session_hooks = ()
+    response_hooks = [_refuse_backend_redirect]
     if isinstance(transport, requests.Session):
         session_hooks = transport.hooks.get("response") or ()
         if callable(session_hooks):
             session_hooks = (session_hooks,)
+        if session_hooks:
+            response_hooks.extend(session_hooks)
+            # A caller's hook can replace the response that Requests sees.
+            response_hooks.append(_refuse_backend_redirect)
     response = send(
         url,
         allow_redirects=False,
-        hooks={"response": [_refuse_backend_redirect, *session_hooks]},
+        hooks={"response": response_hooks},
         **kwargs,
     )
     return _refuse_backend_redirect(response)
