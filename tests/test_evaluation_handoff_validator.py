@@ -135,6 +135,65 @@ def test_pristine_bundle_validates_without_mutating_inventory_bytes_or_mtimes(tm
     assert _snapshot(bundle) == before
 
 
+def test_validator_reads_fixture_once_as_bytes(tmp_path, monkeypatch):
+    bundle = _build_bundle(tmp_path)
+    fixture = bundle / "fixtures" / "safety_boundaries_v0.jsonl"
+    original_open = Path.open
+    fixture_modes = []
+
+    def record_open(path, mode="r", *args, **kwargs):
+        if path == fixture:
+            fixture_modes.append(mode)
+        return original_open(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", record_open)
+
+    validate_evaluation_handoff_bundle(bundle)
+
+    assert fixture_modes == ["rb"]
+
+
+@pytest.mark.parametrize(
+    ("target", "reason"),
+    [
+        ("fixture", "fixture_invalid"),
+        ("actual", "actual_invalid_json"),
+        ("manifest", "manifest_invalid_json"),
+    ],
+)
+@pytest.mark.parametrize(
+    "members",
+    [
+        b'"sample": "blue", "sample": "green", ',
+        b'"example": [{"sample": "blue", "sample": "green"}], ',
+        b'"example": NaN, ',
+    ],
+)
+def test_ambiguous_json_is_rejected_with_matching_hashes(
+    tmp_path, target, reason, members
+):
+    bundle = _build_bundle(tmp_path)
+    manifest = _read_manifest(bundle)
+    if target == "fixture":
+        spec = manifest["fixture"]
+        invalid = bundle / spec["path"]
+    elif target == "actual":
+        spec = manifest["actuals"]["entries"][0]
+        invalid = bundle / spec["path"]
+    else:
+        spec = None
+        invalid = _manifest_path(bundle)
+    invalid.write_bytes(b"{" + members + invalid.read_bytes()[1:])
+    if spec is not None:
+        spec["sha256"] = _sha(invalid)
+        _write_manifest(bundle, manifest)
+    before = _snapshot(bundle)
+
+    _assert_reason(reason, lambda: validate_evaluation_handoff_bundle(bundle))
+
+    assert _snapshot(bundle) == before
+
+
 def test_partial_actual_coverage_and_non_enum_decision_are_valid(tmp_path):
     bundle = _build_bundle(
         tmp_path,

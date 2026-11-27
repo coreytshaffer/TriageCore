@@ -1,5 +1,8 @@
+import hashlib
 import json
 import sys
+
+import pytest
 
 from triage_core.evaluation_handoff_bundle import build_evaluation_handoff_bundle
 
@@ -107,3 +110,51 @@ def test_cli_failure_is_reason_only_and_never_echoes_payload(
 
 def test_cli_missing_bundle_argument_is_argparse_exit_two(monkeypatch):
     assert _run_cli(monkeypatch, ["eval", "validate-handoff"]) == 2
+
+
+@pytest.mark.parametrize(
+    ("target", "reason"),
+    [
+        ("fixture", "fixture_invalid"),
+        ("actual", "actual_invalid_json"),
+        ("manifest", "manifest_invalid_json"),
+    ],
+)
+def test_cli_ambiguous_json_reports_only_the_reason_and_preserves_bundle(
+    monkeypatch, capsys, tmp_path, target, reason
+):
+    bundle = _bundle(tmp_path)
+    manifest_path = bundle / "manifest" / "evaluation_handoff_manifest.json"
+    manifest = json.loads(manifest_path.read_bytes())
+    if target == "fixture":
+        spec = manifest["fixture"]
+        invalid = bundle / spec["path"]
+    elif target == "actual":
+        spec = manifest["actuals"]["entries"][0]
+        invalid = bundle / spec["path"]
+    else:
+        spec = None
+        invalid = manifest_path
+    members = b'"example": [{"sample": "blue", "sample": "green"}], '
+    content = b"{" + members + invalid.read_bytes()[1:]
+    invalid.write_bytes(content)
+    if spec is not None:
+        spec["sha256"] = hashlib.sha256(content).hexdigest()
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    before = {
+        path: (path.stat().st_mtime_ns, path.read_bytes())
+        for path in bundle.rglob("*")
+        if path.is_file()
+    }
+
+    code = _run_cli(monkeypatch, ["eval", "validate-handoff", "--bundle", str(bundle)])
+
+    captured = capsys.readouterr()
+    assert code == 1
+    assert captured.out == ""
+    assert captured.err.strip() == f"reason={reason}"
+    assert {
+        path: (path.stat().st_mtime_ns, path.read_bytes())
+        for path in bundle.rglob("*")
+        if path.is_file()
+    } == before

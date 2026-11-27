@@ -1,9 +1,13 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
+
+from triage_core.evaluation_json import (
+    EvaluationJSONDecodeError,
+    decode_evaluation_json,
+)
 
 
 SCHEMA_VERSION = "eval_case_v0"
@@ -51,7 +55,19 @@ class EvalFixtureValidationError(ValueError):
 
 
 def load_eval_fixture_jsonl(path: str | Path) -> tuple[Mapping[str, Any], ...]:
-    text = Path(path).read_text(encoding="utf-8")
+    return validate_eval_fixture_jsonl_bytes(Path(path).read_bytes())
+
+
+def validate_eval_fixture_jsonl_bytes(content: bytes) -> tuple[Mapping[str, Any], ...]:
+    try:
+        text = content.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        prefix = content[:exc.start].decode("utf-8")
+        # Keep the current line when the valid prefix ends at a line break.
+        line_number = len((prefix + ".").splitlines())
+        raise EvalFixtureValidationError(
+            [EvalFixtureDiagnostic(line_number, "malformed JSON (invalid UTF-8)")]
+        ) from None
     return validate_eval_fixture_jsonl_text(text)
 
 
@@ -72,14 +88,9 @@ def validate_eval_fixture_jsonl_text(text: str) -> tuple[Mapping[str, Any], ...]
             continue
 
         try:
-            payload = json.loads(line)
-        except json.JSONDecodeError as exc:
-            diagnostics.append(
-                EvalFixtureDiagnostic(
-                    line_number,
-                    f"malformed JSON ({exc.msg})",
-                )
-            )
+            payload = decode_evaluation_json(line)
+        except EvaluationJSONDecodeError as exc:
+            diagnostics.append(EvalFixtureDiagnostic(line_number, str(exc)))
             continue
 
         if not isinstance(payload, Mapping):

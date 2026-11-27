@@ -11,7 +11,11 @@ from typing import Any, Mapping
 
 from triage_core.eval_fixture_validator import (
     EvalFixtureValidationError,
-    load_eval_fixture_jsonl,
+    validate_eval_fixture_jsonl_bytes,
+)
+from triage_core.evaluation_json import (
+    EvaluationJSONDecodeError,
+    decode_evaluation_json,
 )
 from triage_core.privacy_invariants import (
     PersistentPrivacyInvariantError,
@@ -76,10 +80,9 @@ def build_evaluation_handoff_bundle(
     _validate_no_path_conflict(fixture_path, actuals_path, output_path)
 
     try:
-        fixture_cases = load_eval_fixture_jsonl(fixture_path)
+        fixture_content = fixture_path.read_bytes()
+        fixture_cases = validate_eval_fixture_jsonl_bytes(fixture_content)
     except EvalFixtureValidationError as exc:
-        raise EvaluationHandoffBundleError("fixture_invalid") from exc
-    except UnicodeError as exc:
         raise EvaluationHandoffBundleError("fixture_invalid") from exc
     except OSError as exc:
         raise EvaluationHandoffBundleError("input_unreadable") from exc
@@ -95,11 +98,6 @@ def build_evaluation_handoff_bundle(
         for case in fixture_cases
     ):
         raise EvaluationHandoffBundleError("unsafe_case_id")
-
-    try:
-        fixture_content = fixture_path.read_bytes()
-    except OSError as exc:
-        raise EvaluationHandoffBundleError("input_unreadable") from exc
 
     fixture_case_ids = {str(case["case_id"]) for case in fixture_cases}
     actuals = _load_actuals(actuals_path, fixture_case_ids)
@@ -224,8 +222,8 @@ def _load_actuals(
             raise EvaluationHandoffBundleError("input_unreadable") from exc
 
         try:
-            payload = json.loads(content.decode("utf-8"))
-        except (UnicodeError, json.JSONDecodeError) as exc:
+            payload = decode_evaluation_json(content)
+        except EvaluationJSONDecodeError as exc:
             raise EvaluationHandoffBundleError("actual_invalid_json") from exc
 
         validate_actual_outcome_contract(payload)

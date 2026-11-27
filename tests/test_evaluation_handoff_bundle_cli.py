@@ -1,6 +1,8 @@
 import json
 import sys
 
+import pytest
+
 
 def _run_cli(monkeypatch, args):
     from triage_core.tc_cli import main
@@ -130,3 +132,37 @@ def test_cli_failure_uses_reason_only_and_does_not_echo_sensitive_input(
 def test_cli_missing_required_argument_is_argparse_exit_two(monkeypatch):
     code = _run_cli(monkeypatch, ["eval", "build-handoff"])
     assert code == 2
+
+
+@pytest.mark.parametrize(
+    ("target", "reason"),
+    [("fixture", "fixture_invalid"), ("actual", "actual_invalid_json")],
+)
+def test_cli_ambiguous_json_reports_only_the_reason_and_leaves_no_bundle(
+    monkeypatch, capsys, tmp_path, target, reason
+):
+    fixture, actuals = _inputs(tmp_path)
+    invalid = fixture if target == "fixture" else actuals / "privacy-001.json"
+    members = b'"example": [{"sample": "blue", "sample": "green"}], '
+    invalid.write_bytes(b"{" + members + invalid.read_bytes()[1:])
+    output = tmp_path / "bundle"
+
+    code = _run_cli(
+        monkeypatch,
+        [
+            "eval",
+            "build-handoff",
+            "--fixture",
+            str(fixture),
+            "--actuals-dir",
+            str(actuals),
+            "--out-dir",
+            str(output),
+        ],
+    )
+
+    captured = capsys.readouterr()
+    assert code == 1
+    assert captured.out == ""
+    assert captured.err.strip() == f"reason={reason}"
+    assert not output.exists()
