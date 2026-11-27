@@ -10,6 +10,7 @@ from triage_core.safe_task_packet import LocalRouteUnavailableError
 from triage_core.routing.resilience_router import ResilienceRouteDecision
 from triage_core import capability_evidence as cap
 from triage_core.local_backend_probe import LocalBackendProbeRecord
+from test_endpoint_transport_guard import record_adapter, transport_tripwires
 
 @pytest.fixture
 def ledger():
@@ -71,7 +72,10 @@ def test_local_only_remote_route_blocked_audit(client, ledger):
     assert "prompt" not in audit
     assert "Sensitive data" not in str(audit)
 
-def test_local_only_explicit_local_route_allowed_audit(client, ledger):
+def test_local_only_explicit_local_route_allowed_audit(monkeypatch, ledger):
+    transport_tripwires(monkeypatch)
+    sends = record_adapter(monkeypatch)
+    client = TriageClient(backend_type="ollama", base_url="http://127.0.0.1:11434")
     packet = TaskPacket(
         task_id="task-125",
         prompt="Sensitive prompt",
@@ -84,8 +88,7 @@ def test_local_only_explicit_local_route_allowed_audit(client, ledger):
     with patch("triage_core.classifier.TaskClassifier.classify", return_value="general"):
         with patch("triage_core.client.choose_resilience_route", return_value=decision):
             with patch("triage_core.project_steward.ProjectSteward.evaluate", return_value={"local_result_status": "sufficient"}):
-                with patch.object(client.engine, "execute_task", return_value={"status": "success", "output": "ok"}):
-                    client.run_task(task_packet=packet, ledger=ledger)
+                client.run_task(task_packet=packet, ledger=ledger)
                     
     audit_events = [p for e, p in ledger.events if e == "route_audit"]
     assert len(audit_events) == 1
@@ -95,6 +98,8 @@ def test_local_only_explicit_local_route_allowed_audit(client, ledger):
     assert audit["reason_code"] == "route_allowed"
     assert audit["is_local_only"] is True
     assert audit["recommended_route"] == "local_heavy"
+    assert audit["selected_backend"] == "ollama"
+    assert [request.method for request, _ in sends] == ["POST"]
     assert "prompt" not in audit
 
 def test_ambiguous_route_blocked_audit(client, ledger):
@@ -165,23 +170,23 @@ def test_normal_non_sensitive_routing_audit(client, ledger):
 def test_sensitivity_blocked_route_records_route_decision(client, ledger):
     """Real choose_resilience_route: usable local capability + high sensitivity
     resolves to human_handoff via sensitivity_requires_human_review, and that
-    cause is persisted on the route_decision event before the raise."""
+    cause is persisted before returning the terminal safety handoff."""
     packet = TaskPacket(
         task_id="task-128",
         prompt="Sensitive prompt",
         data="Sensitive data",
         privacy_metadata=PrivacyMetadata(contains_pii=True)
     )
-    with patch("triage_core.classifier.TaskClassifier.classify", return_value="security_review"):
-        with pytest.raises(LocalRouteUnavailableError):
-            client.run_task(task_packet=packet, ledger=ledger)
+    with patch("triage_core.classifier.TaskClassifier.classify_deterministic", return_value="security_review"):
+        result = client.run_task(task_packet=packet, ledger=ledger)
 
-    assert [e for e, _ in ledger.events] == ["route_audit", "route_decision"]
+    assert [e for e, _ in ledger.events] == ["route_audit", "route_decision", "worker_result"]
     audit = ledger.events[0][1]
     decision = ledger.events[1][1]
 
     assert audit["decision"] == "blocked"
-    assert audit["reason_code"] == "ambiguous_or_remote_route"
+    assert audit["reason_code"] == "sensitivity_requires_human_review"
+    assert result["worker_result_status"] == "not_attempted"
     assert decision["selected_route"] == "human_handoff"
     assert decision["reason"] == "sensitivity_requires_human_review"
 

@@ -3,11 +3,11 @@ from typing import Optional, Callable
 
 @dataclass
 class PrivacyMetadata:
-    data_class: str = "public"
+    data_class: str = "restricted"
     contains_pii: bool = False
     contains_sensitive_content: bool = False
     contains_precise_location: bool = False
-    external_model_allowed: bool = True
+    external_model_allowed: bool = False
     retention_policy: str = "default"
     redaction_required: bool = False
 

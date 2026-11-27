@@ -15,6 +15,7 @@ from .destination_policy import (
     RouteBinding,
     TransportPolicy,
     backend_protocol_key,
+    bind_local_endpoint,
     bind_qwen_endpoint,
     require_qwen_model,
 )
@@ -509,21 +510,69 @@ def create_bound_backend(
             base_url=base_url, model=configuration.cloud_model.value,
             api_key=api_key or "", _route_binding=binding, _transport_policy=transport_policy,
         )
+    return _create_bound_local_backend(
+        binding, backend_protocol_key(configuration.backend_type.value),
+        configuration.model.value, transport_policy,
+    )
+
+
+def _create_bound_local_backend(
+    binding: RouteBinding, kind: str, model: str, transport_policy: TransportPolicy
+) -> OllamaBackend | OpenAICompatibleBackend:
+    base_url = binding.endpoint.canonical
     guard = GuardedTransport(binding, policy=transport_policy)
     if binding.protocol == "ollama":
         backend = OllamaBackend(
-            base_url=base_url, model=configuration.model.value, transport=guard,
+            base_url=base_url, model=model, transport=guard,
         )
     elif binding.protocol == "openai_compatible":
-        kind = backend_protocol_key(configuration.backend_type.value)
         backend = OpenAICompatibleBackend(
             name=_openai_backend_name(kind, base_url), base_url=base_url,
-            model=configuration.model.value, transport=guard,
+            model=model, transport=guard,
         )
     else:
         raise DestinationPolicyError("backend_protocol_unsupported", binding.route)
     guard.bind_owner(backend)
     return backend
+
+
+def bind_legacy_local_backend(
+    backend: LocalBackend, *, route: str = "local_fast", model: Optional[str] = None
+) -> OllamaBackend | OpenAICompatibleBackend:
+    """Rebuild a known backend from its settings with a new guard for this attempt."""
+    if type(backend) is OllamaBackend:
+        kind = "ollama"
+    elif type(backend) is OpenAICompatibleBackend:
+        kind = backend_protocol_key(backend.name) if isinstance(backend.name, str) else "custom"
+        if kind not in GOVERNED_LOCAL_PRESETS or kind == "ollama":
+            kind = "custom"
+    else:
+        raise DestinationPolicyError("backend_protocol_unsupported", route)
+    binding = bind_local_endpoint(kind, backend.base_url, route)
+    selected_model = backend.model if model is None else model
+    if not isinstance(selected_model, str):
+        raise DestinationPolicyError("configuration_unreadable", route)
+    return _create_bound_local_backend(binding, kind, selected_model, DEFAULT_TRANSPORT_POLICY)
+
+
+def create_legacy_local_backend(
+    backend_type: str, model: str, base_url: Optional[str] = None
+) -> OllamaBackend | OpenAICompatibleBackend:
+    """Resolve CLI settings once, then construct only a guarded local backend."""
+    if not isinstance(backend_type, str) or not backend_type:
+        raise DestinationPolicyError("backend_protocol_unsupported", "local_fast")
+    kind = backend_protocol_key(backend_type)
+    if kind not in GOVERNED_LOCAL_PRESETS:
+        raise DestinationPolicyError("backend_protocol_unsupported", "local_fast")
+    if base_url is not None and not isinstance(base_url, str):
+        raise DestinationPolicyError("endpoint_malformed", "local_fast")
+    if kind == "custom" and not base_url:
+        raise DestinationPolicyError("endpoint_malformed", "local_fast")
+    try:
+        backend = create_backend(kind, model, base_url)
+    except ValueError:
+        raise DestinationPolicyError("endpoint_malformed", "local_fast") from None
+    return bind_legacy_local_backend(backend)
 
 
 def create_backend(

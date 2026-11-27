@@ -1,4 +1,5 @@
-from triage_core.backends import BackendResponse
+from triage_core.backends import OllamaBackend
+from test_endpoint_transport_guard import transport_tripwires
 from triage_core.client import TriageClient
 from triage_core.agent_identity import AgentIdentityRegistry
 from triage_core.task_ledger import TaskLedger
@@ -7,30 +8,46 @@ from triage_core.task_packet import TaskPacket, PrivacyMetadata
 import tempfile
 import uuid
 
+import pytest
+import requests
 
-class RecordingBackend:
-    name = "fake"
-    base_url = "http://localhost"
-    model = "fake-model"
 
-    def __init__(self) -> None:
+ROUTED_MODEL = "qwen2.5-coder:7b-triagecore"
+
+
+@pytest.fixture
+def local_client(monkeypatch):
+    transport_tripwires(monkeypatch)
+    calls = []
+
+    def send(self, request, **settings):
+        calls.append(request)
+        response = requests.Response()
+        response.status_code = 200
+        response._content = (
+            b'{"message":{"content":"LOCAL_RAN"},"prompt_eval_count":3,"eval_count":2}'
+        )
+        response._content_consumed = True
+        return response
+
+    monkeypatch.setattr(requests.adapters.HTTPAdapter, "send", send)
+    client = TriageClient(
+        backend_type="ollama", model="fixture", base_url="http://127.0.0.1:11434"
+    )
+    return client, calls
+
+
+class FailingBackend:
+    name = "fixture"
+    base_url = "http://127.0.0.1:11434"
+    model = "fixture"
+
+    def __init__(self):
         self.called = False
 
-    def generate(self, messages, temperature=0.1, timeout=45, **kwargs):
+    def generate(self, *args, **kwargs):
         self.called = True
-        return BackendResponse(
-            text="LOCAL_RAN",
-            raw={},
-            usage={"prompt_tokens": 3, "completion_tokens": 2, "total_tokens": 5},
-            backend_name=self.name,
-        )
-
-
-class FailingBackend(RecordingBackend):
-    def generate(self, messages, temperature=0.1, timeout=45, **kwargs):
-        self.called = True
-        raise AssertionError("Backend should not run for high-risk prompts.")
-
+        raise AssertionError("Backend should never run for high-risk prompts.")
 
 def test_high_risk_task_is_handed_off_before_backend_runs():
     backend = FailingBackend()
@@ -45,27 +62,24 @@ def test_high_risk_task_is_handed_off_before_backend_runs():
     assert backend.called is False
 
 
-def test_low_risk_task_runs_backend():
-    backend = RecordingBackend()
-    client = TriageClient(backend=backend)
+def test_low_risk_task_runs_backend(local_client):
+    client, calls = local_client
 
     result = client.run_task("Summarize this text", "small data")
 
     assert result["status"] == "success"
     assert result["source"] == "local"
     assert result["output"] == "LOCAL_RAN"
-    assert result["backend_name"] == "fake"
-    assert result["model"] == "fake-model"
+    assert result["backend_name"] == "ollama"
+    assert result["model"] == ROUTED_MODEL
     assert result["input_tokens"] == 3
     assert result["output_tokens"] == 2
     assert result["total_tokens"] == 5
-    assert backend.called is True
+    assert [request.method for request in calls] == ["POST"]
 
 
-def test_validator_failure_records_model_and_token_context():
-    backend = RecordingBackend()
-    client = TriageClient(backend=backend)
-
+def test_validator_failure_records_model_and_token_context(local_client):
+    client, calls = local_client
     result = client.run_task(
         "Summarize this text",
         "small data",
@@ -77,49 +91,30 @@ def test_validator_failure_records_model_and_token_context():
     assert result["validator_passed"] is False
     assert result["worker_result_status"] == "completed"
     assert result["validation_status"] == "failed"
-    assert result["backend_name"] == "fake"
-    assert result["model"] == "fake-model"
+    assert result["backend_name"] == "ollama"
+    assert result["model"] == ROUTED_MODEL
     assert result["input_tokens"] == 3
     assert result["output_tokens"] == 2
     assert result["total_tokens"] == 5
-    assert backend.called is True
+    assert [request.method for request in calls] == ["POST"]
 
 
-import requests
+@pytest.mark.parametrize("failure, expected", [
+    (requests.exceptions.Timeout("Timed out"), ("timed_out", "timeout", "local_backend_generate")),
+    (RuntimeError("Synthetic backend failure"), ("worker_failed", "backend_error", "local_backend_generate")),
+    (ValueError("Missing response content"), ("invalid_output", "invalid_backend_response", "response_parse")),
+])
+def test_engine_failure_statuses_pass_through_client(monkeypatch, local_client, failure, expected):
+    client, calls = local_client
 
-class TimeoutBackend(RecordingBackend):
-    def generate(self, messages, temperature=0.1, timeout=45, **kwargs):
-        raise requests.exceptions.Timeout("Timed out")
+    def fail_generate(self, **kwargs):
+        assert kwargs["_verified_transport"].owner is self
+        raise failure
 
-class ErrorBackend(RecordingBackend):
-    def generate(self, messages, temperature=0.1, timeout=45, **kwargs):
-        raise Exception("Some random error")
-
-class InvalidOutputBackend(RecordingBackend):
-    def generate(self, messages, temperature=0.1, timeout=45, **kwargs):
-        raise ValueError("Backend returned no message content.")
-
-
-def test_timeout_returns_timed_out_status():
-    client = TriageClient(backend=TimeoutBackend())
-    result = client.run_task("do it", "data")
-    assert result["worker_result_status"] == "timed_out"
-    assert result["failure_type"] == "timeout"
-    assert result["failure_stage"] == "local_backend_generate"
-
-def test_backend_error_returns_worker_failed_status():
-    client = TriageClient(backend=ErrorBackend())
-    result = client.run_task("do it", "data")
-    assert result["worker_result_status"] == "worker_failed"
-    assert result["failure_type"] == "backend_error"
-    assert result["failure_stage"] == "local_backend_generate"
-
-def test_invalid_output_returns_invalid_output_status():
-    client = TriageClient(backend=InvalidOutputBackend())
-    result = client.run_task("do it", "data")
-    assert result["worker_result_status"] == "invalid_output"
-    assert result["failure_type"] == "invalid_backend_response"
-    assert result["failure_stage"] == "response_parse"
+    monkeypatch.setattr(OllamaBackend, "generate", fail_generate)
+    result = client.run_task("Summarize this", "Synthetic data")
+    assert tuple(result[key] for key in ("worker_result_status", "failure_type", "failure_stage")) == expected
+    assert not calls
 
 def test_router_safety_handoff_is_not_counted_as_backend_failure():
     backend = FailingBackend()
@@ -129,8 +124,8 @@ def test_router_safety_handoff_is_not_counted_as_backend_failure():
     assert result["failure_type"] == "safety_handoff"
     assert result["failure_stage"] == "router"
 
-def test_client_run_task_with_explicit_task_packet():
-    client = TriageClient(backend=RecordingBackend())
+def test_client_run_task_with_explicit_task_packet(local_client):
+    client, _ = local_client
     metadata = PrivacyMetadata(data_class="restricted", external_model_allowed=False)
     packet = TaskPacket(
         prompt="Analyze sensitive data",
@@ -143,9 +138,8 @@ def test_client_run_task_with_explicit_task_packet():
     assert result["output"] == "LOCAL_RAN"
 
 
-def test_run_task_writes_route_decision_and_worker_result_events():
-    backend = RecordingBackend()
-    client = TriageClient(backend=backend)
+def test_run_task_writes_route_decision_and_worker_result_events(local_client):
+    client, _ = local_client
 
     with tempfile.TemporaryDirectory() as temp_dir:
         ledger = TaskLedger(ledger_dir=temp_dir)
@@ -174,9 +168,8 @@ def test_run_task_writes_route_decision_and_worker_result_events():
     assert worker_event["payload"]["backend_failure"] is False
 
 
-def test_run_task_can_write_signed_route_decision_event():
-    backend = RecordingBackend()
-    client = TriageClient(backend=backend)
+def test_run_task_can_write_signed_route_decision_event(local_client):
+    client, _ = local_client
 
     with tempfile.TemporaryDirectory() as temp_dir:
         ledger = TaskLedger(ledger_dir=temp_dir)

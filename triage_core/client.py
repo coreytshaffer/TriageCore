@@ -1,5 +1,5 @@
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import wraps
 from threading import RLock
 from types import MappingProxyType
@@ -8,10 +8,10 @@ from .engine import TriageEngine
 from .routers import TriageRouter
 from .backends import (
     LocalBackend, OllamaBackend, OpenAICompatibleBackend, QwenCloudBackend,
-    create_backend, create_bound_backend,
+    bind_legacy_local_backend, create_backend, create_bound_backend,
 )
 from .destination_policy import (
-    NON_NETWORK_ROUTES, DestinationPolicyError, GuardedTransport, RouteBinding, SendRecord,
+    LOCAL_ROUTES, NON_NETWORK_ROUTES, DestinationPolicyError, GuardedTransport, RouteBinding, SendRecord,
     bind_route_endpoints,
 )
 from .runtime_observation import GovernedBindingError
@@ -294,7 +294,7 @@ class TriageClient:
                 data=data,
                 task_id=task_id,
                 validator=validator,
-                # Legacy inputs get default public metadata
+                # Implicit legacy input is restricted by the packet default.
             )
         else:
             prompt = task_packet.prompt
@@ -381,13 +381,22 @@ class TriageClient:
                 category
             )
         else:
-            category = TaskClassifier.classify(prompt)
-            route_decision = self.router.specialist.route_task(category, prompt, data)
+            if is_local_only:
+                category = TaskClassifier.classify_deterministic(prompt)
+                route_decision = self.router.specialist.route_task(
+                    category, prompt, data, allow_internet=False
+                )
+            else:
+                category = TaskClassifier.classify(prompt)
+                route_decision = self.router.specialist.route_task(category, prompt, data)
             use_timeout = route_decision.get("timeout", self.engine.timeout)
             post_processor_override = None
+        cloud_enabled = config.cloud_enabled.value if governed else None
+        if not governed and is_local_only:
+            cloud_enabled = False
         resilience_input = self._build_resilience_route_input(
             category=category, validator=validator, capability=capability,
-            cloud_enabled=config.cloud_enabled.value if governed else None,
+            cloud_enabled=cloud_enabled,
         )
 
         if is_local_only:
@@ -462,9 +471,14 @@ class TriageClient:
             and selected_route == "human_handoff"
             and decision.policy.ethical_firewall == "triggered"
         )
+        legacy_safety_handoff = (
+            not governed
+            and selected_route == "human_handoff"
+            and resilience_decision.reason == "sensitivity_requires_human_review"
+        )
 
         # Ensure local-only packets only use explicitly local routes
-        if is_local_only and not governed_terminal_handoff:
+        if is_local_only and not (governed_terminal_handoff or legacy_safety_handoff):
             if selected_route not in ["local_heavy", "local_fast", "deterministic"]:
                 audit = RouteDecisionAudit(task_id, privacy_level, True, True, selected_route, selected_backend_name, "blocked", "ambiguous_or_remote_route")
                 self._append_optional_event(ledger, task_id, "route_audit", audit.to_dict())
@@ -503,8 +517,25 @@ class TriageClient:
                     build_specialist_offload_payload(route_decision),
                 )
                 raise LocalRouteUnavailableError("Specialist router recommended offload for a local-only packet. Failing closed.")
-        
-        # Allowed Route Audit
+
+        legacy_backend = None
+        legacy_refusal = None
+        if not governed and selected_route in LOCAL_ROUTES and not route_decision.get("offload_recommended"):
+            try:
+                legacy_backend = bind_legacy_local_backend(
+                    self.engine.backend, route=selected_route, model=selected_model or None
+                )
+            except DestinationPolicyError as exc:
+                legacy_refusal = exc
+                selected_backend_name = ""
+            else:
+                selected_backend_name = legacy_backend.name
+
+        audit_reason = "route_allowed"
+        if legacy_refusal is not None:
+            audit_reason = legacy_refusal.code
+        elif legacy_safety_handoff:
+            audit_reason = resilience_decision.reason
         audit = RouteDecisionAudit(
             task_id=task_id,
             privacy_level=privacy_level,
@@ -512,8 +543,8 @@ class TriageClient:
             is_local_only=is_local_only,
             recommended_route=selected_route,
             selected_backend=selected_backend_name,
-            decision="allowed",
-            reason_code="route_allowed"
+            decision="blocked" if legacy_refusal or legacy_safety_handoff else "allowed",
+            reason_code=audit_reason,
         )
         self._append_optional_event(ledger, task_id, "route_audit", audit.to_dict())
         try:
@@ -536,6 +567,8 @@ class TriageClient:
             signing_registry=route_decision_signing_registry,
             signing_agent_id=route_decision_signing_agent_id,
         )
+        if legacy_refusal is not None:
+            return self._record_legacy_local_refusal(ledger, task_id, route_payload, legacy_refusal)
 
         # The ethical firewall, terminal escalation, and human-review posture are
         # first-class fields of the governed decision. On the governed path they
@@ -675,7 +708,34 @@ class TriageClient:
             )
             return self._merge_route_fields(result, route_payload)
         
-        executor = destination if governed else self.engine
+        if not governed:
+            if legacy_backend is None:
+                refusal = DestinationPolicyError("destination_binding_mismatch")
+                blocked = replace(audit, decision="blocked", reason_code=refusal.code)
+                self._append_optional_event(ledger, task_id, "route_audit", blocked.to_dict())
+                return self._record_legacy_local_refusal(ledger, task_id, route_payload, refusal)
+            guard = legacy_backend.transport
+            try:
+                if type(guard) is not GuardedTransport or guard.owner is not legacy_backend:
+                    raise DestinationPolicyError("transport_not_guarded")
+                guard.verify_integrity()
+                result = TriageEngine(backend=legacy_backend, timeout_seconds=use_timeout).execute_task(
+                    task_prompt=prompt,
+                    raw_data=data,
+                    validator=validator,
+                    post_processor=post_processor,
+                    verified_transport=guard,
+                )
+            except DestinationPolicyError as exc:
+                blocked = replace(audit, decision="blocked", reason_code=exc.code)
+                self._append_optional_event(ledger, task_id, "route_audit", blocked.to_dict())
+                attempted = type(guard) is GuardedTransport and bool(guard.sends)
+                return self._record_legacy_local_refusal(
+                    ledger, task_id, route_payload, exc, attempted=attempted
+                )
+            return self._record_backend_result(ledger, task_id, route_payload, result, None)
+
+        executor = destination
         backend = executor.backend
         original_model = backend.model
         if getattr(backend, "name", "") != "fake" and requested_model and requested_model != original_model:
@@ -692,6 +752,27 @@ class TriageClient:
             return self._record_backend_result(ledger, task_id, route_payload, result, destination)
         finally:
             backend.model = original_model
+
+    def _record_legacy_local_refusal(
+        self,
+        ledger: Optional[TaskLedger],
+        task_id: Optional[str],
+        route_payload: Dict[str, Any],
+        refusal: DestinationPolicyError,
+        *,
+        attempted: bool = False,
+    ) -> Dict[str, Any]:
+        reason = f"Local destination policy refused the task: {refusal.code}"
+        result = {
+            "status": "handoff_required",
+            "source": "local_engine" if attempted else "router",
+            "reason": reason,
+            "handoff_reason": reason,
+            "worker_result_status": "worker_failed" if attempted else "not_attempted",
+            "failure_type": "safety_handoff",
+            "failure_stage": "local_backend_generate" if attempted else "router",
+        }
+        return self._record_backend_result(ledger, task_id, route_payload, result, None)
 
     def _record_backend_result(
         self, ledger: Optional[TaskLedger], task_id: Optional[str],

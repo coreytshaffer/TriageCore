@@ -52,7 +52,9 @@ def test_make_external_safe_packet_success():
 def test_make_external_safe_packet_rejects_various_flags():
     # Base clean packet
     def get_clean_verified(mutator_kwargs):
-        meta = PrivacyMetadata(**mutator_kwargs)
+        metadata = {"data_class": "public", "external_model_allowed": True}
+        metadata.update(mutator_kwargs)
+        meta = PrivacyMetadata(**metadata)
         # Create a manually verified packet because passing PII via scan with contains_pii=True works, 
         # but here we just want to test the safe packet factory flags directly
         packet = TaskPacket(prompt="test", data="test", privacy_metadata=meta)
@@ -102,7 +104,7 @@ def test_client_verifies_before_routing_and_legacy_callers_work():
     
     # 1. Legacy string callers still work and are verified correctly
     # By mocking classify to raise an exception, we prove it passed the verify_packet guard successfully
-    with patch("triage_core.classifier.TaskClassifier.classify", side_effect=RuntimeError("stop")):
+    with patch("triage_core.classifier.TaskClassifier.classify_deterministic", side_effect=RuntimeError("stop")):
         with pytest.raises(RuntimeError, match="stop"):
             client.run_task(prompt="Hello", data="World")
                 
@@ -116,3 +118,15 @@ def test_raw_taskpacket_cannot_cross_boundary():
     with patch("triage_core.safe_task_packet.verify_packet", return_value=packet):
         with pytest.raises(UnsafePacketError, match="Only VerifiedTaskPacket may enter routing boundary"):
             client.run_task(task_packet=packet)
+
+
+def test_governed_local_only_preserves_its_scanner_metadata():
+    from triage_core.run_plan import privacy_metadata_for_run
+
+    metadata = privacy_metadata_for_run("local_only", allow_cloud=False)
+    assert metadata.data_class == "public"
+    assert metadata.external_model_allowed is False
+
+    packet = TaskPacket("Summarize this", "CONFIDENTIAL sample", privacy_metadata=metadata)
+    with pytest.raises(PrivacyViolationError, match="sensitive keyword"):
+        verify_packet(packet)

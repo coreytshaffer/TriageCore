@@ -45,7 +45,7 @@ def test_sensitive_metadata_bypasses_summarization(temp_file, privacy_kwargs):
     assert type(bundle.source_files[0]["size_bytes"]) is int
 
 def test_local_llm_summarization_records_provenance(temp_file):
-    meta = PrivacyMetadata(contains_sensitive_content=False)
+    meta = PrivacyMetadata(data_class="public", external_model_allowed=True)
     packet = TaskPacket(prompt="Fix this", data="data here", privacy_metadata=meta)
     
     # Mock backend
@@ -71,7 +71,7 @@ def test_local_llm_summarization_records_provenance(temp_file):
     assert "generated_at" in bundle.provenance
     
 def test_backend_unavailability_returns_deterministic_fallback(temp_file):
-    meta = PrivacyMetadata(contains_sensitive_content=False)
+    meta = PrivacyMetadata(data_class="public", external_model_allowed=True)
     packet = TaskPacket(prompt="Fix this", data="data here", privacy_metadata=meta)
     
     backend = MagicMock()

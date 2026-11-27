@@ -127,8 +127,7 @@ _ROUTE_AVAILABILITY_FIELD = {
 
 
 def privacy_metadata_for_run(privacy: str, allow_cloud: bool) -> PrivacyMetadata:
-    if privacy == "local_only":
-        return PrivacyMetadata(external_model_allowed=False)
+    # Governed runs have an explicit scanner basis and cloud authorization.
     return PrivacyMetadata(
         data_class="public",
         external_model_allowed=privacy in {"external_safe", "public"} and allow_cloud,
