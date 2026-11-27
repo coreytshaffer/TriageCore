@@ -1,12 +1,31 @@
 import pytest
+import requests
+from unittest.mock import Mock, patch
 
+from triage_core.backends import OllamaBackend
 from triage_core.classifier import TaskClassifier, DangerDetector
 
 def test_task_classifier():
-    assert TaskClassifier.classify("Please fix this error") == "bugfix"
-    assert TaskClassifier.classify("Update the README") == "docs_update"
-    assert TaskClassifier.classify("Add a pytest") == "test_addition"
-    assert TaskClassifier.classify("Delete all files") == "blocked_or_high_risk"
+    with patch("triage_core.backends.create_backend", return_value=None):
+        assert TaskClassifier.classify("Please fix this error") == "bugfix"
+        assert TaskClassifier.classify("Update the README") == "docs_update"
+        assert TaskClassifier.classify("Add a pytest") == "test_addition"
+        assert TaskClassifier.classify("Delete all files") == "blocked_or_high_risk"
+
+
+def test_model_classifier_falls_back_after_a_backend_redirect():
+    response = Mock(spec=requests.Response)
+    response.status_code = 307
+    response.ok = True
+    response.json.return_value = {"message": {"content": "architecture_planning"}}
+    transport = Mock()
+    transport.post.return_value = response
+    backend = OllamaBackend(model="fixture", transport=transport)
+
+    assert TaskClassifier.classify("Update the README", backend=backend) == "docs_update"
+    transport.post.assert_called_once()
+    assert transport.post.call_args.kwargs["allow_redirects"] is False
+    response.json.assert_not_called()
 
 def test_danger_detector_safe():
     res = DangerDetector.analyze("Add a new print statement to main.py", ["main.py"])

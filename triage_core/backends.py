@@ -29,6 +29,47 @@ class BackendUnavailableError(Exception):
     pass
 
 
+class BackendRedirectRefused(BackendUnavailableError):
+    """A direct backend returned a 3xx response."""
+
+
+def _refuse_backend_redirect(response: requests.Response, **kwargs: Any) -> requests.Response:
+    if 300 <= response.status_code < 400:
+        try:
+            response.close()
+        finally:
+            raise BackendRedirectRefused("Backend redirect refused.") from None
+    return response
+
+
+def request_backend_without_redirects(
+    transport: Any, method: str, url: str, **kwargs: Any
+) -> requests.Response:
+    """Send once and reject redirects before reading a backend result."""
+    send = getattr(transport, method)
+    if isinstance(transport, GuardedTransport):
+        return send(url, **kwargs)
+
+    # Requests can prepare a redirect even when following it is disabled.
+    # Refuse in its response hook before it reads Location or the response body.
+    response_hooks = [_refuse_backend_redirect]
+    if isinstance(transport, requests.Session):
+        session_hooks = transport.hooks.get("response") or ()
+        if callable(session_hooks):
+            session_hooks = (session_hooks,)
+        if session_hooks:
+            response_hooks.extend(session_hooks)
+            # A caller's hook can replace the response that Requests sees.
+            response_hooks.append(_refuse_backend_redirect)
+    response = send(
+        url,
+        allow_redirects=False,
+        hooks={"response": response_hooks},
+        **kwargs,
+    )
+    return _refuse_backend_redirect(response)
+
+
 
 @dataclass
 class BackendResponse:
@@ -87,9 +128,9 @@ def _lmstudio_base_url() -> str:
 def _lmstudio_is_online(base_url: str, transport: Any, timeout: float) -> bool:
     url = f"{base_url.rstrip('/')}/models"
     try:
-        response = transport.get(url, timeout=timeout)
+        response = request_backend_without_redirects(transport, "get", url, timeout=timeout)
         return response.status_code == 200
-    except requests.exceptions.RequestException:
+    except (requests.exceptions.RequestException, BackendRedirectRefused):
         return False
 
 
@@ -151,7 +192,9 @@ class OpenAICompatibleBackend:
 
         url = f"{self.base_url.rstrip('/')}/models"
         try:
-            response = transport.get(url, timeout=timeout, headers=self._request_headers(transport))
+            response = request_backend_without_redirects(
+                transport, "get", url, timeout=timeout, headers=self._request_headers(transport)
+            )
             response.raise_for_status()
             resolved = _model_id_from_openai_models(response.json())
             if resolved:
@@ -190,7 +233,9 @@ class OpenAICompatibleBackend:
         if stream_callback:
             payload["stream"] = True
             try:
-                response = transport.post(
+                response = request_backend_without_redirects(
+                    transport,
+                    "post",
                     url,
                     json=payload,
                     timeout=timeout,
@@ -238,7 +283,9 @@ class OpenAICompatibleBackend:
             )
 
         try:
-            response = transport.post(
+            response = request_backend_without_redirects(
+                transport,
+                "post",
                 url,
                 json=payload,
                 timeout=timeout,
@@ -275,7 +322,9 @@ class OpenAICompatibleBackend:
         url = f"{self.base_url.rstrip('/')}/models"
         transport = self.transport
         try:
-            response = transport.get(url, timeout=timeout, headers=self._request_headers(transport))
+            response = request_backend_without_redirects(
+                transport, "get", url, timeout=timeout, headers=self._request_headers(transport)
+            )
             if response.status_code == 200 and self.model in _AUTO_MODEL_SENTINELS:
                 try:
                     resolved = _model_id_from_openai_models(response.json())
@@ -284,7 +333,7 @@ class OpenAICompatibleBackend:
                 except ValueError:
                     pass
             return response.status_code == 200
-        except requests.exceptions.RequestException:
+        except (requests.exceptions.RequestException, BackendRedirectRefused):
             return False
 
 
@@ -353,7 +402,7 @@ class OllamaBackend:
 
         url = f"{self.base_url.rstrip('/')}/api/tags"
         try:
-            response = transport.get(url, timeout=timeout)
+            response = request_backend_without_redirects(transport, "get", url, timeout=timeout)
             response.raise_for_status()
             models = response.json().get("models") or []
             if models:
@@ -395,7 +444,9 @@ class OllamaBackend:
 
         if stream_callback:
             try:
-                response = transport.post(url, json=payload, timeout=timeout, stream=True)
+                response = request_backend_without_redirects(
+                    transport, "post", url, json=payload, timeout=timeout, stream=True
+                )
                 response.raise_for_status()
             except requests.exceptions.RequestException as e:
                 _raise_backend_unavailable("Ollama", transport, url, e)
@@ -426,7 +477,7 @@ class OllamaBackend:
             )
 
         try:
-            response = transport.post(url, json=payload, timeout=timeout)
+            response = request_backend_without_redirects(transport, "post", url, json=payload, timeout=timeout)
             if not response.ok:
                 print(
                     "Backend Error: "
@@ -464,7 +515,7 @@ class OllamaBackend:
 
         url = f"{self.base_url.rstrip('/')}/api/tags"
         try:
-            response = transport.get(url, timeout=timeout)
+            response = request_backend_without_redirects(transport, "get", url, timeout=timeout)
             if response.status_code == 200 and self.model in _AUTO_MODEL_SENTINELS:
                 try:
                     models = response.json().get("models") or []
@@ -475,7 +526,7 @@ class OllamaBackend:
                 except ValueError:
                     pass
             return response.status_code == 200
-        except requests.exceptions.RequestException:
+        except (requests.exceptions.RequestException, BackendRedirectRefused):
             return False
 
 

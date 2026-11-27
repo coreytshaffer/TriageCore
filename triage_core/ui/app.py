@@ -3457,6 +3457,8 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
     def _lmstudio_runtime_status(self, base_url=None, timeout=0.75):
         import requests
 
+        from ..backends import BackendRedirectRefused, request_backend_without_redirects
+
         base_url = (base_url or os.getenv("TRIAGE_SUPERVISOR_BASE_URL", "http://localhost:1234/v1")).rstrip("/")
         root_url = base_url[:-3] if base_url.endswith("/v1") else base_url
         candidates = [
@@ -3473,7 +3475,7 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
 
         for url in candidates:
             try:
-                response = requests.get(url, timeout=timeout)
+                response = request_backend_without_redirects(requests, "get", url, timeout=timeout)
                 if response.status_code != 200:
                     continue
                 data = response.json()
@@ -3501,6 +3503,8 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
                 else:
                     info["display"] = "LM Studio online, no models listed"
                 return info
+            except BackendRedirectRefused:
+                break
             except Exception:
                 continue
 
@@ -3513,6 +3517,8 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
     def _native_ollama_status(self, timeout=0.75):
         import requests
 
+        from ..backends import request_backend_without_redirects
+
         base_url = os.getenv("TRIAGE_OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
         info = {
             "provider": "ollama",
@@ -3522,7 +3528,9 @@ class TriageDeskApp(ctk.CTk if UI_AVAILABLE else object):
             "display": "Ollama offline",
         }
         try:
-            response = requests.get(f"{base_url}/api/tags", timeout=timeout)
+            response = request_backend_without_redirects(
+                requests, "get", f"{base_url}/api/tags", timeout=timeout
+            )
             if response.status_code == 200:
                 data = response.json()
                 models = []

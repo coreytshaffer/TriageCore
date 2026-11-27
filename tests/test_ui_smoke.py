@@ -2,6 +2,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
+import requests
 
 from triage_core.task_review_service import ReviewState
 
@@ -11,6 +12,32 @@ def test_ui_import_graceful_degradation():
     # As long as it imports without throwing an error when customtkinter isn't present,
     # or loads fine when it is, the smoke test passes.
     assert TriageDeskApp is not None
+
+
+@pytest.mark.parametrize("method, url", [
+    ("_lmstudio_runtime_status", "http://127.0.0.1:1234/api/v1/models"),
+    ("_native_ollama_status", "http://127.0.0.1:11434/api/tags"),
+])
+def test_triagedesk_inventory_refuses_redirect(monkeypatch, method, url):
+    from triage_core.ui.app import TriageDeskApp
+
+    monkeypatch.setenv("TRIAGE_SUPERVISOR_BASE_URL", "http://127.0.0.1:1234/v1")
+    monkeypatch.setenv("TRIAGE_OLLAMA_BASE_URL", "http://127.0.0.1:11434")
+    response = Mock(spec=requests.Response)
+    response.status_code = 302
+    get = Mock(return_value=response)
+    monkeypatch.setattr(requests, "get", get)
+
+    status = getattr(TriageDeskApp, method)(None)
+
+    assert status["online"] is False
+    assert not status["models"]
+    get.assert_called_once()
+    assert get.call_args.args == (url,)
+    assert get.call_args.kwargs["allow_redirects"] is False
+    assert get.call_args.kwargs["timeout"] == 0.75
+    response.close.assert_called_once()
+    response.json.assert_not_called()
 
 
 def test_ui_paths_use_config(tmp_path, monkeypatch):
