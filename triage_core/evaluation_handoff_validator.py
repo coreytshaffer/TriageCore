@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import re
 import stat
 from dataclasses import dataclass
@@ -10,7 +9,7 @@ from typing import Any, Mapping
 
 from triage_core.eval_fixture_validator import (
     EvalFixtureValidationError,
-    load_eval_fixture_jsonl,
+    validate_eval_fixture_jsonl_bytes,
 )
 from triage_core.evaluation_handoff_bundle import (
     ACTUAL_CONTRACT,
@@ -23,6 +22,10 @@ from triage_core.evaluation_handoff_bundle import (
     EvaluationHandoffBundleError,
     is_safe_case_id,
     validate_actual_outcome_contract,
+)
+from triage_core.evaluation_json import (
+    EvaluationJSONDecodeError,
+    decode_evaluation_json,
 )
 from triage_core.privacy_invariants import (
     PersistentPrivacyInvariantError,
@@ -59,10 +62,6 @@ class EvaluationHandoffValidationResult:
     actual_count: int
 
 
-class _DuplicateObjectKey(ValueError):
-    pass
-
-
 def validate_evaluation_handoff_bundle(
     bundle: str | Path,
 ) -> EvaluationHandoffValidationResult:
@@ -76,19 +75,14 @@ def validate_evaluation_handoff_bundle(
     fixture_spec, actual_specs = _validate_manifest_schema(manifest)
     _validate_inventory(root, actual_specs)
 
-    fixture_path = root / FIXTURE_BUNDLE_PATH
-    fixture_bytes = _read_bytes(fixture_path)
+    fixture_bytes = _read_bytes(root / FIXTURE_BUNDLE_PATH)
     if _sha256(fixture_bytes) != fixture_spec["sha256"]:
         raise EvaluationHandoffValidationError("hash_mismatch")
 
     try:
-        fixture_cases = load_eval_fixture_jsonl(fixture_path)
+        fixture_cases = validate_eval_fixture_jsonl_bytes(fixture_bytes)
     except EvalFixtureValidationError as exc:
         raise EvaluationHandoffValidationError("fixture_invalid") from exc
-    except UnicodeError as exc:
-        raise EvaluationHandoffValidationError("fixture_invalid") from exc
-    except OSError as exc:
-        raise EvaluationHandoffValidationError("input_unreadable") from exc
 
     if len(fixture_cases) != fixture_spec["case_count"]:
         raise EvaluationHandoffValidationError("fixture_count_mismatch")
@@ -108,11 +102,8 @@ def validate_evaluation_handoff_bundle(
         if _sha256(content) != spec["sha256"]:
             raise EvaluationHandoffValidationError("hash_mismatch")
         try:
-            payload = json.loads(
-                content.decode("utf-8"),
-                parse_constant=_reject_json_constant,
-            )
-        except (UnicodeError, json.JSONDecodeError, ValueError) as exc:
+            payload = decode_evaluation_json(content)
+        except EvaluationJSONDecodeError as exc:
             raise EvaluationHandoffValidationError("actual_invalid_json") from exc
         try:
             validate_actual_outcome_contract(payload)
@@ -184,29 +175,12 @@ def _load_manifest(path: Path) -> Mapping[str, Any]:
     except OSError as exc:
         raise EvaluationHandoffValidationError("manifest_unreadable") from exc
     try:
-        payload = json.loads(
-            content.decode("utf-8"),
-            object_pairs_hook=_strict_object,
-            parse_constant=_reject_json_constant,
-        )
-    except (UnicodeError, json.JSONDecodeError, _DuplicateObjectKey, ValueError) as exc:
+        payload = decode_evaluation_json(content)
+    except EvaluationJSONDecodeError as exc:
         raise EvaluationHandoffValidationError("manifest_invalid_json") from exc
     if not isinstance(payload, Mapping):
         raise EvaluationHandoffValidationError("manifest_invalid_schema")
     return payload
-
-
-def _strict_object(pairs):
-    result = {}
-    for key, value in pairs:
-        if key in result:
-            raise _DuplicateObjectKey(key)
-        result[key] = value
-    return result
-
-
-def _reject_json_constant(value: str):
-    raise ValueError(value)
 
 
 def _validate_manifest_schema(

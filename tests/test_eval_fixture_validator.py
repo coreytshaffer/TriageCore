@@ -81,6 +81,38 @@ def test_malformed_json_fails_closed_with_line_number():
     assert exc_info.value.diagnostics[0].line_number == 2
 
 
+@pytest.mark.parametrize(
+    "members",
+    [
+        '"sample": "blue", "sample": "green"',
+        '"example": {"sample": "blue", "sample": "green"}',
+        '"example": [{"sample": "blue", "sample": "green"}]',
+    ],
+)
+def test_duplicate_json_keys_produce_only_a_line_diagnostic(members):
+    valid = json.dumps(_case(case_id="ok-001"))
+    second = "{" + members + ", " + json.dumps(_case(case_id="ok-002"))[1:]
+
+    with pytest.raises(EvalFixtureValidationError) as exc_info:
+        validate_eval_fixture_jsonl_text(valid + "\r\n" + second + "\r\n")
+
+    assert [item.format() for item in exc_info.value.diagnostics] == [
+        "line 2: malformed JSON (duplicate object key)"
+    ]
+
+
+@pytest.mark.parametrize("constant", ["NaN", "Infinity", "-Infinity"])
+def test_nonstandard_constants_fail_closed_without_echoing_the_token(constant):
+    text = '{"example": ' + constant + ", " + json.dumps(_case())[1:]
+
+    with pytest.raises(EvalFixtureValidationError) as exc_info:
+        validate_eval_fixture_jsonl_text(text)
+
+    assert [item.format() for item in exc_info.value.diagnostics] == [
+        "line 1: malformed JSON (non-standard numeric constant)"
+    ]
+
+
 def test_missing_required_top_level_field_fails_closed():
     payload = _case()
     payload.pop("title")

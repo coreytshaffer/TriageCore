@@ -89,6 +89,8 @@ def test_build_bundle_is_deterministic_and_copies_inputs_byte_for_byte(tmp_path)
         case_ids=("routing-002", "privacy-001"),
         actual_order=("privacy-001", "routing-002"),
     )
+    fixture_bytes = fixture_bytes.replace(b"\n", b"\r\n")
+    fixture.write_bytes(fixture_bytes)
     first = tmp_path / "bundle-one"
     second = tmp_path / "bundle-two"
 
@@ -133,9 +135,56 @@ def test_build_bundle_is_deterministic_and_copies_inputs_byte_for_byte(tmp_path)
         "privacy-001",
         "routing-002",
     ]
+    assert [entry["sha256"] for entry in manifest["actuals"]["entries"]] == [
+        hashlib.sha256(actual_bytes[case_id]).hexdigest()
+        for case_id in ("privacy-001", "routing-002")
+    ]
     assert "generated_at" not in manifest
     assert "score" not in manifest
     assert "verdict" not in manifest
+
+
+def test_builder_reads_fixture_once_as_bytes(tmp_path, monkeypatch):
+    fixture, _, actuals, _ = _write_inputs(tmp_path)
+    original_open = Path.open
+    fixture_modes = []
+
+    def record_open(path, mode="r", *args, **kwargs):
+        if path == fixture:
+            fixture_modes.append(mode)
+        return original_open(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", record_open)
+
+    build_evaluation_handoff_bundle(fixture, actuals, tmp_path / "bundle")
+
+    assert fixture_modes == ["rb"]
+
+
+@pytest.mark.parametrize(
+    ("target", "reason"),
+    [("fixture", "fixture_invalid"), ("actual", "actual_invalid_json")],
+)
+@pytest.mark.parametrize(
+    "members",
+    [
+        b'"sample": "blue", "sample": "green", ',
+        b'"example": [{"sample": "blue", "sample": "green"}], ',
+        b'"example": Infinity, ',
+    ],
+)
+def test_ambiguous_json_leaves_no_bundle(tmp_path, target, reason, members):
+    fixture, _, actuals, _ = _write_inputs(tmp_path)
+    invalid = fixture if target == "fixture" else actuals / "privacy-deny-001.json"
+    invalid.write_bytes(b"{" + members + invalid.read_bytes()[1:])
+    output = tmp_path / "bundle"
+
+    _assert_reason(
+        reason, lambda: build_evaluation_handoff_bundle(fixture, actuals, output)
+    )
+
+    assert not output.exists()
+    assert not list(tmp_path.glob(".bundle.*"))
 
 
 def test_manifest_order_is_independent_of_actual_file_creation_order(tmp_path):

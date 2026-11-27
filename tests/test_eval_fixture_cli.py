@@ -103,3 +103,40 @@ def test_eval_validate_fixtures_missing_file_fails_closed(monkeypatch, capsys, t
     assert code == 1
     assert f"Error: eval fixture file not found: {missing}" in out
     assert "reason=input_not_found" in out
+
+
+def test_eval_validate_fixtures_duplicate_key_has_bounded_diagnostic(
+    monkeypatch, capsys, tmp_path
+):
+    fixture = tmp_path / "eval_cases.jsonl"
+    row = '{"example": [{"sample": "blue", "sample": "green"}], '
+    fixture.write_text(row + json.dumps(_case())[1:] + "\n", encoding="utf-8")
+
+    code = run_cli(monkeypatch, ["eval", "validate-fixtures", "--input", str(fixture)])
+
+    captured = capsys.readouterr()
+    assert code == 1
+    assert captured.err == ""
+    assert captured.out.splitlines() == [
+        "Eval fixture validation failed",
+        "reason=invalid_eval_fixture",
+        "line 1: malformed JSON (duplicate object key)",
+    ]
+
+
+def test_eval_validate_fixtures_invalid_utf8_has_bounded_diagnostic(
+    monkeypatch, capsys, tmp_path
+):
+    fixture = tmp_path / "eval_cases.jsonl"
+    fixture.write_bytes(json.dumps(_case()).encode("utf-8") + b"\r\n\xff")
+
+    code = run_cli(monkeypatch, ["eval", "validate-fixtures", "--input", str(fixture)])
+
+    captured = capsys.readouterr()
+    assert code == 1
+    assert captured.err == ""
+    assert captured.out.splitlines() == [
+        "Eval fixture validation failed",
+        "reason=invalid_eval_fixture",
+        "line 2: malformed JSON (invalid UTF-8)",
+    ]
